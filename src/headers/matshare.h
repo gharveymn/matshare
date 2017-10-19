@@ -5,13 +5,26 @@
 #include <string.h>
 #include <mex.h>
 #include <matrix.h>
+#include "ezq.h"
 
 #define TRUE 1
 #define FALSE 0
+#define MATSHARE_SHM_SIG "TUFUU0hBUkU"
+#define MATSHARE_SHM_SIG_LEN 11
+
+
+typedef enum
+{
+	MSH_OPEN,
+	MSH_SHARE,
+	MSH_GET,
+	MSH_UNSHARE,
+	MSH_CLOSE
+} matop_t;
 
 typedef struct
 {
-	char* operation_name;
+	matop_t matshare_operation;
 	const mxArray** args;
 } ParamStruct;
 

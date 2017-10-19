@@ -1,6 +1,7 @@
 #include "headers/matshare.h"
 
-ParamStruct param_struct;
+static ParamStruct param_struct;
+Queue mxArrayNameTracker;
 
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
@@ -16,29 +17,45 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	readInput(nrhs, prhs);
 	
-	/* General outline:
-	 * 		two shared memory blocks
-	 * 		one holding hashtable for object locations, can be put into persistent memory after initial load
-	 * 		one holding actual mxArray objects
-	 *
-	 * 		access hashtable by hashing name
-	 */
-	
-	mxFree(param_struct.operation_name);
 }
 
 
 void readInput(int nrhs, const mxArray* prhs[])
 {
 	
-	param_struct.operation_name = mxArrayToString(prhs[0]);
+	char* opname = mxArrayToString(prhs[0]);
 	param_struct.args = NULL;
 	
-	if(strcmp(param_struct.operation_name, "share") == 0 || strcmp(param_struct.operation_name, "get") == 0)
+	
+	if(strcmp(opname, "open") == 0)
 	{
+		param_struct.matshare_operation = MSH_OPEN;
+	}
+	else if(strcmp(opname, "share") == 0)
+	{
+		param_struct.matshare_operation = MSH_SHARE;
 		param_struct.args = &prhs[1];
 	}
+	else if(strcmp(opname, "get") == 0)
+	{
+		param_struct.matshare_operation = MSH_GET;
+		param_struct.args = &prhs[1];
+	}
+	else if(strcmp(opname, "close") == 0)
+	{
+		param_struct.matshare_operation = MSH_CLOSE;
+	}
+	else
+	{
+		mxFree(opname);
+		mexErrMsgIdAndTxt("matshare:invalidOperation", "The specified operation is invalid. "
+				"Available operations are 'open', 'share', 'get', and 'close'.");
+	}
 	
+	mxFree(opname);
 	
 }
+
+
+void
 
