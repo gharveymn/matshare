@@ -25,10 +25,15 @@ typedef enum
 typedef struct
 {
 	matop_t matshare_operation;
-	const mxArray** args;
+	char* varname;
 } ParamStruct;
 
 void readInput(int nrhs, const mxArray* prhs[]);
+size_t getVariableSize(mxArray* variable);
+void shareVariable(mxArray* variable);
+mxArray* getVariable(char* varname);
+void unshareVariable(char* varname);
+
 
 
 #endif //MATSHARE_MATSHARE_H
