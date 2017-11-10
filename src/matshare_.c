@@ -88,7 +88,15 @@ void shareVariable(mxArray* variable, char* varname)
 	//TODO memory alignment
 	size_t variable_sz = getVariableSize(variable);
 	int fd = shm_open(param_struct.varname, O_RDWR|O_CREAT|O_TRUNC, 0666);
-	//currently assuming this object hasn't already been created
+	
+	struct stat *shm_stats;
+	fstat(fd, shm_stats);
+
+	if (fstat->st_size > 0)
+	{
+		readMXWarn("matshare:badInputError", "The variable %s already exists in shared memory.\n", varname);
+		return;
+	}
 	ftruncate(fd, variable_sz);
 	byte_t* shm_seg = mmap(NULL , variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	mxArray* variable_clone = mxDuplicateArray(variable);
