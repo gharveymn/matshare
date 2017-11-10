@@ -42,7 +42,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	switch(param_struct.matshare_operation)
 	{
 		case MSH_SHARE:
-			plhs[0] = shareVariable(prhs[1]);
+			shareVariable(prhs[1], param_struct.varname);
 			break;
 		case MSH_GET:
 			plhs[0] = getVariable(param_struct.varname);
@@ -83,11 +83,11 @@ void readInput(int nrhs, const mxArray* prhs[])
 }
 
 
-mxArray* shareVariable(mxArray* variable)
+void shareVariable(mxArray* variable, char* varname)
 {
 	//TODO memory alignment
 	size_t variable_sz = getVariableSize(variable);
-	int fd = shm_open(param_struct.varname, O_RDWR|O_CREAT|O_TRUNC, 0666);
+	int fd = shm_open(varname, O_RDWR|O_CREAT|O_TRUNC, 0666);
 	byte_t* shm_seg = mmap(NULL , variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	mxArray* variable_clone = mxDuplicateArray(variable);
 	moveSegment(variable_clone, shm_seg);
@@ -167,6 +167,10 @@ size_t getVariableSize(mxArray* variable)
 
 size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 {
+	
+	//31 possible extra padded bytes to satisfy AVX 32-byte alignment
+	curr_sz += sizeof(*variable) + 31;
+	
 	if(mxIsStruct(variable) == TRUE)
 	{
 		size_t num_structs = mxGetNumberOfElements(variable);
@@ -178,7 +182,7 @@ size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 				curr_sz += getVariableSize_(mxGetFieldByNumber(variable,i,j), curr_sz);
 			}
 		}
-		return curr_sz + sizeof(variable);
+		return curr_sz;
 	}
 	else if(mxIsCell(variable) == TRUE)
 	{
@@ -188,12 +192,18 @@ size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 			mxArray* cell = mxGetCell(variable, i);
 			curr_sz += getVariableSize_(cell, curr_sz);
 		}
-		return curr_sz + sizeof(variable);
+		return curr_sz;
 	}
 	else
 	{
-		return curr_sz + sizeof(variable)
-			  + (mxIsComplex(variable) + 1)*(mxGetElementSize(variable) + mxGetNumberOfElements(variable));
+		return curr_sz + (mxIsComplex(variable) + 1)*(mxGetElementSize(variable) + mxGetNumberOfElements(variable));
 	}
+}
+
+
+void* padTo32ByteAlign(void* ptr)
+{
+	size_t addr = (size_t)ptr;
+	return ptr + (0x1F - (addr % 0x1F));
 }
 
