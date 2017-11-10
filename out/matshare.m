@@ -4,9 +4,7 @@ function matshare(matshare_operation, variable)
 	varname = inputname(2);
 	
 	if(strcmp(matshare_operation, 'share'))
-		shared_variable = matshare_(int32(0), variable);
-		evalin('caller', ['clear(' varname ')']);
-		assignin('caller', varname, shared_variable);
+		matshare_(int32(0), variable);
 	elseif(strcmp(matshare_operation, 'get'))
 		shared_variable = matshare_(int32(1), uint8(varname));
 		assignin('caller', varname, shared_variable);
