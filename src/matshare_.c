@@ -88,6 +88,8 @@ mxArray* shareVariable(mxArray* variable)
 	//TODO memory alignment
 	size_t variable_sz = getVariableSize(variable);
 	int fd = shm_open(param_struct.varname, O_RDWR|O_CREAT|O_TRUNC, 0666);
+	//currently assuming this object hasn't already been created
+	ftruncate(fd, variable_sz);
 	byte_t* shm_seg = mmap(NULL , variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	mxArray* variable_clone = mxDuplicateArray(variable);
 	moveSegment(variable_clone, shm_seg);
@@ -111,13 +113,13 @@ void unshareVariable(char* varname)
 	int fd = shm_open(varname, O_RDWR, 0666);
 	byte_t* shm_seg = mmap(NULL , variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	mxDestroyArray((mxArray*)shm_seg);
-	ftruncate(fd,0);
+	munmap(shm_seg, variable_sz);
+	close(fd);
 }
 
 
 void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg)
 {
-	
 	memmove(shm_seg, arr_ptr, sizeof(arr_ptr));
 	shm_seg += sizeof(arr_ptr);
 	
