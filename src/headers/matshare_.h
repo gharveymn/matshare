@@ -5,6 +5,7 @@
 #include <string.h>
 #include <mex.h>
 #include <matrix.h>
+#include "../extlib/mman-win32/mman.h"
 #include "ezq.h"
 
 #define TRUE 1
@@ -15,11 +16,9 @@
 
 typedef enum
 {
-	MSH_OPEN,
 	MSH_SHARE,
 	MSH_GET,
-	MSH_UNSHARE,
-	MSH_CLOSE
+	MSH_UNSHARE
 } matop_t;
 
 typedef struct
@@ -28,11 +27,15 @@ typedef struct
 	char* varname;
 } ParamStruct;
 
+typedef char byte_t;
+
 void readInput(int nrhs, const mxArray* prhs[]);
-size_t getVariableSize(mxArray* variable);
-void shareVariable(mxArray* variable);
+mxArray* shareVariable(mxArray* variable);
 mxArray* getVariable(char* varname);
 void unshareVariable(char* varname);
+void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg);
+size_t getVariableSize(mxArray* variable);
+size_t getVariableSize_(mxArray* variable, size_t curr_sz);
 
 
 

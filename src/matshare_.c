@@ -38,13 +38,17 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	readInput(nrhs, prhs);
 	
+	
 	switch(param_struct.matshare_operation)
 	{
 		case MSH_SHARE:
+			plhs[0] = shareVariable(prhs[1]);
 			break;
 		case MSH_GET:
+			plhs[0] = getVariable(param_struct.varname);
 			break;
 		case MSH_UNSHARE:
+			unshareVariable(param_struct.varname);
 			break;
 		default:
 			break;
@@ -58,32 +62,138 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 void readInput(int nrhs, const mxArray* prhs[])
 {
 	
-	char* opname = mxArrayToString(prhs[0]);
+	param_struct.matshare_operation = (matop_t)mxGetData(prhs[0]);
 	param_struct.varname = NULL;
 	
+	switch(param_struct.matshare_operation)
+	{
+		case MSH_SHARE:
+			break;
+		case MSH_GET:
+		case MSH_UNSHARE:
+			param_struct.varname = malloc((1 + MATSHARE_SHM_SIG_LEN + mxGetNumberOfElements(prhs[1]) + 1)*sizeof(char));
+			param_struct.varname[0] = '/';
+			strcpy(param_struct.varname + 1, MATSHARE_SHM_SIG);
+			strcpy(param_struct.varname + 1 + MATSHARE_SHM_SIG_LEN, (char*)mxGetData(prhs[1]));
+			break;
+		default:
+			break;
+	}
 	
-	if(strcmp(opname, "share") == 0)
+}
+
+
+mxArray* shareVariable(mxArray* variable)
+{
+	//TODO memory alignment
+	size_t variable_sz = getVariableSize(variable);
+	int fd = shm_open(param_struct.varname, O_RDWR|O_CREAT|O_TRUNC, 0666);
+	byte_t* shm_seg = mmap(NULL , variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	mxArray* variable_clone = mxDuplicateArray(variable);
+	moveSegment(variable_clone, shm_seg);
+	mxDestroyArray(variable);
+	return (mxArray*)shm_seg;
+	
+}
+
+
+mxArray* getVariable(char* varname)
+{
+	size_t variable_sz = getVariableSize(variable);
+	int fd = shm_open(varname, O_RD, 0666);
+	byte_t* shm_seg = mmap(NULL, variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	return (mxArray*)shm_seg;
+}
+
+
+void unshareVariable(char* varname)
+{
+	int fd = shm_open(varname, O_RDWR, 0666);
+	byte_t* shm_seg = mmap(NULL , variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	mxDestroyArray((mxArray*)shm_seg);
+	ftruncate(fd,0);
+}
+
+
+void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg)
+{
+	
+	memmove(shm_seg, arr_ptr, sizeof(arr_ptr));
+	shm_seg += sizeof(arr_ptr);
+	
+	if(mxIsStruct(arr_ptr) == TRUE)
 	{
-		param_struct.matshare_operation = MSH_SHARE;
-		param_struct.varname = malloc((MATSHARE_SHM_SIG_LEN + strlen()));
+		size_t num_structs = mxGetNumberOfElements(arr_ptr);
+		int num_fields = mxGetNumberOfFields(arr_ptr);
+		for(int i = 0; i < num_structs; i++)
+		{
+			for(int j = 0; j < num_fields; j++)
+			{
+				shm_seg = moveSegment(mxGetFieldByNumber(arr_ptr, i, j), shm_seg);
+				mxSetFieldByNumber(arr_ptr, i, j, (mxArray*)shm_seg);
+			}
+		}
 	}
-	else if(strcmp(opname, "get") == 0)
+	else if(mxIsCell(arr_ptr) == TRUE)
 	{
-		param_struct.matshare_operation = MSH_GET;
-		param_struct. = &prhs[1];
-	}
-	else if(strcmp(opname, "unshare") == 0)
-	{
-		param_struct.matshare_operation = MSH_UNSHARE;
+		size_t num_cells = mxGetNumberOfElements(arr_ptr);
+		for(int i = 0; i < num_cells; i++)
+		{
+			shm_seg = moveSegment(mxGetCell(arr_ptr, i), shm_seg);
+			mxSetCell(arr_ptr, i, (mxArray*)shm_seg);
+		}
 	}
 	else
 	{
-		mxFree(opname);
-		mexErrMsgIdAndTxt("matshare:invalidOperation", "The specified operation is invalid. "
-				"Available operations are 'open', 'share', 'get', and 'close'.");
+		memmove(shm_seg, mxGetData(arr_ptr), mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr));
+		shm_seg += mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr);
+		if(mxIsComplex(arr_ptr))
+		{
+			memmove(shm_seg, mxGetImagData(arr_ptr), mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr));
+			shm_seg += mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr);
+		}
 	}
 	
-	mxFree(opname);
+	return shm_seg;
 	
+}
+
+
+size_t getVariableSize(mxArray* variable)
+{
+	return getVariableSize_(variable, 0);
+}
+
+
+size_t getVariableSize_(mxArray* variable, size_t curr_sz)
+{
+	if(mxIsStruct(variable) == TRUE)
+	{
+		size_t num_structs = mxGetNumberOfElements(variable);
+		int num_fields = mxGetNumberOfFields(variable);
+		for(int i = 0; i < num_structs; i++)
+		{
+			for(int j = 0; j < num_fields; j++)
+			{
+				curr_sz += getVariableSize_(mxGetFieldByNumber(variable,i,j), curr_sz);
+			}
+		}
+		return curr_sz + sizeof(variable);
+	}
+	else if(mxIsCell(variable) == TRUE)
+	{
+		size_t num_cells = mxGetNumberOfElements(variable);
+		for(int i = 0; i < num_cells; i++)
+		{
+			mxArray* cell = mxGetCell(variable, i);
+			curr_sz += getVariableSize_(cell, curr_sz);
+		}
+		return curr_sz + sizeof(variable);
+	}
+	else
+	{
+		return curr_sz + sizeof(variable)
+			  + (mxIsComplex(variable) + 1)*(mxGetElementSize(variable) + mxGetNumberOfElements(variable));
+	}
 }
 
