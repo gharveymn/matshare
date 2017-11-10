@@ -5,6 +5,9 @@
 #include <string.h>
 #include <mex.h>
 #include <matrix.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "../extlib/mman-win32/mman.h"
 #include "ezq.h"
 
