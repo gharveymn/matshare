@@ -201,9 +201,9 @@ size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 }
 
 
-void* padTo32ByteAlign(void* ptr)
+void* padTo32ByteAlign(byte_t* ptr)
 {
 	size_t addr = (size_t)ptr;
-	return ptr + (0x1F - (addr % 0x1F));
+	return ptr + (0x20 - (addr & 0x1F));
 }
 
