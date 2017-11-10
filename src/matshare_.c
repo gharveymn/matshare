@@ -126,8 +126,9 @@ void unshareVariable(char* varname)
 
 void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg)
 {
-	memmove(shm_seg, arr_ptr, sizeof(arr_ptr));
-	shm_seg += sizeof(arr_ptr);
+	shm_seg = padTo32ByteAlign(shm_seg);
+	memmove(shm_seg, arr_ptr, sizeof(*arr_ptr));
+	shm_seg += sizeof(*arr_ptr);
 	
 	if(mxIsStruct(arr_ptr) == TRUE)
 	{
@@ -153,10 +154,12 @@ void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg)
 	}
 	else
 	{
+		shm_seg = padTo32ByteAlign(shm_seg);
 		memmove(shm_seg, mxGetData(arr_ptr), mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr));
 		shm_seg += mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr);
 		if(mxIsComplex(arr_ptr))
 		{
+			shm_seg = padTo32ByteAlign(shm_seg);
 			memmove(shm_seg, mxGetImagData(arr_ptr), mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr));
 			shm_seg += mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr);
 		}
@@ -204,7 +207,7 @@ size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 	}
 	else
 	{
-		return curr_sz + (mxIsComplex(variable) + 1)*(mxGetElementSize(variable) + mxGetNumberOfElements(variable));
+		return curr_sz + (mxIsComplex(variable) + 1)*(mxGetElementSize(variable) + mxGetNumberOfElements(variable) + 0x20);
 	}
 }
 
