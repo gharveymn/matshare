@@ -89,10 +89,10 @@ void shareVariable(mxArray* variable, char* varname)
 	size_t variable_sz = getVariableSize(variable);
 	int fd = shm_open(param_struct.varname, O_RDWR|O_CREAT|O_TRUNC, 0666);
 	
-	struct stat *shm_stats;
-	fstat(fd, shm_stats);
-
-	if (fstat->st_size > 0)
+	struct stat shm_stats;
+	fstat(fd, &shm_stats);
+	
+	if (shm_stats.st_size > 0)
 	{
 		readMXWarn("matshare:badInputError", "The variable %s already exists in shared memory.\n", varname);
 		return;
@@ -177,7 +177,7 @@ size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 {
 	
 	//31 possible extra padded bytes to satisfy AVX 32-byte alignment
-	curr_sz += sizeof(*variable) + 31;
+	curr_sz += sizeof(*variable) + 0x20;
 	
 	if(mxIsStruct(variable) == TRUE)
 	{
