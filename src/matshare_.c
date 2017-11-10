@@ -89,10 +89,10 @@ void shareVariable(mxArray* variable, char* varname)
 	size_t variable_sz = getVariableSize(variable);
 	int fd = shm_open(param_struct.varname, O_RDWR|O_CREAT|O_TRUNC, 0666);
 	
-	struct stat *shm_stats;
-	fstat(fd, shm_stats);
-
-	if (fstat->st_size > 0)
+	struct stat shm_stats;
+	fstat(fd, &shm_stats);
+	
+	if (shm_stats.st_size > 0)
 	{
 		readMXWarn("matshare:badInputError", "The variable %s already exists in shared memory.\n", varname);
 		return;
@@ -126,8 +126,9 @@ void unshareVariable(char* varname)
 
 void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg)
 {
-	memmove(shm_seg, arr_ptr, sizeof(arr_ptr));
-	shm_seg += sizeof(arr_ptr);
+	shm_seg = padTo32ByteAlign(shm_seg);
+	memmove(shm_seg, arr_ptr, sizeof(*arr_ptr));
+	shm_seg += sizeof(*arr_ptr);
 	
 	if(mxIsStruct(arr_ptr) == TRUE)
 	{
@@ -153,10 +154,12 @@ void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg)
 	}
 	else
 	{
+		shm_seg = padTo32ByteAlign(shm_seg);
 		memmove(shm_seg, mxGetData(arr_ptr), mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr));
 		shm_seg += mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr);
 		if(mxIsComplex(arr_ptr))
 		{
+			shm_seg = padTo32ByteAlign(shm_seg);
 			memmove(shm_seg, mxGetImagData(arr_ptr), mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr));
 			shm_seg += mxGetElementSize(arr_ptr) + mxGetNumberOfElements(arr_ptr);
 		}
@@ -177,7 +180,7 @@ size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 {
 	
 	//31 possible extra padded bytes to satisfy AVX 32-byte alignment
-	curr_sz += sizeof(*variable) + 31;
+	curr_sz += sizeof(*variable) + 0x20;
 	
 	if(mxIsStruct(variable) == TRUE)
 	{
@@ -204,14 +207,14 @@ size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 	}
 	else
 	{
-		return curr_sz + (mxIsComplex(variable) + 1)*(mxGetElementSize(variable) + mxGetNumberOfElements(variable));
+		return curr_sz + (mxIsComplex(variable) + 1)*(mxGetElementSize(variable) + mxGetNumberOfElements(variable) + 0x20);
 	}
 }
 
 
-void* padTo32ByteAlign(void* ptr)
+void* padTo32ByteAlign(byte_t* ptr)
 {
 	size_t addr = (size_t)ptr;
-	return ptr + (0x1F - (addr % 0x1F));
+	return ptr + (0x20 - (addr & 0x1F));
 }
 

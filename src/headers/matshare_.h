@@ -54,7 +54,7 @@ void unshareVariable(char* varname);
 void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg);
 size_t getVariableSize(mxArray* variable);
 size_t getVariableSize_(mxArray* variable, size_t curr_sz);
-void* padTo32ByteAlign(void*);
+void* padTo32ByteAlign(byte_t*);
 
 
 #endif //MATSHARE_MATSHARE_H
