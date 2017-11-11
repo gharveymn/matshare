@@ -107,9 +107,15 @@ void shareVariable(mxArray* variable, char* varname)
 
 mxArray* getVariable(char* varname)
 {
-	size_t variable_sz = getVariableSize(variable);
-	int fd = shm_open(varname, O_RD, 0666);
+	int fd = shm_open(varname, O_RDONLY, 0666);
+    
+    //get shm segment size
+    struct stat shm_stats;
+	fstat(fd, &shm_stats);
+	size_t variable_sz = shm_stats.st_size;
+    
 	byte_t* shm_seg = mmap(NULL, variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    shm_seg = padTo32ByteAlign(shm_seg);
 	return (mxArray*)shm_seg;
 }
 
@@ -117,6 +123,12 @@ mxArray* getVariable(char* varname)
 void unshareVariable(char* varname)
 {
 	int fd = shm_open(varname, O_RDWR, 0666);
+    
+    //get shm segment size
+    struct stat shm_stats;
+	fstat(fd, &shm_stats);
+	size_t variable_sz = shm_stats.st_size;
+    
 	byte_t* shm_seg = mmap(NULL , variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	mxDestroyArray((mxArray*)shm_seg);
 	munmap(shm_seg, variable_sz);
@@ -127,7 +139,7 @@ void unshareVariable(char* varname)
 void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg)
 {
 	shm_seg = padTo32ByteAlign(shm_seg);
-	memmove(shm_seg, arr_ptr, sizeof(*arr_ptr));
+	memmove(shm_seg, arr_ptr, sizeof(mxArray));
 	shm_seg += sizeof(*arr_ptr);
 	
 	if(mxIsStruct(arr_ptr) == TRUE)
@@ -180,7 +192,7 @@ size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 {
 	
 	//31 possible extra padded bytes to satisfy AVX 32-byte alignment
-	curr_sz += sizeof(*variable) + 0x20;
+	curr_sz += sizeof(mxArray) + 0x20;
 	
 	if(mxIsStruct(variable) == TRUE)
 	{

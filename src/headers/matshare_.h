@@ -9,8 +9,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <fcntl.h>
 
-#include "ezq.h"
+#include "utils.h"
 
 
 #if (defined(_WIN32) || defined(WIN32) || defined(_WIN64)) && !defined __CYGWIN__
