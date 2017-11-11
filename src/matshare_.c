@@ -101,7 +101,6 @@ void shareVariable(mxArray* variable, char* varname)
 	byte_t* shm_seg = mmap(NULL , variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	mxArray* variable_clone = mxDuplicateArray(variable);
 	moveSegment(variable_clone, shm_seg);
-	mxDestroyArray(variable);
 }
 
 

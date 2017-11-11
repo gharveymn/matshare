@@ -42,6 +42,13 @@ typedef enum
 
 typedef struct
 {
+	mxClassID datatype;
+	const char** fieldnames;
+	
+} mxHeader_t;
+
+typedef struct
+{
 	matop_t matshare_operation;
 	char* varname;
 } ParamStruct;
