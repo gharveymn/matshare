@@ -1,8 +1,6 @@
 #ifndef EZQ_H
 #define EZQ_H
 
-#include <pthread.h>
-
 #define QUEUE_FRONT 0
 #define QUEUE_BACK 1
 
