@@ -29,9 +29,12 @@
 #define MATSHARE_SHM_SIG_LEN 11
 #define ERROR_BUFFER_SIZE 5000
 #define WARNING_BUFFER_SIZE 1000
+#define MATLAB_MAX_NAME_LENGTH 63
+#define MATLAB_MAX_NUM_DIMS 32 //mirrors MAT-files
 #define MATLAB_HELP_MESSAGE ""
 #define MATLAB_WARN_MESSAGE ""
 
+typedef char byte_t;
 
 typedef enum
 {
@@ -45,12 +48,15 @@ typedef struct mshHeader_t_ mshHeader_t;
 struct mshHeader_t_
 {
 	mxClassID datatype;
-	const char** fieldnames;
-	const mwSize* dimensions;
+	char fieldname[MATLAB_MAX_NAME_LENGTH + 1];
+	mwSize dims[MATLAB_MAX_NUM_DIMS];
+	mwSize numdims;
 	size_t elemsz;
 	size_t numelems;
+	int numfields;
 	mxComplexity iscomplex;
-	mshHeader_t* children;
+	byte_t* real_data;
+	byte_t* imag_data;
 };
 
 typedef struct
@@ -59,13 +65,11 @@ typedef struct
 	char* varname;
 } ParamStruct;
 
-typedef char byte_t;
-
 void readInput(int nrhs, const mxArray* prhs[]);
 void shareVariable(mxArray* variable, char* varname);
 mxArray* getVariable(char* varname);
 void unshareVariable(char* varname);
-void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg);
+void* storeSegment(mxArray* arr_ptr, mshHeader_t* array_header);
 size_t getVariableSize(mxArray* variable);
 size_t getVariableSize_(mxArray* variable, size_t curr_sz);
 void* padTo32ByteAlign(byte_t*);
