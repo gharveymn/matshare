@@ -109,6 +109,7 @@ mxArray* getVariable(char* varname)
 	size_t variable_sz = getVariableSize(variable);
 	int fd = shm_open(varname, O_RD, 0666);
 	byte_t* shm_seg = mmap(NULL, variable_sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	
 	return (mxArray*)shm_seg;
 }
 
@@ -125,7 +126,6 @@ void unshareVariable(char* varname)
 
 void* moveSegment(mxArray* arr_ptr, byte_t* shm_seg)
 {
-	shm_seg = padTo32ByteAlign(shm_seg);
 	memmove(shm_seg, arr_ptr, sizeof(*arr_ptr));
 	shm_seg += sizeof(*arr_ptr);
 	
@@ -178,8 +178,7 @@ size_t getVariableSize(mxArray* variable)
 size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 {
 	
-	//31 possible extra padded bytes to satisfy AVX 32-byte alignment
-	curr_sz += sizeof(*variable) + 0x20;
+	curr_sz += sizeof(mshHeader_t);
 	
 	if(mxIsStruct(variable) == TRUE)
 	{
@@ -208,6 +207,12 @@ size_t getVariableSize_(mxArray* variable, size_t curr_sz)
 	{
 		return curr_sz + (mxIsComplex(variable) + 1)*(mxGetElementSize(variable) + mxGetNumberOfElements(variable) + 0x20);
 	}
+}
+
+
+mxArray* createVariable(mshHeader_t* variable_header)
+{
+
 }
 
 

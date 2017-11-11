@@ -39,12 +39,18 @@ typedef enum
 	MSH_UNSHARE
 } matop_t;
 
-typedef struct
+
+typedef struct mshHeader_t_ mshHeader_t;
+struct mshHeader_t_
 {
 	mxClassID datatype;
 	const char** fieldnames;
-	
-} mxHeader_t;
+	const mwSize* dimensions;
+	size_t elemsz;
+	size_t numelems;
+	mxComplexity iscomplex;
+	mshHeader_t* children;
+};
 
 typedef struct
 {
