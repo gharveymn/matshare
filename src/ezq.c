@@ -11,7 +11,6 @@ Queue* initQueue(void (* free_function)(void*))
 	new_queue->length = 0;
 	new_queue->total_length = 0;
 	new_queue->free_function = free_function;
-	pthread_mutex_init(&new_queue->lock, NULL);
 	return new_queue;
 }
 
@@ -20,7 +19,6 @@ void enqueue(Queue* queue, void* data)
 {
 	QueueNode* new_node = malloc(sizeof(QueueNode));
 	new_node->data = data;
-	pthread_mutex_lock(&queue->lock);
 	if(queue->total_length == 0)
 	{
 		new_node->next = NULL;
@@ -47,14 +45,12 @@ void enqueue(Queue* queue, void* data)
 	}
 	queue->length++;
 	queue->total_length++;
-	pthread_mutex_unlock(&queue->lock);
 }
 
 
 void priorityEnqueue(Queue* queue, void* data)
 {
 	QueueNode* new_node = malloc(sizeof(QueueNode));
-	pthread_mutex_lock(&queue->lock);
 	new_node->data = data;
 	if(queue->total_length == 0)
 	{
@@ -98,30 +94,24 @@ void priorityEnqueue(Queue* queue, void* data)
 	}
 	queue->length++;
 	queue->total_length++;
-	pthread_mutex_unlock(&queue->lock);
 }
 
 
 void resetQueue(Queue* queue)
 {
-	pthread_mutex_lock(&queue->lock);
 	queue->front = queue->back;
 	queue->length = 0;
-	pthread_mutex_unlock(&queue->lock);
 }
 
 void restartQueue(Queue* queue)
 {
-	pthread_mutex_lock(&queue->lock);
 	queue->front = queue->abs_front;
 	queue->length = queue->total_length;
-	pthread_mutex_unlock(&queue->lock);
 }
 
 
 void* dequeue(Queue* queue)
 {
-	pthread_mutex_lock(&queue->lock);
 	if(queue->front != NULL)
 	{
 		void* to_return = queue->front->data;
@@ -131,12 +121,10 @@ void* dequeue(Queue* queue)
 			queue->front = new_front;
 		}
 		queue->length--;
-		pthread_mutex_unlock(&queue->lock);
 		return to_return;
 	}
 	else
 	{
-		pthread_mutex_unlock(&queue->lock);
 		return NULL;
 	}
 }
@@ -170,7 +158,6 @@ void flushQueue(Queue* queue)
 {
 	if(queue != NULL)
 	{
-		pthread_mutex_lock(&queue->lock);
 		while(queue->abs_front != NULL)
 		{
 			QueueNode* next = queue->abs_front->next;
@@ -186,7 +173,6 @@ void flushQueue(Queue* queue)
 		queue->back = NULL;
 		queue->length = 0;
 		queue->total_length = 0;
-		pthread_mutex_unlock(&queue->lock);
 	}
 }
 
@@ -196,7 +182,6 @@ void cleanQueue(Queue* queue)
 	//move the absolute front to the same position as front and free up the queue objects along the way
 	if(queue != NULL)
 	{
-		pthread_mutex_lock(&queue->lock);
 		while(queue->abs_front != queue->front)
 		{
 			QueueNode* next = queue->abs_front->next;
@@ -210,7 +195,6 @@ void cleanQueue(Queue* queue)
 			queue->abs_front = next;
 			queue->total_length--;
 		}
-		pthread_mutex_unlock(&queue->lock);
 	}
 }
 
