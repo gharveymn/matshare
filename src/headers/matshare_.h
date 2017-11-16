@@ -35,6 +35,7 @@
 #define MATLAB_WARN_MESSAGE ""
 
 typedef char byte_t;
+typedef uint8_t bool_t;
 
 typedef enum
 {
@@ -54,9 +55,11 @@ struct mshHeader_t_
 	size_t elemsz;
 	size_t numelems;
 	int numfields;
-	mxComplexity iscomplex;
+	mxComplexity is_complex;
 	byte_t* real_data;
 	byte_t* imag_data;
+	mshHeader_t* first_child;
+	mshHeader_t* right_adj;
 };
 
 typedef struct
@@ -73,6 +76,6 @@ void* storeSegment(mxArray* arr_ptr, mshHeader_t* array_header);
 size_t getVariableSize(mxArray* variable);
 size_t getVariableSize_(mxArray* variable, size_t curr_sz);
 void* padTo32ByteAlign(byte_t*);
-
+void exitHooks(void);
 
 #endif //MATSHARE_MATSHARE_H
