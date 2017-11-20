@@ -1,5 +1,5 @@
 addpath('res')
-addpath('bin')
+addpath('out')
 
 testvar = 'a';
 matshare('share','a');

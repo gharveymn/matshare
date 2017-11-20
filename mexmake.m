@@ -1,5 +1,5 @@
 addpath('src')
-output_path = [pwd '/bin'];
+output_path = [pwd '/out'];
 cd src
 
 try

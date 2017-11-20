@@ -12,11 +12,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		mexErrMsgIdAndTxt("matshare:notEnoughArguments", "Not enough arguments.");
 	}
 	
-	if(mxIsChar(prhs[0]) != TRUE)
-	{
-		mexErrMsgIdAndTxt("matshare:invalidArgument", "The first argument must be a character vector.");
-	}
-	
 	/* SUPPORTED TYPES GOAL
 	n	mxUNKNOWN_CLASS,
 	y	mxCELL_CLASS,
@@ -146,7 +141,7 @@ mxArray* getVariable(char* varname)
 	
 	byte_t* shm_seg = mmap(NULL, variable_sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	mapped_seg_ptr = mxMalloc(sizeof(byte_t*));
-	mapped_seg_ptr[0] = &(*shm_seg);
+	memcpy(mapped_seg_ptr, &shm_seg, sizeof(byte_t*));
 	mexMakeMemoryPersistent(mapped_seg_ptr);
 	return createVariable((mshHeader_t*)shm_seg);
 }
