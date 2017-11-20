@@ -27,6 +27,8 @@ try
 		
 	elseif(strcmp(mex.getCompilerConfigurations('C','Selected').ShortName, 'gcc'))
 		
+		mexflags = [mexflags,{'-lrt'}];
+		
 		mex(mexflags{:}, sources{:})
 		
 	end

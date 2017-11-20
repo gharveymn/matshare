@@ -35,7 +35,6 @@
 #define MATLAB_WARN_MESSAGE ""
 
 typedef char byte_t;
-typedef uint8_t bool_t;
 
 typedef enum
 {
