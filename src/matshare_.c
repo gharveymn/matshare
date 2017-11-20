@@ -2,6 +2,7 @@
 
 
 static ParamStruct param_struct;
+static byte_t** mapped_seg_ptr;
 
 
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
@@ -55,6 +56,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		default:
 			break;
 	}
+	
+	exitHooks();
 	
 }
 
@@ -114,7 +117,7 @@ void shareVariable(mxArray* variable, char* varname)
 {
 	//TODO memory alignment
 	size_t variable_sz = getVariableSize(variable);
-	int fd = shm_open(param_struct.varname, O_RDWR | O_CREAT | O_TRUNC, 0666);
+	int fd = shm_open(varname, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	
 	struct stat shm_stats;
 	fstat(fd, &shm_stats);
@@ -128,6 +131,7 @@ void shareVariable(mxArray* variable, char* varname)
 	byte_t* shm_seg = mmap(NULL, variable_sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	mxArray* variable_clone = mxDuplicateArray(variable);
 	storeSegment(variable_clone, shm_seg);
+	munmap(shm_seg, variable_sz);
 }
 
 
@@ -141,7 +145,10 @@ mxArray* getVariable(char* varname)
 	size_t variable_sz = shm_stats.st_size;
 	
 	byte_t* shm_seg = mmap(NULL, variable_sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	return (mxArray*) shm_seg;
+	mapped_seg_ptr = mxMalloc(sizeof(byte_t*));
+	mapped_seg_ptr[0] = &(*shm_seg);
+	mexMakeMemoryPersistent(mapped_seg_ptr);
+	return createVariable((mshHeader_t*)shm_seg);
 }
 
 
@@ -153,10 +160,8 @@ void unshareVariable(char* varname)
 	struct stat shm_stats;
 	fstat(fd, &shm_stats);
 	size_t variable_sz = shm_stats.st_size;
-	
-	byte_t* shm_seg = mmap(NULL, variable_sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	mxDestroyArray((mxArray*) shm_seg);
-	munmap(shm_seg, variable_sz);
+	munmap(*mapped_seg_ptr, variable_sz);
+	shm_unlink(varname);
 	close(fd);
 }
 
@@ -404,6 +409,9 @@ void* padTo32ByteAlign(byte_t* ptr)
 
 void exitHooks(void)
 {
-	free(param_struct.varname);
+	if(param_struct.varname != NULL)
+	{
+		free(param_struct.varname);
+	}
 }
 

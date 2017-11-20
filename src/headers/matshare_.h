@@ -73,6 +73,7 @@ void shareVariable(mxArray* variable, char* varname);
 mxArray* getVariable(char* varname);
 void unshareVariable(char* varname);
 void* storeSegment(mxArray* arr_ptr, mshHeader_t* array_header);
+mxArray* createVariable(mshHeader_t* variable_header);
 size_t getVariableSize(mxArray* variable);
 size_t getVariableSize_(mxArray* variable, size_t curr_sz);
 void* padTo32ByteAlign(byte_t*);
