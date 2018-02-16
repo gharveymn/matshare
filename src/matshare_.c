@@ -2,7 +2,7 @@
 
 
 static ParamStruct param_struct;
-
+extern int shm_open(const char *name, int oflag, mode_t mode);
 
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {

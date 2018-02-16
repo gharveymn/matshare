@@ -6,7 +6,7 @@ void* padTo32ByteAlign(char* ptr);
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
 	int len;
-	void *data;
+	void* data;
 	void* newdata;
 	size_t data_addr;
 	size_t padded_data_addr;
@@ -18,6 +18,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 		data = malloc (len);
 		data_addr = (size_t) data;
 		alignment |= data_addr;
+		
+		
 		free(data);
 	}
 	mexPrintf ("malloc alignment=%lx\n", alignment & 0x1F);
@@ -41,5 +43,5 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 void* padTo32ByteAlign(char* ptr)
 {
 	size_t addr = (size_t)ptr;
-	return ptr + (0x20 - (addr & 0x1F));
+	return ptr + (0x1F & (0x20 - (addr & 0x1F)));
 }

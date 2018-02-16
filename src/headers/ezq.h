@@ -1,6 +1,8 @@
 #ifndef EZQ_H
 #define EZQ_H
 
+#include "matshare_.h"
+
 #define QUEUE_FRONT 0
 #define QUEUE_BACK 1
 

@@ -10,6 +10,24 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <pthread.h>
+
+#if UINTPTR_MAX == 0xffffffffffffffff
+#define GMV_64_BIT
+typedef int64_t address_t;
+typedef int64_t index_t;
+#define UNDEF_ADDR (address_t)0xffffffffffffffff
+#elif UINTPTR_MAX == 0xffffffff
+#define GMV_32_BIT
+typedef uint32_t address_t;
+typedef uint32_t index_t;
+#define UNDEF_ADDR (address_t)0xffffffff
+#else
+#error Your architecture is weird
+#endif
 
 #include "utils.h"
 
@@ -21,7 +39,6 @@
 #else
 #include <sys/mman.h>
 #endif
-
 
 #define TRUE 1
 #define FALSE 0
@@ -35,6 +52,7 @@
 #define MATLAB_WARN_MESSAGE ""
 
 typedef char byte_t;
+typedef bool bool_t;
 
 typedef enum
 {
@@ -73,6 +91,9 @@ void* storeSegment(mxArray* arr_ptr, mshHeader_t* array_header);
 size_t getVariableSize(mxArray* variable);
 size_t getVariableSize_(mxArray* variable, size_t curr_sz);
 void* padTo32ByteAlign(byte_t*);
+
+
+
 
 
 #endif //MATSHARE_MATSHARE_H

@@ -22,3 +22,6 @@ To shut down
 ```Matlab
 	matshare('close');
 ```
+
+TODO: Implement this as a MATLAB class to automatically handle setting of variables, so that shared variables are
+mutable like any other MATLAB variable.

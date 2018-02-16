@@ -16,13 +16,23 @@
 // #endif
 
 /* Determine offset type */
+#ifdef NO_MEX
 #include <stdint.h>
+#else
+#include <mex.h>
+#ifndef int64_t
+#define int64_t int64_T
+#endif
 
+#ifndef uint32_t
+#define uint32_t uint32_T
+#endif
+#endif
 
 #if defined(_WIN64)
-typedef int64_t OffsetType;
+typedef int64_t address_t;
 #else
-typedef uint32_t OffsetType;
+typedef uint32_t address_t;
 #endif
 
 #include <sys/types.h>
@@ -53,7 +63,7 @@ extern "C" {
 #define MS_INVALIDATE   4
 
 
-void* mmap(void* addr, size_t len, int prot, int flags, int fildes, OffsetType off);
+void* mmap(void* addr, size_t len, int prot, int flags, int fildes, address_t off);
 
 
 int munmap(void* addr, size_t len);
