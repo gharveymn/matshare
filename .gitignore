@@ -56,6 +56,6 @@ bld/
 [Bb]in/*
 !*pthreadVC2.dll
 !*pthreadGC2.dll
-!*getmatvar.m
+!*matshare.m
 [Oo]bj/
 [Ll]og/

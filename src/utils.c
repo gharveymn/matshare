@@ -1,6 +1,5 @@
 #include "headers/utils.h"
 
-
 void readMXError(const char error_id[], const char error_message[], ...)
 {
 	

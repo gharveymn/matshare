@@ -1,5 +1,5 @@
 addpath('src')
-output_path = [pwd '/bin'];
+output_path = [pwd '/out'];
 cd src
 
 try
@@ -26,6 +26,8 @@ try
 		mex(mexflags{:}, sources{:})
 		
 	elseif(strcmp(mex.getCompilerConfigurations('C','Selected').ShortName, 'gcc'))
+		
+		mexflags = [mexflags,{'-lrt'}];
 		
 		mex(mexflags{:}, sources{:})
 		
