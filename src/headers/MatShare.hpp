@@ -1,66 +1,5 @@
-/*
- * SharedMemory.hpp
- *
- * This Matlab Mex program allows you to matlab variable between different
- * Matlab processes under Windows (e.g. for the parrellel toolbox).  It has four functions:
- *
- * 1) clone:
- *    Recursively place the contents of a matlab array into shared memory.
- *    This is a "full" copy, so at this point there is a copy of the data in Matlab's memory and shared memory
- * 2) attach:
- *    "Reconstitute" the shared data into the appropriate Matlab object using
- *    shallow copying.  The process that attaches to the shared memory will make the memory
- *    persistent until it is free'd by the attaching process or the attaching process ends.
- * 3) detach:
- *    Remove the shallow references and detach the shared memory from the
- *    Matlab data space.  Ensure this is done before the variable is cleared
- *    or else Matlab WILL crash.
- * 4) free:
- *    Mark the shared memory for destruction.  The shared memory will only be destroyed when all processes attached to it have called free.
- *
- *	  Notes:
- *    1) This is reliant on the BOOST interprocess library to compile
- *    2) Do not use pack after a variable is attached or Matlab WILL crash
- *    3) Do not call "clear mex" while there is data in the shared memory.  The handle to the shared
- *       memory will be lost and the only way to free it will be to restart the system.
- *
- *
- * This code can be compiled from within Matlab or command-line, assuming the
- * system is appropriately setup.  To compile, invoke:
- *
- * For 32-bit machines:
- *     mex -O -v -I<BoostDir> SharedMemory.cpp
- * For 64-bit machines:
- *     mex -largeArrayDims -O -v -I<BoostDir> SharedMemory.cpp
- *
- * where <BoostDir> is the Boost directory, e.g. C:\Program Files\Boost\boost_1_45_0
- * The Boost library (or at least the InterProcess library) must be present for this to compile
- *
- *  Example usage:
- *
- * Create a crazy matlab array
- Cell = {eye(3), struct('a', 1, 'b', sparse(eye(3))), 'dummy'};										   %different data types
- X = struct('cat', [], 'happy', 'I am', 'guff', randn(2,3,4,5), 'mayhem', sparse(randn(3,2 > .5)));    %different data types
- X.cat = Cell;  %to check recursion
- 
- % copy the contents of x into shared memory (x retains its copy)
- SharedMemory('clone','x_shared',X);
-
- % make a copy variable Y from the shared memory.  Y's data exists in the shared memory
- Y = SharedMemory('attach','x_shared');
-
- % detach Y making it safe to destroy (Y will retain its cell/structure structure however all numeric matrices will be empty)
- % this must be done before Y is cleared or Matlab will crash
- SharedMemory('detach', 'x_shared', Y);
-
- %Free the shared memory.  It will no longer be possible to attach a variable to 'x_shared'
- SharedMemory('free','x_shared')
- *
- */
-
-
 /* ------------------------------------------------------------------------- */
-/* --- SHAREDMEMORY.H ------------------------------------------------------ */
+/* --- MATSHARE.H ------------------------------------------------------ */
 /* ------------------------------------------------------------------------- */
 
 #ifndef shared_memory__hpp
@@ -102,9 +41,13 @@
 /* max length of directive string */
 #define MAXDIRECTIVELEN 256
 
+#define MATSHARE_SEGMENT_NAME "MATSHARE_SEGMENT"
+
 /* these are used for recording structure field names */
 const char term_char = ';';          /*use this character to terminate a string containing the list of fields.  Do this because it can't be in a valid field name*/
 const size_t align_size = 8;   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
+
+mxArray* global_shared_variable;
 
 
 /*
@@ -134,6 +77,15 @@ typedef int64_t index_t;
 	#error Your architecture is weird
 #endif
 
+
+enum msh_directive_t
+{
+	msh_INIT,
+	msh_CLONE,
+	msh_ATTACH,
+	msh_DETACH,
+	msh_FREE
+};
 
 /* structure used to record all of the data addresses */
 struct data
@@ -169,6 +121,8 @@ struct header
 	int par_hdr_off;   /* offset to the parent's header, add this to help backwards searches (double linked... sort of)*/
 	size_t shmsiz;            /* size of serialized object (header + size array + field names string) */
 };
+
+void init();
 
 /* Remove shared memory references to input matrix (in-situ), recursively    */
 /* if needed.                                                                */
