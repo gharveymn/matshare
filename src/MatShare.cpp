@@ -52,7 +52,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	{
 		case msh_INIT:
 			init();
-			prhs[0] = global_shared_variable;
+			plhs[0] = global_shared_variable;
 			break;
 		case msh_CLONE:
 			/********************/
@@ -67,16 +67,22 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			}
 			
 			/* Assign */
-			mxInput = prhs[2];
+			mxInput = prhs[1];
 			
 			/* scan input data */
-			sm_size = deepscan(&hdr, &dat, mxInput, nullptr);
+			sm_size = deepscan(&hdr, &dat, mxInput, nullptr, global_shared_variable);
 
 #ifdef DEBUG
 			mexPrintf("clone: Debug: deepscan done.\n");
 #endif
 			
 			/* create the segment */
+			segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
+			if(segIndex < 0)
+			{
+				SegmentBuffer.removeSegmentByIndex(segIndex);
+			}
+			
 			try
 			{
 				pSegment = new windows_shared_memory(open_or_create, MATSHARE_SEGMENT_NAME, read_write, sm_size);
@@ -203,7 +209,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			/* NULL all of the Matlab pointers */
 			deepdetach((mxArray*) mxInput);               /* Abuse const */
-			mxOutput = mxCreateDoubleScalar(0.0);
 			
 			/* Tell the segment buffer that a matlab variables is "dettached" to it */
 			SegmentBuffer.removeReferenceByIndex(segIndex);
@@ -493,7 +498,7 @@ size_t shallowrestore(char* shm, mxArray** p_mxInput)
 		shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));          /* takes us to the end of the real data */
 		
 		/* if complex get a pointer to the complex data */
-		if(hdr->isComplex)
+		if(hdr->complexity == mxCOMPLEX)
 		{
 			pi = (void*) shm;
 			shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));     /* takes us to the end of the complex data */
@@ -519,7 +524,7 @@ size_t shallowrestore(char* shm, mxArray** p_mxInput)
 			}
 			else
 			{
-				*p_mxInput = mxCreateSparse(0, 0, 0, (hdr->isComplex) ? mxCOMPLEX : mxREAL);
+				*p_mxInput = mxCreateSparse(0, 0, 0, hdr->complexity);
 			}
 			
 			/* Free the memory it was created with */
@@ -559,7 +564,7 @@ size_t shallowrestore(char* shm, mxArray** p_mxInput)
 #endif
 			
 			/*  create an empty array */
-			*p_mxInput = mxCreateNumericMatrix(0, 0, hdr->classid, (hdr->isComplex) ? mxCOMPLEX : mxREAL);
+			*p_mxInput = mxCreateNumericMatrix(0, 0, hdr->classid, hdr->complexity);
 			
 			/* set the size */
 			if(mxSetDimensions(*p_mxInput, pSize, hdr->nDims))
@@ -579,14 +584,14 @@ size_t shallowrestore(char* shm, mxArray** p_mxInput)
 		/* Hack  Method */
 		/* ((Internal_mxArray*)(*p_mxInput))->data.number_array.pdata = pBuffer;  / * works assuming the size is <= 50 * / */
 		// ((Internal_mxArray*)(*p_mxInput))->data.number_array.pdata = pr;		 /* Hack */
-		// if ( hdr->isComplex )
+		// if ( hdr->complexity )
 		// {	((Internal_mxArray*)(*p_mxInput))->data.number_array.pimag_data = pi;   }
 
 #else
 		
 		/* Safe - but takes it out of global memory */
 		mxSetData(*p_mxInput, safeCopy(pr, hdr->nzmax*hdr->elemsiz));
-		if ( hdr->isComplex )
+		if ( hdr->complexity )
 		{	mxSetImagData(*p_mxInput, safeCopy(pi, hdr->nzmax*hdr->elemsiz));  }
 #endif
 	
@@ -609,7 +614,7 @@ size_t shallowrestore(char* shm, mxArray** p_mxInput)
 /* Returns:                                                                  */
 /*    size that shared memory segment will need to be.                       */
 /* ------------------------------------------------------------------------- */
-size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr)
+size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray* ret_var)
 {
 	/* counter */
 	size_t i;
@@ -632,10 +637,9 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	if(mxInput == (const mxArray*) nullptr || mxIsEmpty(mxInput))
 	{
 		/* initialize header info */
-		hdr->isCell = 0;
-		hdr->isSparse = 0;
-		hdr->isComplex = 0;
-		hdr->isStruct = 0;
+		hdr->isNumeric = false;
+		hdr->isSparse = false;
+		hdr->complexity = mxREAL;
 		hdr->classid = mxUNKNOWN_CLASS;
 		hdr->nDims = 0;
 		hdr->elemsiz = 0;
@@ -647,10 +651,9 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	}
 	
 	/* initialize header info */
-	hdr->isCell = mxIsCell(mxInput);
+	hdr->isNumeric = mxIsNumeric(mxInput);
 	hdr->isSparse = mxIsSparse(mxInput);
-	hdr->isComplex = mxIsComplex(mxInput);
-	hdr->isStruct = mxIsStruct(mxInput);
+	hdr->complexity = mxIsComplex(mxInput)? mxCOMPLEX : mxREAL;
 	hdr->classid = mxGetClassID(mxInput);
 	hdr->nDims = mxGetNumberOfDimensions(mxInput);
 	hdr->elemsiz = mxGetElementSize(mxInput);
@@ -664,8 +667,9 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	/* Add space for the dimensions */
 	hdr->shmsiz += pad_to_align(hdr->nDims * sizeof(mwSize));
 	
+	
 	/* Structure case */
-	if(hdr->isStruct)
+	if(hdr->classid == mxSTRUCT_CLASS)
 	{
 #ifdef DEBUG
 		mexPrintf("deepscan: Debug: found structure.\n");
@@ -675,7 +679,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		hdr->nFields = mxGetNumberOfFields(mxInput);
 		
 		/* Find the size required to store the field names */
-		strBytes = FieldNamesSize(mxInput);     /* always a multiple of alignment size */
+		strBytes = (size_t)FieldNamesSize(mxInput);     /* always a multiple of alignment size */
 		hdr->shmsiz += strBytes;                   /* Add space for the field string */
 		
 		/* use mxCalloc so mem is freed on error via garbage collection */
@@ -685,8 +689,13 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		dat->child_dat = (data_t*) &dat->child_hdr[hdr->nFields * hdr->nzmax];
 		dat->field_str = (char*) &dat->child_dat[hdr->nFields * hdr->nzmax];
 		
+		const char** field_names = (const char**)mxMalloc(hdr->nFields*sizeof(char*));
+		
 		/* make a record of the field names */
-		CopyFieldNames(mxInput, dat->field_str);
+		CopyFieldNames(mxInput, dat->field_str, field_names);
+		
+		ret_var = mxCreateStructArray(hdr->nDims, dat->pSize, hdr->nFields, field_names);
+		mexMakeArrayPersistent(ret_var);
 		
 		/* go through each recursively */
 		count = 0;
@@ -696,7 +705,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			{
 				/* call recursivley */
 				hdr->shmsiz += deepscan(&(dat->child_hdr[count]), &(dat->child_dat[count]),
-								    mxGetFieldByNumber(mxInput, i, field_num), hdr);
+								    mxGetFieldByNumber(mxInput, i, field_num), hdr, mxGetFieldByNumber(ret_var, i, field_num));
 				
 				count++; /* progress */
 #ifdef DEBUG
@@ -705,7 +714,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			}
 		}
 	}
-	else if(hdr->isCell) /* Cell case */
+	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
 #ifdef DEBUG
 		mexPrintf("deepscan: Debug: found cell.\n");
@@ -715,10 +724,13 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		dat->child_hdr = (header_t*) mxCalloc(hdr->nzmax, sizeof(header_t) + sizeof(data_t));
 		dat->child_dat = (data_t*) &dat->child_hdr[hdr->nzmax];
 		
+		ret_var = mxCreateCellArray(hdr->nDims, dat->pSize);
+		mexMakeArrayPersistent(ret_var);
+		
 		/* go through each recursively */
 		for(i = 0; i < hdr->nzmax; i++)
 		{
-			hdr->shmsiz += deepscan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr);
+			hdr->shmsiz += deepscan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr, mxGetCell(ret_var, i));
 #ifdef DEBUG
 			mexPrintf("deepscan: Debug: finished %d.\n",i);
 #endif
@@ -731,27 +743,63 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 					"least one non-empty item (at all levels).");
 		}
 	}
-	else if(mxIsNumeric(mxInput) || mxIsLogical(mxInput) ||
-		   mxIsChar(mxInput))  /* a matrix containing data *//* base case */
+	else if(hdr->isNumeric || hdr->classid == mxLOGICAL_CLASS || hdr->classid == mxCHAR_CLASS)  /* a matrix containing data *//* base case */
 	{
 		dat->pr = mxGetData(mxInput);
 		dat->pi = mxGetImagData(mxInput);
 		
-		/*is it sparse? */
 		if(hdr->isSparse)
 		{
 			/* len(pr)=nzmax, len(ir)=nzmax, len(jc)=colc+1 */
-			hdr->nzmax = mxGetNzmax(mxInput);
+			hdr->nzmax = (size_t)mxGetNzmax(mxInput);
 			dat->ir = mxGetIr(mxInput);
 			dat->jc = mxGetJc(mxInput);
 			hdr->shmsiz += pad_to_align(
 					sizeof(mwIndex) * (hdr->nzmax));      /* ensure both pointers are aligned individually */
 			hdr->shmsiz += pad_to_align(sizeof(mwIndex) * (dat->pSize[1] + 1));
+			
+			if(hdr->isNumeric)
+			{
+				ret_var = mxCreateSparse(mxGetM(mxInput), mxGetN(mxInput), 1, hdr->complexity);
+			}
+			else
+			{
+				ret_var = mxCreateSparseLogicalMatrix(mxGetM(mxInput), mxGetN(mxInput), 1);
+			}
+			
+			mxFree(mxGetIr(ret_var));
+			mwIndex* ret_ir = (mwIndex*)mxMalloc(hdr->nzmax * sizeof(mwIndex));
+			memcpy(ret_ir, dat->ir, hdr->nzmax * sizeof(mwIndex));
+			mxSetIr(ret_var, ret_ir);
+			
+			mwIndex* ret_jc = mxGetJc(ret_var);
+			memcpy(ret_jc, dat->jc, hdr->nzmax * sizeof(mwIndex));
+			
+			
 		}
+		else
+		{
+			if(hdr->isNumeric)
+			{
+				ret_var = mxCreateNumericArray(0, nullptr, hdr->classid, hdr->complexity);
+				mxSetDimensions(ret_var, dat->pSize, hdr->nDims);
+			}
+			else if(hdr->classid == mxLOGICAL_CLASS)
+			{
+				ret_var = mxCreateLogicalArray(0, nullptr);
+				mxSetDimensions(ret_var, dat->pSize, hdr->nDims);
+			}
+			else
+			{
+				ret_var = mxCreateCharArray(0, nullptr);
+				mxSetDimensions(ret_var, dat->pSize, hdr->nDims);
+			}
+		}
+		mexMakeArrayPersistent(ret_var);
 		
 		/* ensure both pointers are aligned individually */
 		hdr->shmsiz += pad_to_align(hdr->elemsiz * hdr->nzmax);
-		if(hdr->isComplex)
+		if(hdr->complexity == mxCOMPLEX)
 		{
 			hdr->shmsiz += pad_to_align(hdr->elemsiz * hdr->nzmax);
 		}
@@ -863,7 +911,7 @@ void deepcopy(header_t* hdr, data_t* dat, char* shm, header_t* par_hdr)
 		shm += pad_to_align(n);
 		
 		/* copy complex data as well */
-		if(hdr->isComplex)
+		if(hdr->complexity == mxCOMPLEX)
 		{
 			n = (hdr->nzmax) * (hdr->elemsiz);
 			memcpy(shm, dat->pi, n);
@@ -960,7 +1008,7 @@ int FieldNamesSize(const mxArray* mxStruct)
 /* Function to copy all of the field names to a character array    */
 /* Use FieldNamesSize() to allocate the required size of the array */
 /* returns the number of bytes used in pList					   */
-int CopyFieldNames(const mxArray* mxStruct, char* pList)
+int CopyFieldNames(const mxArray* mxStruct, char* pList, const char** field_names)
 {
 	const char* pFieldName;    /* name of the field to add to the list */
 	int nFields;                    /* the number of fields */
@@ -975,6 +1023,7 @@ int CopyFieldNames(const mxArray* mxStruct, char* pList)
 	{
 		/* This field */
 		pFieldName = mxGetFieldNameByNumber(mxStruct, i);
+		field_names[i] = pFieldName;
 		j = 0;
 		while(pFieldName[j])
 		{

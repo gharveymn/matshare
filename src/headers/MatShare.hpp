@@ -49,7 +49,6 @@ const size_t align_size = 8;   /*the pointer alignment size, so if pdata is a va
 
 mxArray* global_shared_variable;
 
-
 /*
  * The header_t object will be copied to shared memory in its entirety.
  *
@@ -109,15 +108,14 @@ struct data
 /* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
 struct header
 {
-	bool isCell;
 	bool isSparse;
-	bool isComplex;
-	bool isStruct;
+	bool isNumeric;
+	mxComplexity complexity;
 	mxClassID classid;       /* matlab class id */
-	size_t nDims;         /* dimensionality of the matrix.  The size array immediately follows the header */
+	int nDims;         /* dimensionality of the matrix.  The size array immediately follows the header */
 	size_t elemsiz;       /* size of each element in pr and pi */
 	size_t nzmax;         /* length of pr,pi */
-	size_t nFields;       /* the number of fields.  The field string immediately follows the size array */
+	int nFields;       /* the number of fields.  The field string immediately follows the size array */
 	int par_hdr_off;   /* offset to the parent's header, add this to help backwards searches (double linked... sort of)*/
 	size_t shmsiz;            /* size of serialized object (header + size array + field names string) */
 };
@@ -161,7 +159,7 @@ int FieldNamesSize(const mxArray* mxStruct);
 /*Function to copy all of the field names to a character array				*/
 /*Use FieldNamesSize() to allocate the required size of the array			*/
 /*returns the number of bytes used in pList									*/
-int CopyFieldNames(const mxArray* mxStruct, char* pList);
+int CopyFieldNames(const mxArray* mxStruct, char* pList, const char** field_names);
 
 /*This function finds the number of fields contained within in a string      */
 /*the string is terminated by term_char, a character that can't be in a      */
