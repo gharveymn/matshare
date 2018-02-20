@@ -1,4 +1,4 @@
-#include "headers/MatShare.hpp"
+#include "headers/matshare_.hpp"
 
 /* shared memory for windows - shared mem is destroyed when no threads are attached to it*/
 using namespace boost::interprocess;
@@ -15,6 +15,7 @@ static shared_mem_stack SegmentBuffer;
 /* ------------------------------------------------------------------------- */
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
+	
 	/* For inputs */
 	const mxArray* mxDirective;               /*  Directive {clone, attach, detach, free}   */
 	const mxArray* mxInput;                /*  Input array (for clone)					  */
@@ -36,7 +37,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	data_t dat;
 	
 	/* check min number of arguments */
-	if(nrhs < 2)
+	if(nrhs < 1)
 	{
 		mexErrMsgIdAndTxt("MATLAB:SharedMemory", "Minimum input arguments missing; must supply directive and key.");
 	}
@@ -45,7 +46,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	mxDirective = prhs[0];
 	
 	/* get directive */
-	directive = (msh_directive_t)mxGetData(mxDirective);
+	directive = (msh_directive_t)*((uint8_t*)(mxGetData(mxDirective)));
 	
 	/* Switch yard {clone, attach, detach, free} */
 	switch(directive)
@@ -53,6 +54,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		case msh_INIT:
 			init();
 			plhs[0] = global_shared_variable;
+			mexPrintf("%d", mxGetNumberOfElements(global_shared_variable));
+			mexPrintf("%d", mxIsEmpty(global_shared_variable));
 			break;
 		case msh_CLONE:
 			/********************/
@@ -60,10 +63,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/********************/
 			
 			/* check the inputs */
-			if((nrhs < 3) || (mxIsEmpty(prhs[2])))
+			if((nrhs < 2) || (mxIsEmpty(prhs[1])))
 			{
 				mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone",
-							   "Required third argument is missing (variable) or empty.");
+							   "Required second argument is missing (variable) or empty.");
 			}
 			
 			/* Assign */
@@ -165,7 +168,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 #endif
 			
 			/* Restore the segments */
-			shallowrestore((char*) pRegion->get_address(), &mxOutput);
+			shallowrestore((char*) pRegion->get_address(), global_shared_variable);
 			
 			/* Tell the segment buffer that a matlab variables is "attached" to it */
 			SegmentBuffer.addReferenceByIndex(segIndex);
@@ -181,37 +184,38 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/*	Dettach case	*/
 			/********************/
 			
-			/* check validity */
-			if((nrhs < 3) || mxIsEmpty(prhs[0]))
+			mexPrintf("%d", mxGetNumberOfElements(global_shared_variable));
+			mexPrintf("%d", mxIsEmpty(global_shared_variable));
+			
+			if(global_shared_variable != nullptr && !mxIsEmpty(global_shared_variable))
 			{
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:detach",
-							   "Required third argument is missing (variable) or empty.");
+				
+				/* Find the segment */
+				segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
+				
+				/* check the mapping exists */
+				if(segIndex < 0)
+				{
+					mexErrMsgIdAndTxt("MATLAB:SharedMemory:detach",
+								   "There is no shared segment with this name in this process.");
+				}
+				
+				if(SegmentBuffer.getRefCountByIndex(segIndex) < 1)
+				{
+					mexErrMsgIdAndTxt("MATLAB:SharedMemory:detach",
+								   "There are no variables attached to the shared memory in this process.");
+				}
+				
+				/* NULL all of the Matlab pointers */
+				deepdetach(global_shared_variable);
+				
+				/* Tell the segment buffer that a matlab variables is "detached" to it */
+				SegmentBuffer.removeReferenceByIndex(segIndex);
+				
 			}
 			
-			/* Assign */
-			mxInput = prhs[2];
-			
-			/* Find the segment */
-			segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
-			
-			/* check the mapping exists */
-			if(segIndex < 0)
-			{
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:detach",
-							   "There is no shared segment with this name in this process.");
-			}
-			
-			if(SegmentBuffer.getRefCountByIndex(segIndex) < 1)
-			{
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:detach",
-							   "There are no variables attached to the shared memory in this process.");
-			}
-			
-			/* NULL all of the Matlab pointers */
-			deepdetach((mxArray*) mxInput);               /* Abuse const */
-			
-			/* Tell the segment buffer that a matlab variables is "dettached" to it */
-			SegmentBuffer.removeReferenceByIndex(segIndex);
+			init();
+			plhs[0] = global_shared_variable;
 			
 			break;
 		case msh_FREE:
@@ -225,8 +229,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* check the mapping exists */
 			if(segIndex < 0)
 			{
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:free",
-							   "There are no shared segments with this name in this process.");
+				break;
+				//mexErrMsgIdAndTxt("MATLAB:SharedMemory:free",
+				//			   "There are no shared segments with this name in this process.");
 			}
 			
 			if(SegmentBuffer.getRefCountByIndex(segIndex) > 0)
@@ -254,8 +259,8 @@ void init()
 {
 	global_shared_variable = mxCreateDoubleMatrix(0,0,mxREAL);
 	mexMakeArrayPersistent(global_shared_variable); /* freed by Matlab Memory Manager */
+	mexAtExit(onExit);
 }
-
 
 
 /* ------------------------------------------------------------------------- */
@@ -269,7 +274,7 @@ void init()
 /* Returns:                                                                  */
 /*    Pointer to start of shared memory segment.                             */
 /* ------------------------------------------------------------------------- */
-void deepdetach(mxArray* mxInput)
+void deepdetach(mxArray* ret_var)
 {
 	
 	/* uses side-effects! */
@@ -282,87 +287,76 @@ void deepdetach(mxArray* mxInput)
 	size_t nFields, j;
 	
 	/* restore matlab  memory */
-	if(mxInput == (mxArray*) nullptr || mxIsEmpty(mxInput))
+	if(ret_var == (mxArray*) nullptr || mxIsEmpty(ret_var))
 	{
 		return;
 	}
-	else if(mxIsStruct(mxInput))
+	else if(mxIsStruct(ret_var))
 	{
 		/* detach each field for each element */
-		n = mxGetNumberOfElements(mxInput);
-		nFields = mxGetNumberOfFields(mxInput);
+		n = mxGetNumberOfElements(ret_var);
+		nFields = mxGetNumberOfFields(ret_var);
 		for(i = 0; i < n; i++)                         /* element */
 		{
 			for(j = 0; j < nFields; j++)               /* field */
 			{
-				deepdetach((mxArray*) (mxGetFieldByNumber(mxInput, i, j)));
+				deepdetach((mxArray*) (mxGetFieldByNumber(ret_var, i, j)));
 			}/* detach this one */
 		}
 	}
-	else if(mxIsCell(mxInput))
+	else if(mxIsCell(ret_var))
 	{
 		/* detach each cell */
-		n = mxGetNumberOfElements(mxInput);
+		n = mxGetNumberOfElements(ret_var);
 		for(i = 0; i < n; i++)
 		{
-			deepdetach((mxArray*) (mxGetCell(mxInput, i)));
+			deepdetach((mxArray*) (mxGetCell(ret_var, i)));
 		}/* detach this one */
 		
 	}
-	else if(mxIsNumeric(mxInput) || mxIsLogical(mxInput) || mxIsChar(mxInput))  /* a matrix containing data */
+	else if(mxIsNumeric(ret_var) || mxIsLogical(ret_var) || mxIsChar(ret_var))  /* a matrix containing data */
 	{
 		
 		/* In safe mode these entries were allocated so remove them properly */
 #ifdef SAFEMODE
-		mxFree(mxGetData(mxInput));
-		mxFree(mxGetImagData(mxInput));
+		mxFree(mxGetData(ret_var));
+		mxFree(mxGetImagData(ret_var));
 #endif
 		
 		/* handle sparse objects */
-		if(mxIsSparse(mxInput))
+		if(mxIsSparse(ret_var))
 		{
 			/* I don't seem to be able to give sparse arrays zero size so (nzmax must be 1) */
 			dims[0] = dims[1] = 1;
 			nzmax = 1;
-			if(mxSetDimensions(mxInput, dims, 2))
+			if(mxSetDimensions(ret_var, dims, 2))
 			{
 				mexErrMsgIdAndTxt("MATLAB:SharedMemory:Unknown", "detach: unable to resize the array.");
 			}
 			
 			/* In safe mode these entries were allocated so remove them properly */
 #ifdef SAFEMODE
-			mxFree(mxGetIr(mxInput));
-			mxFree(mxGetJc(mxInput));
+			mxFree(mxGetIr(ret_var));
+			mxFree(mxGetJc(ret_var));
 #endif
 			
 			/* allocate 1 element */
-			elemsiz = mxGetElementSize(mxInput);
-			mxSetData(mxInput, mxCalloc(nzmax, elemsiz));
-			if(mxIsComplex(mxInput))
+			elemsiz = mxGetElementSize(ret_var);
+			mxSetData(ret_var, mxMalloc(0));
+			if(mxIsComplex(ret_var))
 			{
-				mxSetImagData(mxInput, mxCalloc(nzmax, elemsiz));
+				mxSetImagData(ret_var, mxMalloc(0));
 			}
 			else
 			{
-				mxSetImagData(mxInput, (void*) nullptr);
+				mxSetImagData(ret_var, (void*) nullptr);
 			}
-			
-			/* allocate 1 element */
-			mxSetNzmax(mxInput, nzmax);
-			mxSetIr(mxInput, (mwSize*) mxCalloc(nzmax, sizeof(mwIndex)));
-			mxSetJc(mxInput, (mwSize*) mxCalloc(dims[1] + 1, sizeof(mwIndex)));
 		}
 		else
 		{
-			/* Can have zero size, so nullify data storage containers */
-			if(mxSetDimensions(mxInput, dims, 2))
-			{
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:Unknown", "detach: unable to resize the array.");
-			}
-			
 			/* Doesn't allocate or deallocate any space for the pr or pi arrays */
-			mxSetData(mxInput, (void*) nullptr);
-			mxSetImagData(mxInput, (void*) nullptr);
+			mxSetData(ret_var, mxMalloc(0));
+			mxSetImagData(ret_var, mxMalloc(0));
 		}
 	}
 	else
@@ -384,7 +378,7 @@ void deepdetach(mxArray* mxInput)
 /* Returns:                                                                  */
 /*    size of shared memory segment.                                         */
 /* ------------------------------------------------------------------------- */
-size_t shallowrestore(char* shm, mxArray** p_mxInput)
+size_t shallowrestore(char* shm, mxArray* ret_var)
 {
 	
 	/* for working with shared memory ... */
@@ -424,31 +418,31 @@ size_t shallowrestore(char* shm, mxArray** p_mxInput)
 	
 	
 	/* Structure case */
-	if(hdr->isStruct)
+	if(hdr->classid == mxSTRUCT_CLASS)
 	{
 #ifdef DEBUG
 		mexPrintf("shallowrestore: Debug: found structure %d x %d.\n", pSize[0], pSize[1]);
 #endif
 		
 		/* Pull out the field names, they follow the size*/
-		ret = NumFieldsFromString(shm, &nFields, &strBytes);
+//		ret = NumFieldsFromString(shm, &nFields, &strBytes);
 		
 		/* check the recovery */
-		if((ret) || (nFields != hdr->nFields))
-		{
-			mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone", "Structure fields have not been recovered properly");
-		}
+//		if((ret) || (nFields != hdr->nFields))
+//		{
+//			mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone", "Structure fields have not been recovered properly");
+//		}
 		
 		/* And convert to something matlab understands */
-		pFieldStr = (char**) mxCalloc(nFields, sizeof(char*));
-		PointCharArrayAtString(pFieldStr, shm, nFields);
+//		pFieldStr = (char**) mxCalloc(nFields, sizeof(char*));
+//		PointCharArrayAtString(pFieldStr, shm, nFields);
 		
 		/* skip over the stored field string */
 		shm += strBytes;
 		
 		/*create the matrix */
-		*p_mxInput = mxCreateStructArray(hdr->nDims, pSize, hdr->nFields, (const char**) pFieldStr);
-		mxFree(pFieldStr);  /* should be able to do this now... */
+//		*p_mxInput = mxCreateStructArray(hdr->nDims, pSize, hdr->nFields, (const char**) pFieldStr);
+//		mxFree(pFieldStr);  /* should be able to do this now... */
 		
 		/* Go through each element */
 		for(i = 0; i < hdr->nzmax; i++)
@@ -456,11 +450,10 @@ size_t shallowrestore(char* shm, mxArray** p_mxInput)
 			for(field_num = 0; field_num < hdr->nFields; field_num++)     /* each field */
 			{
 #ifdef DEBUG
-				mexPrintf("shallowrestore: Debug: working on %d field %d at 0x%016x.\n",i,field_num, *p_mxInput);
+				//mexPrintf("shallowrestore: Debug: working on %d field %d at 0x%016x.\n",i,field_num, *p_mxInput);
 #endif
 				/* And fill it */
-				shmsiz = shallowrestore(shm, &mxChild);                           /* restore the mxArray */
-				mxSetFieldByNumber(*p_mxInput, i, field_num, mxChild);    /* and pop it in	   */
+				shmsiz = shallowrestore(shm, mxGetFieldByNumber(ret_var, i, field_num));
 				shm += shmsiz;
 
 #ifdef DEBUG
@@ -469,22 +462,18 @@ size_t shallowrestore(char* shm, mxArray** p_mxInput)
 			}
 		}
 	}
-	else if(hdr->isCell) /* Cell case */
+	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
 #ifdef DEBUG
 		mexPrintf("shallowrestore: Debug: found cell %d x %d.\n",pSize[0], pSize[1]);
 #endif
-		
-		/* Create the array */
-		*p_mxInput = mxCreateCellArray(hdr->nDims, pSize);
 		for(i = 0; i < hdr->nzmax; i++)
 		{
 #ifdef DEBUG
 			mexPrintf("shallowrestore: Debug: working on %d.\n",i);
 #endif
 			/* And fill it */
-			shmsiz = shallowrestore(shm, &mxChild);
-			mxSetCell(*p_mxInput, i, mxChild);
+			shmsiz = shallowrestore(shm, mxGetCell(ret_var,i));
 			shm += shmsiz;
 #ifdef DEBUG
 			mexPrintf("shallowrestore: Debug: completed %d at 0x%016x.\n",i,mxChild);
@@ -516,43 +505,9 @@ size_t shallowrestore(char* shm, mxArray** p_mxInput)
 			
 			jc = (mwIndex*) shm;
 			shm += pad_to_align((pSize[1] + 1) * sizeof(mwIndex));
-			
-			/* FIX: need to create sparse logical differently */
-			if(hdr->classid == mxLOGICAL_CLASS)
-			{
-				*p_mxInput = mxCreateSparseLogicalMatrix(0, 0, 0);
-			}
-			else
-			{
-				*p_mxInput = mxCreateSparse(0, 0, 0, hdr->complexity);
-			}
-			
-			/* Free the memory it was created with */
-			mxFree(mxGetIr(*p_mxInput));
-			mxFree(mxGetJc(*p_mxInput));
-			
-			/* set the size */
-			if(mxSetDimensions(*p_mxInput, pSize, hdr->nDims))
-			{
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:Unknown", "attach: unable to resize the sparse array.");
-			}
 				
-				/* set the pointers relating to sparse (set the real and imaginary data later)*/
-#ifndef SAFEMODE
-				
-				/* Hack  Method */
-				// ((Internal_mxArray*)*p_mxInput)->data.number_array.reserved5    = ir;
-				// ((Internal_mxArray*)*p_mxInput)->data.number_array.reserved6[0] = (size_t)jc;
-				// ((Internal_mxArray*)*p_mxInput)->data.number_array.reserved6[1] = (size_t)(hdr->nzmax);
+			/* set the pointers relating to sparse (set the real and imaginary data later)*/
 
-#else
-				
-				/* Safe - but takes it out of global memory */
-				mxSetIr(*p_mxInput, (mwIndex*)safeCopy(ir, (hdr->nzmax)*sizeof(mwIndex)));
-				mxSetJc(*p_mxInput, (mwIndex*)safeCopy(jc, (pSize[1]+1)*sizeof(mwIndex)));
-
-#endif
-			mxSetNzmax(*p_mxInput, hdr->nzmax);
 			
 		}
 		else
@@ -562,38 +517,18 @@ size_t shallowrestore(char* shm, mxArray** p_mxInput)
 #ifdef DEBUG
 			mexPrintf("shallowrestore: Debug: found non-cell, non-sparse.\n");
 #endif
-			
-			/*  create an empty array */
-			*p_mxInput = mxCreateNumericMatrix(0, 0, hdr->classid, hdr->complexity);
-			
-			/* set the size */
-			if(mxSetDimensions(*p_mxInput, pSize, hdr->nDims))
-			{
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:Unknown", "attach: unable to resize the array.");
-			}
+		
 		}
 		
-		
-		/* Free the memory it was created with (shouldn't be necessary) */
-		mxFree(mxGetPr(*p_mxInput));
-		mxFree(mxGetPi(*p_mxInput));
-		
 		/* set the real and imaginary data */
-#ifndef SAFEMODE
-		
-		/* Hack  Method */
-		/* ((Internal_mxArray*)(*p_mxInput))->data.number_array.pdata = pBuffer;  / * works assuming the size is <= 50 * / */
-		// ((Internal_mxArray*)(*p_mxInput))->data.number_array.pdata = pr;		 /* Hack */
-		// if ( hdr->complexity )
-		// {	((Internal_mxArray*)(*p_mxInput))->data.number_array.pimag_data = pi;   }
 
-#else
 		
 		/* Safe - but takes it out of global memory */
-		mxSetData(*p_mxInput, safeCopy(pr, hdr->nzmax*hdr->elemsiz));
+		mxSetData(ret_var, pr);
 		if ( hdr->complexity )
-		{	mxSetImagData(*p_mxInput, safeCopy(pi, hdr->nzmax*hdr->elemsiz));  }
-#endif
+		{
+			mxSetImagData(ret_var, pi);
+		}
 	
 	}
 	return hdr->shmsiz;
@@ -775,7 +710,6 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			mwIndex* ret_jc = mxGetJc(ret_var);
 			memcpy(ret_jc, dat->jc, hdr->nzmax * sizeof(mwIndex));
 			
-			
 		}
 		else
 		{
@@ -860,7 +794,7 @@ void deepcopy(header_t* hdr, data_t* dat, char* shm, header_t* par_hdr)
 	shm += offset;
 	
 	/* Structure case */
-	if(hdr->isStruct)
+	if(hdr->classid == mxSTRUCT_CLASS)
 	{
 #ifdef DEBUG
 		mexPrintf("deepcopy: Debug: found structure.\n");
@@ -889,7 +823,7 @@ void deepcopy(header_t* hdr, data_t* dat, char* shm, header_t* par_hdr)
 			shm += (dat->child_hdr[i]).shmsiz;
 		}
 	}
-	else if(hdr->isCell) /* Cell case */
+	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
 		/* recurse for each cell element */
 #ifdef DEBUG
@@ -1190,6 +1124,42 @@ int BytesFromStringEnd(const char* pString, size_t* pBytes)
 	}/* happy */
 	
 }
+
+
+void onExit()
+{
+	int segIndex;
+	if(!mxIsEmpty(global_shared_variable))
+	{
+		
+		/* Find the segment */
+		segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
+		
+		/* check the mapping exists */
+		if(segIndex < 0)
+		{
+			mexErrMsgIdAndTxt("MATLAB:SharedMemory:detach",
+						   "There is no shared segment with this name in this process.");
+		}
+		
+		if(SegmentBuffer.getRefCountByIndex(segIndex) < 1)
+		{
+			mexErrMsgIdAndTxt("MATLAB:SharedMemory:detach",
+						   "There are no variables attached to the shared memory in this process.");
+		}
+		
+		/* NULL all of the Matlab pointers */
+		deepdetach(global_shared_variable);
+		
+		/* Tell the segment buffer that a matlab variables is "detached" to it */
+		SegmentBuffer.removeReferenceByIndex(segIndex);
+		
+		SegmentBuffer.removeSegmentByIndex(segIndex);
+		
+	}
+}
+
+
 
 /*
  * Possibly useful information/related work:

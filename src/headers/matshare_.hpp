@@ -45,7 +45,7 @@
 
 /* these are used for recording structure field names */
 const char term_char = ';';          /*use this character to terminate a string containing the list of fields.  Do this because it can't be in a valid field name*/
-const size_t align_size = 8;   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
+const size_t align_size = 32;   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
 
 mxArray* global_shared_variable;
 
@@ -124,14 +124,14 @@ void init();
 
 /* Remove shared memory references to input matrix (in-situ), recursively    */
 /* if needed.                                                                */
-void deepdetach(mxArray* mxInput);
+void deepdetach(mxArray* ret_var);
 
 /* Shallow copy matrix from shared memory into Matlab form.                  */
-size_t shallowrestore(char* shm, mxArray** p_mxInput);
+size_t shallowrestore(char* shm, mxArray* ret_var);
 
 /* Recursively descend through Matlab matrix to assess how much space its    */
 /* serialization will require.                                               */
-size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr);
+size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray* ret_var);
 
 /* Descend through header and data structure and copy relevent data to       */
 /* shared memory.                                                            */
@@ -140,6 +140,7 @@ void deepcopy(header_t* hdr, data_t* dat, char* shared_mem, header_t* par_hdr);
 /* Descend through header and data structure and free the memory.            */
 void deepfree(data_t* dat);
 
+void onExit();
 
 /* Pads the size to something that guarantees pointer alignment.			*/
 __inline size_t pad_to_align(size_t size)
