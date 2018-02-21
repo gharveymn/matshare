@@ -1,40 +1,62 @@
 classdef mshdata < handle
 	
-	properties (AbortSet, GetObservable, SetObservable)
+	properties (AbortSet, Access=private)
+		deepdata
+	end
+	
+	properties (Dependent, GetObservable, SetObservable)
 		data
 	end
 	
 	properties (Constant, Access=private, Hidden)
-		msh_INIT = uint8(0);
-		msh_CLONE = uint8(1);
-		msh_ATTACH = uint8(2);
-		msh_DETACH = uint8(3);
-		msh_FREE = uint8(4);
+		INIT = uint8(0);
+		CLONE = uint8(1);
+		ATTACH = uint8(2);
+		DETACH = uint8(3);
+		FREE = uint8(4);
+		FETCH = uint8(5);
+		COMPARE = uint8(6);
+	end
+	
+	properties (Access=private, Hidden)
+		internal_change = false;
 	end
 	
 	methods
 		function obj = mshdata
-			obj.data = matshare_(obj.msh_INIT);
-			addlistener(obj, 'data', 'PreSet', @(src,evnt)mshdata.propChangeCallback(obj,src,evnt));	
-			%addlistener(obj, 'data', 'PreGet', @(src,evnt)mshdata.propChangeCallback(obj,src,evnt));	
+			obj.deepdata = matshare_(obj.INIT);
+			addlistener(obj, 'data', 'PreSet', @(src,evnt)mshdata.preSetCallback(obj,src,evnt));	
+			addlistener(obj, 'data', 'PreGet', @(src,evnt)mshdata.preGetCallback(obj,src,evnt));	
 		end
 		
 		function set.data(obj,in)
-			obj.data = matshare_(obj.msh_CLONE,in);
-			matshare_(obj.msh_ATTACH);
+			obj.deepdata = matshare_(obj.CLONE,in);
+			matshare_(obj.ATTACH);
 		end
 		
-		function delete(obj,in)
-			obj.data = matshare_(obj.msh_DETACH);
-			matshare_(obj.msh_FREE);
-			clear obj.data;
+		function ret = get.data(obj)
+			ret = obj.deepdata;
+		end
+		
+		function delete(obj)
+			obj.deepdata = matshare_(obj.DETACH);
+			matshare_(obj.FREE);
+			clear obj.deepdata;
 		end
 	end
 	
 	methods (Static)
-		function propChangeCallback(obj,src,evnt)
-			obj.data = matshare_(obj.msh_DETACH);
-			matshare_(obj.msh_FREE);
+		function preSetCallback(obj,~,~)
+			obj.deepdata = matshare_(obj.DETACH);
+			matshare_(obj.FREE);
+		end
+		
+		function preGetCallback(obj,~,~)
+			if(~matshare_(obj.COMPARE, obj.deepdata))
+				obj.deepdata = matshare_(obj.DETACH);
+				obj.deepdata = matshare_(obj.FETCH);
+				matshare_(obj.ATTACH);
+			end
 		end
 	end
 end

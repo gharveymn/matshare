@@ -29,7 +29,8 @@ try
 	%include boost
 	if ispc
 		BOOST_dir = 'C:\local\boost\';
-		BOOST_lib = [BOOST_dir 'stage\lib\'];
+		%BOOST_lib = [BOOST_dir 'stage\lib\'];
+		BOOST_lib = [BOOST_dir 'lib64-msvc-14.0\'];
 	else
 		% on Ubuntu: sudo aptitude install libboost-all-dev libboost-doc
 		BOOST_dir = '/usr/include/';

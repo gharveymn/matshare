@@ -7,11 +7,11 @@
 
 /* Define this to test */
 /* #define SAFEMODE    */                 /* This copies memory across, defeating the purpose of this function but useful for testing */
-/* #define DEBUG					  /* Verbose outputs */
+/* #define DEBUG	   */			  /* Verbose outputs */
 
 
 /* Possibily useful undocumented functions (see links at end for details): */
-/* extern mxArray *mxCreateSharedDataCopy(const mxArray *pr);			   */
+/* extern mxArray *mxCreateSharedDataCopy(const mxArray *pr);			*/
 /* extern bool mxUnshareArray(const mxArray *pr, const bool noDeepCopy);   */
 /* extern mxArray *mxUnreference(const mxArray *pr);					   */
 
@@ -36,7 +36,6 @@
 #include <cstddef>
 #include <windows.h>
 #include <memory.h>
-
 
 /* max length of directive string */
 #define MAXDIRECTIVELEN 256
@@ -63,6 +62,7 @@ const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 2
 typedef struct data data_t;
 typedef struct header header_t;
 typedef char byte_t;
+typedef bool bool_t;
 
 #if UINTPTR_MAX == 0xffffffffffffffff
 typedef int64_t address_t;
@@ -83,7 +83,9 @@ enum msh_directive_t
 	msh_CLONE,
 	msh_ATTACH,
 	msh_DETACH,
-	msh_FREE
+	msh_FREE,
+	msh_FETCH,
+	msh_COMPARE
 };
 
 /* structure used to record all of the data addresses */
@@ -128,7 +130,9 @@ void init();
 void deepdetach(mxArray* ret_var);
 
 /* Shallow copy matrix from shared memory into Matlab form.                  */
-size_t shallowrestore(char* shm, mxArray* ret_var);
+size_t shallowrestore(byte_t* shm, mxArray* ret_var);
+
+size_t shallowfetch(byte_t* shm, mxArray** ret_var);
 
 /* Recursively descend through Matlab matrix to assess how much space its    */
 /* serialization will require.                                               */
@@ -136,10 +140,12 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 
 /* Descend through header and data structure and copy relevent data to       */
 /* shared memory.                                                            */
-void deepcopy(header_t* hdr, data_t* dat, char* shared_mem, header_t* par_hdr);
+void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr);
 
 /* Descend through header and data structure and free the memory.            */
 void deepfree(data_t* dat);
+
+mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset);
 
 void onExit();
 
@@ -179,6 +185,7 @@ int PointCharArrayAtString(char** pCharArray, char* pString, int nFields);
 /* Function to find the bytes in the string starting from the end of the string */
 /* returns < 0 on error */
 int BytesFromStringEnd(const char* pString, size_t* pBytes);
+
 
 #ifdef SAFEMODE
 /* A convenient function for safe assignment of memory to an mxArray */
