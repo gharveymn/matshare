@@ -16,7 +16,7 @@ classdef mshdata < handle
 		function obj = mshdata
 			obj.data = matshare_(obj.msh_INIT);
 			addlistener(obj, 'data', 'PreSet', @(src,evnt)mshdata.propChangeCallback(obj,src,evnt));	
-			addlistener(obj, 'data', 'PreGet', @(src,evnt)mshdata.propChangeCallback(obj,src,evnt));	
+			%addlistener(obj, 'data', 'PreGet', @(src,evnt)mshdata.propChangeCallback(obj,src,evnt));	
 		end
 		
 		function set.data(obj,in)

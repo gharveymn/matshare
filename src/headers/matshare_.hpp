@@ -46,8 +46,8 @@
 /* these are used for recording structure field names */
 const char term_char = ';';          /*use this character to terminate a string containing the list of fields.  Do this because it can't be in a valid field name*/
 const size_t align_size = 32;   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
-
-mxArray* global_shared_variable;
+const uint8_t MXMALLOC_SIG_LEN = 16;
+const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
 
 /*
  * The header_t object will be copied to shared memory in its entirety.
@@ -118,6 +118,7 @@ struct header
 	int nFields;       /* the number of fields.  The field string immediately follows the size array */
 	int par_hdr_off;   /* offset to the parent's header, add this to help backwards searches (double linked... sort of)*/
 	size_t shmsiz;            /* size of serialized object (header + size array + field names string) */
+	size_t  strBytes;
 };
 
 void init();
@@ -131,7 +132,7 @@ size_t shallowrestore(char* shm, mxArray* ret_var);
 
 /* Recursively descend through Matlab matrix to assess how much space its    */
 /* serialization will require.                                               */
-size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray* ret_var);
+size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray** ret_var);
 
 /* Descend through header and data structure and copy relevent data to       */
 /* shared memory.                                                            */

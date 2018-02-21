@@ -1,4 +1,5 @@
 #include "headers/matshare_.hpp"
+mxArray* global_shared_variable;
 
 /* shared memory for windows - shared mem is destroyed when no threads are attached to it*/
 using namespace boost::interprocess;
@@ -8,14 +9,13 @@ using namespace boost::interprocess;
 (or this is destroyed).  Each calling process will have its own version of this variable */
 static shared_mem_stack SegmentBuffer;
 
-
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
 /*                                                                           */
 /* ------------------------------------------------------------------------- */
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
-	
+
 	/* For inputs */
 	const mxArray* mxDirective;               /*  Directive {clone, attach, detach, free}   */
 	const mxArray* mxInput;                /*  Input array (for clone)					  */
@@ -54,8 +54,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		case msh_INIT:
 			init();
 			plhs[0] = global_shared_variable;
-			mexPrintf("%d", mxGetNumberOfElements(global_shared_variable));
-			mexPrintf("%d", mxIsEmpty(global_shared_variable));
 			break;
 		case msh_CLONE:
 			/********************/
@@ -73,7 +71,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			mxInput = prhs[1];
 			
 			/* scan input data */
-			sm_size = deepscan(&hdr, &dat, mxInput, nullptr, global_shared_variable);
+			sm_size = deepscan(&hdr, &dat, mxInput, nullptr, &global_shared_variable);
 
 #ifdef DEBUG
 			mexPrintf("clone: Debug: deepscan done.\n");
@@ -184,8 +182,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/*	Dettach case	*/
 			/********************/
 			
-			mexPrintf("%d", mxGetNumberOfElements(global_shared_variable));
-			mexPrintf("%d", mxIsEmpty(global_shared_variable));
+//			mexPrintf("%d", mxGetNumberOfElements(global_shared_variable));
+//			mexPrintf("%d", mxIsEmpty(global_shared_variable));
 			
 			if(global_shared_variable != nullptr && !mxIsEmpty(global_shared_variable))
 			{
@@ -257,7 +255,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
 void init()
 {
-	global_shared_variable = mxCreateDoubleMatrix(0,0,mxREAL);
+	global_shared_variable = mxCreateNumericArray(0, nullptr, mxUINT8_CLASS, mxREAL);
 	mexMakeArrayPersistent(global_shared_variable); /* freed by Matlab Memory Manager */
 	mexAtExit(onExit);
 }
@@ -347,10 +345,6 @@ void deepdetach(mxArray* ret_var)
 			{
 				mxSetImagData(ret_var, mxMalloc(0));
 			}
-			else
-			{
-				mxSetImagData(ret_var, (void*) nullptr);
-			}
 		}
 		else
 		{
@@ -382,7 +376,7 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 {
 	
 	/* for working with shared memory ... */
-	size_t i, shmsiz;
+	size_t i;
 	mxArray* mxChild;   /* temporary pointer */
 	
 	/* for working with payload ... */
@@ -396,19 +390,11 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 	int ret;
 	size_t nFields;                     /* number of fields */
 	size_t field_num;                /* current field */
-	size_t strBytes;                /* Number of bytes in the string recording the field names */
 	char** pFieldStr;           /* Array to pass to Matlab with the field names pFields[0] is a poitner to the first field name, pFields[1] is the pointer to the second*/
-	
-	/* for testing ... */
-	static double pBuffer[50];
-	for(int i = 0; i < 50; i++)
-	{
-		pBuffer[i] = i;
-	}
 	
 	/* retrieve the data */
 	hdr = (header_t*) shm;
-	shm += sizeof(header_t);
+	shm += pad_to_align(sizeof(header_t));
 	
 	/* the size pointer */
 	pSize = (mwSize*) shm;
@@ -438,7 +424,7 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 //		PointCharArrayAtString(pFieldStr, shm, nFields);
 		
 		/* skip over the stored field string */
-		shm += strBytes;
+		shm += pad_to_align(hdr->strBytes);
 		
 		/*create the matrix */
 //		*p_mxInput = mxCreateStructArray(hdr->nDims, pSize, hdr->nFields, (const char**) pFieldStr);
@@ -453,8 +439,7 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 				//mexPrintf("shallowrestore: Debug: working on %d field %d at 0x%016x.\n",i,field_num, *p_mxInput);
 #endif
 				/* And fill it */
-				shmsiz = shallowrestore(shm, mxGetFieldByNumber(ret_var, i, field_num));
-				shm += shmsiz;
+				shm += shallowrestore(shm, mxGetFieldByNumber(ret_var, i, field_num));
 
 #ifdef DEBUG
 				mexPrintf("shallowrestore: Debug: completed %d field %d.\n",i, field_num);
@@ -473,8 +458,7 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 			mexPrintf("shallowrestore: Debug: working on %d.\n",i);
 #endif
 			/* And fill it */
-			shmsiz = shallowrestore(shm, mxGetCell(ret_var,i));
-			shm += shmsiz;
+			shm += shallowrestore(shm, mxGetCell(ret_var,i));
 #ifdef DEBUG
 			mexPrintf("shallowrestore: Debug: completed %d at 0x%016x.\n",i,mxChild);
 #endif
@@ -483,12 +467,14 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 	else     /*base case*/
 	{
 		/* this is the address of the first data */
+		shm += pad_to_align(MXMALLOC_SIG_LEN);
 		pr = (void*) shm;
 		shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));          /* takes us to the end of the real data */
 		
 		/* if complex get a pointer to the complex data */
 		if(hdr->complexity == mxCOMPLEX)
 		{
+			shm += pad_to_align(MXMALLOC_SIG_LEN);
 			pi = (void*) shm;
 			shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));     /* takes us to the end of the complex data */
 		}
@@ -505,15 +491,21 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 			
 			jc = (mwIndex*) shm;
 			shm += pad_to_align((pSize[1] + 1) * sizeof(mwIndex));
-				
+			
 			/* set the pointers relating to sparse (set the real and imaginary data later)*/
-
+			mxFree(mxGetIr(ret_var));
+			mwIndex* ret_ir = (mwIndex*)mxMalloc(hdr->nzmax * sizeof(mwIndex));
+			memcpy(ret_ir, ir, hdr->nzmax * sizeof(mwIndex));
+			mxSetIr(ret_var, ret_ir);
+			
+			mxSetNzmax(ret_var, hdr->nzmax);
 			
 		}
 		else
 		{
 			
 			/*  rebuild constitute the array  */
+			mxSetDimensions(ret_var, pSize, hdr->nDims);
 #ifdef DEBUG
 			mexPrintf("shallowrestore: Debug: found non-cell, non-sparse.\n");
 #endif
@@ -524,9 +516,11 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 
 		
 		/* Safe - but takes it out of global memory */
+		mxFree(mxGetData(ret_var));
 		mxSetData(ret_var, pr);
 		if ( hdr->complexity )
 		{
+			mxFree(mxGetImagData(ret_var));
 			mxSetImagData(ret_var, pi);
 		}
 	
@@ -549,14 +543,13 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 /* Returns:                                                                  */
 /*    size that shared memory segment will need to be.                       */
 /* ------------------------------------------------------------------------- */
-size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray* ret_var)
+size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray** ret_var)
 {
 	/* counter */
 	size_t i;
 	
 	/* for structures */
 	size_t field_num, count;
-	size_t strBytes;
 	
 	/* initialize data info; _possibly_ update these later */
 	dat->pSize = (mwSize*) nullptr;
@@ -580,7 +573,8 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		hdr->elemsiz = 0;
 		hdr->nzmax = 0;
 		hdr->nFields = 0;
-		hdr->shmsiz = sizeof(header_t);
+		hdr->strBytes = 0;
+		hdr->shmsiz = pad_to_align(sizeof(header_t));
 		
 		return hdr->shmsiz;
 	}
@@ -592,9 +586,10 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	hdr->classid = mxGetClassID(mxInput);
 	hdr->nDims = mxGetNumberOfDimensions(mxInput);
 	hdr->elemsiz = mxGetElementSize(mxInput);
-	hdr->nzmax = mxGetNumberOfElements(mxInput);     /* update this later on sparse*/
-	hdr->nFields = 0;                                             /* update this later */
-	hdr->shmsiz = sizeof(header_t);                         /* update this later */
+	hdr->nzmax = mxGetNumberOfElements(mxInput);      /* update this later on sparse*/
+	hdr->nFields = 0;                                 /* update this later */
+	hdr->shmsiz = pad_to_align(sizeof(header_t));     /* update this later */
+	hdr->strBytes = 0;							/* update this later */
 	
 	/* copy the size */
 	dat->pSize = (mwSize*) mxGetDimensions(mxInput);     /* some abuse of const for now, fix on deep copy*/
@@ -614,12 +609,12 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		hdr->nFields = mxGetNumberOfFields(mxInput);
 		
 		/* Find the size required to store the field names */
-		strBytes = (size_t)FieldNamesSize(mxInput);     /* always a multiple of alignment size */
-		hdr->shmsiz += strBytes;                   /* Add space for the field string */
+		hdr->strBytes = (size_t)FieldNamesSize(mxInput);     /* always a multiple of alignment size */
+		hdr->shmsiz += pad_to_align(hdr->strBytes);                   /* Add space for the field string */
 		
 		/* use mxCalloc so mem is freed on error via garbage collection */
 		dat->child_hdr = (header_t*) mxCalloc(
-				hdr->nzmax * hdr->nFields * (sizeof(header_t) + sizeof(data_t)) + strBytes,
+				hdr->nzmax * hdr->nFields * (sizeof(header_t) + sizeof(data_t)) + hdr->strBytes,
 				1); /* extra space for the field string */
 		dat->child_dat = (data_t*) &dat->child_hdr[hdr->nFields * hdr->nzmax];
 		dat->field_str = (char*) &dat->child_dat[hdr->nFields * hdr->nzmax];
@@ -629,8 +624,8 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		/* make a record of the field names */
 		CopyFieldNames(mxInput, dat->field_str, field_names);
 		
-		ret_var = mxCreateStructArray(hdr->nDims, dat->pSize, hdr->nFields, field_names);
-		mexMakeArrayPersistent(ret_var);
+		*ret_var = mxCreateStructArray(hdr->nDims, dat->pSize, hdr->nFields, field_names);
+		mexMakeArrayPersistent(*ret_var);
 		
 		/* go through each recursively */
 		count = 0;
@@ -639,8 +634,8 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			for(field_num = 0; field_num < hdr->nFields; field_num++)     /* each field */
 			{
 				/* call recursivley */
-				hdr->shmsiz += deepscan(&(dat->child_hdr[count]), &(dat->child_dat[count]),
-								    mxGetFieldByNumber(mxInput, i, field_num), hdr, mxGetFieldByNumber(ret_var, i, field_num));
+				mxArray* ret_child = mxGetFieldByNumber(*ret_var, i, field_num);
+				hdr->shmsiz += deepscan(&(dat->child_hdr[count]), &(dat->child_dat[count]), mxGetFieldByNumber(mxInput, i, field_num), hdr, &ret_child);
 				
 				count++; /* progress */
 #ifdef DEBUG
@@ -659,22 +654,23 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		dat->child_hdr = (header_t*) mxCalloc(hdr->nzmax, sizeof(header_t) + sizeof(data_t));
 		dat->child_dat = (data_t*) &dat->child_hdr[hdr->nzmax];
 		
-		ret_var = mxCreateCellArray(hdr->nDims, dat->pSize);
-		mexMakeArrayPersistent(ret_var);
+		*ret_var = mxCreateCellArray(hdr->nDims, dat->pSize);
+		mexMakeArrayPersistent(*ret_var);
 		
 		/* go through each recursively */
 		for(i = 0; i < hdr->nzmax; i++)
 		{
-			hdr->shmsiz += deepscan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr, mxGetCell(ret_var, i));
+			mxArray* ret_child = mxGetFieldByNumber(*ret_var, i, field_num);
+			hdr->shmsiz += deepscan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr, &ret_child);
 #ifdef DEBUG
 			mexPrintf("deepscan: Debug: finished %d.\n",i);
 #endif
 		}
 		
 		/* if its a cell it has to have at least one mom-empty element */
-		if(hdr->shmsiz == (1 + hdr->nzmax) * sizeof(header_t))
+		if(hdr->shmsiz == (1 + hdr->nzmax) * pad_to_align(sizeof(header_t)))
 		{
-			mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone", "Required third argument (variable) must contain at "
+			mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone", "Required (variable) must contain at "
 					"least one non-empty item (at all levels).");
 		}
 	}
@@ -695,46 +691,42 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			
 			if(hdr->isNumeric)
 			{
-				ret_var = mxCreateSparse(mxGetM(mxInput), mxGetN(mxInput), 1, hdr->complexity);
+				*ret_var = mxCreateSparse(mxGetM(mxInput), mxGetN(mxInput), 1, hdr->complexity);
 			}
 			else
 			{
-				ret_var = mxCreateSparseLogicalMatrix(mxGetM(mxInput), mxGetN(mxInput), 1);
+				*ret_var = mxCreateSparseLogicalMatrix(mxGetM(mxInput), mxGetN(mxInput), 1);
 			}
 			
-			mxFree(mxGetIr(ret_var));
-			mwIndex* ret_ir = (mwIndex*)mxMalloc(hdr->nzmax * sizeof(mwIndex));
-			memcpy(ret_ir, dat->ir, hdr->nzmax * sizeof(mwIndex));
-			mxSetIr(ret_var, ret_ir);
-			
-			mwIndex* ret_jc = mxGetJc(ret_var);
+			mwIndex* ret_jc = mxGetJc(*ret_var);
 			memcpy(ret_jc, dat->jc, hdr->nzmax * sizeof(mwIndex));
+			ret_jc[mxGetN(mxInput)] = 0;
 			
 		}
 		else
 		{
 			if(hdr->isNumeric)
 			{
-				ret_var = mxCreateNumericArray(0, nullptr, hdr->classid, hdr->complexity);
-				mxSetDimensions(ret_var, dat->pSize, hdr->nDims);
+				*ret_var = mxCreateNumericArray(0, nullptr, hdr->classid, hdr->complexity);
+				//mxSetDimensions(*ret_var, dat->pSize, hdr->nDims);
 			}
 			else if(hdr->classid == mxLOGICAL_CLASS)
 			{
-				ret_var = mxCreateLogicalArray(0, nullptr);
-				mxSetDimensions(ret_var, dat->pSize, hdr->nDims);
+				*ret_var = mxCreateLogicalArray(0, nullptr);
 			}
 			else
 			{
-				ret_var = mxCreateCharArray(0, nullptr);
-				mxSetDimensions(ret_var, dat->pSize, hdr->nDims);
+				*ret_var = mxCreateCharArray(0, nullptr);
 			}
 		}
-		mexMakeArrayPersistent(ret_var);
+		mexMakeArrayPersistent(*ret_var);
 		
 		/* ensure both pointers are aligned individually */
+		hdr->shmsiz += pad_to_align(MXMALLOC_SIG_LEN);			//this is 32 bytes
 		hdr->shmsiz += pad_to_align(hdr->elemsiz * hdr->nzmax);
 		if(hdr->complexity == mxCOMPLEX)
 		{
+			hdr->shmsiz += pad_to_align(MXMALLOC_SIG_LEN);			//this is 32 bytes
 			hdr->shmsiz += pad_to_align(hdr->elemsiz * hdr->nzmax);
 		}
 	}
@@ -770,7 +762,6 @@ void deepcopy(header_t* hdr, data_t* dat, char* shm, header_t* par_hdr)
 	mwSize* pSize;               /* points to the size data */
 	
 	/* for structures */
-	size_t nFields, strBytes;
 	int ret;
 	
 	/* load up the shared memory */
@@ -778,7 +769,7 @@ void deepcopy(header_t* hdr, data_t* dat, char* shm, header_t* par_hdr)
 	/* copy the header */
 	n = sizeof(header_t);
 	memcpy(shm, hdr, n);
-	offset = n;
+	offset = pad_to_align(n);
 	
 	/* copy the dimensions */
 	cpy_hdr = (header_t*) shm;
@@ -801,20 +792,13 @@ void deepcopy(header_t* hdr, data_t* dat, char* shm, header_t* par_hdr)
 #endif
 		
 		/* place the field names next in shared memory */
-		ret = NumFieldsFromString(dat->field_str, &nFields, &strBytes);
-		
-		/* check the recovery */
-		if((ret) || (nFields != hdr->nFields))
-		{
-			mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone", "Structure fields have not been recovered properly");
-		}
 		
 		/* copy the field string */
-		for(i = 0; i < strBytes; i++)
+		for(i = 0; i < hdr->strBytes; i++)
 		{
 			shm[i] = dat->field_str[i];
 		}
-		shm += strBytes;
+		shm += pad_to_align(hdr->strBytes);
 		
 		/* copy the children recursively */
 		for(i = 0; i < hdr->nzmax * hdr->nFields; i++)
@@ -840,6 +824,8 @@ void deepcopy(header_t* hdr, data_t* dat, char* shm, header_t* par_hdr)
 	else /* base case */
 	{
 		/* copy real data */
+		memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
+		shm += pad_to_align(MXMALLOC_SIG_LEN);
 		n = (hdr->nzmax) * (hdr->elemsiz);
 		memcpy(shm, dat->pr, n);
 		shm += pad_to_align(n);
@@ -847,6 +833,8 @@ void deepcopy(header_t* hdr, data_t* dat, char* shm, header_t* par_hdr)
 		/* copy complex data as well */
 		if(hdr->complexity == mxCOMPLEX)
 		{
+			memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
+			shm += pad_to_align(MXMALLOC_SIG_LEN);
 			n = (hdr->nzmax) * (hdr->elemsiz);
 			memcpy(shm, dat->pi, n);
 			shm += pad_to_align(n);
