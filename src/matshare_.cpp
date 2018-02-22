@@ -1,13 +1,4 @@
 #include "headers/matshare_.hpp"
-mxArray* global_shared_variable;
-
-/* shared memory for windows - shared mem is destroyed when no threads are attached to it*/
-using namespace boost::interprocess;
-
-/* define the segment container with static linkage */
-/* shared memory will be destroyed when the shared memory is removed from this
-(or this is destroyed).  Each calling process will have its own version of this variable */
-static shared_mem_stack SegmentBuffer;
 
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
@@ -26,10 +17,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* For storing inputs */
 	msh_directive_t directive;
 	
-	/* for working with shared memory ... */
-	windows_shared_memory* pSegment;             /* pointer to the segment that interfaces the shared memory */
-	mapped_region* pRegion;                      /* pointer to the memory map for the shared memory */
-	int segIndex;                                /* which segment in the current process? */
 	size_t sm_size;                              /* size required by the shared memory */
 	
 	/* for storing the mxArrays ... */
@@ -38,6 +25,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	mxLogical* ret_data = nullptr;
 	size_t tmp = 0;
+	
+	segment_info* seg_info;
 	
 	/* check min number of arguments */
 	if(nrhs < 1)
@@ -50,6 +39,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	/* get directive */
 	directive = (msh_directive_t)*((uint8_t*)(mxGetData(mxDirective)));
+	DWORD hi_sz, lo_sz, err;
 	
 	/* Switch yard {clone, attach, detach, free} */
 	switch(directive)
@@ -57,7 +47,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		case msh_INIT:
 			init();
 			plhs[0] = mxDuplicateArray(global_shared_variable);
-			mexLock();
+			//mexLock();
 			break;
 		case msh_CLONE:
 			/********************/
@@ -81,38 +71,33 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			mexPrintf("clone: Debug: deepscan done.\n");
 #endif
 			
-			/* remove the segment if it already exists */
-			segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
-			if(segIndex < 0)
+			// get current map number
+			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
+			seg_info->segment_number += 1;
+			current_segment_info->segment_number = seg_info->segment_number;
+			seg_info->segment_size = sm_size;
+			current_segment_info->segment_size = sm_size;
+			memcpy(MSH_SEGMENT_NAME + MSH_SEG_NAME_PREAMB_LEN - 1, &current_segment_info->segment_number, sizeof(uint32_t));
+			
+			UnmapViewOfFile(*current_segment_p);
+			CloseHandle(*shm_handle);
+			
+			// create the new mapping
+			lo_sz =  (DWORD)(sm_size & 0xFFFFFFFFL);
+			hi_sz =  (DWORD)((sm_size >> 32) & 0xFFFFFFFFL);
+			*shm_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, MSH_SEGMENT_NAME);
+			err = GetLastError();
+			if(*shm_handle == nullptr)
 			{
-				SegmentBuffer.removeSegmentByIndex(segIndex);
+				mexPrintf("Error number: %d\n", err);
+				mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
+							   "SharedMemory::Could not create the memory segment");
 			}
 			
-			/* create the segment */
-			try
-			{
-				pSegment = new windows_shared_memory(open_or_create, MATSHARE_SEGMENT_NAME, read_write, sm_size);
-			} /* changed from 'create_only' to 'open_or_create' per user Guy Katz suggestion */
-			catch(interprocess_exception &ex)
-			{
-				mexPrintf("%i) %s\n", ex.get_error_code(), ex.what());
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone",
-							   "SharedMemory::Could not create the memory segment (name conflict?)");
-			}
-			
-			/* attach the segment to this dataspace */
-			pRegion = new mapped_region(*pSegment, read_write);
-			if(pRegion->get_address() == nullptr)
-			{
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone",
-							   "SharedMemory::Unable to attach shared memory to data space.");
-			}
-			
-			/* Successful, so add it to the shared memory stack so its preserved after this function exits */
-			segIndex = SegmentBuffer.addSegmentToBuffer(pSegment, pRegion);
+			*current_segment_p = (byte_t*)MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, sm_size);
 			
 			/* copy data to the shared memory */
-			deepcopy(&hdr, &dat, (char*) pRegion->get_address(), nullptr);
+			deepcopy(&hdr, &dat, *current_segment_p, nullptr);
 			
 			/* free temporary allocation */
 			deepfree(&dat);
@@ -122,66 +107,22 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 #endif
 			
 			plhs[0] = global_shared_variable;
-			mexLock();
+			UnmapViewOfFile(seg_info);
+			//mexLock();
 			break;
 		case msh_ATTACH:
 			/********************/
 			/*	Attach case	*/
 			/********************/
-			
-			/* Has this shared memory segment been mapped in this region? */
-			segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
-			
-			if(segIndex < 0)
-			{
-				/* It hasn't, so attach to the shared memory segment */
-				try
-				{
-					pSegment = new windows_shared_memory(open_only, MATSHARE_SEGMENT_NAME, read_write);
-				}
-				catch(interprocess_exception &ex)
-				{
-					mexPrintf("%i) %s\n", ex.get_error_code(), ex.what());
-					mexErrMsgIdAndTxt("MATLAB:SharedMemory:attach",
-								   "SharedMemory::Could not attach to the memory segment (does it exist?)");
-				}
-				
-				/* Map the whole shared memory in this process */
-				pRegion = new mapped_region(*pSegment, read_write);
-				
-				/* Check the validity */
-				if(nullptr == pRegion->get_address())
-				{
-					mexErrMsgIdAndTxt("MATLAB:SharedMemory:attach",
-								   "SharedMemory::Unable to attach shared memory to data space.");
-				}
-				
-				/* Successful, so add it to the shared memory stack so its preserved after this function exits */
-				segIndex = SegmentBuffer.addSegmentToBuffer(pSegment, pRegion);
-				
-			}
-			else
-			{
-				/* It has, so retrieve the mapping */
-				pSegment = SegmentBuffer.getSegmentByIndex(segIndex);
-				pRegion = SegmentBuffer.getRegionByIndex(segIndex);
-			}
 
-#ifdef DEBUG
-			mexPrintf("attach: Debug: shared memory at: 0x%016x\n",pRegion->get_address());
-#endif
+			// get current map size
+			updateSegmentInfo();
 			
-			/* Restore the segments */
-			shallowrestore((byte_t*) pRegion->get_address(), global_shared_variable);
-			
-			/* Tell the segment buffer that a matlab variables is "attached" to it */
-			SegmentBuffer.addReferenceByIndex(segIndex);
-
-#ifdef DEBUG
-			mexPrintf("attach: Debug: done\n");
-#endif
-			
-			
+			/* Restore the segment if this an initialized region */
+			if(current_segment_info->segment_size != NULLSEGMENT_SZ)
+			{
+				shallowrestore(*current_segment_p, global_shared_variable);
+			}
 			break;
 		case msh_DETACH:
 			/********************/
@@ -193,36 +134,16 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			if(!mxIsEmpty(global_shared_variable))
 			{
-				
-				/* Find the segment */
-				segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
-				
-				/* check the mapping exists */
-				if(segIndex < 0)
-				{
-					mexErrMsgIdAndTxt("MATLAB:SharedMemory:detach",
-								   "There is no shared segment with this name in this process.");
-				}
-				
-				if(SegmentBuffer.getRefCountByIndex(segIndex) < 1)
-				{
-					mexErrMsgIdAndTxt("MATLAB:SharedMemory:detach",
-								   "There are no variables attached to the shared memory in this process.");
-				}
-				
 				/* NULL all of the Matlab pointers */
 				deepdetach(global_shared_variable);
-				
-				/* Tell the segment buffer that a matlab variable is "detached" from it */
-				SegmentBuffer.removeReferenceByIndex(segIndex);
-				
 			}
 			else
 			{
 				mxDestroyArray(global_shared_variable);
 			}
 			
-			init();
+			global_shared_variable = mxCreateNumericArray(0, nullptr, mxUINT8_CLASS, mxREAL);
+			mexMakeArrayPersistent(global_shared_variable);
 			plhs[0] = mxDuplicateArray(global_shared_variable);
 			
 			break;
@@ -230,113 +151,36 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/********************/
 			/*	free case		*/
 			/********************/
-			
-			/* Find the segment */
-			segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
-			
-			/* check the mapping exists */
-			if(segIndex < 0)
-			{
-				// if we havent created the segment yet just leave
-				break;
-			}
-			
-			if(SegmentBuffer.getRefCountByIndex(segIndex) == 0)
-			{
-				SegmentBuffer.removeSegmentByIndex(segIndex);
-			}
-			
-			mexUnlock();
+			//CloseHandle(*shm_handle);
+			//mexUnlock();
 			break;
 		case msh_FETCH:
 			
-			/* Has this shared memory segment been mapped in this region? */
-			segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
-			
-			if(segIndex < 0)
+			updateSegmentInfo();
+			UnmapViewOfFile(*current_segment_p);
+			CloseHandle(*shm_handle);
+			if(current_segment_info->segment_size != NULLSEGMENT_SZ)
 			{
-				/* It hasn't, so attach to the shared memory segment */
-				try
-				{
-					pSegment = new windows_shared_memory(open_only, MATSHARE_SEGMENT_NAME, read_write);
-				}
-				catch(interprocess_exception &ex)
-				{
-					mexPrintf("%i) %s\n", ex.get_error_code(), ex.what());
-					mexErrMsgIdAndTxt("MATLAB:SharedMemory:compare",
-								   "SharedMemory::Could not fetch the memory segment (does it exist?)");
-				}
-				
-				/* Map the whole shared memory in this process */
-				pRegion = new mapped_region(*pSegment, read_write);
-				
-				/* Check the validity */
-				if(nullptr == pRegion->get_address())
-				{
-					mexErrMsgIdAndTxt("MATLAB:SharedMemory:compare",
-								   "SharedMemory::Unable to attach shared memory to data space.");
-				}
-				
-				/* Successful, so add it to the shared memory stack so its preserved after this function exits */
-				segIndex = SegmentBuffer.addSegmentToBuffer(pSegment, pRegion);
-				
+				*shm_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, true, MSH_SEGMENT_NAME);
+				*current_segment_p = (byte_t*)MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, current_segment_info->segment_size);
+				shallowfetch(*current_segment_p, &global_shared_variable);
+				plhs[0] = global_shared_variable;
 			}
 			else
 			{
-				/* It has, so retrieve the mapping */
-				pRegion = SegmentBuffer.getRegionByIndex(segIndex);
+				mxDestroyArray(global_shared_variable);
+				global_shared_variable = mxCreateNumericArray(0, nullptr, mxUINT8_CLASS, mxREAL);
+				mexMakeArrayPersistent(global_shared_variable);
+				plhs[0] = mxDuplicateArray(global_shared_variable);
 			}
-			shallowfetch((byte_t*)pRegion->get_address(), &global_shared_variable);
-			plhs[0] = global_shared_variable;
 			break;
 		case msh_COMPARE:
 			
 			plhs[0] = mxCreateLogicalMatrix(1,1);
 			ret_data = mxGetLogicals(plhs[0]);
-			
-			/* Has this shared memory segment been mapped in this region? */
-			segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
-			if(segIndex < 0)
-			{
-				/* It hasn't, so attach to the shared memory segment */
-				try
-				{
-					pSegment = new windows_shared_memory(open_only, MATSHARE_SEGMENT_NAME, read_write);
-				}
-				catch(interprocess_exception &ex)
-				{
-					// the segment doesn't exist
-					*ret_data = false;
-				}
-				
-				/* Map the whole shared memory in this process */
-				pRegion = new mapped_region(*pSegment, read_write);
-				
-				/* Check the validity */
-				if(nullptr == pRegion->get_address())
-				{
-					mexErrMsgIdAndTxt("MATLAB:SharedMemory:compare",
-								   "SharedMemory::Unable to attach shared memory to data space.");
-				}
-				
-				/* Successful, so add it to the shared memory stack so its preserved after this function exits */
-				segIndex = SegmentBuffer.addSegmentToBuffer(pSegment, pRegion);
-				
-			}
-			else
-			{
-				/* It has, so retrieve the mapping */
-				pRegion = SegmentBuffer.getRegionByIndex(segIndex);
-			}
-			
-			if(!mxIsEmpty(global_shared_variable))
-			{
-				*ret_data = deepcompare((byte_t*)pRegion->get_address(), prhs[1], &tmp);
-			}
-			else
-			{
-				*ret_data = mxIsEmpty(prhs[1]);
-			}
+			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
+			*ret_data = (current_segment_info->segment_number == seg_info->segment_number);
+			UnmapViewOfFile(seg_info);
 			break;
 		default:
 			mexErrMsgIdAndTxt("MATLAB:SharedMemory", "Unrecognized directive.");
@@ -345,15 +189,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	}
 	
 	
-}
-
-
-
-void init()
-{
-	global_shared_variable = mxCreateNumericArray(0, nullptr, mxUINT8_CLASS, mxREAL);
-	mexMakeArrayPersistent(global_shared_variable); /* freed by Matlab Memory Manager */
-	mexAtExit(onExit);
 }
 
 
@@ -412,10 +247,6 @@ void deepdetach(mxArray* ret_var)
 	{
 		
 		/* In safe mode these entries were allocated so remove them properly */
-#ifdef SAFEMODE
-		mxFree(mxGetData(ret_var));
-		mxFree(mxGetImagData(ret_var));
-#endif
 		
 		/* handle sparse objects */
 		if(mxIsSparse(ret_var))
@@ -428,23 +259,18 @@ void deepdetach(mxArray* ret_var)
 				mexErrMsgIdAndTxt("MATLAB:SharedMemory:Unknown", "detach: unable to resize the array.");
 			}
 			
-			/* In safe mode these entries were allocated so remove them properly */
-#ifdef SAFEMODE
-			mxFree(mxGetIr(ret_var));
-			mxFree(mxGetJc(ret_var));
-#endif
-			
 			/* allocate 1 element */
 			elemsiz = mxGetElementSize(ret_var);
-			mxSetData(ret_var, mxMalloc(0));
+			mxSetData(ret_var, mxMalloc(1));
 			if(mxIsComplex(ret_var))
 			{
-				mxSetImagData(ret_var, mxMalloc(0));
+				mxSetImagData(ret_var, mxMalloc(1));
 			}
 		}
 		else
 		{
 			/* Doesn't allocate or deallocate any space for the pr or pi arrays */
+			mxSetDimensions(ret_var, dims, 2);
 			mxSetData(ret_var, mxMalloc(0));
 			mxSetImagData(ret_var, mxMalloc(0));
 		}
@@ -1424,6 +1250,64 @@ int BytesFromStringEnd(const char* pString, size_t* pBytes)
 }
 
 
+void init()
+{
+	
+	current_segment_p = (byte_t**)mxMalloc(sizeof(byte_t*));
+	mexMakeMemoryPersistent(current_segment_p);
+	
+	current_segment_info = (segment_info*)mxMalloc(sizeof(segment_info));
+	mexMakeMemoryPersistent(current_segment_info);
+	
+	shm_name_handle = (HANDLE*)mxMalloc(sizeof(HANDLE));
+	mexMakeMemoryPersistent(shm_name_handle);
+	
+	*shm_name_handle = CreateFileMapping(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(segment_info), MSH_NAME_SEGMENT_NAME);
+	DWORD err = GetLastError();
+	if(*shm_name_handle == nullptr)
+	{
+		mexPrintf("Error number: %d\n", err);
+		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
+					   "SharedMemory::Could not create the memory segment");
+	}
+	
+	segment_info* seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
+	if(seg_info == nullptr)
+	{
+		mexPrintf("Error number: %d\n", err);
+		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
+					   "SharedMemory::Could not map the name memory segment");
+	}
+	else if(err != ERROR_ALREADY_EXISTS)
+	{
+		seg_info->segment_number = 0;
+		seg_info->segment_size = NULLSEGMENT_SZ;
+	}
+	
+	shm_handle = (HANDLE*)mxMalloc(sizeof(HANDLE));
+	mexMakeMemoryPersistent(shm_handle);
+	
+	memcpy(MSH_SEGMENT_NAME + MSH_SEG_NAME_PREAMB_LEN - 1, &seg_info->segment_number, sizeof(uint32_t));
+	*shm_handle = CreateFileMapping(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, NULLSEGMENT_SZ, MSH_SEGMENT_NAME);
+	err = GetLastError();
+	if(*shm_handle == nullptr)
+	{
+		mexPrintf("Error number: %d\n", err);
+		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
+					   "SharedMemory::Could not create the memory segment");
+	}
+	*current_segment_p = (byte_t*)MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, seg_info->segment_size);
+	
+	current_segment_info->segment_number = 0;
+	current_segment_info->segment_size = NULLSEGMENT_SZ;
+	UnmapViewOfFile(seg_info);
+	
+	global_shared_variable = mxCreateNumericArray(0, nullptr, mxUINT8_CLASS, mxREAL);
+	mexMakeArrayPersistent(global_shared_variable);
+	mexAtExit(onExit);
+}
+
+
 void onExit()
 {
 	if(!mxIsEmpty(global_shared_variable))
@@ -1436,20 +1320,15 @@ void onExit()
 		mxDestroyArray(global_shared_variable);
 	}
 	
-	int segIndex = SegmentBuffer.findSegmentByName(MATSHARE_SEGMENT_NAME);
+	UnmapViewOfFile(*current_segment_p);
+	CloseHandle(*shm_handle);
+	CloseHandle(*shm_name_handle);
+	mxFree(shm_handle);
+	mxFree(shm_name_handle);
+	mxFree(current_segment_info);
+	mxFree(current_segment_p);
 	
-	/* check the mapping exists */
-	if(segIndex >= 0)
-	{
-		if(SegmentBuffer.getRefCountByIndex(segIndex) >= 1)
-		{
-			SegmentBuffer.removeReferenceByIndex(segIndex);
-		}
-		else
-		{
-			SegmentBuffer.removeSegmentByIndex(segIndex);
-		}
-	}
+	//mexUnlock();
 	
 }
 

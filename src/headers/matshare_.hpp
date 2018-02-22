@@ -26,12 +26,7 @@
 /* standard mex include; */
 #include "matrix.h"
 #include "mex.h"
-
-/* inbuilt libs */
-#include "SharedMemStack.hpp"
-#include <boost/interprocess/shared_memory_object.hpp>                  /* Prefer this but get permission errors sadly */
-#include <boost/interprocess/windows_shared_memory.hpp>                  /* Have to ensure one windows_shared_memory object is attached to the memory, or else the memory is free'd */
-#include <boost/interprocess/mapped_region.hpp>
+#include <cstdint>
 #include <cstring>
 #include <cstddef>
 #include <windows.h>
@@ -40,13 +35,27 @@
 /* max length of directive string */
 #define MAXDIRECTIVELEN 256
 
-#define MATSHARE_SEGMENT_NAME "MATSHARE_SEGMENT"
+#define MSH_NAME_SEGMENT_NAME "MATSHARE_NAME_SEGMENT"
+#define NULLSEGMENT_SZ 1
+
+typedef struct data data_t;
+typedef struct header header_t;
+typedef char byte_t;
+typedef bool bool_t;
 
 /* these are used for recording structure field names */
 const char term_char = ';';          /*use this character to terminate a string containing the list of fields.  Do this because it can't be in a valid field name*/
 const size_t align_size = 32;   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
 const uint8_t MXMALLOC_SIG_LEN = 16;
 const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
+const uint8_t MSH_SEG_NAME_PREAMB_LEN = 17;
+const uint8_t MSH_SEG_NAME_LEN = MSH_SEG_NAME_PREAMB_LEN + sizeof(uint32_t);
+char MSH_SEGMENT_NAME[MSH_SEG_NAME_LEN] = "MATSHARE_SEGMENT";
+
+mxArray* global_shared_variable;
+HANDLE* shm_handle;
+HANDLE* shm_name_handle;
+byte_t** current_segment_p;
 
 /*
  * The header_t object will be copied to shared memory in its entirety.
@@ -58,11 +67,6 @@ const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 2
  * to abstract away mex calls and simplify the deep traversals in matlab.
  *
  */
-
-typedef struct data data_t;
-typedef struct header header_t;
-typedef char byte_t;
-typedef bool bool_t;
 
 #if UINTPTR_MAX == 0xffffffffffffffff
 typedef int64_t address_t;
@@ -105,6 +109,12 @@ struct data
 	
 };
 
+struct segment_info
+{
+	uint32_t segment_number;
+	size_t segment_size;
+};
+
 
 /* captures fundamentals of the mxArray */
 /* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
@@ -122,6 +132,8 @@ struct header
 	size_t shmsiz;            /* size of serialized object (header + size array + field names string) */
 	size_t  strBytes;
 };
+
+segment_info* current_segment_info;
 
 void init();
 
@@ -185,6 +197,15 @@ int PointCharArrayAtString(char** pCharArray, char* pString, int nFields);
 /* Function to find the bytes in the string starting from the end of the string */
 /* returns < 0 on error */
 int BytesFromStringEnd(const char* pString, size_t* pBytes);
+
+void updateSegmentInfo()
+{
+	segment_info* seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
+	current_segment_info->segment_number = seg_info->segment_number;
+	current_segment_info->segment_size = seg_info->segment_size;
+	memcpy(MSH_SEGMENT_NAME + MSH_SEG_NAME_PREAMB_LEN - 1, &current_segment_info->segment_number, sizeof(uint32_t));
+	UnmapViewOfFile(seg_info);
+}
 
 
 #ifdef SAFEMODE

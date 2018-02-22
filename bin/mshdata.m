@@ -1,6 +1,6 @@
 classdef mshdata < handle
 	
-	properties (AbortSet, Access=private)
+	properties (AbortSet, Access=private, NonCopyable, Transient)
 		deepdata
 	end
 	
@@ -16,10 +16,6 @@ classdef mshdata < handle
 		FREE = uint8(4);
 		FETCH = uint8(5);
 		COMPARE = uint8(6);
-	end
-	
-	properties (Access=private, Hidden)
-		internal_change = false;
 	end
 	
 	methods
@@ -41,6 +37,7 @@ classdef mshdata < handle
 		function delete(obj)
 			obj.deepdata = matshare_(obj.DETACH);
 			matshare_(obj.FREE);
+			clear matshare_;
 			clear obj.deepdata;
 		end
 	end

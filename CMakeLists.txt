@@ -22,7 +22,7 @@ IF("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 
 	SET(SOURCE_FILES
 			src/extlib/mman-win32/mman.c src/extlib/mman-win32/mman.h
-		   src/matshare_.cpp src/headers/matshare_.hpp src/headers/SharedMemStack.hpp
+		   src/matshare_.cpp src/headers/matshare_.hpp
 			)
 
 	ADD_EXECUTABLE(${OUT_NAME} ${SOURCE_FILES})

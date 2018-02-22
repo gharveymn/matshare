@@ -10,7 +10,7 @@ SET(BOOST_LIB "${BOOST_DIR} stage/lib/")
 SET(SOURCE_FILES
 		${MATLAB_INCLUDE_DIR}/mex.h
 		extlib/mman-win32/mman.c extlib/mman-win32/mman.h
-	   matshare_.cpp headers/matshare_.hpp headers/SharedMemStack.hpp
+	   matshare_.cpp headers/matshare_.hpp
 		)
 
 ADD_LIBRARY(${MEX_FILE_NAME} SHARED ${SOURCE_FILES} ${CMAKE_SOURCE_DIR}/Matlabdef.def)
