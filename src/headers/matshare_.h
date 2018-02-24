@@ -33,7 +33,7 @@
 /* Possibily useful undocumented functions (see links at end for details): */
 /* extern bool mxUnshareArray(const mxArray *pr, const bool noDeepCopy);   */
 /* extern mxArray *mxUnreference(const mxArray *pr);					   */
-extern "C" mxArray* mxCreateSharedDataCopy(mxArray *);
+extern mxArray* mxCreateSharedDataCopy(mxArray *);
 
 /* max length of directive string */
 #define MAXDIRECTIVELEN 256
@@ -193,6 +193,8 @@ struct header
 segment_info* current_segment_info;
 
 void init();
+
+void resetCrossLinkPtrs(mxArray* ret_var);
 
 /* Remove shared memory references to input matrix (in-situ), recursively    */
 /* if needed.                                                                */

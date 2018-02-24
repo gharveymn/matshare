@@ -100,15 +100,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* free temporary allocation */
 			deepfree(&dat);
 			
-			if(mxIsStruct(global_shared_variable) || mxIsCell(global_shared_variable))
-			{
-				plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
-			}
-			else
-			{
-				plhs[0] = global_shared_variable;
-			}
-			
+			plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
 			UnmapViewOfFile(seg_info);
 //			mexLock();
 			break;
@@ -131,24 +123,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/*	Dettach case	*/
 			/********************/
 			
-			//TODO move all gc into here and remove when CrossLink is NULL
 			
 			if(!mxIsEmpty(global_shared_variable))
 			{
 				/* NULL all of the Matlab pointers */
 				deepdetach(global_shared_variable);
-				
-				// if this a struct or cell then refs were sent back to matlab, so destroy the whole thing now
-				if(mxIsStruct(global_shared_variable) || mxIsCell(global_shared_variable))
-				{
-					mxDestroyArray(global_shared_variable);
-				}
-				
+				//resetCrossLinkPtrs(global_shared_variable);
 			}
-			else
-			{
-				mxDestroyArray(global_shared_variable);
-			}
+			mxDestroyArray(global_shared_variable);
 			
 			global_shared_variable = mxCreateNumericArray(0, NULL, mxUINT8_CLASS, mxREAL);
 			mexMakeArrayPersistent(global_shared_variable);
@@ -173,16 +155,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				*current_segment_p = (byte_t*)MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, current_segment_info->segment_size);
 				shallowfetch(*current_segment_p, &global_shared_variable);
 				mexMakeArrayPersistent(global_shared_variable);
-				
-				if(mxIsStruct(global_shared_variable) || mxIsCell(global_shared_variable))
-				{
-					plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
-				}
-				else
-				{
-					plhs[0] = global_shared_variable;
-				}
-				
+				plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
 			}
 			else
 			{
@@ -259,7 +232,7 @@ void deepdetach(mxArray* ret_var)
 		{
 			for(j = 0; j < nFields; j++)               /* field */
 			{
-				deepdetach((mxArray*) (mxGetFieldByNumber(ret_var, i, j)));
+				deepdetach(mxGetFieldByNumber(ret_var, i, j));
 			}/* detach this one */
 		}
 	}
@@ -269,7 +242,7 @@ void deepdetach(mxArray* ret_var)
 		n = mxGetNumberOfElements(ret_var);
 		for(i = 0; i < n; i++)
 		{
-			deepdetach((mxArray*) (mxGetCell(ret_var, i)));
+			deepdetach(mxGetCell(ret_var, i));
 		}/* detach this one */
 		
 	}
@@ -277,6 +250,8 @@ void deepdetach(mxArray* ret_var)
 	{
 		
 		/* In safe mode these entries were allocated so remove them properly */
+		size_t num_dims = 2;
+		void* pr,* pi = NULL;
 		
 		/* handle sparse objects */
 		if(mxIsSparse(ret_var))
@@ -284,30 +259,95 @@ void deepdetach(mxArray* ret_var)
 			/* I don't seem to be able to give sparse arrays zero size so (nzmax must be 1) */
 			dims[0] = dims[1] = 1;
 			nzmax = 1;
-			if(mxSetDimensions(ret_var, dims, 2))
+			if(mxSetDimensions(ret_var, dims, num_dims))
 			{
 				mexErrMsgIdAndTxt("MATLAB:SharedMemory:Unknown", "detach: unable to resize the array.");
 			}
 			
 			/* allocate 1 element */
-			elemsiz = mxGetElementSize(ret_var);
+			pr = mxMalloc(1);
 			mxSetData(ret_var, mxMalloc(1));
 			if(mxIsComplex(ret_var))
 			{
-				mxSetImagData(ret_var, mxMalloc(1));
+				pi = mxMalloc(1);
+				mxSetImagData(ret_var, pi);
 			}
+			mxSetNzmax(ret_var, nzmax);
 		}
 		else
 		{
-			/* Doesn't allocate or deallocate any space for the pr or pi arrays */
-			mxSetDimensions(ret_var, dims, 2);
-			mxSetData(ret_var, mxMalloc(0));
-			mxSetImagData(ret_var, mxMalloc(0));
+			mxSetDimensions(ret_var, dims, num_dims);
+			pr = mxMalloc(0);
+			mxSetData(ret_var, pr);
+			if(mxIsComplex(ret_var))
+			{
+				pi = mxMalloc(0);
+				mxSetImagData(ret_var, pi);
+			}
 		}
+		
+		mxArray* link;
+		for(link = ((mxArrayStruct*)ret_var)->CrossLink; link != NULL && link != ret_var; link = ((mxArrayStruct*)link)->CrossLink)
+		{
+			mxSetDimensions(link, dims, num_dims);
+			mxSetData(link, pr);
+			if(mxIsComplex(ret_var))
+			{
+				mxSetImagData(link, pi);
+			}
+		}
+		
 	}
 	else
 	{
 		mexErrMsgIdAndTxt("MATLAB:SharedMemory:InvalidInput", "detach: unsupported type.");
+	}
+}
+
+
+void resetCrossLinkPtrs(mxArray* ret_var)
+{
+	mwSize n = mxGetNumberOfElements(ret_var);
+	size_t i;
+	int nFields, j;
+	if(mxIsStruct(ret_var))
+	{
+		nFields = mxGetNumberOfFields(ret_var);
+		for(i = 0; i < n; i++)                         /* element */
+		{
+			for(j = 0; j < nFields; j++)               /* field */
+			{
+				resetCrossLinkPtrs(mxGetFieldByNumber(ret_var, i, j));
+			}/* detach this one */
+		}
+	}
+	else if(mxIsCell(ret_var))
+	{
+		for(i = 0; i < n; i++)
+		{
+			resetCrossLinkPtrs(mxGetCell(ret_var, i));
+		}/* detach this one */
+	}
+	if(!mxIsStruct(ret_var) && !mxIsCell(ret_var))
+	{
+		void* pr = mxGetData(ret_var);
+		void* pi;
+		if(mxIsComplex(ret_var))
+		{
+			pi = mxGetImagData(ret_var);
+		}
+		const mwSize* dims = mxGetDimensions(ret_var);
+		mwSize num_dims = mxGetNumberOfDimensions(ret_var);
+		mxArray* link;
+		for(link = ((mxArrayStruct*)ret_var)->CrossLink; link != NULL && link != ret_var; link = ((mxArrayStruct*)link)->CrossLink)
+		{
+			mxSetDimensions(link, dims, num_dims);
+			mxSetData(link, pr);
+			if(mxIsComplex(ret_var))
+			{
+				mxSetImagData(link, pi);
+			}
+		}
 	}
 }
 
