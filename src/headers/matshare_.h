@@ -194,8 +194,6 @@ segment_info* current_segment_info;
 
 void init();
 
-void resetCrossLinkPtrs(mxArray* ret_var);
-
 /* Remove shared memory references to input matrix (in-situ), recursively    */
 /* if needed.                                                                */
 void deepdetach(mxArray* ret_var);

@@ -305,54 +305,6 @@ void deepdetach(mxArray* ret_var)
 }
 
 
-void resetCrossLinkPtrs(mxArray* ret_var)
-{
-	mwSize n = mxGetNumberOfElements(ret_var);
-	size_t i;
-	int nFields, j;
-	if(mxIsStruct(ret_var))
-	{
-		nFields = mxGetNumberOfFields(ret_var);
-		for(i = 0; i < n; i++)                         /* element */
-		{
-			for(j = 0; j < nFields; j++)               /* field */
-			{
-				resetCrossLinkPtrs(mxGetFieldByNumber(ret_var, i, j));
-			}/* detach this one */
-		}
-	}
-	else if(mxIsCell(ret_var))
-	{
-		for(i = 0; i < n; i++)
-		{
-			resetCrossLinkPtrs(mxGetCell(ret_var, i));
-		}/* detach this one */
-	}
-	if(!mxIsStruct(ret_var) && !mxIsCell(ret_var))
-	{
-		void* pr = mxGetData(ret_var);
-		void* pi;
-		if(mxIsComplex(ret_var))
-		{
-			pi = mxGetImagData(ret_var);
-		}
-		const mwSize* dims = mxGetDimensions(ret_var);
-		mwSize num_dims = mxGetNumberOfDimensions(ret_var);
-		mxArray* link;
-		for(link = ((mxArrayStruct*)ret_var)->CrossLink; link != NULL && link != ret_var; link = ((mxArrayStruct*)link)->CrossLink)
-		{
-			mxSetDimensions(link, dims, num_dims);
-			mxSetData(link, pr);
-			if(mxIsComplex(ret_var))
-			{
-				mxSetImagData(link, pi);
-			}
-		}
-	}
-}
-
-
-
 /* ------------------------------------------------------------------------- */
 /* shallowrestore                                                            */
 /*                                                                           */
