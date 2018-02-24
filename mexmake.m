@@ -3,7 +3,7 @@ output_path = [pwd '/bin'];
 
 try
 	
-	sources = {'src/matshare_.cpp',...
+	sources = {'src/matshare_.c',...
 			};
 	
 	mexflags = {'-g', '-v', 'CFLAGS="$CFLAGS -std=c99"', '-outdir', output_path};

@@ -11,7 +11,6 @@
 
 
 /* Possibily useful undocumented functions (see links at end for details): */
-/* extern mxArray *mxCreateSharedDataCopy(const mxArray *pr);			*/
 /* extern bool mxUnshareArray(const mxArray *pr, const bool noDeepCopy);   */
 /* extern mxArray *mxUnreference(const mxArray *pr);					   */
 
@@ -26,11 +25,15 @@
 /* standard mex include; */
 #include "matrix.h"
 #include "mex.h"
-#include <cstdint>
-#include <cstring>
-#include <cstddef>
+#include <stdint.h>
+#include <stddef.h>
 #include <windows.h>
 #include <memory.h>
+
+/* Possibily useful undocumented functions (see links at end for details): */
+/* extern bool mxUnshareArray(const mxArray *pr, const bool noDeepCopy);   */
+/* extern mxArray *mxUnreference(const mxArray *pr);					   */
+extern "C" mxArray* mxCreateSharedDataCopy(mxArray *);
 
 /* max length of directive string */
 #define MAXDIRECTIVELEN 256
@@ -46,10 +49,10 @@ typedef bool bool_t;
 /* these are used for recording structure field names */
 const char term_char = ';';          /*use this character to terminate a string containing the list of fields.  Do this because it can't be in a valid field name*/
 const size_t align_size = 32;   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
-const uint8_t MXMALLOC_SIG_LEN = 16;
+#define MXMALLOC_SIG_LEN 16
 const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
-const uint8_t MSH_SEG_NAME_PREAMB_LEN = 17;
-const uint8_t MSH_SEG_NAME_LEN = MSH_SEG_NAME_PREAMB_LEN + sizeof(uint32_t);
+#define MSH_SEG_NAME_PREAMB_LEN 17
+#define MSH_SEG_NAME_LEN (MSH_SEG_NAME_PREAMB_LEN + sizeof(uint32_t))
 char MSH_SEGMENT_NAME[MSH_SEG_NAME_LEN] = "MATSHARE_SEGMENT";
 
 mxArray* global_shared_variable;
@@ -80,8 +83,60 @@ typedef int64_t index_t;
 	#error Your architecture is weird
 #endif
 
+typedef struct {
+	void *name;             /*   prev - R2008b: Name of variable in workspace
+				               R2009a - R2010b: NULL
+				               R2011a - later : Reverse CrossLink pointer    */
+	mxClassID ClassID;      /*  0 = unknown     10 = int16
+                                1 = cell        11 = uint16
+                                2 = struct      12 = int32
+                                3 = logical     13 = uint32
+                                4 = char        14 = int64
+                                5 = void        15 = uint64
+                                6 = double      16 = function_handle
+                                7 = single      17 = opaque (classdef)
+                                8 = int8        18 = object (old style)
+                                9 = uint8       19 = index (deprecated)
+                               10 = int16       20 = sparse (deprecated)     */
+	int VariableType;       /*  0 = normal
+                                1 = persistent
+                                2 = global
+                                3 = sub-element (field or cell)
+                                4 = temporary
+                                5 = (unknown)
+                                6 = property of opaque class object
+                                7 = (unknown)                                */
+	mxArray *CrossLink;     /* Address of next shared-data variable          */
+	size_t ndim;            /* Number of dimensions                          */
+	unsigned int RefCount;  /* Number of extra sub-element copies            */
+	unsigned int flags;     /*  bit  0 = is scalar double full
+                                bit  2 = is empty double full
+                                bit  4 = is temporary
+                                bit  5 = is sparse
+                                bit  9 = is numeric
+                                bits 24 - 31 = User Bits                     */
+	union {
+		size_t M;           /* Row size for 2D matrices, or                  */
+		size_t *dims;       /* Pointer to dims array for nD > 2 arrays       */
+	} Mdims;
+	size_t N;               /* Product of dims 2:end                         */
+	void *pr;               /* Real Data Pointer (or cell/field elements)    */
+	void *pi;               /* Imag Data Pointer (or field information)      */
+	union {
+		mwIndex *ir;        /* Pointer to row values for sparse arrays       */
+		mxClassID ClassID;  /* New User Defined Class ID (classdef)          */
+		char *ClassName;    /* Pointer to Old User Defined Class Name        */
+	} irClassNameID;
+	union {
+		mwIndex *jc;        /* Pointer to column values for sparse arrays    */
+		mxClassID ClassID;  /* Old User Defined Class ID                     */
+	} jcClassID;
+	size_t nzmax;           /* Number of elements allocated for sparse       */
+/*  size_t reserved;           Don't believe this! It is not really there!   */
+} mxArrayStruct;
 
-enum msh_directive_t
+
+typedef enum
 {
 	msh_INIT,
 	msh_CLONE,
@@ -89,8 +144,11 @@ enum msh_directive_t
 	msh_DETACH,
 	msh_FREE,
 	msh_FETCH,
-	msh_COMPARE
-};
+	msh_COMPARE,
+	msh_COPY,
+	msh_DEEPCOPY,
+	msh_DEBUG
+} msh_directive_t;
 
 /* structure used to record all of the data addresses */
 struct data
@@ -106,14 +164,13 @@ struct data
 	mwIndex* jc;                    /* cumulative column counts, for sparse */
 	data_t* child_dat;          /* array of children data structures, for cell */
 	header_t* child_hdr;          /* array of corresponding children header structures, for cell */
-	
 };
 
-struct segment_info
+typedef struct
 {
 	uint32_t segment_number;
 	size_t segment_size;
-};
+} segment_info;
 
 
 /* captures fundamentals of the mxArray */
@@ -124,7 +181,7 @@ struct header
 	bool isNumeric;
 	mxComplexity complexity;
 	mxClassID classid;       /* matlab class id */
-	int nDims;         /* dimensionality of the matrix.  The size array immediately follows the header */
+	size_t nDims;         /* dimensionality of the matrix.  The size array immediately follows the header */
 	size_t elemsiz;       /* size of each element in pr and pi */
 	size_t nzmax;         /* length of pr,pi */
 	int nFields;       /* the number of fields.  The field string immediately follows the size array */
@@ -162,14 +219,7 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset);
 void onExit();
 
 /* Pads the size to something that guarantees pointer alignment.			*/
-__inline size_t pad_to_align(size_t size)
-{
-	if(size%align_size)
-	{
-		size += align_size - (size%align_size);
-	}
-	return size;
-}
+size_t pad_to_align(size_t size);
 
 
 /*Function to find the number of bytes required to store all of the			 */

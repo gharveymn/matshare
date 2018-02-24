@@ -3,8 +3,6 @@ PROJECT(matshare)
 SET(CMAKE_CXX_STANDARD 11)
 MESSAGE(STATUS "Building with configuration CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 
-SET(BOOST_DIR "C:/local/boost/")
-SET(BOOST_LIB "${BOOST_DIR} stage/lib/")
 
 IF("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 
@@ -22,24 +20,21 @@ IF("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 
 	SET(SOURCE_FILES
 			src/extlib/mman-win32/mman.c src/extlib/mman-win32/mman.h
-		   src/matshare_.cpp src/headers/matshare_.hpp
+			src/matshare_.c src/headers/matshare_.h
 			)
 
 	ADD_EXECUTABLE(${OUT_NAME} ${SOURCE_FILES})
-
-	LINK_DIRECTORIES(${OUT_NAME} ${BOOST_LIB})
 
 ELSE("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 
 	SET(INSTALL_OUTPUT_PATH "bin")
 	SET(CMAKE_CL_64 TRUE)
 	#set(CMAKE_VERBOSE_MAKEFILE ON)
-	FIND_PATH(MATLAB_ROOT "bin/matlab.exe")
+	SET(MATLAB_ROOT "C:\\Program Files\\MATLAB\\R2017b")
 	SET(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 	SET(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake) # add FindMatlab module
 
 	ADD_DEFINITIONS(-DMATLAB_MEX_FILE) #define matlab macros
-	ADD_DEFINITIONS(-DMX_COMPAT_32)
 
 	FIND_PACKAGE(Matlab REQUIRED)
 
