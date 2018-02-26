@@ -29,7 +29,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		mexErrMsgIdAndTxt("MATLAB:SharedMemory", "Minimum input arguments missing; must supply directive and key.");
+		mexErrMsgIdAndTxt("MATLAB:MatShare", "Minimum input arguments missing; must supply directive and key.");
 	}
 	
 	/* assign inputs */
@@ -40,9 +40,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	DWORD hi_sz, lo_sz, err;
 	mxArrayStruct* arr;
 	
-	uint32_t n;
-	uint8_t num_digits;
-	HANDLE shm_handle_predup;
+	HANDLE temp_handle;
 	
 	/* Switch yard {clone, attach, detach, free} */
 	switch(directive)
@@ -75,20 +73,12 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			// get current map number
 			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
-			seg_info->segment_number += 1;
+			seg_info->segment_number = seg_info->segment_number == UINT32_MAX? 0 : seg_info->segment_number + 1; // there aren't going to be UINT32_MAX files open, so reset to 0 without checking
 			current_segment_info->segment_number = seg_info->segment_number;
 			seg_info->segment_size = sm_size;
 			current_segment_info->segment_size = sm_size;
 			
-			n = current_segment_info->segment_number;
-			num_digits = 0;
-			do
-			{
-				n /= 10;
-				num_digits++;
-			} while(n != 0);
-			
-			msh_segment_name = mxMalloc((MSH_SEG_NAME_PREAMB_LEN + num_digits)*sizeof(char));
+			msh_segment_name = mxMalloc((MSH_SEG_NAME_LEN + 1)*sizeof(char));
 			sprintf(msh_segment_name, MSH_SEGMENT_NAME, seg_info->segment_number);
 			
 			UnmapViewOfFile(*current_segment_p);
@@ -97,14 +87,24 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			// create the new mapping
 			lo_sz =  (DWORD)(sm_size & 0xFFFFFFFFL);
 			hi_sz =  (DWORD)((sm_size >> 32) & 0xFFFFFFFFL);
-			*shm_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, MSH_SEGMENT_NAME);
+			temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, MSH_SEGMENT_NAME);
 			err = GetLastError();
-			if(*shm_handle == NULL)
+			if(temp_handle == NULL)
 			{
+				// throw error is already exists because that shouldn't happen
 				releaseProcLock();
 				mexPrintf("Error number: %d\n", err);
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
-							   "SharedMemory::Could not create the memory segment");
+				mexErrMsgIdAndTxt("MATLAB:MatShare:init",
+							   "MatShare::Could not create the memory segment");
+			}
+			
+			if(err == ERROR_ALREADY_EXISTS)
+			{
+				DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+			}
+			else
+			{
+				*shm_handle = temp_handle;
 			}
 			
 			*current_segment_p = (byte_t*)MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, sm_size);
@@ -190,23 +190,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					deepdetach(global_shared_variable);
 				}
 				mxDestroyArray(global_shared_variable);
-				
-				global_shared_variable = mxCreateDoubleMatrix(0, 0, mxREAL);
-				mexMakeArrayPersistent(global_shared_variable);
-				plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
 			}
 			current_segment_info->segment_number = seg_info->segment_number;
 			current_segment_info->segment_size = seg_info->segment_size;
 			
-			n = current_segment_info->segment_number;
-			num_digits = 0;
-			do
-			{
-				n /= 10;
-				num_digits++;
-			} while(n != 0);
-			
-			msh_segment_name = mxMalloc((MSH_SEG_NAME_PREAMB_LEN + num_digits)*sizeof(char));
+			msh_segment_name = mxMalloc((MSH_SEG_NAME_LEN + 1)*sizeof(char));
 			sprintf(msh_segment_name, MSH_SEGMENT_NAME, current_segment_info->segment_number);
 			
 			UnmapViewOfFile(*current_segment_p);
@@ -214,22 +202,24 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			if(current_segment_info->segment_size != NULLSEGMENT_SZ)
 			{
 				
-				shm_handle_predup = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, msh_segment_name);
-				if(shm_handle_predup == NULL)
+				temp_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, msh_segment_name);
+				err = GetLastError();
+				if(temp_handle == NULL)
 				{
 					releaseProcLock();
-					mexPrintf("Error number: %d\n", GetLastError());
+					mexPrintf("Error number: %d\n", err);
 					mexErrMsgIdAndTxt("MATLAB:MatShare:fetch",
 								   "MatShare::Could not open the memory segment");
 				}
 				
-				DuplicateHandle(GetCurrentProcess(), shm_handle_predup, GetCurrentProcess(), shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+				DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
 				
 				*current_segment_p = (byte_t*)MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, current_segment_info->segment_size);
+				err = GetLastError();
 				if(*current_segment_p == NULL)
 				{
 					releaseProcLock();
-					mexPrintf("Error number: %d\n", GetLastError());
+					mexPrintf("Error number: %d\n", err);
 					mexErrMsgIdAndTxt("MATLAB:MatShare:fetch",
 								   "MatShare::Could not fetch the memory segment");
 				}
@@ -1348,6 +1338,8 @@ int BytesFromStringEnd(const char* pString, size_t* pBytes)
 
 void init()
 {
+	DWORD err;
+	HANDLE temp_handle;
 	
 	current_segment_p = (byte_t**)mxMalloc(sizeof(byte_t*));
 	mexMakeMemoryPersistent(current_segment_p);
@@ -1370,25 +1362,44 @@ void init()
 	lock_sec->lpSecurityDescriptor = NULL;
 	lock_sec->bInheritHandle = TRUE;
 	
-	*proc_lock = CreateMutex(lock_sec, FALSE, MSH_LOCK_NAME);
-	DWORD err = GetLastError();
-	if(*proc_lock == NULL)
+	temp_handle = CreateMutex(lock_sec, FALSE, MSH_LOCK_NAME);
+	err = GetLastError();
+	if(temp_handle == NULL)
 	{
 		mexPrintf("Error number: %d\n", err);
 		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
 					   "SharedMemory::Could not create the memory segment");
 	}
 	
+	if(err == ERROR_ALREADY_EXISTS)
+	{
+		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), proc_lock, 0, TRUE, DUPLICATE_SAME_ACCESS);
+	}
+	else
+	{
+		*proc_lock = temp_handle;
+	}
+	
+	
 	acquireProcLock();
 	
-	*shm_name_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(segment_info), MSH_NAME_SEGMENT_NAME);
+	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(segment_info), MSH_NAME_SEGMENT_NAME);
 	err = GetLastError();
-	if(*shm_name_handle == NULL)
+	if(temp_handle == NULL)
 	{
 		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
 		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
 					   "SharedMemory::Could not create the memory segment");
+	}
+	
+	if(err == ERROR_ALREADY_EXISTS)
+	{
+		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), shm_name_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+	}
+	else
+	{
+		*shm_name_handle = temp_handle;
 	}
 	
 	segment_info* seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
@@ -1406,26 +1417,29 @@ void init()
 		seg_info->segment_size = NULLSEGMENT_SZ;
 	}
 	
-	uint32_t n = seg_info->segment_number;
-	uint8_t num_digits = 0;
-	do
-	{
-		n /= 10;
-		num_digits++;
-	} while(n != 0);
-	
-	char* msh_segment_name = mxMalloc((MSH_SEG_NAME_PREAMB_LEN + num_digits)*sizeof(char));
+	char* msh_segment_name = mxMalloc((MSH_SEG_NAME_LEN + 1)*sizeof(char));
 	sprintf(msh_segment_name, MSH_SEGMENT_NAME, seg_info->segment_number);
-	*shm_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, NULLSEGMENT_SZ, MSH_SEGMENT_NAME);
+	
+	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, NULLSEGMENT_SZ, MSH_SEGMENT_NAME);
 	mxFree(msh_segment_name);
 	err = GetLastError();
-	if(*shm_handle == NULL)
+	if(temp_handle == NULL)
 	{
 		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
 		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
 					   "SharedMemory::Could not create the memory segment");
 	}
+	
+	if(err == ERROR_ALREADY_EXISTS)
+	{
+		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+	}
+	else
+	{
+		*shm_handle = temp_handle;
+	}
+	
 	*current_segment_p = (byte_t*)MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, seg_info->segment_size);
 	
 	current_segment_info->segment_number = 0;

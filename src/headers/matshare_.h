@@ -53,8 +53,11 @@ const char term_char = ';';          /*use this character to terminate a string 
 const size_t align_size = 32;   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
 #define MXMALLOC_SIG_LEN 16
 const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
-#define MSH_SEG_NAME_PREAMB_LEN 17
+#define MSH_SEG_NAME_PREAMB_LEN 16
 #define MSH_SEGMENT_NAME "MATSHARE_SEGMENT%d"
+#define MAX_INT_STR_LEN 19
+#define MSH_SEG_NAME_LEN (MSH_SEG_NAME_PREAMB_LEN + MAX_INT_STR_LEN)
+
 
 mxArray* global_shared_variable;
 HANDLE* shm_handle;
