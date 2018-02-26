@@ -11,9 +11,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	const mxArray* mxDirective;               /*  Directive {clone, attach, detach, free}   */
 	const mxArray* mxInput;                /*  Input array (for clone)					  */
 	
-	/* For output */
-	mxArray* mxOutput;
-	
 	/* For storing inputs */
 	msh_directive_t directive;
 	
@@ -27,6 +24,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	size_t tmp = 0;
 	
 	segment_info* seg_info;
+	char* msh_segment_name;
 	
 	/* check min number of arguments */
 	if(nrhs < 1)
@@ -42,13 +40,18 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	DWORD hi_sz, lo_sz, err;
 	mxArrayStruct* arr;
 	
+	uint32_t n;
+	uint8_t num_digits;
+	HANDLE shm_handle_predup;
+	
 	/* Switch yard {clone, attach, detach, free} */
 	switch(directive)
 	{
 		case msh_INIT:
 			init();
-			plhs[0] = mxDuplicateArray(global_shared_variable);
-//			mexLock();
+			mexMakeArrayPersistent(global_shared_variable);
+			plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
+			mexLock();
 			break;
 		case msh_CLONE:
 			/********************/
@@ -62,12 +65,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 							   "Required second argument is missing (variable) or empty.");
 			}
 			
+			acquireProcLock();
+			
 			/* Assign */
 			mxInput = prhs[1];
 			
 			/* scan input data */
 			sm_size = deepscan(&hdr, &dat, mxInput, NULL, &global_shared_variable);
-			mexMakeArrayPersistent(global_shared_variable);
 			
 			// get current map number
 			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
@@ -75,7 +79,17 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			current_segment_info->segment_number = seg_info->segment_number;
 			seg_info->segment_size = sm_size;
 			current_segment_info->segment_size = sm_size;
-			memcpy(MSH_SEGMENT_NAME + MSH_SEG_NAME_PREAMB_LEN - 1, &current_segment_info->segment_number, sizeof(uint32_t));
+			
+			n = current_segment_info->segment_number;
+			num_digits = 0;
+			do
+			{
+				n /= 10;
+				num_digits++;
+			} while(n != 0);
+			
+			msh_segment_name = mxMalloc((MSH_SEG_NAME_PREAMB_LEN + num_digits)*sizeof(char));
+			sprintf(msh_segment_name, MSH_SEGMENT_NAME, seg_info->segment_number);
 			
 			UnmapViewOfFile(*current_segment_p);
 			CloseHandle(*shm_handle);
@@ -87,6 +101,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			err = GetLastError();
 			if(*shm_handle == NULL)
 			{
+				releaseProcLock();
 				mexPrintf("Error number: %d\n", err);
 				mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
 							   "SharedMemory::Could not create the memory segment");
@@ -100,78 +115,149 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* free temporary allocation */
 			deepfree(&dat);
 			
+			mxFree(msh_segment_name);
+			mexMakeArrayPersistent(global_shared_variable);
 			plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
 			UnmapViewOfFile(seg_info);
-//			mexLock();
+			mexLock();
+			releaseProcLock();
 			break;
 		case msh_ATTACH:
 			/********************/
 			/*	Attach case	*/
 			/********************/
+			
+			acquireProcLock();
 
 			// get current map size
-			updateSegmentInfo();
+			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
+			current_segment_info->segment_number = seg_info->segment_number;
+			current_segment_info->segment_size = seg_info->segment_size;
 			
 			/* Restore the segment if this an initialized region */
 			if(current_segment_info->segment_size != NULLSEGMENT_SZ)
 			{
 				shallowrestore(*current_segment_p, global_shared_variable);
 			}
+			releaseProcLock();
 			break;
 		case msh_DETACH:
 			/********************/
 			/*	Dettach case	*/
 			/********************/
 			
+			acquireProcLock();
 			
 			if(!mxIsEmpty(global_shared_variable))
 			{
 				/* NULL all of the Matlab pointers */
 				deepdetach(global_shared_variable);
-				//resetCrossLinkPtrs(global_shared_variable);
 			}
 			mxDestroyArray(global_shared_variable);
 			
-			global_shared_variable = mxCreateNumericArray(0, NULL, mxUINT8_CLASS, mxREAL);
+			global_shared_variable = mxCreateDoubleMatrix(0, 0, mxREAL);
 			mexMakeArrayPersistent(global_shared_variable);
-			plhs[0] = mxDuplicateArray(global_shared_variable);
-//			mexUnlock();
+			plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
+			mexUnlock();
+			releaseProcLock();
 			break;
 		case msh_FREE:
 			/********************/
 			/*	free case		*/
 			/********************/
 			//CloseHandle(*shm_handle);
-			//mexUnlock();
+			mexUnlock();
 			break;
 		case msh_FETCH:
 			
-			updateSegmentInfo();
+			acquireProcLock();
+			
+			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
+			if(current_segment_info->segment_number == seg_info->segment_number)
+			{
+				//return a shallow copy of the variable
+				UnmapViewOfFile(seg_info);
+				plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
+				releaseProcLock();
+				break;
+			}
+			else
+			{
+				//do a detach operation
+				if(!mxIsEmpty(global_shared_variable))
+				{
+					/* NULL all of the Matlab pointers */
+					deepdetach(global_shared_variable);
+				}
+				mxDestroyArray(global_shared_variable);
+				
+				global_shared_variable = mxCreateDoubleMatrix(0, 0, mxREAL);
+				mexMakeArrayPersistent(global_shared_variable);
+				plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
+			}
+			current_segment_info->segment_number = seg_info->segment_number;
+			current_segment_info->segment_size = seg_info->segment_size;
+			
+			n = current_segment_info->segment_number;
+			num_digits = 0;
+			do
+			{
+				n /= 10;
+				num_digits++;
+			} while(n != 0);
+			
+			msh_segment_name = mxMalloc((MSH_SEG_NAME_PREAMB_LEN + num_digits)*sizeof(char));
+			sprintf(msh_segment_name, MSH_SEGMENT_NAME, current_segment_info->segment_number);
+			
 			UnmapViewOfFile(*current_segment_p);
 			CloseHandle(*shm_handle);
 			if(current_segment_info->segment_size != NULLSEGMENT_SZ)
 			{
-				*shm_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, true, MSH_SEGMENT_NAME);
+				
+				shm_handle_predup = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, msh_segment_name);
+				if(shm_handle_predup == NULL)
+				{
+					releaseProcLock();
+					mexPrintf("Error number: %d\n", GetLastError());
+					mexErrMsgIdAndTxt("MATLAB:MatShare:fetch",
+								   "MatShare::Could not open the memory segment");
+				}
+				
+				DuplicateHandle(GetCurrentProcess(), shm_handle_predup, GetCurrentProcess(), shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+				
 				*current_segment_p = (byte_t*)MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, current_segment_info->segment_size);
+				if(*current_segment_p == NULL)
+				{
+					releaseProcLock();
+					mexPrintf("Error number: %d\n", GetLastError());
+					mexErrMsgIdAndTxt("MATLAB:MatShare:fetch",
+								   "MatShare::Could not fetch the memory segment");
+				}
 				shallowfetch(*current_segment_p, &global_shared_variable);
-				mexMakeArrayPersistent(global_shared_variable);
-				plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
 			}
 			else
 			{
 				mxDestroyArray(global_shared_variable);
-				global_shared_variable = mxCreateNumericArray(0, NULL, mxUINT8_CLASS, mxREAL);
-				mexMakeArrayPersistent(global_shared_variable);
-				plhs[0] = mxDuplicateArray(global_shared_variable);
+				global_shared_variable = mxCreateDoubleMatrix(0, 0, mxREAL);
 			}
-//			mexLock();
+			mexMakeArrayPersistent(global_shared_variable);
+			plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
+			mexLock();
+			mxFree(msh_segment_name);
+			UnmapViewOfFile(seg_info);
+			releaseProcLock();
 			break;
 		case msh_COMPARE:
+			
+			acquireProcLock();
+			
 			plhs[0] = mxCreateLogicalMatrix(1,1);
 			ret_data = mxGetLogicals(plhs[0]);
 			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
 			*ret_data = (mxLogical)(current_segment_info->segment_number == seg_info->segment_number);
 			UnmapViewOfFile(seg_info);
+			
+			releaseProcLock();
 			break;
 		case msh_COPY:
 			plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
@@ -212,7 +298,6 @@ void deepdetach(mxArray* ret_var)
 	/* uses side-effects! */
 	mwSize dims[] = {0, 0};
 	mwSize nzmax = 0;
-	size_t elemsiz;
 	size_t i, n;
 	
 	/*for structure */
@@ -261,6 +346,7 @@ void deepdetach(mxArray* ret_var)
 			nzmax = 1;
 			if(mxSetDimensions(ret_var, dims, num_dims))
 			{
+				releaseProcLock();
 				mexErrMsgIdAndTxt("MATLAB:SharedMemory:Unknown", "detach: unable to resize the array.");
 			}
 			
@@ -300,6 +386,7 @@ void deepdetach(mxArray* ret_var)
 	}
 	else
 	{
+		releaseProcLock();
 		mexErrMsgIdAndTxt("MATLAB:SharedMemory:InvalidInput", "detach: unsupported type.");
 	}
 }
@@ -320,7 +407,7 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 {
 	
 	/* for working with shared memory ... */
-	int i;
+	size_t i;
 	
 	/* for working with payload ... */
 	header_t* hdr;
@@ -368,7 +455,7 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 		for(i = 0; i < hdr->nzmax; i++)
 		{
 			/* And fill it */
-			shm += shallowrestore(shm, mxGetCell(ret_var,i));
+			shm += shallowrestore(shm, mxGetCell(ret_var, i));
 		}
 	}
 	else     /*base case*/
@@ -656,9 +743,6 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 				mxSetFieldByNumber(*ret_var, i, field_num, ret_child);
 				
 				count++; /* progress */
-#ifdef DEBUG
-				mexPrintf("deepscan: Debug: finished element %d field %d.\n",i,field_num);
-#endif
 			}
 		}
 	}
@@ -687,6 +771,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		/* if its a cell it has to have at least one mom-empty element */
 		if(hdr->shmsiz == (1 + hdr->nzmax) * pad_to_align(sizeof(header_t)))
 		{
+			releaseProcLock();
 			mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone", "Required (variable) must contain at "
 					"least one non-empty item (at all levels).");
 		}
@@ -748,6 +833,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	}
 	else
 	{
+		releaseProcLock();
 		mexPrintf("Unknown class found: %s\n", mxGetClassName(mxInput));
 		mexErrMsgIdAndTxt("MATLAB:SharedMemory:InvalidInput", "clone: unsupported type.");
 	}
@@ -777,9 +863,6 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr)
 	size_t i, n, offset = 0;
 	mwSize* pSize;               /* points to the size data */
 	
-	/* for structures */
-	int ret;
-	
 	/* load up the shared memory */
 	
 	/* copy the header */
@@ -803,9 +886,6 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr)
 	/* Structure case */
 	if(hdr->classid == mxSTRUCT_CLASS)
 	{
-#ifdef DEBUG
-		mexPrintf("deepcopy: Debug: found structure.\n");
-#endif
 		
 		/* place the field names next in shared memory */
 		
@@ -826,9 +906,6 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr)
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
 		/* recurse for each cell element */
-#ifdef DEBUG
-		mexPrintf("deepcopy: Debug: found cell.\n");
-#endif
 		
 		/* recurse through each cell */
 		for(i = 0; i < hdr->nzmax; i++)
@@ -1032,17 +1109,18 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 		
 	}
 	*offset = hdr->shmsiz;
+	return true;
 }
 
 
 /* Function to find the number of bytes required to store all of the */
 /* field names of a structure									     */
-int FieldNamesSize(const mxArray* mxStruct)
+size_t FieldNamesSize(const mxArray* mxStruct)
 {
 	const char* pFieldName;
 	int nFields;
 	int i, j;               /* counters */
-	int Bytes = 0;
+	size_t Bytes = 0;
 	
 	/* How many fields? */
 	nFields = mxGetNumberOfFields(mxStruct);
@@ -1084,12 +1162,12 @@ int FieldNamesSize(const mxArray* mxStruct)
 /* Function to copy all of the field names to a character array    */
 /* Use FieldNamesSize() to allocate the required size of the array */
 /* returns the number of bytes used in pList					   */
-int CopyFieldNames(const mxArray* mxStruct, char* pList, const char** field_names)
+size_t CopyFieldNames(const mxArray* mxStruct, char* pList, const char** field_names)
 {
 	const char* pFieldName;    /* name of the field to add to the list */
 	int nFields;                    /* the number of fields */
 	int i, j;                         /* counters */
-	int Bytes = 0;                    /* number of bytes copied */
+	size_t Bytes = 0;                    /* number of bytes copied */
 	
 	/* How many fields? */
 	nFields = mxGetNumberOfFields(mxStruct);
@@ -1176,8 +1254,8 @@ int PointCharArrayAtString(char** pCharArray, char* pString, int nFields)
 int NumFieldsFromString(const char* pString, size_t* pFields, size_t* pBytes)
 {
 	unsigned int stored_length;          /* the recorded length of the string */
-	bool term_found = false;          /* has the termination character been found? */
-	int i = 0;                              /* counter */
+	bool_t term_found = false;          /* has the termination character been found? */
+	size_t i = 0;                              /* counter */
 	
 	pFields[0] = 0;                         /* the number of fields in the string */
 	pBytes[0] = 0;
@@ -1193,7 +1271,7 @@ int NumFieldsFromString(const char* pString, size_t* pFields, size_t* pBytes)
 		}
 		
 		/* is this the special termination character? */
-		term_found = pString[i] == term_char;
+		term_found = (bool_t)(pString[i] == term_char);
 		
 		if(!term_found)
 		{
@@ -1244,11 +1322,11 @@ int NumFieldsFromString(const char* pString, size_t* pFields, size_t* pBytes)
 int BytesFromStringEnd(const char* pString, size_t* pBytes)
 {
 	
-	int offset = align_size;            /* start from the end of the string */
+	int offset = (int) align_size;            /* start from the end of the string */
 	pBytes[0] = 0;                           /* default */
 	
 	/* Grab it directly from the string */
-	pBytes[0] = (size_t) (*(unsigned int*) &pString[-offset]);
+	pBytes[0] = (*(size_t*) &pString[-offset]);
 	
 	/* scan for the termination character */
 	while((offset < 2 * align_size) && (pString[-offset] != term_char))
@@ -1280,10 +1358,34 @@ void init()
 	shm_name_handle = (HANDLE*)mxMalloc(sizeof(HANDLE));
 	mexMakeMemoryPersistent(shm_name_handle);
 	
-	*shm_name_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(segment_info), MSH_NAME_SEGMENT_NAME);
+	shm_handle = (HANDLE*)mxMalloc(sizeof(HANDLE));
+	mexMakeMemoryPersistent(shm_handle);
+	
+	proc_lock = (HANDLE*)mxMalloc(sizeof(HANDLE));
+	mexMakeMemoryPersistent(proc_lock);
+	
+	lock_sec = (SECURITY_ATTRIBUTES*)mxMalloc(sizeof(SECURITY_ATTRIBUTES));
+	mexMakeMemoryPersistent(lock_sec);
+	lock_sec->nLength = sizeof(SECURITY_ATTRIBUTES);
+	lock_sec->lpSecurityDescriptor = NULL;
+	lock_sec->bInheritHandle = TRUE;
+	
+	*proc_lock = CreateMutex(lock_sec, FALSE, MSH_LOCK_NAME);
 	DWORD err = GetLastError();
+	if(*proc_lock == NULL)
+	{
+		mexPrintf("Error number: %d\n", err);
+		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
+					   "SharedMemory::Could not create the memory segment");
+	}
+	
+	acquireProcLock();
+	
+	*shm_name_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(segment_info), MSH_NAME_SEGMENT_NAME);
+	err = GetLastError();
 	if(*shm_name_handle == NULL)
 	{
+		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
 		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
 					   "SharedMemory::Could not create the memory segment");
@@ -1292,9 +1394,11 @@ void init()
 	segment_info* seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
 	if(seg_info == NULL)
 	{
+		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
 		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
 					   "SharedMemory::Could not map the name memory segment");
+		exit(1);
 	}
 	else if(err != ERROR_ALREADY_EXISTS)
 	{
@@ -1302,14 +1406,22 @@ void init()
 		seg_info->segment_size = NULLSEGMENT_SZ;
 	}
 	
-	shm_handle = (HANDLE*)mxMalloc(sizeof(HANDLE));
-	mexMakeMemoryPersistent(shm_handle);
+	uint32_t n = seg_info->segment_number;
+	uint8_t num_digits = 0;
+	do
+	{
+		n /= 10;
+		num_digits++;
+	} while(n != 0);
 	
-	memcpy(MSH_SEGMENT_NAME + MSH_SEG_NAME_PREAMB_LEN - 1, &seg_info->segment_number, sizeof(uint32_t));
+	char* msh_segment_name = mxMalloc((MSH_SEG_NAME_PREAMB_LEN + num_digits)*sizeof(char));
+	sprintf(msh_segment_name, MSH_SEGMENT_NAME, seg_info->segment_number);
 	*shm_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, NULLSEGMENT_SZ, MSH_SEGMENT_NAME);
+	mxFree(msh_segment_name);
 	err = GetLastError();
 	if(*shm_handle == NULL)
 	{
+		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
 		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
 					   "SharedMemory::Could not create the memory segment");
@@ -1320,13 +1432,15 @@ void init()
 	current_segment_info->segment_size = NULLSEGMENT_SZ;
 	UnmapViewOfFile(seg_info);
 	
-	global_shared_variable = mxCreateNumericArray(0, NULL, mxUINT8_CLASS, mxREAL);
-	mexMakeArrayPersistent(global_shared_variable);
+	global_shared_variable = mxCreateDoubleMatrix(0, 0, mxREAL);
 	mexAtExit(onExit);
+	
+	releaseProcLock();
+	
 }
 
 
-void onExit()
+void onExit(void)
 {
 	if(!mxIsEmpty(global_shared_variable))
 	{
@@ -1341,12 +1455,13 @@ void onExit()
 	UnmapViewOfFile(*current_segment_p);
 	CloseHandle(*shm_handle);
 	CloseHandle(*shm_name_handle);
+	CloseHandle(*proc_lock);
 	mxFree(shm_handle);
 	mxFree(shm_name_handle);
+	mxFree(proc_lock);
+	mxFree(lock_sec);
 	mxFree(current_segment_info);
 	mxFree(current_segment_p);
-	
-	//mexUnlock();
 	
 }
 
@@ -1359,6 +1474,32 @@ size_t pad_to_align(size_t size)
 	return size;
 }
 
+void acquireProcLock(void)
+{
+	DWORD ret = WaitForSingleObject(*proc_lock, INFINITE);
+	if(ret == WAIT_ABANDONED)
+	{
+		mexErrMsgIdAndTxt("MATLAB:MatShare:acquireProcLock",
+					   "The wait for process lock was abandoned.");
+	}
+	else if(ret == WAIT_FAILED)
+	{
+		mexPrintf("Error number: %d\n", GetLastError());
+		mexErrMsgIdAndTxt("MATLAB:MatShare:acquireProcLock",
+					   "The wait for process lock failed.");
+	}
+}
+
+
+void releaseProcLock(void)
+{
+	if(ReleaseMutex(*proc_lock) == 0)
+	{
+		mexPrintf("Error number: %d\n", GetLastError());
+		mexErrMsgIdAndTxt("MATLAB:MatShare:releaseProcLock",
+					   "The process lock release failed.");
+	}
+}
 
 
 /*

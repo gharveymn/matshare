@@ -41,6 +41,8 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 #define MSH_NAME_SEGMENT_NAME "MATSHARE_NAME_SEGMENT"
 #define NULLSEGMENT_SZ 1
 
+#define MSH_LOCK_NAME "MATSHARE_LOCK"
+
 typedef struct data data_t;
 typedef struct header header_t;
 typedef char byte_t;
@@ -52,13 +54,14 @@ const size_t align_size = 32;   /*the pointer alignment size, so if pdata is a v
 #define MXMALLOC_SIG_LEN 16
 const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
 #define MSH_SEG_NAME_PREAMB_LEN 17
-#define MSH_SEG_NAME_LEN (MSH_SEG_NAME_PREAMB_LEN + sizeof(uint32_t))
-char MSH_SEGMENT_NAME[MSH_SEG_NAME_LEN] = "MATSHARE_SEGMENT";
+#define MSH_SEGMENT_NAME "MATSHARE_SEGMENT%d"
 
 mxArray* global_shared_variable;
 HANDLE* shm_handle;
 HANDLE* shm_name_handle;
+HANDLE* proc_lock;
 byte_t** current_segment_p;
+SECURITY_ATTRIBUTES* lock_sec;
 
 /*
  * The header_t object will be copied to shared memory in its entirety.
@@ -216,7 +219,7 @@ void deepfree(data_t* dat);
 
 mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset);
 
-void onExit();
+void onExit(void);
 
 /* Pads the size to something that guarantees pointer alignment.			*/
 size_t pad_to_align(size_t size);
@@ -224,12 +227,12 @@ size_t pad_to_align(size_t size);
 
 /*Function to find the number of bytes required to store all of the			 */
 /*field names of a structure */
-int FieldNamesSize(const mxArray* mxStruct);
+size_t FieldNamesSize(const mxArray* mxStruct);
 
 /*Function to copy all of the field names to a character array				*/
 /*Use FieldNamesSize() to allocate the required size of the array			*/
 /*returns the number of bytes used in pList									*/
-int CopyFieldNames(const mxArray* mxStruct, char* pList, const char** field_names);
+size_t CopyFieldNames(const mxArray* mxStruct, char* pList, const char** field_names);
 
 /*This function finds the number of fields contained within in a string      */
 /*the string is terminated by term_char, a character that can't be in a      */
@@ -248,15 +251,9 @@ int PointCharArrayAtString(char** pCharArray, char* pString, int nFields);
 /* returns < 0 on error */
 int BytesFromStringEnd(const char* pString, size_t* pBytes);
 
-void updateSegmentInfo()
-{
-	segment_info* seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
-	current_segment_info->segment_number = seg_info->segment_number;
-	current_segment_info->segment_size = seg_info->segment_size;
-	memcpy(MSH_SEGMENT_NAME + MSH_SEG_NAME_PREAMB_LEN - 1, &current_segment_info->segment_number, sizeof(uint32_t));
-	UnmapViewOfFile(seg_info);
-}
+void acquireProcLock(void);
 
+void releaseProcLock(void);
 
 #ifdef SAFEMODE
 /* A convenient function for safe assignment of memory to an mxArray */

@@ -9,5 +9,15 @@ classdef tc
 			addpath('tests');
 			teststruct;
 		end
+		
+		function testmulti
+			addpath('tests');
+			test;
+		end
+		
+		function testnums
+			addpath('tests');
+			testnums;
+		end
 	end
 end

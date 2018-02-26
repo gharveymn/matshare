@@ -6,7 +6,7 @@ try
 	sources = {'src/matshare_.c',...
 			};
 	
-	mexflags = {'-g', '-v', 'CFLAGS="$CFLAGS -std=c99"', '-outdir', output_path};
+	mexflags = {'-g', '-v', '-outdir', output_path};
 	
 	if(strcmp(mex.getCompilerConfigurations('C','Selected').ShortName, 'mingw64'))
 		

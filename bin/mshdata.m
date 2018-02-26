@@ -25,17 +25,22 @@ classdef mshdata < handle
 		function obj = mshdata
 			obj.deepdata = matshare_(obj.INIT);
 			addlistener(obj, 'data', 'PreSet', @(src,evnt)mshdata.preSetCallback(obj,src,evnt));	
-			addlistener(obj, 'data', 'PreGet', @(src,evnt)mshdata.preGetCallback(obj,src,evnt));	
+			%addlistener(obj, 'data', 'PreGet', @(src,evnt)mshdata.preGetCallback(obj,src,evnt));	
 		end
 		
 		function set.data(obj,in)
-			obj.deepdata = matshare_(obj.CLONE,in);
+			if(isempty(in))
+				obj.free();
+				return;
+			end
+			validateattributes(in, {'numeric','logical','char','struct','cell'},{});
+			obj.deepdata = matshare_(obj.CLONE, in);
 			matshare_(obj.ATTACH);
 		end
 		
 		function ret = get.data(obj)
- 			ret = matshare_(obj.COPY);
-% 			ret = obj.deepdata;
+			% make sure this isn't deep-copied
+ 			ret = matshare_(obj.FETCH);
 		end
 		
 		function ret = deepcopy(obj)
@@ -44,6 +49,10 @@ classdef mshdata < handle
 		
 		function debug(obj)
 			matshare_(obj.DEBUG);
+		end
+		
+		function free(obj)
+			matshare_(obj.DETACH);
 		end
 		
 		function delete(obj)
@@ -59,11 +68,7 @@ classdef mshdata < handle
 		end
 		
 		function preGetCallback(obj,~,~)
-			if(~matshare_(obj.COMPARE, obj.deepdata))
-				obj.deepdata = matshare_(obj.DETACH);
-				obj.deepdata = matshare_(obj.FETCH);
-				matshare_(obj.ATTACH);
-			end
+			obj.deepdata = matshare_(obj.FETCH);
 		end
 	end
 end
