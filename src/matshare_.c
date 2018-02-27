@@ -334,7 +334,7 @@ void deepdetach(mxArray* ret_var)
 			
 			/* allocate 1 element */
 			pr = mxMalloc(1);
-			mxSetData(ret_var, mxMalloc(1));
+			mxSetData(ret_var, pr);
 			if(mxIsComplex(ret_var))
 			{
 				pi = mxMalloc(1);
@@ -354,6 +354,7 @@ void deepdetach(mxArray* ret_var)
 			}
 		}
 		
+		// reset all the crosslinks so nothing in MATLAB is pointing to shared data (which will be gone soon)
 		mxArray* link;
 		for(link = ((mxArrayStruct*)ret_var)->CrossLink; link != NULL && link != ret_var; link = ((mxArrayStruct*)link)->CrossLink)
 		{
