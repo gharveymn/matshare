@@ -20,8 +20,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	header_t hdr;
 	data_t dat;
 	
-	mxLogical* ret_data = NULL;
-	
 	segment_info* seg_info;
 	char* msh_segment_name;
 	
@@ -169,12 +167,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			acquireProcLock();
 			
-			plhs[1] = mxCreateLogicalMatrix(1,1);
-			ret_data = mxGetLogicals(plhs[1]);
-			
 			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
-			*ret_data = (mxLogical)(current_segment_info->segment_number != seg_info->segment_number);
-			if(*ret_data != TRUE)
+			plhs[1] = mxCreateLogicalScalar((mxLogical)(current_segment_info->segment_number != seg_info->segment_number));
+			if(*mxGetLogicals(plhs[1]) != TRUE)
 			{
 				//return a shallow copy of the variable
 				UnmapViewOfFile(seg_info);
@@ -237,10 +232,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			acquireProcLock();
 			
-			plhs[0] = mxCreateLogicalMatrix(1,1);
-			ret_data = mxGetLogicals(plhs[0]);
 			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
-			*ret_data = (mxLogical)(current_segment_info->segment_number == seg_info->segment_number);
+			plhs[0] = mxCreateLogicalScalar((mxLogical)(current_segment_info->segment_number != seg_info->segment_number));
 			UnmapViewOfFile(seg_info);
 			
 			releaseProcLock();
@@ -358,7 +351,8 @@ void deepdetach(mxArray* ret_var)
 			}
 		}
 		
-		// reset all the crosslinks so nothing in MATLAB is pointing to shared data (which will be gone soon)
+		/** HACK **/
+		/* reset all the crosslinks so nothing in MATLAB is pointing to shared data (which will be gone soon) */
 		mxArray* link;
 		for(link = ((mxArrayStruct*)ret_var)->CrossLink; link != NULL && link != ret_var; link = ((mxArrayStruct*)link)->CrossLink)
 		{
@@ -1469,7 +1463,10 @@ void init()
 	else if(err != ERROR_ALREADY_EXISTS)
 	{
 		copy_info = TRUE;
+		
 		/* this is the first region created */
+		/* this info shouldn't ever actually be used */
+		/* but make sure the memory segment is consistent */
 		hdr.isNumeric = 1;
 		hdr.isSparse = 0;
 		hdr.isEmpty = 1;
@@ -1487,14 +1484,16 @@ void init()
 		seg_info->segment_size = hdr.shmsiz;
 	}
 	
+	/* in any case we want to make sure that the current segment is either
+	 * the null case, or differs from the current shared segment number */
+	current_segment_info->segment_number = 0;
+	current_segment_info->segment_size = 0;
+	
 	char* msh_segment_name = mxMalloc((MSH_SEG_NAME_LEN + 1)*sizeof(char));
 	sprintf(msh_segment_name, MSH_SEGMENT_NAME, seg_info->segment_number);
 	
-	current_segment_info->segment_number = seg_info->segment_number;
-	current_segment_info->segment_size = seg_info->segment_size;
-	
-	DWORD lo_sz =  (DWORD)(current_segment_info->segment_size & 0xFFFFFFFFL);
-	DWORD hi_sz =  (DWORD)((current_segment_info->segment_size >> 32) & 0xFFFFFFFFL);
+	DWORD lo_sz =  (DWORD)(seg_info->segment_size & 0xFFFFFFFFL);
+	DWORD hi_sz =  (DWORD)((seg_info->segment_size >> 32) & 0xFFFFFFFFL);
 	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, msh_segment_name);
 	err = GetLastError();
 	if(temp_handle == NULL)
