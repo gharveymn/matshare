@@ -44,6 +44,7 @@ res/*
 *.log
 *.vspscc
 *.vssscc
+*.vspx
 .builds
 *.pidb
 *.svclog
@@ -56,6 +57,7 @@ bld/
 [Bb]in/*
 !*pthreadVC2.dll
 !*pthreadGC2.dll
-!*matshare.m
 [Oo]bj/
 [Ll]og/
+!bin/MatShare.m
+!bin/mshdata.m

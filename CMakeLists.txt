@@ -1,13 +1,12 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
 PROJECT(matshare)
-
+SET(CMAKE_CXX_STANDARD 11)
 MESSAGE(STATUS "Building with configuration CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
+
 
 IF("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 
 	SET(OUT_NAME mexemulate)
-
-	SET(CMAKE_CXX_STANDARD 99)
 
 	if(MSVC OR (DEFINED USE_MSVC))
 		MESSAGE(STATUS "Building with MSVC")
@@ -17,57 +16,22 @@ IF("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wall -DNO_MEX")
 	ENDIF(MSVC OR (DEFINED USE_MSVC))
 
-	# 32-bit or 64-bit mex
-	IF(WIN32)
-		IF((CMAKE_SIZEOF_VOID_P EQUAL 4) OR ("${BUILD_ENV}" STREQUAL "32BIT"))
-			MESSAGE(STATUS "Compiling on 32 bit Windows")
-			SET(LIB_DEFLATE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/src/extlib/libdeflate/win/x86)
-			SET(LIB_DEFLATE_LIBRARY ${CMAKE_SOURCE_DIR}/src/extlib/libdeflate/win/x86/libdeflate.lib)
-
-		ELSEIF(CMAKE_SIZEOF_VOID_P EQUAL 8)
-			MESSAGE(STATUS "Compiling on 64 bit Windows")
-			SET(LIB_DEFLATE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/src/extlib/libdeflate/win/x64)
-			SET(LIB_DEFLATE_LIBRARY ${CMAKE_SOURCE_DIR}/src/extlib/libdeflate/win/x64/libdeflate.lib)
-		ENDIF()
-	ELSE(WIN32)
-		IF(CMAKE_SIZEOF_VOID_P EQUAL 4)
-			MESSAGE(STATUS "Compiling on 32 bit Linux")
-		ELSEIF(CMAKE_SIZEOF_VOID_P EQUAL 8)
-			MESSAGE(STATUS "Compiling on 64 bit Linux")
-		ENDIF()
-	ENDIF(WIN32)
-
-	INCLUDE_DIRECTORIES(${LIB_DEFLATE_INCLUDE_DIR})
-
 	SET(SOURCE_FILES
-			extlib/mman-win32/mman.c extlib/mman-win32/mman.h
-			src/ezq.c src/headers/ezq.h
 			src/matshare_.c src/headers/matshare_.h
-			src/utils.c src/headers/utils.h
-			src/shmem.c src/headers/shmem.h
-			src/headers/shmem.h)
+			)
 
 	ADD_EXECUTABLE(${OUT_NAME} ${SOURCE_FILES})
-
-#	IF("${BUILD_ENV}" STREQUAL "32BIT")
-#		set_target_properties(${OUT_NAME} PROPERTIES COMPILE_FLAGS "-m32" LINK_FLAGS "-m32")
-#	ELSE("${BUILD_ENV}" STREQUAL "32BIT")
-#		set_target_properties(${OUT_NAME} PROPERTIES COMPILE_FLAGS "-m64" LINK_FLAGS "-m64")
-#	ENDIF("${BUILD_ENV}" STREQUAL "32BIT")
-
-	TARGET_LINK_LIBRARIES(${OUT_NAME} ${LIB_DEFLATE_LIBRARY})
 
 ELSE("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 
 	SET(INSTALL_OUTPUT_PATH "bin")
 	SET(CMAKE_CL_64 TRUE)
 	#set(CMAKE_VERBOSE_MAKEFILE ON)
-	FIND_PATH(MATLAB_ROOT "bin/matlab.exe")
+	SET(MATLAB_ROOT "C:\\Program Files\\MATLAB\\R2017b")
 	SET(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 	SET(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake) # add FindMatlab module
 
 	ADD_DEFINITIONS(-DMATLAB_MEX_FILE) #define matlab macros
-	ADD_DEFINITIONS(-DMX_COMPAT_32)
 
 	FIND_PACKAGE(Matlab REQUIRED)
 

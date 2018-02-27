@@ -1,43 +1,24 @@
-addpath('src')
-output_path = [pwd '/out'];
-cd src
+addpath('bin')
+output_path = [pwd '/bin'];
 
 try
 	
-	sources = {'matshare_.c',...
-                'utils.c'};
+	sources = {'src/matshare_.c',...
+			};
 	
-	mexflags = {'-g', '-v', 'CFLAGS="$CFLAGS -std=c99"', '-outdir', output_path};
+	mexflags = {'-g', '-v', '-outdir', output_path};
 	
-	if(strcmp(mex.getCompilerConfigurations('C','Selected').ShortName, 'mingw64'))
-		
-		sources = [sources,...
-			{'extlib/mman-win32/mman.c'}
-			];
-		
-		mex(mexflags{:}, sources{:})
-		
-	elseif(strncmpi(mex.getCompilerConfigurations('C','Selected').ShortName, 'MSVC',4))
-		
-		sources = [sources,...
-			{'extlib/mman-win32/mman.c'}
-			];
-		
-		mex(mexflags{:}, sources{:})
-		
-	elseif(strcmp(mex.getCompilerConfigurations('C','Selected').ShortName, 'gcc'))
-		
+	if(ispc)
+		% stub
+	else
 		mexflags = [mexflags,{'-lrt'}];
-		
-		mex(mexflags{:}, sources{:})
-		
 	end
 	
-	cd ..
+	mex(mexflags{:}, sources{:})
+	
 	
 catch ME
 	
-	cd ..
 	rethrow(ME)
 	
 end
