@@ -2,8 +2,8 @@
 /* --- MATSHARE.H ------------------------------------------------------ */
 /* ------------------------------------------------------------------------- */
 
-#ifndef shared_memory__hpp
-#define shared_memory__hpp
+#ifndef matshare__h
+#define matshare__h
 
 /* Define this to test */
 /* #define SAFEMODE    */                 /* This copies memory across, defeating the purpose of this function but useful for testing */
@@ -39,7 +39,6 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 #define MAXDIRECTIVELEN 256
 
 #define MSH_NAME_SEGMENT_NAME "MATSHARE_NAME_SEGMENT"
-#define NULLSEGMENT_SZ 1
 
 #define MSH_LOCK_NAME "MATSHARE_LOCK"
 
@@ -185,6 +184,7 @@ struct header
 {
 	bool isSparse;
 	bool isNumeric;
+	bool isEmpty;
 	mxComplexity complexity;
 	mxClassID classid;       /* matlab class id */
 	size_t nDims;         /* dimensionality of the matrix.  The size array immediately follows the header */

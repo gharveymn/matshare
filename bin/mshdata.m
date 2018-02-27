@@ -29,10 +29,10 @@ classdef mshdata < handle
 		end
 		
 		function set.data(obj,in)
-			if(isempty(in))
-				obj.free();
-				return;
-			end
+% 			if(isempty(in))
+% 				obj.free();
+% 				return;
+% 			end
 			validateattributes(in, {'numeric','logical','char','struct','cell'},{});
 			obj.deepdata = matshare_(obj.CLONE, in);
 			matshare_(obj.ATTACH);
