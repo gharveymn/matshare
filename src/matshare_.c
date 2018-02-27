@@ -6,7 +6,7 @@
 /* ------------------------------------------------------------------------- */
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
-
+	
 	/* For inputs */
 	const mxArray* mxDirective;               /*  Directive {clone, attach, detach, free}   */
 	const mxArray* mxInput;                /*  Input array (for clone)					  */
@@ -30,7 +30,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	mxDirective = prhs[0];
 	
 	/* get directive */
-	directive = (msh_directive_t)*((uint8_t*)(mxGetData(mxDirective)));
+	directive = parseDirective(mxDirective);
 	DWORD hi_sz, lo_sz, err;
 	mxArrayStruct* arr;
 	
@@ -41,9 +41,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	{
 		case msh_INIT:
 			init();
+			glob_info->is_mem_safe = (bool_t)(nrhs <= 1);
 			makeDummyVar(&plhs[0]);
 			break;
-			
+		
 		case msh_CLONE:
 			/********************/
 			/*	Clone case		*/
@@ -54,8 +55,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* check the inputs */
 			if(nrhs < 2)
 			{
-				mexErrMsgIdAndTxt("MATLAB:MatShare:clone",
-							   "Required second argument is missing.");
+				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Required second argument is missing.");
 			}
 			
 			/* Assign */
@@ -63,8 +63,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			if(!(mxIsNumeric(mxInput) || mxIsLogical(mxInput) || mxIsChar(mxInput) || mxIsStruct(mxInput) || mxIsCell(mxInput)))
 			{
-				mexErrMsgIdAndTxt("MATLAB:MatShare:clone",
-							   "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 			}
 			
 			/* clear the previous variable */
@@ -139,7 +138,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			}
 			
 			/* copy data to the shared memory */
-			deepcopy(&hdr, &dat, glob_info->cur_seg_ptr, NULL);
+			deepcopy(&hdr, &dat, glob_info->cur_seg_ptr, NULL, glob_shm_var);
 			
 			/* free temporary allocation */
 			deepfree(&dat);
@@ -147,8 +146,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			mexMakeArrayPersistent(glob_shm_var);
 			plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
 			
-			break;
+			releaseProcLock();
 			
+			break;
+		
 		case msh_ATTACH:
 			/********************/
 			/*	Attach case	*/
@@ -159,10 +160,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			shallowrestore(glob_info->cur_seg_ptr, glob_shm_var);
 			
 			/* proc_lock was acquired either in CLONE or FETCH */
-			releaseProcLock();
+//			releaseProcLock();
 			
 			break;
-			
+		
 		case msh_DETACH:
 			/********************/
 			/*	Dettach case	*/
@@ -178,7 +179,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			makeDummyVar(&plhs[0]);
 			
 			break;
-			
+		
 		case msh_FREE:
 			/********************/
 			/*	free case		*/
@@ -225,12 +226,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			acquireProcLock();
 			
 			/* check if the current revision number is the same as the shm revision number */
-			plhs[1] = mxCreateLogicalScalar((mxLogical)(glob_info->cur_seg_info.rev_num != glob_info->shm_seg_info->rev_num));
-			if(*mxGetLogicals(plhs[1]) != TRUE)
+			if(glob_info->cur_seg_info.rev_num == glob_info->shm_seg_info->rev_num)
 			{
 				//return a shallow copy of the variable
 				plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
-				releaseProcLock();
 			}
 			else
 			{
@@ -251,40 +250,38 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				UnmapViewOfFile(glob_info->cur_seg_ptr);
 				CloseHandle(glob_info->shm_handle);
 				
-					temp_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, glob_info->cur_seg_info.seg_name);
-					err = GetLastError();
-					if(temp_handle == NULL)
-					{
-						makeDummyVar(&plhs[0]);
-						releaseProcLock();
-						mexPrintf("Error number: %d\n", err);
-						mexErrMsgIdAndTxt("MATLAB:MatShare:fetch",
-									   "MatShare::Could not open the memory segment");
-					}
-					
-					DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE,
-								 DUPLICATE_SAME_ACCESS);
-					
-					glob_info->cur_seg_ptr = (byte_t*) MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0,
-														glob_info->cur_seg_info.seg_sz);
-					err = GetLastError();
-					if(glob_info->cur_seg_ptr == NULL)
-					{
-						makeDummyVar(&plhs[0]);
-						releaseProcLock();
-						mexPrintf("Error number: %d\n", err);
-						mexErrMsgIdAndTxt("MATLAB:MatShare:fetch",
-									   "MatShare::Could not fetch the memory segment");
-					}
-					shallowfetch(glob_info->cur_seg_ptr, &glob_shm_var);
+				temp_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, glob_info->cur_seg_info.seg_name);
+				err = GetLastError();
+				if(temp_handle == NULL)
+				{
+					makeDummyVar(&plhs[0]);
+					releaseProcLock();
+					mexPrintf("Error number: %d\n", err);
+					mexErrMsgIdAndTxt("MATLAB:MatShare:fetch", "MatShare::Could not open the memory segment");
+				}
+				
+				DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+				
+				glob_info->cur_seg_ptr = (byte_t*)MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->cur_seg_info.seg_sz);
+				err = GetLastError();
+				if(glob_info->cur_seg_ptr == NULL)
+				{
+					makeDummyVar(&plhs[0]);
+					releaseProcLock();
+					mexPrintf("Error number: %d\n", err);
+					mexErrMsgIdAndTxt("MATLAB:MatShare:fetch", "MatShare::Could not fetch the memory segment");
+				}
+				shallowfetch(glob_info->cur_seg_ptr, &glob_shm_var);
 				
 				mexMakeArrayPersistent(glob_shm_var);
 				plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
 				
 			}
 			
-			break;
+			releaseProcLock();
 			
+			break;
+		
 		case msh_COMPARE:
 			acquireProcLock();
 			plhs[0] = mxCreateLogicalScalar((mxLogical)(glob_info->cur_seg_info.seg_num != glob_info->shm_seg_info->seg_num));
@@ -305,7 +302,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* unrecognised directive */
 			break;
 	}
-	
+
 //	mexPrintf("%s\n", mexIsLocked()? "TRUE": "FALSE" );
 
 
@@ -335,7 +332,7 @@ void deepdetach(mxArray* ret_var)
 	int nFields, j;
 	
 	/* restore matlab  memory */
-	if(ret_var == (mxArray*) NULL || mxIsEmpty(ret_var))
+	if(ret_var == (mxArray*)NULL || mxIsEmpty(ret_var))
 	{
 		return;
 	}
@@ -367,7 +364,7 @@ void deepdetach(mxArray* ret_var)
 		
 		/* In safe mode these entries were allocated so remove them properly */
 		size_t num_dims = 2;
-		void* pr,* pi = NULL;
+		void* pr, * pi = NULL;
 		
 		/* handle sparse objects */
 		if(mxIsSparse(ret_var))
@@ -453,7 +450,7 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 	int field_num;                /* current field */
 	
 	/* retrieve the data */
-	hdr = (header_t*) shm;
+	hdr = (header_t*)shm;
 	shm += pad_to_align(sizeof(header_t));
 	
 	/* don't do anything if this is an empty matrix */
@@ -463,18 +460,15 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 	}
 	
 	/* the size pointer */
-	pSize = (mwSize*) shm;
+	pSize = (mwSize*)shm;
 	
 	/* skip over the stored sizes */
-	shm += pad_to_align(sizeof(mwSize) * hdr->nDims);
+	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
 	
 	
 	/* Structure case */
 	if(hdr->classid == mxSTRUCT_CLASS)
 	{
-#ifdef DEBUG
-		mexPrintf("shallowrestore: Debug: found structure %d x %d.\n", pSize[0], pSize[1]);
-#endif
 		
 		/* skip over the stored field string */
 		shm += pad_to_align(hdr->strBytes);
@@ -501,21 +495,21 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 	{
 		/* this is the address of the first data */
 		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		pr = (void*) shm;
-		shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));          /* takes us to the end of the real data */
+		pr = (void*)shm;
+		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
 		
 		/* if complex get a pointer to the complex data */
 		if(hdr->complexity == mxCOMPLEX)
 		{
 			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			pi = (void*) shm;
-			shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));     /* takes us to the end of the complex data */
+			pi = (void*)shm;
+			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
 		}
 		
 		/* set the real and imaginary data */
 		mxFree(mxGetData(ret_var));
 		mxSetData(ret_var, pr);
-		if ( hdr->complexity )
+		if(hdr->complexity)
 		{
 			mxFree(mxGetImagData(ret_var));
 			mxSetImagData(ret_var, pi);
@@ -525,16 +519,16 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 		if(hdr->isSparse)
 		{
 			
-			ir = (mwIndex*) shm;
-			shm += pad_to_align((hdr->nzmax) * sizeof(mwIndex));
+			ir = (mwIndex*)shm;
+			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
 			
-			jc = (mwIndex*) shm;
-			shm += pad_to_align((pSize[1] + 1) * sizeof(mwIndex));
+			jc = (mwIndex*)shm;
+			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
 			
 			/* set the pointers relating to sparse (set the real and imaginary data later)*/
 			mxFree(mxGetIr(ret_var));
-			mwIndex* ret_ir = (mwIndex*)mxMalloc(hdr->nzmax * sizeof(mwIndex));
-			memcpy(ret_ir, ir, hdr->nzmax * sizeof(mwIndex));
+			mwIndex* ret_ir = (mwIndex*)mxMalloc(hdr->nzmax*sizeof(mwIndex));
+			memcpy(ret_ir, ir, hdr->nzmax*sizeof(mwIndex));
 			mxSetIr(ret_var, ret_ir);
 			
 			mxSetNzmax(ret_var, hdr->nzmax);
@@ -545,10 +539,10 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 			
 			/*  rebuild constitute the array  */
 			mxSetDimensions(ret_var, pSize, hdr->nDims);
-		
+			
 		}
 		
-	
+		
 	}
 	return hdr->shmsiz;
 }
@@ -563,23 +557,23 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 	/* for working with payload ... */
 	header_t* hdr;
 	mwSize* pSize;             /* pointer to the array dimensions */
-	void* pr = NULL, * pi = NULL;  /* real and imaginary data pointers */
-	mwIndex* ir = NULL, * jc = NULL;  /* sparse matrix data indices */
+	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
+	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
 	
 	
 	/* for structures */
 	int field_num;                /* current field */
 	
 	/* retrieve the data */
-	hdr = (header_t*) shm;
+	hdr = (header_t*)shm;
 	shm += pad_to_align(sizeof(header_t));
 	
 	
 	/* the size pointer */
-	pSize = (mwSize*) shm;
+	pSize = (mwSize*)shm;
 	
 	/* skip over the stored sizes */
-	shm += pad_to_align(sizeof(mwSize) * hdr->nDims);
+	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
 	
 	
 	/* Structure case */
@@ -592,13 +586,13 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 		}
 		else
 		{
-			char** field_names = (char**) mxCalloc((size_t) hdr->nFields, sizeof(char*));
+			char** field_names = (char**)mxCalloc((size_t)hdr->nFields, sizeof(char*));
 			PointCharArrayAtString(field_names, shm, hdr->nFields);
 			
 			/* skip over the stored field string */
 			shm += pad_to_align(hdr->strBytes);
 			
-			*ret_var = mxCreateStructArray(hdr->nDims, pSize, hdr->nFields, (const char**) field_names);
+			*ret_var = mxCreateStructArray(hdr->nDims, pSize, hdr->nFields, (const char**)field_names);
 			
 			/* Go through each element */
 			for(i = 0; i < hdr->nzmax; i++)
@@ -623,25 +617,25 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 	else     /*base case*/
 	{
 		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		pr = (void*) shm;
-		shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));          /* takes us to the end of the real data */
+		shm_pr = (void*)shm;
+		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
 		
 		/* if complex get a pointer to the complex data */
 		if(hdr->complexity == mxCOMPLEX)
 		{
 			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			pi = (void*) shm;
-			shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));     /* takes us to the end of the complex data */
+			shm_pi = (void*)shm;
+			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
 		}
 		
 		if(hdr->isSparse)
 		{
 			
-			ir = (mwIndex*) shm;
-			shm += pad_to_align((hdr->nzmax) * sizeof(mwIndex));
+			shm_ir = (mwIndex*)shm;
+			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
 			
-			jc = (mwIndex*) shm;
-			shm += pad_to_align((pSize[1] + 1) * sizeof(mwIndex));
+			shm_jc = (mwIndex*)shm;
+			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
 			
 			if(hdr->isNumeric)
 			{
@@ -653,45 +647,64 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 			}
 			
 			mwIndex* ret_jc = mxGetJc(*ret_var);
-			memcpy(ret_jc, jc, hdr->nzmax * sizeof(mwIndex));
+			memcpy(ret_jc, shm_jc, hdr->nzmax*sizeof(mwIndex));
 			ret_jc[pSize[1]] = 0;
+			
+			/* set the pointers relating to sparse (set the real and imaginary data later)*/
+			mxFree(mxGetIr(*ret_var));
+			mwIndex* ret_ir = (mwIndex*)mxMalloc(hdr->nzmax*sizeof(mwIndex));
+			memcpy(ret_ir, shm_ir, hdr->nzmax*sizeof(mwIndex));
+			mxSetIr(*ret_var, ret_ir);
+			
+			mxSetNzmax(*ret_var, hdr->nzmax);
 			
 		}
 		else
 		{
-			if(hdr->isNumeric)
+			
+			if(hdr->isEmpty)
 			{
-				if(hdr->isEmpty)
+				if(hdr->isNumeric)
 				{
 					*ret_var = mxCreateNumericArray(hdr->nDims, pSize, hdr->classid, hdr->complexity);
 				}
-				else
-				{
-					*ret_var = mxCreateNumericArray(0, NULL, hdr->classid, hdr->complexity);
-				}
-			}
-			else if(hdr->classid == mxLOGICAL_CLASS)
-			{
-				if(hdr->isEmpty)
+				else if(hdr->classid == mxLOGICAL_CLASS)
 				{
 					*ret_var = mxCreateLogicalArray(hdr->nDims, pSize);
 				}
 				else
 				{
-					*ret_var = mxCreateLogicalArray(0, NULL);
+					*ret_var = mxCreateCharArray(hdr->nDims, pSize);
 				}
 			}
 			else
 			{
-				if(hdr->isEmpty)
+				if(hdr->isNumeric)
 				{
-					*ret_var = mxCreateCharArray(hdr->nDims, pSize);
+					*ret_var = mxCreateNumericArray(0, NULL, hdr->classid, hdr->complexity);
+				}
+				else if(hdr->classid == mxLOGICAL_CLASS)
+				{
+					*ret_var = mxCreateLogicalArray(0, NULL);
 				}
 				else
 				{
 					*ret_var = mxCreateCharArray(0, NULL);
 				}
+				
+				/* set the real and imaginary data */
+				mxFree(mxGetData(*ret_var));
+				mxSetData(*ret_var, shm_pr);
+				if(hdr->complexity)
+				{
+					mxFree(mxGetImagData(*ret_var));
+					mxSetImagData(*ret_var, shm_pi);
+				}
+				
+				mxSetDimensions(*ret_var, pSize, hdr->nDims);
+				
 			}
+			
 		}
 		
 	}
@@ -723,14 +736,14 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	int field_num;
 	
 	/* initialize data info; _possibly_ update these later */
-	dat->pSize = (mwSize*) NULL;
-	dat->pr = (void*) NULL;
-	dat->pi = (void*) NULL;
-	dat->ir = (mwIndex*) NULL;
-	dat->jc = (mwIndex*) NULL;
-	dat->child_dat = (data_t*) NULL;
-	dat->child_hdr = (header_t*) NULL;
-	dat->field_str = (char*) NULL;
+	dat->pSize = (mwSize*)NULL;
+	dat->pr = (void*)NULL;
+	dat->pi = (void*)NULL;
+	dat->ir = (mwIndex*)NULL;
+	dat->jc = (mwIndex*)NULL;
+	dat->child_dat = (data_t*)NULL;
+	dat->child_hdr = (header_t*)NULL;
+	dat->field_str = (char*)NULL;
 	hdr->par_hdr_off = 0;               /*don't record it here */
 	
 	if(mxInput == NULL)
@@ -750,13 +763,13 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	hdr->nzmax = mxGetNumberOfElements(mxInput);      /* update this later on sparse*/
 	hdr->nFields = 0;                                 /* update this later */
 	hdr->shmsiz = pad_to_align(sizeof(header_t));     /* update this later */
-	hdr->strBytes = 0;							/* update this later */
+	hdr->strBytes = 0;                                   /* update this later */
 	
 	/* copy the size */
-	dat->pSize = (mwSize*) mxGetDimensions(mxInput);     /* some abuse of const for now, fix on deep copy*/
+	dat->pSize = (mwSize*)mxGetDimensions(mxInput);     /* some abuse of const for now, fix on deep copy*/
 	
 	/* Add space for the dimensions */
-	hdr->shmsiz += pad_to_align(hdr->nDims * sizeof(mwSize));
+	hdr->shmsiz += pad_to_align(hdr->nDims*sizeof(mwSize));
 	
 	
 	/* Structure case */
@@ -779,17 +792,15 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			hdr->nFields = mxGetNumberOfFields(mxInput);
 			
 			/* Find the size required to store the field names */
-			hdr->strBytes = (size_t) FieldNamesSize(mxInput);     /* always a multiple of alignment size */
+			hdr->strBytes = (size_t)FieldNamesSize(mxInput);     /* always a multiple of alignment size */
 			hdr->shmsiz += pad_to_align(hdr->strBytes);                   /* Add space for the field string */
 			
 			/* use mxCalloc so mem is freed on error via garbage collection */
-			dat->child_hdr = (header_t*) mxCalloc(
-					hdr->nzmax * hdr->nFields * (sizeof(header_t) + sizeof(data_t)) + hdr->strBytes,
-					1); /* extra space for the field string */
-			dat->child_dat = (data_t*) &dat->child_hdr[hdr->nFields * hdr->nzmax];
-			dat->field_str = (char*) &dat->child_dat[hdr->nFields * hdr->nzmax];
+			dat->child_hdr = (header_t*)mxCalloc(hdr->nzmax*hdr->nFields*(sizeof(header_t) + sizeof(data_t)) + hdr->strBytes, 1); /* extra space for the field string */
+			dat->child_dat = (data_t*)&dat->child_hdr[hdr->nFields*hdr->nzmax];
+			dat->field_str = (char*)&dat->child_dat[hdr->nFields*hdr->nzmax];
 			
-			const char** field_names = (const char**) mxMalloc(hdr->nFields * sizeof(char*));
+			const char** field_names = (const char**)mxMalloc(hdr->nFields*sizeof(char*));
 			
 			/* make a record of the field names */
 			CopyFieldNames(mxInput, dat->field_str, field_names);
@@ -803,8 +814,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 				for(field_num = 0; field_num < hdr->nFields; field_num++)     /* each field */
 				{
 					/* call recursivley */
-					hdr->shmsiz += deepscan(&(dat->child_hdr[count]), &(dat->child_dat[count]),
-									    mxGetFieldByNumber(mxInput, i, field_num), hdr, &ret_child);
+					hdr->shmsiz += deepscan(&(dat->child_hdr[count]), &(dat->child_dat[count]), mxGetFieldByNumber(mxInput, i, field_num), hdr, &ret_child);
 					mxSetFieldByNumber(*ret_var, i, field_num, ret_child);
 					
 					count++; /* progress */
@@ -814,7 +824,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	}
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
-
+		
 		
 		if(hdr->isEmpty)
 		{
@@ -824,21 +834,20 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		{
 			
 			/* use mxCalloc so mem is freed on error via garbage collection */
-			dat->child_hdr = (header_t*) mxCalloc(hdr->nzmax, sizeof(header_t) + sizeof(data_t));
-			dat->child_dat = (data_t*) &dat->child_hdr[hdr->nzmax];
+			dat->child_hdr = (header_t*)mxCalloc(hdr->nzmax, sizeof(header_t) + sizeof(data_t));
+			dat->child_dat = (data_t*)&dat->child_hdr[hdr->nzmax];
 			
 			*ret_var = mxCreateCellArray(hdr->nDims, dat->pSize);
 			
 			/* go through each recursively */
 			for(i = 0; i < hdr->nzmax; i++)
 			{
-				hdr->shmsiz += deepscan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr,
-								    &ret_child);
+				hdr->shmsiz += deepscan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr, &ret_child);
 				mxSetCell(*ret_var, i, ret_child);
 			}
 			
 			/* if its a cell it has to have at least one mom-empty element */
-			if(hdr->shmsiz == (1 + hdr->nzmax) * pad_to_align(sizeof(header_t)))
+			if(hdr->shmsiz == (1 + hdr->nzmax)*pad_to_align(sizeof(header_t)))
 			{
 				releaseProcLock();
 				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Required (variable) must contain at "
@@ -857,9 +866,8 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			hdr->nzmax = (size_t)mxGetNzmax(mxInput);
 			dat->ir = mxGetIr(mxInput);
 			dat->jc = mxGetJc(mxInput);
-			hdr->shmsiz += pad_to_align(
-					sizeof(mwIndex) * (hdr->nzmax));      /* ensure both pointers are aligned individually */
-			hdr->shmsiz += pad_to_align(sizeof(mwIndex) * (dat->pSize[1] + 1));
+			hdr->shmsiz += pad_to_align(sizeof(mwIndex)*(hdr->nzmax));      /* ensure both pointers are aligned individually */
+			hdr->shmsiz += pad_to_align(sizeof(mwIndex)*(dat->pSize[1] + 1));
 			
 			if(hdr->isNumeric)
 			{
@@ -871,7 +879,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			}
 			
 			mwIndex* ret_jc = mxGetJc(*ret_var);
-			memcpy(ret_jc, dat->jc, hdr->nzmax * sizeof(mwIndex));
+			memcpy(ret_jc, dat->jc, hdr->nzmax*sizeof(mwIndex));
 			ret_jc[mxGetN(mxInput)] = 0;
 			
 		}
@@ -913,12 +921,12 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		}
 		
 		/* ensure both pointers are aligned individually */
-		hdr->shmsiz += pad_to_align(MXMALLOC_SIG_LEN);			//this is 32 bytes
-		hdr->shmsiz += pad_to_align(hdr->elemsiz * hdr->nzmax);
+		hdr->shmsiz += pad_to_align(MXMALLOC_SIG_LEN);               //this is 32 bytes
+		hdr->shmsiz += pad_to_align(hdr->elemsiz*hdr->nzmax);
 		if(hdr->complexity == mxCOMPLEX)
 		{
-			hdr->shmsiz += pad_to_align(MXMALLOC_SIG_LEN);			//this is 32 bytes
-			hdr->shmsiz += pad_to_align(hdr->elemsiz * hdr->nzmax);
+			hdr->shmsiz += pad_to_align(MXMALLOC_SIG_LEN);               //this is 32 bytes
+			hdr->shmsiz += pad_to_align(hdr->elemsiz*hdr->nzmax);
 		}
 	}
 	else
@@ -946,12 +954,14 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 /* Returns:                                                                  */
 /*    void                                                                   */
 /* ------------------------------------------------------------------------- */
-void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr)
+void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray* ret_var)
 {
 	
 	header_t* cpy_hdr;          /* the header in its copied location */
 	size_t i, n, offset = 0;
 	mwSize* pSize;               /* points to the size data */
+	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
+	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
 	
 	/* load up the shared memory */
 	
@@ -960,17 +970,20 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr)
 	memcpy(shm, hdr, n);
 	offset = pad_to_align(n);
 	
+	/* for structures */
+	int field_num;                /* current field */
+	
 	/* copy the dimensions */
-	cpy_hdr = (header_t*) shm;
-	pSize = (mwSize*) &shm[offset];
+	cpy_hdr = (header_t*)shm;
+	pSize = (mwSize*)&shm[offset];
 	for(i = 0; i < cpy_hdr->nDims; i++)
 	{
 		pSize[i] = dat->pSize[i];
 	}
-	offset += pad_to_align(cpy_hdr->nDims * sizeof(mwSize));
+	offset += pad_to_align(cpy_hdr->nDims*sizeof(mwSize));
 	
 	/* assign the parent header  */
-	cpy_hdr->par_hdr_off = (NULL == par_hdr) ? 0 : (int) (par_hdr - cpy_hdr);
+	cpy_hdr->par_hdr_off = (NULL == par_hdr)? 0 : (int)(par_hdr - cpy_hdr);
 	shm += offset;
 	
 	/* Structure case */
@@ -987,10 +1000,15 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr)
 		shm += pad_to_align(hdr->strBytes);
 		
 		/* copy the children recursively */
-		for(i = 0; i < hdr->nzmax * hdr->nFields; i++)
+		for(i = 0; i < hdr->nzmax; i++)
 		{
-			deepcopy(&(dat->child_hdr[i]), &(dat->child_dat[i]), shm, cpy_hdr);
-			shm += (dat->child_hdr[i]).shmsiz;
+			for(field_num = 0; field_num < hdr->nFields; field_num++)     /* each field */
+			{
+				/* And fill it */
+				size_t idx = i*hdr->nzmax + field_num;
+				deepcopy(&(dat->child_hdr[idx]), &(dat->child_dat[idx]), shm, cpy_hdr, mxGetFieldByNumber(ret_var, i, field_num));
+				shm += (dat->child_hdr[idx]).shmsiz;
+			}
 		}
 	}
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
@@ -1000,7 +1018,7 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr)
 		/* recurse through each cell */
 		for(i = 0; i < hdr->nzmax; i++)
 		{
-			deepcopy(&(dat->child_hdr[i]), &(dat->child_dat[i]), shm, cpy_hdr);
+			deepcopy(&(dat->child_hdr[i]), &(dat->child_dat[i]), shm, cpy_hdr, mxGetCell(ret_var, i));
 			shm += (dat->child_hdr[i]).shmsiz;
 		}
 	}
@@ -1009,8 +1027,9 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr)
 		/* copy real data */
 		memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
 		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		n = (hdr->nzmax) * (hdr->elemsiz);
-		memcpy(shm, dat->pr, n);
+		shm_pr = (void*)shm;
+		n = (hdr->nzmax)*(hdr->elemsiz);
+		memcpy(shm_pr, dat->pr, n);
 		shm += pad_to_align(n);
 		
 		/* copy complex data as well */
@@ -1018,21 +1037,45 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr)
 		{
 			memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
 			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			n = (hdr->nzmax) * (hdr->elemsiz);
-			memcpy(shm, dat->pi, n);
+			shm_pi = (void*)shm;
+			n = (hdr->nzmax)*(hdr->elemsiz);
+			memcpy(shm_pi, dat->pi, n);
 			shm += pad_to_align(n);
+		}
+		
+		/* set the real and imaginary data */
+		mxFree(mxGetData(ret_var));
+		mxSetData(ret_var, shm_pr);
+		if(hdr->complexity)
+		{
+			mxFree(mxGetImagData(ret_var));
+			mxSetImagData(ret_var, shm_pi);
 		}
 		
 		/* and the indices of the sparse data as well */
 		if(hdr->isSparse)
 		{
-			n = hdr->nzmax * sizeof(mwIndex);
-			memcpy(shm, dat->ir, n);
+			shm_ir = (void*)shm;
+			n = hdr->nzmax*sizeof(mwIndex);
+			memcpy(shm_ir, dat->ir, n);
 			shm += pad_to_align(n);
 			
-			n = (pSize[1] + 1) * sizeof(mwIndex);
-			memcpy(shm, dat->jc, n);
+			shm_jc = (void*)shm;
+			n = (pSize[1] + 1)*sizeof(mwIndex);
+			memcpy(shm_jc, dat->jc, n);
 			shm += pad_to_align(n);
+			
+			/* set the pointers relating to sparse (set the real and imaginary data later)*/
+			mxFree(mxGetIr(ret_var));
+			mwIndex* ret_ir = (mwIndex*)mxMalloc(hdr->nzmax*sizeof(mwIndex));
+			memcpy(ret_ir, shm_ir, hdr->nzmax*sizeof(mwIndex));
+			mxSetIr(ret_var, ret_ir);
+			
+			mxSetNzmax(ret_var, hdr->nzmax);
+		}
+		else
+		{
+			mxSetDimensions(ret_var, pSize, hdr->nDims);
 		}
 	}
 }
@@ -1059,9 +1102,9 @@ void deepfree(data_t* dat)
 	
 	/* free on the way back up */
 	mxFree(dat->child_hdr);
-	dat->child_hdr = (header_t*) NULL;
-	dat->child_dat = (data_t*) NULL;
-	dat->field_str = (char*) NULL;
+	dat->child_hdr = (header_t*)NULL;
+	dat->child_dat = (data_t*)NULL;
+	dat->field_str = (char*)NULL;
 }
 
 
@@ -1081,7 +1124,7 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	int field_num;                /* current field */
 	
 	/* retrieve the data */
-	hdr = (header_t*) shm;
+	hdr = (header_t*)shm;
 	shm += pad_to_align(sizeof(header_t));
 	
 	if(mxGetClassID(comp_var) != hdr->classid)
@@ -1090,16 +1133,14 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	}
 	
 	/* the size pointer */
-	pSize = (mwSize*) shm;
-	if(hdr->nDims != mxGetNumberOfDimensions(comp_var)
-	   		|| memcmp(pSize, mxGetDimensions(comp_var), sizeof(mwSize) * hdr->nDims) != 0
-			|| hdr->nzmax != mxGetNumberOfElements(comp_var))
+	pSize = (mwSize*)shm;
+	if(hdr->nDims != mxGetNumberOfDimensions(comp_var) || memcmp(pSize, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->nDims) != 0 || hdr->nzmax != mxGetNumberOfElements(comp_var))
 	{
 		return false;
 	}
 	
 	/* skip over the stored sizes */
-	shm += pad_to_align(sizeof(mwSize) * hdr->nDims);
+	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
 	
 	
 	/* Structure case */
@@ -1138,7 +1179,7 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	{
 		for(i = 0, shmshift = 0; i < hdr->nzmax; i++, shmshift = 0)
 		{
-			if(!deepcompare(shm, mxGetCell(comp_var,i), &shmshift))
+			if(!deepcompare(shm, mxGetCell(comp_var, i), &shmshift))
 			{
 				return false;
 			}
@@ -1152,8 +1193,8 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	{
 		/* this is the address of the first data */
 		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		pr = (void*) shm;
-		shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));          /* takes us to the end of the real data */
+		pr = (void*)shm;
+		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
 		
 		//these should point to the same location
 		if(pr != mxGetData(comp_var))
@@ -1165,8 +1206,8 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 		if(hdr->complexity == mxCOMPLEX)
 		{
 			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			pi = (void*) shm;
-			shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));     /* takes us to the end of the complex data */
+			pi = (void*)shm;
+			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
 			
 			//these should point to the same location
 			if(pi != mxGetImagData(comp_var))
@@ -1183,14 +1224,13 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 				return false;
 			}
 			
-			ir = (mwIndex*) shm;
-			shm += pad_to_align((hdr->nzmax) * sizeof(mwIndex));
+			ir = (mwIndex*)shm;
+			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
 			
-			jc = (mwIndex*) shm;
-			shm += pad_to_align((pSize[1] + 1) * sizeof(mwIndex));
+			jc = (mwIndex*)shm;
+			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
 			
-			if(memcmp(ir, mxGetIr(comp_var), (hdr->nzmax) * sizeof(mwIndex)) != 0
-				|| memcmp(jc, mxGetJc(comp_var), (pSize[1] + 1) * sizeof(mwIndex)) != 0)
+			if(memcmp(ir, mxGetIr(comp_var), (hdr->nzmax)*sizeof(mwIndex)) != 0 || memcmp(jc, mxGetJc(comp_var), (pSize[1] + 1)*sizeof(mwIndex)) != 0)
 			{
 				return false;
 			}
@@ -1283,14 +1323,14 @@ size_t CopyFieldNames(const mxArray* mxStruct, char* pList, const char** field_n
 		}
 		
 		/* Pad it out to 8 bytes */
-		while(Bytes % align_size)
+		while(Bytes%align_size)
 		{
 			pList[Bytes++] = 0;
 		}
 	}
 	
 	/* Add an extra alignment size to store the length of the string (in Bytes) */
-	*(unsigned int*) &pList[Bytes] = (unsigned int) (Bytes + align_size);
+	*(unsigned int*)&pList[Bytes] = (unsigned int)(Bytes + align_size);
 	Bytes += align_size;
 	
 	return Bytes;
@@ -1318,7 +1358,7 @@ int PointCharArrayAtString(char** pCharArray, char* pString, int nFields)
 		}
 		
 		/* Check the address is aligned (assume every forth bytes is aligned) */
-		if(i % align_size)
+		if(i%align_size)
 		{
 			return -1;
 		}
@@ -1366,7 +1406,7 @@ int NumFieldsFromString(const char* pString, size_t* pFields, size_t* pBytes)
 		if(!term_found)
 		{
 			/* Check the address is aligned (assume every forth bytes is aligned) */
-			if(i % align_size)
+			if(i%align_size)
 			{
 				return -1;
 			}
@@ -1394,7 +1434,7 @@ int NumFieldsFromString(const char* pString, size_t* pFields, size_t* pBytes)
 	pBytes[0] = pad_to_align(pBytes[0]);
 	
 	/* Check what's recovered matches the stored length */
-	stored_length = *(unsigned int*) &pString[pBytes[0]];       /* the recorded length of the string */
+	stored_length = *(unsigned int*)&pString[pBytes[0]];       /* the recorded length of the string */
 	pBytes[0] += align_size;                                          /* add the extra space for the record */
 	
 	/* Check on it */
@@ -1412,14 +1452,14 @@ int NumFieldsFromString(const char* pString, size_t* pFields, size_t* pBytes)
 int BytesFromStringEnd(const char* pString, size_t* pBytes)
 {
 	
-	int offset = (int) align_size;            /* start from the end of the string */
+	int offset = (int)align_size;            /* start from the end of the string */
 	pBytes[0] = 0;                           /* default */
 	
 	/* Grab it directly from the string */
-	pBytes[0] = (*(size_t*) &pString[-offset]);
+	pBytes[0] = (*(size_t*)&pString[-offset]);
 	
 	/* scan for the termination character */
-	while((offset < 2 * align_size) && (pString[-offset] != term_char))
+	while((offset < 2*align_size) && (pString[-offset] != term_char))
 	{
 		offset++;
 	}
@@ -1458,8 +1498,7 @@ void init()
 	if(temp_handle == NULL)
 	{
 		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:MatShare:init",
-					   "MatShare::Could not create the memory segment");
+		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not create the memory segment");
 	}
 	else if(err == ERROR_ALREADY_EXISTS)
 	{
@@ -1476,8 +1515,7 @@ void init()
 	{
 		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:MatShare:init",
-					   "MatShare::Could not create the memory segment");
+		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not create the memory segment");
 	}
 	
 	if(err == ERROR_ALREADY_EXISTS)
@@ -1498,8 +1536,7 @@ void init()
 	{
 		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:MatShare:init",
-					   "MatShare::Could not map the name memory segment");
+		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not map the name memory segment");
 		exit(1);
 	}
 	
@@ -1534,6 +1571,7 @@ void init()
 	
 	/* make sure to init local proc_lock flag as false */
 	glob_info->is_proc_locked = FALSE;
+	glob_info->is_mem_safe = TRUE;
 	acquireProcLock();
 	
 	/* in any case we want to make sure that the current segment is either
@@ -1544,16 +1582,15 @@ void init()
 	
 	sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->shm_seg_info->seg_num);
 	
-	DWORD lo_sz =  (DWORD)(glob_info->shm_seg_info->seg_sz & 0xFFFFFFFFL);
-	DWORD hi_sz =  (DWORD)((glob_info->shm_seg_info->seg_sz >> 32) & 0xFFFFFFFFL);
+	DWORD lo_sz = (DWORD)(glob_info->shm_seg_info->seg_sz & 0xFFFFFFFFL);
+	DWORD hi_sz = (DWORD)((glob_info->shm_seg_info->seg_sz >> 32) & 0xFFFFFFFFL);
 	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->cur_seg_info.seg_name);
 	err = GetLastError();
 	if(temp_handle == NULL)
 	{
 		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:MatShare:init",
-					   "MatShare::Could not create the memory segment");
+		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not create the memory segment");
 	}
 	else if(err == ERROR_ALREADY_EXISTS)
 	{
@@ -1614,16 +1651,18 @@ void onExit(void)
 	
 }
 
+
 size_t pad_to_align(size_t size)
 {
 	/* bitwise expression is equiv to (size % align_size) since align_size is a power of 2 */
 	return size + align_size - (size | ~align_size);
 }
 
+
 void acquireProcLock(void)
 {
 	/* only request a lock if there is more than one process */
-	if(glob_info->shm_seg_info->num_procs > 1)
+	if(glob_info->shm_seg_info->num_procs > 1 && glob_info->is_mem_safe)
 	{
 		DWORD ret = WaitForSingleObject(glob_info->proc_lock, INFINITE);
 		if(ret == WAIT_ABANDONED)
@@ -1653,11 +1692,84 @@ void releaseProcLock(void)
 	}
 }
 
+
 void makeDummyVar(mxArray** out)
 {
 	glob_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
 	mexMakeArrayPersistent(glob_shm_var);
 	*out = mxCreateSharedDataCopy(glob_shm_var);
+}
+
+msh_directive_t parseDirective(const mxArray* in)
+{
+	
+	if(mxIsNumeric(in))
+	{
+		return (msh_directive_t)*((uint8_t*)(mxGetData(in)));
+	}
+	else if(mxIsChar(in))
+	{
+		char dir_str[9];
+		mxGetString(in, dir_str, 9);
+		for(int i = 0; dir_str[i]; i++)
+		{
+			dir_str[i] = (char)tolower(dir_str[i]);
+		}
+		
+		if(strcmp(dir_str, "init") == 0)
+		{
+			return msh_INIT;
+		}
+		else if(strcmp(dir_str, "clone") == 0)
+		{
+			return msh_CLONE;
+		}
+		else if(strcmp(dir_str, "attach") == 0)
+		{
+			return msh_ATTACH;
+		}
+		else if(strcmp(dir_str, "detach") == 0)
+		{
+			return msh_DETACH;
+		}
+		else if(strcmp(dir_str, "free") == 0)
+		{
+			return msh_FREE;
+		}
+		else if(strcmp(dir_str, "fetch") == 0)
+		{
+			return msh_FETCH;
+		}
+		else if(strcmp(dir_str, "compare") == 0)
+		{
+			return msh_COMPARE;
+		}
+		else if(strcmp(dir_str, "copy") == 0)
+		{
+			return msh_COPY;
+		}
+		else if(strcmp(dir_str, "deepcopy") == 0)
+		{
+			return msh_DEEPCOPY;
+		}
+		else if(strcmp(dir_str, "debug") == 0)
+		{
+			return msh_DEBUG;
+		}
+		else if(strcmp(dir_str, "share") == 0)
+		{
+			return msh_CLONE;
+		}
+		else
+		{
+			mexErrMsgIdAndTxt("MATLAB:MatShare:parseDirective", "Directive not recognized.");
+		}
+		
+	}
+	else
+	{
+		mexErrMsgIdAndTxt("MATLAB:MatShare:parseDirective", "Directive must either be 'uint8' or 'char'.");
+	}
 }
 
 

@@ -23,20 +23,24 @@ classdef MatShare < handle
 	end
 	
 	methods
-		function obj = MatShare
-			obj.deepdata = matshare_(uint8(0));
-			addlistener(obj, 'data', 'PreSet', @(src,evnt)MatShare.preSetCallback(obj,src,evnt));	
-			addlistener(obj, 'data', 'PreGet', @(src,evnt)MatShare.preGetCallback(obj,src,evnt));	
+		function obj = MatShare(varargin)
+			if(nargin > 0 && strcmp('unsafe',varargin{1}))
+				% initialize as unsafe
+				obj.deepdata = matshare_(uint8(0), 1);
+			else
+				obj.deepdata = matshare_(uint8(0));
+			end
+% 			addlistener(obj, 'data', 'PreSet', @(src,evnt)MatShare.preSetCallback(obj,src,evnt));	
+% 			addlistener(obj, 'data', 'PreGet', @(src,evnt)MatShare.preGetCallback(obj,src,evnt));	
 		end
 		
-		function set.data(obj,in)
-			obj.deepdata = matshare_(uint8(1), in);
-			matshare_(uint8(2));
+		function set.data(~,in)
+			matshare_(uint8(1), in);
 		end
 		
-		function ret = get.data(~)
+		function out = get.data(~)
 			% make sure this isn't deep-copied
- 			ret = matshare_(uint8(7));
+ 			out = matshare_(uint8(5));
 		end
 		
 		function ret = deepcopy(~)
@@ -59,39 +63,33 @@ classdef MatShare < handle
 	end
 	
 	methods (Static)
-		function preSetCallback(obj,~,~)
-			obj.deepdata = matshare_(uint8(3));
-		end
+% 		function preSetCallback(obj,~,~)
+% 			obj.deepdata = matshare_(uint8(3));
+% 		end
+% 		
+% 		function preGetCallback(obj,~,~)
+% 			[obj.deepdata,ischanged] = matshare_(uint8(5));
+% 			if(ischanged)
+% 				matshare_(uint8(2));
+% 			end
+% 		end
 		
-		function preGetCallback(obj,~,~)
-			[obj.deepdata,ischanged] = matshare_(uint8(5));
-			if(ischanged)
-				matshare_(uint8(2));
+		function init(varargin)
+			if(nargin > 0 && strcmp('unsafe',varargin{1}))
+				% initialize as unsafe
+				matshare_(uint8(0), 1);
+			else
+				matshare_(uint8(0));
 			end
 		end
 		
-		function init()
-			matshare_(uint8(0));
-		end
-		
 		function share(in)
-			% set callback
-			matshare_(uint8(3));
-
-			% set fcn
 			matshare_(uint8(1), in);
-			matshare_(uint8(2));
 		end
 		
 		function out = fetch()
 			% get callback
-			[~, ischanged] = matshare_(uint8(5));
-			if(ischanged)
-				matshare_(uint8(2));
-			end
-
-			% get fcn
-			out = matshare_(uint8(7));
+			out = matshare_(uint8(5));
 		end
 		
 		function free()

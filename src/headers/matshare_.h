@@ -207,6 +207,7 @@ typedef struct
 	bool_t is_freed;
 	bool_t shm_is_used;
 	bool_t is_proc_locked;
+	bool_t is_mem_safe;
 	segment_info cur_seg_info;
 	shm_segment_info* shm_seg_info;
 	byte_t* cur_seg_ptr;
@@ -232,7 +233,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 
 /* Descend through header and data structure and copy relevent data to       */
 /* shared memory.                                                            */
-void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr);
+void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray* ret_var);
 
 /* Descend through header and data structure and free the memory.            */
 void deepfree(data_t* dat);
@@ -276,6 +277,8 @@ void acquireProcLock(void);
 void releaseProcLock(void);
 
 void makeDummyVar(mxArray** out);
+
+msh_directive_t parseDirective(const mxArray* in);
 
 
 #endif

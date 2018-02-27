@@ -34,5 +34,15 @@ classdef tc
 			addpath('tests');
 			testnumsfcns;
 		end
+		
+		function testnumsfcnsmex
+			addpath('tests');
+			testnumsfcnsmex;
+		end
+		
+		function testnumsnorm
+			addpath('tests');
+			testnumsnorm;
+		end
 	end
 end

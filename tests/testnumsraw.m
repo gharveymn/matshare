@@ -11,8 +11,8 @@ obj.COPY     = uint8(7);
 obj.DEEPCOPY = uint8(8);
 obj.DEBUG    = uint8(9);
 
-data = matshare_(obj.INIT);
-nums = 100000;
+matshare_(obj.INIT,1);
+nums = 10000000;
 lents = 0;
 disp(getmem);
 tic
@@ -20,24 +20,10 @@ for i = 1:nums
 	
 	% place in shm
 	% set callback
-	data = matshare_(obj.DETACH);
-	
-	% set fcn
-	validateattributes(i, {'numeric','logical','char','struct','cell'},{});
-	data = matshare_(obj.CLONE, i);
-	matshare_(obj.ATTACH);
-	
+	matshare_(obj.CLONE, i);
 	
 	% assign to x
-	% get callback
-	[data, ischanged] = matshare_(obj.FETCH);
-	if(ischanged)
-		matshare_(obj.ATTACH);
-	end
-	
-	% get fcn
-	x = matshare_(obj.COPY);
-	
+	x = matshare_(obj.FETCH);	
 	
 % 	disp(a.shared.data);
 % 	timestr = sprintf('%d/%d', i, nums);
