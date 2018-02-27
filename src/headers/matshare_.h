@@ -43,7 +43,6 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 #define MSH_LOCK_NAME "MATSHARE_LOCK"
 
 typedef struct data data_t;
-typedef struct header header_t;
 typedef char byte_t;
 typedef bool bool_t;
 
@@ -57,13 +56,6 @@ const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 2
 #define MAX_INT_STR_LEN 19
 #define MSH_SEG_NAME_LEN (MSH_SEG_NAME_PREAMB_LEN + MAX_INT_STR_LEN)
 
-
-mxArray* global_shared_variable;
-HANDLE* shm_handle;
-HANDLE* shm_name_handle;
-HANDLE* proc_lock;
-byte_t** current_segment_p;
-SECURITY_ATTRIBUTES* lock_sec;
 
 /*
  * The header_t object will be copied to shared memory in its entirety.
@@ -155,6 +147,24 @@ typedef enum
 	msh_DEBUG
 } msh_directive_t;
 
+/* captures fundamentals of the mxArray */
+/* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
+typedef struct
+{
+	bool_t isSparse;
+	bool_t isNumeric;
+	bool_t isEmpty;
+	mxComplexity complexity;
+	mxClassID classid;       /* matlab class id */
+	size_t nDims;         /* dimensionality of the matrix.  The size array immediately follows the header */
+	size_t elemsiz;       /* size of each element in pr and pi */
+	size_t nzmax;         /* length of pr,pi */
+	int nFields;       /* the number of fields.  The field string immediately follows the size array */
+	int par_hdr_off;   /* offset to the parent's header, add this to help backwards searches (double linked... sort of)*/
+	size_t shmsiz;            /* size of serialized object (header + size array + field names string) */
+	size_t  strBytes;
+} header_t;
+
 /* structure used to record all of the data addresses */
 struct data
 {
@@ -173,30 +183,37 @@ struct data
 
 typedef struct
 {
-	uint32_t segment_number;
-	size_t segment_size;
+	uint16_t num_procs;
+	uint32_t lead_num;
+	uint32_t seg_num;
+	uint32_t rev_num;
+	size_t seg_sz;
+} shm_segment_info;
+
+typedef struct
+{
+	char seg_name[MSH_SEG_NAME_LEN + 1];		// segment name
+	uint32_t seg_num;						// segment number (iterated when a new file is needed)
+	uint32_t rev_num;						// total number of revisions (used for comparison, not indexing, so it's circular)
+	size_t seg_sz;							// size of the segment
 } segment_info;
 
-
-/* captures fundamentals of the mxArray */
-/* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
-struct header
+typedef struct
 {
-	bool isSparse;
-	bool isNumeric;
-	bool isEmpty;
-	mxComplexity complexity;
-	mxClassID classid;       /* matlab class id */
-	size_t nDims;         /* dimensionality of the matrix.  The size array immediately follows the header */
-	size_t elemsiz;       /* size of each element in pr and pi */
-	size_t nzmax;         /* length of pr,pi */
-	int nFields;       /* the number of fields.  The field string immediately follows the size array */
-	int par_hdr_off;   /* offset to the parent's header, add this to help backwards searches (double linked... sort of)*/
-	size_t shmsiz;            /* size of serialized object (header + size array + field names string) */
-	size_t  strBytes;
-};
+	HANDLE shm_handle;
+	HANDLE shm_name_handle;
+	HANDLE proc_lock;
+	SECURITY_ATTRIBUTES lock_sec;
+	bool_t is_freed;
+	bool_t shm_is_used;
+	bool_t is_proc_locked;
+	segment_info cur_seg_info;
+	shm_segment_info* shm_seg_info;
+	byte_t* cur_seg_ptr;
+} mex_info;
 
-segment_info* current_segment_info;
+mxArray* glob_shm_var;
+mex_info* glob_info;
 
 void init();
 
@@ -258,19 +275,7 @@ void acquireProcLock(void);
 
 void releaseProcLock(void);
 
-#ifdef SAFEMODE
-/* A convenient function for safe assignment of memory to an mxArray */
-void* safeCopy(void* pBuffer, mwSize Bytes)
-{
-	void* pSafeBuffer;
-	
-	/* ensure Matlab knows it */
-	pSafeBuffer = mxMalloc(Bytes);
-	if (pSafeBuffer != NULL)
-		memcpy(pSafeBuffer, pBuffer, Bytes); /* and copy the data */
+void makeDummyVar(mxArray** out);
 
-	return pSafeBuffer;
-}
-#endif
 
 #endif

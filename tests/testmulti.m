@@ -21,12 +21,12 @@ drawnow
 %using shared version
 tic;
 a = MatShare;
-a.shared.data = Data;								%place a copy of data in global memory
+a.data = Data;								%place a copy of data in global memory
 parfor i = 1:numel(funlist)
 	sh = MatShare;
-	resultpar(i) = feval(funlist{i}, sh.shared.data);
+	resultpar(i) = feval(funlist{i}, sh.data);
 end
-a.shared.data = [];                    %The shared memory is now detached from all processes and will be deleted
+a.data = [];                    %The shared memory is now detached from all processes and will be deleted
 toc  %Elapsed time is 1.399766 seconds.
 
 if(~any(resultpar - result))

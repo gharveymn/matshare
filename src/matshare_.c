@@ -20,9 +20,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	header_t hdr;
 	data_t dat;
 	
-	segment_info* seg_info;
-	char* msh_segment_name;
-	
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
@@ -44,10 +41,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	{
 		case msh_INIT:
 			init();
-			mexMakeArrayPersistent(global_shared_variable);
-			plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
-			mexLock();
+			makeDummyVar(&plhs[0]);
 			break;
+			
 		case msh_CLONE:
 			/********************/
 			/*	Clone case		*/
@@ -56,9 +52,17 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* check the inputs */
 			if(nrhs < 2)
 			{
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone",
+				mexErrMsgIdAndTxt("MATLAB:MatShare:clone",
 							   "Required second argument is missing (???)");
 			}
+			
+			/* clear the dummy variable we allocated in the DETACH or INIT case */
+			if(!mxIsEmpty(glob_shm_var))
+			{
+				mexErrMsgIdAndTxt("MATLAB:MatShare:clone",
+							   "Expected dummy variable was not empty in msh_CLONE");
+			}
+			mxDestroyArray(glob_shm_var);
 			
 			acquireProcLock();
 			
@@ -66,190 +70,231 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			mxInput = prhs[1];
 			
 			/* scan input data */
-			sm_size = deepscan(&hdr, &dat, mxInput, NULL, &global_shared_variable);
+			sm_size = deepscan(&hdr, &dat, mxInput, NULL, &glob_shm_var);
 			
-			// get current map number
-			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
-			seg_info->segment_number = seg_info->segment_number == UINT32_MAX? 0 : seg_info->segment_number + 1; // there aren't going to be UINT32_MAX files open, so reset to 0 without checking
-			current_segment_info->segment_number = seg_info->segment_number;
-			seg_info->segment_size = sm_size;
-			current_segment_info->segment_size = sm_size;
-			
-			msh_segment_name = mxMalloc((MSH_SEG_NAME_LEN + 1)*sizeof(char));
-			sprintf(msh_segment_name, MSH_SEGMENT_NAME, seg_info->segment_number);
-			
-			UnmapViewOfFile(*current_segment_p);
-			CloseHandle(*shm_handle);
-			
-			// create the new mapping
-			lo_sz =  (DWORD)(sm_size & 0xFFFFFFFFL);
-			hi_sz =  (DWORD)((sm_size >> 32) & 0xFFFFFFFFL);
-			temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, msh_segment_name);
-			err = GetLastError();
-			if(temp_handle == NULL)
+			/* update the revision number and indicate our info is current */
+			glob_info->shm_seg_info->rev_num += 1;
+			glob_info->cur_seg_info.rev_num = glob_info->shm_seg_info->rev_num;
+			if(sm_size <= glob_info->cur_seg_info.seg_sz)
 			{
-				// throw error is already exists because that shouldn't happen
-				releaseProcLock();
-				mexPrintf("Error number: %d\n", err);
-				mexErrMsgIdAndTxt("MATLAB:MatShare:init",
-							   "MatShare::Could not create the memory segment");
-			}
-			
-			if(err == ERROR_ALREADY_EXISTS)
-			{
-				DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+				/* reuse the current segment, which we should still be mapped to */
+				
+				/* tell everyone to come back to this segment */
+				glob_info->shm_seg_info->seg_num = glob_info->cur_seg_info.seg_num;
+				
+				/* don't close the current file handle (obviously) */
+				
 			}
 			else
 			{
-				*shm_handle = temp_handle;
+				
+				// get current map number
+				
+				/* warning: this may cause a collision in the rare case where one process is still at seg_num = 0 and lead_num = UINT32_MAX; very unlikely, so the overhead isn't worth it */
+				glob_info->shm_seg_info->lead_num += 1;
+				
+				glob_info->cur_seg_info.seg_num = glob_info->shm_seg_info->lead_num;
+				glob_info->shm_seg_info->seg_num = glob_info->cur_seg_info.seg_num;
+				glob_info->shm_seg_info->seg_sz = sm_size;
+				glob_info->cur_seg_info.seg_sz = sm_size;
+				
+				sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->shm_seg_info->seg_num);
+				
+				/* decrement the kernel handle count and tell onExit not to do this twice */
+				UnmapViewOfFile(glob_info->cur_seg_ptr);
+				CloseHandle(glob_info->shm_handle);
+				glob_info->shm_is_used = FALSE;
+				
+				// create the new mapping
+				lo_sz = (DWORD)(sm_size & 0xFFFFFFFFL);
+				hi_sz = (DWORD)((sm_size >> 32) & 0xFFFFFFFFL);
+				temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->cur_seg_info.seg_name);
+				err = GetLastError();
+				if(temp_handle == NULL)
+				{
+					// throw error if it already exists because that shouldn't happen
+					makeDummyVar(&plhs[0]);
+					releaseProcLock();
+					mexPrintf("Error number: %d\n", err);
+					mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not create the memory segment");
+				}
+				else if(err == ERROR_ALREADY_EXISTS)
+				{
+					DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+				}
+				else
+				{
+					glob_info->shm_handle = temp_handle;
+				}
+				glob_info->cur_seg_ptr = (byte_t*)MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, sm_size);
+				glob_info->shm_is_used = TRUE;
+				
 			}
 			
-			*current_segment_p = (byte_t*)MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, sm_size);
-			
 			/* copy data to the shared memory */
-			deepcopy(&hdr, &dat, *current_segment_p, NULL);
+			deepcopy(&hdr, &dat, glob_info->cur_seg_ptr, NULL);
 			
 			/* free temporary allocation */
 			deepfree(&dat);
 			
-			mxFree(msh_segment_name);
-			mexMakeArrayPersistent(global_shared_variable);
-			plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
-			UnmapViewOfFile(seg_info);
-			mexLock();
-			releaseProcLock();
+			mexMakeArrayPersistent(glob_shm_var);
+			plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
+			
 			break;
+			
 		case msh_ATTACH:
 			/********************/
 			/*	Attach case	*/
 			/********************/
 			
-			acquireProcLock();
-
-			// get current map size
-			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
-			current_segment_info->segment_number = seg_info->segment_number;
-			current_segment_info->segment_size = seg_info->segment_size;
 			
 			/* Restore the segment if this an initialized region */
-			shallowrestore(*current_segment_p, global_shared_variable);
+			shallowrestore(glob_info->cur_seg_ptr, glob_shm_var);
 			
+			/* proc_lock was acquired either in CLONE or FETCH */
 			releaseProcLock();
+			
 			break;
+			
 		case msh_DETACH:
 			/********************/
 			/*	Dettach case	*/
 			/********************/
 			
-			acquireProcLock();
-			
-			if(!mxIsEmpty(global_shared_variable))
+			if(!mxIsEmpty(glob_shm_var))
 			{
 				/* NULL all of the Matlab pointers */
-				deepdetach(global_shared_variable);
+				deepdetach(glob_shm_var);
 			}
-			mxDestroyArray(global_shared_variable);
+			mxDestroyArray(glob_shm_var);
 			
-			global_shared_variable = mxCreateDoubleMatrix(0, 0, mxREAL);
-			mexMakeArrayPersistent(global_shared_variable);
-			plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
-			mexUnlock();
-			releaseProcLock();
+			makeDummyVar(&plhs[0]);
+			
 			break;
+			
 		case msh_FREE:
 			/********************/
 			/*	free case		*/
 			/********************/
-			//CloseHandle(*shm_handle);
+			
+			/* this is the same as DETACH, but unlocks the mex file, and closes the segment */
+			
+			if(!mxIsEmpty(glob_shm_var))
+			{
+				/* NULL all of the Matlab pointers */
+				deepdetach(glob_shm_var);
+			}
+			mxDestroyArray(glob_shm_var);
+			
+			if(!glob_info->is_freed)
+			{
+				
+				/* decrement the kernel handle count and tell onExit not to do this twice */
+				if(glob_info->shm_is_used)
+				{
+					UnmapViewOfFile(glob_info->cur_seg_ptr);
+					CloseHandle(glob_info->shm_handle);
+					glob_info->shm_is_used = FALSE;
+				}
+				
+				glob_info->shm_seg_info->num_procs -= 1;
+				
+				/* if the function is process locked be sure to release it */
+				if(glob_info->is_proc_locked)
+				{
+					releaseProcLock();
+				}
+				
+				glob_info->is_freed = TRUE;
+				
+			}
+			
 			mexUnlock();
+			makeDummyVar(&plhs[0]);
+			
 			break;
 		case msh_FETCH:
 			
 			acquireProcLock();
 			
-			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
-			plhs[1] = mxCreateLogicalScalar((mxLogical)(current_segment_info->segment_number != seg_info->segment_number));
+			/* check if the current revision number is the same as the shm revision number */
+			plhs[1] = mxCreateLogicalScalar((mxLogical)(glob_info->cur_seg_info.rev_num != glob_info->shm_seg_info->rev_num));
 			if(*mxGetLogicals(plhs[1]) != TRUE)
 			{
 				//return a shallow copy of the variable
-				UnmapViewOfFile(seg_info);
-				plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
+				plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
 				releaseProcLock();
-				break;
 			}
 			else
 			{
 				//do a detach operation
-				if(!mxIsEmpty(global_shared_variable))
+				if(!mxIsEmpty(glob_shm_var))
 				{
 					/* NULL all of the Matlab pointers */
-					deepdetach(global_shared_variable);
+					deepdetach(glob_shm_var);
 				}
-				mxDestroyArray(global_shared_variable);
+				mxDestroyArray(glob_shm_var);
 				
-				current_segment_info->segment_number = seg_info->segment_number;
-				current_segment_info->segment_size = seg_info->segment_size;
+				glob_info->cur_seg_info.rev_num = glob_info->shm_seg_info->rev_num;
+				glob_info->cur_seg_info.seg_num = glob_info->shm_seg_info->seg_num;
+				glob_info->cur_seg_info.seg_sz = glob_info->shm_seg_info->seg_sz;
 				
-				msh_segment_name = mxMalloc((MSH_SEG_NAME_LEN + 1) * sizeof(char));
-				sprintf(msh_segment_name, MSH_SEGMENT_NAME, current_segment_info->segment_number);
+				sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->cur_seg_info.seg_num);
 				
-				UnmapViewOfFile(*current_segment_p);
-				CloseHandle(*shm_handle);
+				UnmapViewOfFile(glob_info->cur_seg_ptr);
+				CloseHandle(glob_info->shm_handle);
 				
-					temp_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, msh_segment_name);
+					temp_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, glob_info->cur_seg_info.seg_name);
 					err = GetLastError();
 					if(temp_handle == NULL)
 					{
+						makeDummyVar(&plhs[0]);
 						releaseProcLock();
 						mexPrintf("Error number: %d\n", err);
 						mexErrMsgIdAndTxt("MATLAB:MatShare:fetch",
 									   "MatShare::Could not open the memory segment");
 					}
 					
-					DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), shm_handle, 0, TRUE,
+					DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE,
 								 DUPLICATE_SAME_ACCESS);
 					
-					*current_segment_p = (byte_t*) MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0,
-														current_segment_info->segment_size);
+					glob_info->cur_seg_ptr = (byte_t*) MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0,
+														glob_info->cur_seg_info.seg_sz);
 					err = GetLastError();
-					if(*current_segment_p == NULL)
+					if(glob_info->cur_seg_ptr == NULL)
 					{
+						makeDummyVar(&plhs[0]);
 						releaseProcLock();
 						mexPrintf("Error number: %d\n", err);
 						mexErrMsgIdAndTxt("MATLAB:MatShare:fetch",
 									   "MatShare::Could not fetch the memory segment");
 					}
-					shallowfetch(*current_segment_p, &global_shared_variable);
+					shallowfetch(glob_info->cur_seg_ptr, &glob_shm_var);
 				
-				mexMakeArrayPersistent(global_shared_variable);
-				plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
-				mxFree(msh_segment_name);
-				UnmapViewOfFile(seg_info);
-				releaseProcLock();
+				mexMakeArrayPersistent(glob_shm_var);
+				plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
+				
 			}
+			
 			break;
+			
 		case msh_COMPARE:
-			
 			acquireProcLock();
-			
-			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
-			plhs[0] = mxCreateLogicalScalar((mxLogical)(current_segment_info->segment_number != seg_info->segment_number));
-			UnmapViewOfFile(seg_info);
-			
+			plhs[0] = mxCreateLogicalScalar((mxLogical)(glob_info->cur_seg_info.seg_num != glob_info->shm_seg_info->seg_num));
 			releaseProcLock();
 			break;
 		case msh_COPY:
-			plhs[0] = mxCreateSharedDataCopy(global_shared_variable);
+			plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
 			break;
 		case msh_DEEPCOPY:
-			plhs[0] = mxDuplicateArray(global_shared_variable);
+			plhs[0] = mxDuplicateArray(glob_shm_var);
 			break;
 		case msh_DEBUG:
-			arr = (mxArrayStruct*)global_shared_variable;
+			arr = (mxArrayStruct*)glob_shm_var;
 			mexPrintf("%d\n", arr->RefCount);
 			break;
 		default:
-			mexErrMsgIdAndTxt("MATLAB:SharedMemory", "Unrecognized directive.");
+			mexErrMsgIdAndTxt("MATLAB:MatShare", "Unrecognized directive.");
 			/* unrecognised directive */
 			break;
 	}
@@ -326,7 +371,7 @@ void deepdetach(mxArray* ret_var)
 			if(mxSetDimensions(ret_var, dims, num_dims))
 			{
 				releaseProcLock();
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:Unknown", "detach: unable to resize the array.");
+				mexErrMsgIdAndTxt("MATLAB:MatShare:Unknown", "detach: unable to resize the array.");
 			}
 			
 			/* allocate 1 element */
@@ -368,7 +413,7 @@ void deepdetach(mxArray* ret_var)
 	else
 	{
 		releaseProcLock();
-		mexErrMsgIdAndTxt("MATLAB:SharedMemory:InvalidInput", "detach: unsupported type.");
+		mexErrMsgIdAndTxt("MATLAB:MatShare:InvalidInput", "Detach: Unsupported type. The segment may have been corrupted.");
 	}
 }
 
@@ -789,7 +834,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			if(hdr->shmsiz == (1 + hdr->nzmax) * pad_to_align(sizeof(header_t)))
 			{
 				releaseProcLock();
-				mexErrMsgIdAndTxt("MATLAB:SharedMemory:clone", "Required (variable) must contain at "
+				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Required (variable) must contain at "
 						"least one non-empty item (at all levels).");
 			}
 		}
@@ -873,7 +918,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	{
 		releaseProcLock();
 		mexPrintf("Unknown class found: %s\n", mxGetClassName(mxInput));
-		mexErrMsgIdAndTxt("MATLAB:SharedMemory:InvalidInput", "clone: unsupported type.");
+		mexErrMsgIdAndTxt("MATLAB:MatShare:InvalidInput", "clone: unsupported type.");
 	}
 	
 	
@@ -1386,49 +1431,37 @@ int BytesFromStringEnd(const char* pString, size_t* pBytes)
 
 void init()
 {
+	
+	mexLock();
+	
 	DWORD err;
 	HANDLE temp_handle;
 	
-	current_segment_p = (byte_t**)mxMalloc(sizeof(byte_t*));
-	mexMakeMemoryPersistent(current_segment_p);
+	bool_t is_global_init;
 	
-	current_segment_info = (segment_info*)mxMalloc(sizeof(segment_info));
-	mexMakeMemoryPersistent(current_segment_info);
+	glob_info = (mex_info*)mxMalloc(sizeof(mex_info));
+	mexMakeMemoryPersistent(glob_info);
 	
-	shm_name_handle = (HANDLE*)mxMalloc(sizeof(HANDLE));
-	mexMakeMemoryPersistent(shm_name_handle);
+	glob_info->lock_sec.nLength = sizeof(SECURITY_ATTRIBUTES);
+	glob_info->lock_sec.lpSecurityDescriptor = NULL;
+	glob_info->lock_sec.bInheritHandle = TRUE;
 	
-	shm_handle = (HANDLE*)mxMalloc(sizeof(HANDLE));
-	mexMakeMemoryPersistent(shm_handle);
-	
-	proc_lock = (HANDLE*)mxMalloc(sizeof(HANDLE));
-	mexMakeMemoryPersistent(proc_lock);
-	
-	lock_sec = (SECURITY_ATTRIBUTES*)mxMalloc(sizeof(SECURITY_ATTRIBUTES));
-	mexMakeMemoryPersistent(lock_sec);
-	lock_sec->nLength = sizeof(SECURITY_ATTRIBUTES);
-	lock_sec->lpSecurityDescriptor = NULL;
-	lock_sec->bInheritHandle = TRUE;
-	
-	temp_handle = CreateMutex(lock_sec, FALSE, MSH_LOCK_NAME);
+	temp_handle = CreateMutex(&glob_info->lock_sec, FALSE, MSH_LOCK_NAME);
 	err = GetLastError();
 	if(temp_handle == NULL)
 	{
 		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
-					   "SharedMemory::Could not create the memory segment");
+		mexErrMsgIdAndTxt("MATLAB:MatShare:init",
+					   "MatShare::Could not create the memory segment");
 	}
 	else if(err == ERROR_ALREADY_EXISTS)
 	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), proc_lock, 0, TRUE, DUPLICATE_SAME_ACCESS);
+		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->proc_lock, 0, TRUE, DUPLICATE_SAME_ACCESS);
 	}
 	else
 	{
-		*proc_lock = temp_handle;
+		glob_info->proc_lock = temp_handle;
 	}
-	
-	
-	acquireProcLock();
 	
 	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(segment_info), MSH_NAME_SEGMENT_NAME);
 	err = GetLastError();
@@ -1436,34 +1469,35 @@ void init()
 	{
 		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
-					   "SharedMemory::Could not create the memory segment");
+		mexErrMsgIdAndTxt("MATLAB:MatShare:init",
+					   "MatShare::Could not create the memory segment");
 	}
 	
 	if(err == ERROR_ALREADY_EXISTS)
 	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), shm_name_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_name_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+		is_global_init = FALSE;
 	}
 	else
 	{
-		*shm_name_handle = temp_handle;
+		/* will initialize */
+		glob_info->shm_name_handle = temp_handle;
+		is_global_init = TRUE;
 	}
 	
-	bool copy_info = FALSE;
 	header_t hdr;
-	segment_info* seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
-	if(seg_info == NULL)
+	glob_info->shm_seg_info = (shm_segment_info*)MapViewOfFile(glob_info->shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(shm_segment_info));
+	if(glob_info->shm_seg_info == NULL)
 	{
 		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
-					   "SharedMemory::Could not map the name memory segment");
+		mexErrMsgIdAndTxt("MATLAB:MatShare:init",
+					   "MatShare::Could not map the name memory segment");
 		exit(1);
 	}
-	else if(err != ERROR_ALREADY_EXISTS)
+	
+	if(is_global_init)
 	{
-		copy_info = TRUE;
-		
 		/* this is the first region created */
 		/* this info shouldn't ever actually be used */
 		/* but make sure the memory segment is consistent */
@@ -1480,48 +1514,57 @@ void init()
 		hdr.strBytes = 0;
 		hdr.par_hdr_off = 0;
 		
-		seg_info->segment_number = 0;
-		seg_info->segment_size = hdr.shmsiz;
+		glob_info->shm_seg_info->num_procs = 1;
+		glob_info->shm_seg_info->seg_num = 0;
+		glob_info->shm_seg_info->rev_num = 0;
+		glob_info->shm_seg_info->lead_num = 0;
+		glob_info->shm_seg_info->seg_sz = hdr.shmsiz;
 	}
+	else
+	{
+		glob_info->shm_seg_info->num_procs += 1;
+	}
+	
+	/* make sure to init local proc_lock flag as false */
+	glob_info->is_proc_locked = FALSE;
+	acquireProcLock();
 	
 	/* in any case we want to make sure that the current segment is either
 	 * the null case, or differs from the current shared segment number */
-	current_segment_info->segment_number = 0;
-	current_segment_info->segment_size = 0;
+	glob_info->cur_seg_info.rev_num = 0;
+	glob_info->cur_seg_info.seg_num = 0;
+	glob_info->cur_seg_info.seg_sz = 0;
 	
-	char* msh_segment_name = mxMalloc((MSH_SEG_NAME_LEN + 1)*sizeof(char));
-	sprintf(msh_segment_name, MSH_SEGMENT_NAME, seg_info->segment_number);
+	sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->shm_seg_info->seg_num);
 	
-	DWORD lo_sz =  (DWORD)(seg_info->segment_size & 0xFFFFFFFFL);
-	DWORD hi_sz =  (DWORD)((seg_info->segment_size >> 32) & 0xFFFFFFFFL);
-	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, msh_segment_name);
+	DWORD lo_sz =  (DWORD)(glob_info->shm_seg_info->seg_sz & 0xFFFFFFFFL);
+	DWORD hi_sz =  (DWORD)((glob_info->shm_seg_info->seg_sz >> 32) & 0xFFFFFFFFL);
+	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->cur_seg_info.seg_name);
 	err = GetLastError();
 	if(temp_handle == NULL)
 	{
 		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:SharedMemory:init",
-					   "SharedMemory::Could not create the memory segment");
+		mexErrMsgIdAndTxt("MATLAB:MatShare:init",
+					   "MatShare::Could not create the memory segment");
 	}
 	else if(err == ERROR_ALREADY_EXISTS)
 	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
 	}
 	else
 	{
-		*shm_handle = temp_handle;
+		glob_info->shm_handle = temp_handle;
 	}
-	mxFree(msh_segment_name);
+	glob_info->cur_seg_ptr = (byte_t*)MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->shm_seg_info->seg_sz);
+	glob_info->shm_is_used = TRUE;
+	glob_info->is_freed = FALSE;
 	
-	*current_segment_p = (byte_t*)MapViewOfFile(*shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, seg_info->segment_size);
-	if(copy_info)
+	if(is_global_init)
 	{
-		memcpy(*current_segment_p, &hdr, hdr.shmsiz);
+		memcpy(glob_info->cur_seg_ptr, &hdr, hdr.shmsiz);
 	}
 	
-	UnmapViewOfFile(seg_info);
-	
-	global_shared_variable = mxCreateDoubleMatrix(0, 0, mxREAL);
 	mexAtExit(onExit);
 	
 	releaseProcLock();
@@ -1531,63 +1574,80 @@ void init()
 
 void onExit(void)
 {
-	if(!mxIsEmpty(global_shared_variable))
+	
+	if(!mxIsEmpty(glob_shm_var))
 	{
 		/* NULL all of the Matlab pointers */
-		deepdetach(global_shared_variable);
+		deepdetach(glob_shm_var);
 	}
-	else
+	mxDestroyArray(glob_shm_var);
+	
+	if(!glob_info->is_freed)
 	{
-		mxDestroyArray(global_shared_variable);
+		glob_info->shm_seg_info->num_procs -= 1;
 	}
 	
-	UnmapViewOfFile(*current_segment_p);
-	CloseHandle(*shm_handle);
-	CloseHandle(*shm_name_handle);
-	CloseHandle(*proc_lock);
-	mxFree(shm_handle);
-	mxFree(shm_name_handle);
-	mxFree(proc_lock);
-	mxFree(lock_sec);
-	mxFree(current_segment_info);
-	mxFree(current_segment_p);
+	if(glob_info->shm_is_used)
+	{
+		UnmapViewOfFile(glob_info->cur_seg_ptr);
+		CloseHandle(glob_info->shm_handle);
+		glob_info->shm_is_used = FALSE;
+	}
+	
+	UnmapViewOfFile(glob_info->shm_seg_info);
+	CloseHandle(glob_info->shm_name_handle);
+	
+	releaseProcLock();
+	CloseHandle(glob_info->proc_lock);
+	
+	mxFree(glob_info);
 	
 }
 
 size_t pad_to_align(size_t size)
 {
-	if(size%align_size)
-	{
-		size += align_size - (size%align_size);
-	}
-	return size;
+	return size + align_size - (size%align_size);
 }
 
 void acquireProcLock(void)
 {
-	DWORD ret = WaitForSingleObject(*proc_lock, INFINITE);
-	if(ret == WAIT_ABANDONED)
+	/* only request a lock if there is more than one process */
+	if(glob_info->shm_seg_info->num_procs > 1)
 	{
-		mexErrMsgIdAndTxt("MATLAB:MatShare:acquireProcLock",
-					   "The wait for process lock was abandoned.");
-	}
-	else if(ret == WAIT_FAILED)
-	{
-		mexPrintf("Error number: %d\n", GetLastError());
-		mexErrMsgIdAndTxt("MATLAB:MatShare:acquireProcLock",
-					   "The wait for process lock failed.");
+		DWORD ret = WaitForSingleObject(glob_info->proc_lock, INFINITE);
+		if(ret == WAIT_ABANDONED)
+		{
+			mexErrMsgIdAndTxt("MATLAB:MatShare:acquireProcLock", "The wait for process lock was abandoned.");
+		}
+		else if(ret == WAIT_FAILED)
+		{
+			mexPrintf("Error number: %d\n", GetLastError());
+			mexErrMsgIdAndTxt("MATLAB:MatShare:acquireProcLock", "The wait for process lock failed.");
+		}
+		glob_info->is_proc_locked = TRUE;
 	}
 }
 
 
 void releaseProcLock(void)
 {
-	if(ReleaseMutex(*proc_lock) == 0)
+	/* unlock only if actually locked */
+	if(glob_info->is_proc_locked)
 	{
-		mexPrintf("Error number: %d\n", GetLastError());
-		mexErrMsgIdAndTxt("MATLAB:MatShare:releaseProcLock",
-					   "The process lock release failed.");
+		if(ReleaseMutex(glob_info->proc_lock) == 0)
+		{
+			mexPrintf("Error number: %d\n", GetLastError());
+			mexErrMsgIdAndTxt("MATLAB:MatShare:releaseProcLock", "The process lock release failed.");
+		}
+		glob_info->is_proc_locked = FALSE;
 	}
+}
+
+void makeDummyVar(mxArray** out)
+{
+	glob_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
+	mexMakeArrayPersistent(glob_shm_var);
+	*out = mxCreateSharedDataCopy(glob_shm_var);
 }
 
 
