@@ -7,7 +7,6 @@ INCLUDE_DIRECTORIES(${MATLAB_INCLUDE_DIR})
 
 SET(SOURCE_FILES
 		${MATLAB_INCLUDE_DIR}/mex.h
-		extlib/mman-win32/mman.c extlib/mman-win32/mman.h
 		matshare_.c headers/matshare_.h
 		)
 

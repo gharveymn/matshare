@@ -16,10 +16,7 @@ IF("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wall -DNO_MEX")
 	ENDIF(MSVC OR (DEFINED USE_MSVC))
 
-	INCLUDE_DIRECTORIES(${BOOST_DIR})
-
 	SET(SOURCE_FILES
-			src/extlib/mman-win32/mman.c src/extlib/mman-win32/mman.h
 			src/matshare_.c src/headers/matshare_.h
 			)
 
