@@ -49,25 +49,32 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/*	Clone case		*/
 			/********************/
 			
+			//TODO if every all dimensions are the same size, just copy over the data and don't reattach etc.
+			
 			/* check the inputs */
 			if(nrhs < 2)
 			{
 				mexErrMsgIdAndTxt("MATLAB:MatShare:clone",
-							   "Required second argument is missing (???)");
+							   "Required second argument is missing.");
 			}
 			
-			/* clear the dummy variable we allocated in the DETACH or INIT case */
-			if(!mxIsEmpty(glob_shm_var))
+			/* Assign */
+			mxInput = prhs[1];
+			
+			if(!(mxIsNumeric(mxInput) || mxIsLogical(mxInput) || mxIsChar(mxInput) || mxIsStruct(mxInput) || mxIsCell(mxInput)))
 			{
 				mexErrMsgIdAndTxt("MATLAB:MatShare:clone",
-							   "Expected dummy variable was not empty in msh_CLONE");
+							   "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+			}
+			
+			/* clear the previous variable */
+			if(!mxIsEmpty(glob_shm_var))
+			{
+				deepdetach(glob_shm_var);
 			}
 			mxDestroyArray(glob_shm_var);
 			
 			acquireProcLock();
-			
-			/* Assign */
-			mxInput = prhs[1];
 			
 			/* scan input data */
 			sm_size = deepscan(&hdr, &dat, mxInput, NULL, &glob_shm_var);
@@ -199,7 +206,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				
 				glob_info->shm_seg_info->num_procs -= 1;
 				
-				/* if the function is process locked be sure to release it */
+				/* if the function is process locked be sure to release it (if not needed, but for clarity)*/
 				if(glob_info->is_proc_locked)
 				{
 					releaseProcLock();
@@ -1597,7 +1604,10 @@ void onExit(void)
 	UnmapViewOfFile(glob_info->shm_seg_info);
 	CloseHandle(glob_info->shm_name_handle);
 	
-	releaseProcLock();
+	if(glob_info->is_proc_locked)
+	{
+		releaseProcLock();
+	}
 	CloseHandle(glob_info->proc_lock);
 	
 	mxFree(glob_info);
@@ -1606,7 +1616,8 @@ void onExit(void)
 
 size_t pad_to_align(size_t size)
 {
-	return size + align_size - (size%align_size);
+	/* bitwise expression is equiv to (size % align_size) since align_size is a power of 2 */
+	return size + align_size - (size | ~align_size);
 }
 
 void acquireProcLock(void)
@@ -1631,7 +1642,6 @@ void acquireProcLock(void)
 
 void releaseProcLock(void)
 {
-	/* unlock only if actually locked */
 	if(glob_info->is_proc_locked)
 	{
 		if(ReleaseMutex(glob_info->proc_lock) == 0)

@@ -8,7 +8,8 @@ classdef MatShare < handle
 		data
 	end
 	
-	properties (Constant, Access=private, Hidden)
+	properties (Constant)
+		% These are just for documentation since it's faster to just use the numbers directly
 		INIT     = uint8(0);
 		CLONE    = uint8(1);
 		ATTACH   = uint8(2);
@@ -23,36 +24,35 @@ classdef MatShare < handle
 	
 	methods
 		function obj = MatShare
-			obj.deepdata = matshare_(obj.INIT);
+			obj.deepdata = matshare_(uint8(0));
 			addlistener(obj, 'data', 'PreSet', @(src,evnt)MatShare.preSetCallback(obj,src,evnt));	
 			addlistener(obj, 'data', 'PreGet', @(src,evnt)MatShare.preGetCallback(obj,src,evnt));	
 		end
 		
 		function set.data(obj,in)
-			validateattributes(in, {'numeric','logical','char','struct','cell'},{});
-			obj.deepdata = matshare_(obj.CLONE, in);
-			matshare_(obj.ATTACH);
+			obj.deepdata = matshare_(uint8(1), in);
+			matshare_(uint8(2));
 		end
 		
-		function ret = get.data(obj)
+		function ret = get.data(~)
 			% make sure this isn't deep-copied
- 			ret = matshare_(obj.COPY);
+ 			ret = matshare_(uint8(7));
 		end
 		
-		function ret = deepcopy(obj)
-			ret = matshare_(obj.DEEPCOPY);
+		function ret = deepcopy(~)
+			ret = matshare_(uint8(8));
 		end
 		
-		function debug(obj)
-			matshare_(obj.DEBUG);
+		function debug(~)
+			matshare_(uint8(9));
 		end
 		
-		function free(obj)
-			obj.deepdata = matshare_(obj.FREE);
+		function safefree(obj)
+			obj.deepdata = matshare_(uint8(4));
 		end
 		
 		function delete(obj)
-			obj.deepdata = matshare_(obj.FREE);
+			obj.deepdata = matshare_(uint8(4));
 			clear matshare_ obj.deepdata;
 		end
 		
@@ -60,15 +60,44 @@ classdef MatShare < handle
 	
 	methods (Static)
 		function preSetCallback(obj,~,~)
-			obj.deepdata = matshare_(obj.DETACH);
+			obj.deepdata = matshare_(uint8(3));
 		end
 		
 		function preGetCallback(obj,~,~)
-			[obj.deepdata,ischanged] = matshare_(obj.FETCH);
+			[obj.deepdata,ischanged] = matshare_(uint8(5));
 			if(ischanged)
-				matshare_(obj.ATTACH);
+				matshare_(uint8(2));
 			end
 		end
+		
+		function init()
+			matshare_(uint8(0));
+		end
+		
+		function share(in)
+			% set callback
+			matshare_(uint8(3));
+
+			% set fcn
+			matshare_(uint8(1), in);
+			matshare_(uint8(2));
+		end
+		
+		function out = fetch()
+			% get callback
+			[~, ischanged] = matshare_(uint8(5));
+			if(ischanged)
+				matshare_(uint8(2));
+			end
+
+			% get fcn
+			out = matshare_(uint8(7));
+		end
+		
+		function free()
+			matshare_(uint8(4));
+		end
+		
 	end
 end
 

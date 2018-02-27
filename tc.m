@@ -19,5 +19,20 @@ classdef tc
 			addpath('tests');
 			testnums;
 		end
+		
+		function testnumsraw
+			addpath('tests');
+			testnumsraw;
+		end
+		
+		function testnumsstatic
+			addpath('tests');
+			testnumsstatic;
+		end
+		
+		function testnumsfcns
+			addpath('tests');
+			testnumsfcns;
+		end
 	end
 end
