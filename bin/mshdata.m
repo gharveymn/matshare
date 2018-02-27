@@ -25,7 +25,7 @@ classdef mshdata < handle
 		function obj = mshdata
 			obj.deepdata = matshare_(obj.INIT);
 			addlistener(obj, 'data', 'PreSet', @(src,evnt)mshdata.preSetCallback(obj,src,evnt));	
-			%addlistener(obj, 'data', 'PreGet', @(src,evnt)mshdata.preGetCallback(obj,src,evnt));	
+			addlistener(obj, 'data', 'PreGet', @(src,evnt)mshdata.preGetCallback(obj,src,evnt));	
 		end
 		
 		function set.data(obj,in)
@@ -40,7 +40,7 @@ classdef mshdata < handle
 		
 		function ret = get.data(obj)
 			% make sure this isn't deep-copied
- 			ret = matshare_(obj.FETCH);
+ 			ret = matshare_(obj.COPY);
 		end
 		
 		function ret = deepcopy(obj)
@@ -68,7 +68,10 @@ classdef mshdata < handle
 		end
 		
 		function preGetCallback(obj,~,~)
-			obj.deepdata = matshare_(obj.FETCH);
+			[obj.deepdata,ischanged] = matshare_(obj.FETCH);
+			if(ischanged)
+				matshare_(obj.ATTACH);
+			end
 		end
 	end
 end

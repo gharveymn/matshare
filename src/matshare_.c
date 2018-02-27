@@ -87,7 +87,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			// create the new mapping
 			lo_sz =  (DWORD)(sm_size & 0xFFFFFFFFL);
 			hi_sz =  (DWORD)((sm_size >> 32) & 0xFFFFFFFFL);
-			temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, MSH_SEGMENT_NAME);
+			temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, msh_segment_name);
 			err = GetLastError();
 			if(temp_handle == NULL)
 			{
@@ -172,8 +172,12 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			acquireProcLock();
 			
+			plhs[1] = mxCreateLogicalMatrix(1,1);
+			ret_data = mxGetLogicals(plhs[1]);
+			
 			seg_info = (segment_info*)MapViewOfFile(*shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(segment_info));
-			if(current_segment_info->segment_number == seg_info->segment_number)
+			*ret_data = (mxLogical)(current_segment_info->segment_number != seg_info->segment_number);
+			if(*ret_data != TRUE)
 			{
 				//return a shallow copy of the variable
 				UnmapViewOfFile(seg_info);
@@ -463,6 +467,15 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 			shm += pad_to_align((hdr->nzmax) * (hdr->elemsiz));     /* takes us to the end of the complex data */
 		}
 		
+		/* set the real and imaginary data */
+		mxFree(mxGetData(ret_var));
+		mxSetData(ret_var, pr);
+		if ( hdr->complexity )
+		{
+			mxFree(mxGetImagData(ret_var));
+			mxSetImagData(ret_var, pi);
+		}
+		
 		/* if sparse get a list of the elements */
 		if(hdr->isSparse)
 		{
@@ -490,17 +503,6 @@ size_t shallowrestore(char* shm, mxArray* ret_var)
 		
 		}
 		
-		/* set the real and imaginary data */
-		
-		
-		/* Safe - but takes it out of global memory */
-		mxFree(mxGetData(ret_var));
-		mxSetData(ret_var, pr);
-		if ( hdr->complexity )
-		{
-			mxFree(mxGetImagData(ret_var));
-			mxSetImagData(ret_var, pi);
-		}
 	
 	}
 	return hdr->shmsiz;
@@ -1420,7 +1422,9 @@ void init()
 	char* msh_segment_name = mxMalloc((MSH_SEG_NAME_LEN + 1)*sizeof(char));
 	sprintf(msh_segment_name, MSH_SEGMENT_NAME, seg_info->segment_number);
 	
-	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, NULLSEGMENT_SZ, MSH_SEGMENT_NAME);
+	DWORD lo_sz =  (DWORD)(seg_info->segment_size & 0xFFFFFFFFL);
+	DWORD hi_sz =  (DWORD)((seg_info->segment_size >> 32) & 0xFFFFFFFFL);
+	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, msh_segment_name);
 	mxFree(msh_segment_name);
 	err = GetLastError();
 	if(temp_handle == NULL)

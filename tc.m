@@ -12,7 +12,7 @@ classdef tc
 		
 		function testmulti
 			addpath('tests');
-			test;
+			testmulti;
 		end
 		
 		function testnums

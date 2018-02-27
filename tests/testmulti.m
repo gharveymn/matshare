@@ -26,8 +26,14 @@ parfor i = 1:numel(funlist)
 	sh = MatShare;
 	resultpar(i) = feval(funlist{i}, sh.shared.data);
 end
-a.shared.data = 1;                    %The shared memory is now detached from all processes and will be deleted
+a.shared.data = [];                    %The shared memory is now detached from all processes and will be deleted
 toc  %Elapsed time is 1.399766 seconds.
+
+if(~any(resultpar - result))
+	disp('Result is correct.');
+else
+	disp('Result is incorrect.');
+end
 
 
 
