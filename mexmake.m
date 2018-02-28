@@ -4,14 +4,14 @@ output_path = [pwd '/bin'];
 try
 	
 	sources = {'src/matshare_.c',...
-			};
+			'src/utils.c'};
 	
 	mexflags = {'-g', '-v', '-outdir', output_path};
 	
 	if(ispc)
-		% stub
+		mexflags = [mexflags,{'-DMATLAB_WINDOWS'}];
 	else
-		mexflags = [mexflags,{'-lrt'}];
+		mexflags = [mexflags,{'-DMATLAB_UNIX','-lrt'}];
 	end
 	
 	mex(mexflags{:}, sources{:})

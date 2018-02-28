@@ -61,3 +61,4 @@ bld/
 [Ll]og/
 !bin/MatShare.m
 !bin/mshdata.m
+/src/extlib

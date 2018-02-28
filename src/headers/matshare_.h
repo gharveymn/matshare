@@ -21,14 +21,49 @@
 // typedef struct mxArray_tag Internal_mxArray;					/* mxArray_tag defined in "mex.h" */
 // #endif
 
-
 /* standard mex include; */
-#include "matrix.h"
 #include "mex.h"
 #include <stdint.h>
 #include <stddef.h>
-#include <windows.h>
 #include <memory.h>
+#include <string.h>
+#include <ctype.h>
+#include "utils.h"
+
+#if defined(MATLAB_UNIX)
+#  include <sys/mman.h>
+#  define MSH_UNIX
+#elif defined(MATLAB_WINDOWS)
+#  define MSH_WIN
+#elif defined(DEBUG_UNIX)
+#  include "../extlib/mman-win32/sys/mman.h"
+#  define MSH_UNIX
+extern int shm_open(const char *name, int oflag, mode_t mode);
+extern int shm_unlink(const char *name);
+#elif defined(DEBUG_WINDOWS)
+#  define MSH_WIN
+#else
+# error(No build type specified.)
+#endif
+
+
+#ifdef MSH_WIN
+#  include <windows.h>
+#  define WIN32_LEAN_AND_MEAN
+#else
+#  include <unistd.h>
+#  include <semaphore.h>
+#  include <pthread.h>
+#  include <fcntl.h>
+#endif
+
+#ifndef FALSE
+#  define FALSE 0
+#endif
+
+#ifndef TRUE
+#  define TRUE 1
+#endif
 
 /* Possibily useful undocumented functions (see links at end for details): */
 /* extern bool mxUnshareArray(const mxArray *pr, const bool noDeepCopy);   */
@@ -38,9 +73,14 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 /* max length of directive string */
 #define MAXDIRECTIVELEN 256
 
-#define MSH_NAME_SEGMENT_NAME "MATSHARE_NAME_SEGMENT"
-
-#define MSH_LOCK_NAME "MATSHARE_LOCK"
+/* forward slash works fine on windows, and required for linux */
+#define MSH_UPDATE_SEGMENT_NAME "/MATSHARE_UPDATE_SEGMENT"
+#define MSH_LOCK_NAME "/MATSHARE_LOCK"
+#define MSH_SEGMENT_NAME "/MATSHARE_SEGMENT%0llx"
+#define MSH_SEG_NAME_PREAMB_LEN (sizeof(MSH_SEGMENT_NAME)-1)
+#define MAX_UINT64_STR_LEN 16
+#define MSH_SEG_NAME_LEN (MSH_SEG_NAME_PREAMB_LEN + MAX_UINT64_STR_LEN)
+#define mexErrMsgIdAndTxt a
 
 typedef struct data data_t;
 typedef char byte_t;
@@ -49,12 +89,10 @@ typedef bool bool_t;
 /* these are used for recording structure field names */
 const char term_char = ';';          /*use this character to terminate a string containing the list of fields.  Do this because it can't be in a valid field name*/
 const size_t align_size = 32;   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
+
+/* HACK */
 #define MXMALLOC_SIG_LEN 16
 const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
-#define MSH_SEG_NAME_PREAMB_LEN 16
-#define MSH_SEGMENT_NAME "MATSHARE_SEGMENT%d"
-#define MAX_INT_STR_LEN 19
-#define MSH_SEG_NAME_LEN (MSH_SEG_NAME_PREAMB_LEN + MAX_INT_STR_LEN)
 
 
 /*
@@ -184,33 +222,76 @@ struct data
 typedef struct
 {
 	uint16_t num_procs;
-	uint32_t lead_num;
-	uint32_t seg_num;
-	uint32_t rev_num;
+	uint64_t lead_num;		/* 64 bit width is temporary ugly fix for theoretical issue of name collision */
+	uint64_t seg_num;
+	uint64_t rev_num;
 	size_t seg_sz;
 } shm_segment_info;
 
 typedef struct
 {
 	char seg_name[MSH_SEG_NAME_LEN + 1];		// segment name
-	uint32_t seg_num;						// segment number (iterated when a new file is needed)
-	uint32_t rev_num;						// total number of revisions (used for comparison, not indexing, so it's circular)
+	uint64_t seg_num;						// segment number (iterated when a new file is needed)
+	uint64_t rev_num;						// total number of revisions (used for comparison, not indexing, so it's circular)
 	size_t seg_sz;							// size of the segment
 } segment_info;
 
+#ifdef MSH_UNIX
 typedef struct
 {
-	HANDLE shm_handle;
-	HANDLE shm_name_handle;
+	bool_t is_init;
+	sem_t lock;
+} lock_segment;
+#endif
+
+typedef struct
+{
+
+#ifdef MSH_WIN
+	
+	struct
+	{
+		HANDLE handle;
+		byte_t* ptr;
+	} shm_data;
+	
+	struct
+	{
+		HANDLE handle;
+		shm_segment_info* ptr;
+	} shm_updater;
+	
 	HANDLE proc_lock;
 	SECURITY_ATTRIBUTES lock_sec;
+	
+#else
+	
+	struct
+	{
+		int handle;
+		byte_t* ptr;
+	} shm_data;
+	
+	struct
+	{
+		int handle;
+		shm_segment_info* ptr;
+	} shm_updater;
+	
+	struct
+	{
+		int handle;
+		lock_segment* shm_lock;
+	} proc_lock;
+	
+#endif
+	
+	
 	bool_t is_freed;
 	bool_t shm_is_used;
 	bool_t is_proc_locked;
 	bool_t is_mem_safe;
 	segment_info cur_seg_info;
-	shm_segment_info* shm_seg_info;
-	byte_t* cur_seg_ptr;
 } mex_info;
 
 mxArray* glob_shm_var;

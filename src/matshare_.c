@@ -8,13 +8,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
 	
 	/* For inputs */
-	const mxArray* mxDirective;               /*  Directive {clone, attach, detach, free}   */
-	const mxArray* mxInput;                /*  Input array (for clone)					  */
+	const mxArray* mxDirective;			/* Directive {clone, attach, detach, free} */
+	const mxArray* mxInput;           		/* Input array (for clone) */
 	
 	/* For storing inputs */
 	msh_directive_t directive;
 	
-	size_t sm_size;                              /* size required by the shared memory */
+	size_t sm_size;					/* size required by the shared memory */
 	
 	/* for storing the mxArrays ... */
 	header_t hdr;
@@ -29,9 +29,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* assign inputs */
 	mxDirective = prhs[0];
 	
-	/* get directive */
+	/* get the directive */
 	directive = parseDirective(mxDirective);
-	DWORD hi_sz, lo_sz, err;
+	uint32_t hi_sz, lo_sz, err;
 	mxArrayStruct* arr;
 	
 	HANDLE temp_handle;
@@ -73,17 +73,17 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			{
 				/* if the current shared variable shares all the same dimensions, etc. then just copy over the memory */
 				/* copy over the data at the same time since otherwise it will be gone */
-				if(shallowcompare(glob_info->cur_seg_ptr, mxInput, &sm_size) == TRUE)
+				if(shallowcompare(glob_info->shm_data.ptr, mxInput, &sm_size) == TRUE)
 				{
 					/* update the revision number and indicate our info is current */
-					glob_info->shm_seg_info->rev_num += 1;
-					glob_info->cur_seg_info.rev_num = glob_info->shm_seg_info->rev_num;
+					glob_info->shm_updater.ptr->rev_num += 1;
+					glob_info->cur_seg_info.rev_num = glob_info->shm_updater.ptr->rev_num;
 					
 					/* tell everyone to come back to this segment */
-					glob_info->shm_seg_info->seg_num = glob_info->cur_seg_info.seg_num;
-					glob_info->shm_seg_info->seg_sz = glob_info->cur_seg_info.seg_sz;
+					glob_info->shm_updater.ptr->seg_num = glob_info->cur_seg_info.seg_num;
+					glob_info->shm_updater.ptr->seg_sz = glob_info->cur_seg_info.seg_sz;
 					
-					shallowrewrite(glob_info->cur_seg_ptr, mxInput);
+					shallowrewrite(glob_info->shm_data.ptr, mxInput);
 					
 					releaseProcLock();
 					break;
@@ -99,15 +99,15 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			sm_size = deepscan(&hdr, &dat, mxInput, NULL, &glob_shm_var);
 			
 			/* update the revision number and indicate our info is current */
-			glob_info->shm_seg_info->rev_num += 1;
-			glob_info->cur_seg_info.rev_num = glob_info->shm_seg_info->rev_num;
+			glob_info->shm_updater.ptr->rev_num += 1;
+			glob_info->cur_seg_info.rev_num = glob_info->shm_updater.ptr->rev_num;
 			if(sm_size <= glob_info->cur_seg_info.seg_sz)
 			{
 				/* reuse the current segment, which we should still be mapped to */
 				
 				/* tell everyone to come back to this segment */
-				glob_info->shm_seg_info->seg_num = glob_info->cur_seg_info.seg_num;
-				glob_info->shm_seg_info->seg_sz = glob_info->cur_seg_info.seg_sz;
+				glob_info->shm_updater.ptr->seg_num = glob_info->cur_seg_info.seg_num;
+				glob_info->shm_updater.ptr->seg_sz = glob_info->cur_seg_info.seg_sz;
 				
 				/* don't close the current file handle (obviously) */
 				
@@ -118,23 +118,23 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				// get current map number
 				
 				/* warning: this may cause a collision in the rare case where one process is still at seg_num = 0 and lead_num = UINT32_MAX; very unlikely, so the overhead isn't worth it */
-				glob_info->shm_seg_info->lead_num += 1;
+				glob_info->shm_updater.ptr->lead_num += 1;
 				
-				glob_info->cur_seg_info.seg_num = glob_info->shm_seg_info->lead_num;
-				glob_info->shm_seg_info->seg_num = glob_info->cur_seg_info.seg_num;
-				glob_info->shm_seg_info->seg_sz = sm_size;
+				glob_info->cur_seg_info.seg_num = glob_info->shm_updater.ptr->lead_num;
+				glob_info->shm_updater.ptr->seg_num = glob_info->cur_seg_info.seg_num;
+				glob_info->shm_updater.ptr->seg_sz = sm_size;
 				glob_info->cur_seg_info.seg_sz = sm_size;
 				
-				sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->shm_seg_info->seg_num);
+				sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->shm_updater.ptr->seg_num);
 				
 				/* decrement the kernel handle count and tell onExit not to do this twice */
-				UnmapViewOfFile(glob_info->cur_seg_ptr);
-				CloseHandle(glob_info->shm_handle);
+				UnmapViewOfFile(glob_info->shm_data.ptr);
+				CloseHandle(glob_info->shm_data.handle);
 				glob_info->shm_is_used = FALSE;
 				
 				// create the new mapping
-				lo_sz = (DWORD)(sm_size & 0xFFFFFFFFL);
-				hi_sz = (DWORD)((sm_size >> 32) & 0xFFFFFFFFL);
+				lo_sz = (uint32_t)(sm_size & 0xFFFFFFFFL);
+				hi_sz = (uint32_t)((sm_size >> 32) & 0xFFFFFFFFL);
 				temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->cur_seg_info.seg_name);
 				err = GetLastError();
 				if(temp_handle == NULL)
@@ -147,19 +147,19 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				}
 				else if(err == ERROR_ALREADY_EXISTS)
 				{
-					DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+					DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_data.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
 				}
 				else
 				{
-					glob_info->shm_handle = temp_handle;
+					glob_info->shm_data.handle = temp_handle;
 				}
-				glob_info->cur_seg_ptr = (byte_t*)MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, sm_size);
+				glob_info->shm_data.ptr = (byte_t*)MapViewOfFile(glob_info->shm_data.handle, FILE_MAP_ALL_ACCESS, 0, 0, sm_size);
 				glob_info->shm_is_used = TRUE;
 				
 			}
 			
 			/* copy data to the shared memory */
-			deepcopy(&hdr, &dat, glob_info->cur_seg_ptr, NULL, glob_shm_var);
+			deepcopy(&hdr, &dat, glob_info->shm_data.ptr, NULL, glob_shm_var);
 			
 			/* free temporary allocation */
 			deepfree(&dat);
@@ -177,7 +177,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			
 			/* Restore the segment if this an initialized region */
-			shallowrestore(glob_info->cur_seg_ptr, glob_shm_var);
+			shallowrestore(glob_info->shm_data.ptr, glob_shm_var);
 			
 			/* proc_lock was acquired either in CLONE or FETCH */
 //			releaseProcLock();
@@ -220,12 +220,12 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				/* decrement the kernel handle count and tell onExit not to do this twice */
 				if(glob_info->shm_is_used)
 				{
-					UnmapViewOfFile(glob_info->cur_seg_ptr);
-					CloseHandle(glob_info->shm_handle);
+					UnmapViewOfFile(glob_info->shm_data.ptr);
+					CloseHandle(glob_info->shm_data.handle);
 					glob_info->shm_is_used = FALSE;
 				}
 				
-				glob_info->shm_seg_info->num_procs -= 1;
+				glob_info->shm_updater.ptr->num_procs -= 1;
 				
 				/* if the function is process locked be sure to release it (if not needed, but for clarity)*/
 				if(glob_info->is_proc_locked)
@@ -246,7 +246,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			acquireProcLock();
 			
 			/* check if the current revision number is the same as the shm revision number */
-			if(glob_info->cur_seg_info.rev_num == glob_info->shm_seg_info->rev_num)
+			if(glob_info->cur_seg_info.rev_num == glob_info->shm_updater.ptr->rev_num)
 			{
 				//return a shallow copy of the variable
 				plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
@@ -261,14 +261,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				}
 				mxDestroyArray(glob_shm_var);
 				
-				glob_info->cur_seg_info.rev_num = glob_info->shm_seg_info->rev_num;
-				glob_info->cur_seg_info.seg_num = glob_info->shm_seg_info->seg_num;
-				glob_info->cur_seg_info.seg_sz = glob_info->shm_seg_info->seg_sz;
+				glob_info->cur_seg_info.rev_num = glob_info->shm_updater.ptr->rev_num;
+				glob_info->cur_seg_info.seg_num = glob_info->shm_updater.ptr->seg_num;
+				glob_info->cur_seg_info.seg_sz = glob_info->shm_updater.ptr->seg_sz;
 				
 				sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->cur_seg_info.seg_num);
 				
-				UnmapViewOfFile(glob_info->cur_seg_ptr);
-				CloseHandle(glob_info->shm_handle);
+				UnmapViewOfFile(glob_info->shm_data.ptr);
+				CloseHandle(glob_info->shm_data.handle);
 				
 				temp_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, glob_info->cur_seg_info.seg_name);
 				err = GetLastError();
@@ -280,18 +280,17 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					mexErrMsgIdAndTxt("MATLAB:MatShare:fetch", "MatShare::Could not open the memory segment");
 				}
 				
-				DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+				DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_data.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
 				
-				glob_info->cur_seg_ptr = (byte_t*)MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->cur_seg_info.seg_sz);
+				glob_info->shm_data.ptr = (byte_t*)MapViewOfFile(glob_info->shm_data.handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->cur_seg_info.seg_sz);
 				err = GetLastError();
-				if(glob_info->cur_seg_ptr == NULL)
+				if(glob_info->shm_data.ptr == NULL)
 				{
 					makeDummyVar(&plhs[0]);
 					releaseProcLock();
-					mexPrintf("Error number: %d\n", err);
-					mexErrMsgIdAndTxt("MATLAB:MatShare:fetch", "MatShare::Could not fetch the memory segment");
+					readMXError("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
 				}
-				shallowfetch(glob_info->cur_seg_ptr, &glob_shm_var);
+				shallowfetch(glob_info->shm_data.ptr, &glob_shm_var);
 				
 				mexMakeArrayPersistent(glob_shm_var);
 				plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
@@ -304,7 +303,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		
 		case msh_COMPARE:
 			acquireProcLock();
-			plhs[0] = mxCreateLogicalScalar((mxLogical)(glob_info->cur_seg_info.seg_num != glob_info->shm_seg_info->seg_num));
+			plhs[0] = mxCreateLogicalScalar((mxLogical)(glob_info->cur_seg_info.seg_num != glob_info->shm_updater.ptr->seg_num));
 			releaseProcLock();
 			break;
 		case msh_COPY:
@@ -318,8 +317,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			mexPrintf("%d\n", arr->RefCount);
 			break;
 		default:
-			mexErrMsgIdAndTxt("MATLAB:MatShare", "Unrecognized directive.");
-			/* unrecognised directive */
+			readMXError("UnknownDirectiveError", "Unrecognized directive.");
 			break;
 	}
 
@@ -394,8 +392,9 @@ void deepdetach(mxArray* ret_var)
 			nzmax = 1;
 			if(mxSetDimensions(ret_var, null_dims, num_dims))
 			{
+				//error for debugging---this is kinda iffy
 				releaseProcLock();
-				mexErrMsgIdAndTxt("MATLAB:MatShare:Unknown", "detach: unable to resize the array.");
+				readMXError("DetachDimensionsError", "Unable to resize the array.");
 			}
 			
 			/* allocate 1 element */
@@ -437,7 +436,7 @@ void deepdetach(mxArray* ret_var)
 	else
 	{
 		releaseProcLock();
-		mexErrMsgIdAndTxt("MATLAB:MatShare:InvalidInput", "Detach: Unsupported type. The segment may have been corrupted.");
+		readMXError("InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
 	}
 }
 
@@ -994,7 +993,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	if(mxInput == NULL)
 	{
 		releaseProcLock();
-		mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Input variable was unexpectedly NULL");
+		readMXError("UnexpectedError", "Input variable was unexpectedly NULL.");
 	}
 	
 	/* initialize header info */
@@ -1026,7 +1025,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			if(hdr->nFields)
 			{
 				releaseProcLock();
-				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "An empty struct array unexpectedly had more than one field");
+				readMXError("UnexpectedError", "An empty struct array unexpectedly had more than one field");
 			}
 			*ret_var = mxCreateStructArray(hdr->nDims, dat->dims, hdr->nFields, NULL);
 		}
@@ -1089,14 +1088,6 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			{
 				hdr->shmsiz += deepscan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr, &ret_child);
 				mxSetCell(*ret_var, i, ret_child);
-			}
-			
-			/* if its a cell it has to have at least one mom-empty element */
-			if(hdr->shmsiz == (1 + hdr->nzmax)*pad_to_align(sizeof(header_t)))
-			{
-				releaseProcLock();
-				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Required (variable) must contain at "
-						"least one non-empty item (at all levels).");
 			}
 		}
 	}
@@ -1177,7 +1168,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	{
 		releaseProcLock();
 		mexPrintf("Unknown class found: %s\n", mxGetClassName(mxInput));
-		mexErrMsgIdAndTxt("MATLAB:MatShare:InvalidInput", "clone: unsupported type.");
+		readMXError("Internal:UnexpectedError", "Tried to clone an unsupported type.");
 	}
 	
 	
@@ -1731,14 +1722,15 @@ void init()
 	
 	mexLock();
 	
-	DWORD err;
-	HANDLE temp_handle;
+	uint32_t err;
 	
 	bool_t is_global_init;
 	
 	glob_info = (mex_info*)mxMalloc(sizeof(mex_info));
 	mexMakeMemoryPersistent(glob_info);
-	
+
+#ifdef MSH_WIN
+	HANDLE temp_handle;
 	glob_info->lock_sec.nLength = sizeof(SECURITY_ATTRIBUTES);
 	glob_info->lock_sec.lpSecurityDescriptor = NULL;
 	glob_info->lock_sec.bInheritHandle = TRUE;
@@ -1747,8 +1739,7 @@ void init()
 	err = GetLastError();
 	if(temp_handle == NULL)
 	{
-		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not create the memory segment");
+		readMXError("Internal:InitMutexError", "Failed to create the mutex (Error number: %u).");
 	}
 	else if(err == ERROR_ALREADY_EXISTS)
 	{
@@ -1759,36 +1750,99 @@ void init()
 		glob_info->proc_lock = temp_handle;
 	}
 	
-	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(segment_info), MSH_NAME_SEGMENT_NAME);
+	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(segment_info), MSH_UPDATE_SEGMENT_NAME);
 	err = GetLastError();
 	if(temp_handle == NULL)
 	{
 		releaseProcLock();
-		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not create the memory segment");
+		readMXError("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).");
 	}
 	
 	if(err == ERROR_ALREADY_EXISTS)
 	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_name_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_updater.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
 		is_global_init = FALSE;
 	}
 	else
 	{
 		/* will initialize */
-		glob_info->shm_name_handle = temp_handle;
+		glob_info->shm_updater.handle = temp_handle;
 		is_global_init = TRUE;
 	}
 	
 	header_t hdr;
-	glob_info->shm_seg_info = (shm_segment_info*)MapViewOfFile(glob_info->shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(shm_segment_info));
-	if(glob_info->shm_seg_info == NULL)
+	glob_info->shm_updater.ptr = (shm_segment_info*)MapViewOfFile(glob_info->shm_updater.handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(shm_segment_info));
+	if(glob_info->shm_updater.ptr == NULL)
+	{
+		err = GetLastError();
+		releaseProcLock();
+		readMXError("MapUpdateSegError", "Could not map the update memory segment (Error number %u)");
+		exit(1);
+	}
+	
+#else
+	
+	glob_info->proc_lock.handle = shm_open(MSH_LOCK_NAME, O_RDWR, O_CREAT);
+	if(glob_info->proc_lock.handle == -1)
+	{
+		printShmError(errno);
+	}
+	ftruncate(glob_info->proc_lock.handle, sizeof(lock_segment));
+	glob_info->proc_lock.shm_lock = mmap(NULL, sizeof(lock_segment), PROT_READ|PROT_WRITE, MAP_SHARED, glob_info->proc_lock.handle, 0);
+	if(glob_info->proc_lock.shm_lock->is_init != TRUE)
+	{
+		if(sem_init(glob_info->proc_lock.shm_lock->lock, TRUE, 0) != 0)
+		{
+			switch(errno)
+			{
+				case ENOSPC:
+					readMXError("SemNoSpaceError", "A resource required to initialise the "
+							"semaphore has been exhausted, or the limit on semaphores (SEM_NSEMS_MAX) "
+							"has been reached.");
+				case ENOSYS:
+					readMXError("SemNoSystemError", "The function sem_init() is not supported by this implementation.");
+				case EPERM:
+					readMXError("SemPermissionsError", "The process lacks the appropriate privileges to initialise the semaphore.");
+				default:
+					readMXError("UnknownError", "An unknown error occurred.");
+				
+			}
+		}
+	}
+	
+	
+	
+	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(segment_info), MSH_UPDATE_SEGMENT_NAME);
+	err = GetLastError();
+	if(temp_handle == NULL)
+	{
+		releaseProcLock();
+		mexPrintf("Error number: %d\n", err);
+		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "[matshare_:init] Could not create the memory segment");
+	}
+	
+	if(err == ERROR_ALREADY_EXISTS)
+	{
+		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_updater.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+		is_global_init = FALSE;
+	}
+	else
+	{
+		/* will initialize */
+		glob_info->shm_updater.handle = temp_handle;
+		is_global_init = TRUE;
+	}
+	
+	header_t hdr;
+	glob_info->shm_updater.ptr = (shm_segment_info*)MapViewOfFile(glob_info->shm_updater.handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(shm_segment_info));
+	if(glob_info->shm_updater.ptr == NULL)
 	{
 		releaseProcLock();
 		mexPrintf("Error number: %d\n", err);
 		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not map the name memory segment");
 		exit(1);
 	}
+#endif
 	
 	if(is_global_init)
 	{
@@ -1808,15 +1862,15 @@ void init()
 		hdr.strBytes = 0;
 		hdr.par_hdr_off = 0;
 		
-		glob_info->shm_seg_info->num_procs = 1;
-		glob_info->shm_seg_info->seg_num = 0;
-		glob_info->shm_seg_info->rev_num = 0;
-		glob_info->shm_seg_info->lead_num = 0;
-		glob_info->shm_seg_info->seg_sz = hdr.shmsiz;
+		glob_info->shm_updater.ptr->num_procs = 1;
+		glob_info->shm_updater.ptr->seg_num = 0;
+		glob_info->shm_updater.ptr->rev_num = 0;
+		glob_info->shm_updater.ptr->lead_num = 0;
+		glob_info->shm_updater.ptr->seg_sz = hdr.shmsiz;
 	}
 	else
 	{
-		glob_info->shm_seg_info->num_procs += 1;
+		glob_info->shm_updater.ptr->num_procs += 1;
 	}
 	
 	/* make sure to init local proc_lock flag as FALSE */
@@ -1830,10 +1884,10 @@ void init()
 	glob_info->cur_seg_info.seg_num = 0;
 	glob_info->cur_seg_info.seg_sz = 0;
 	
-	sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->shm_seg_info->seg_num);
+	sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->shm_updater.ptr->seg_num);
 	
-	DWORD lo_sz = (DWORD)(glob_info->shm_seg_info->seg_sz & 0xFFFFFFFFL);
-	DWORD hi_sz = (DWORD)((glob_info->shm_seg_info->seg_sz >> 32) & 0xFFFFFFFFL);
+	uint32_t lo_sz = (uint32_t)(glob_info->shm_updater.ptr->seg_sz & 0xFFFFFFFFL);
+	uint32_t hi_sz = (uint32_t)((glob_info->shm_updater.ptr->seg_sz >> 32) & 0xFFFFFFFFL);
 	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->cur_seg_info.seg_name);
 	err = GetLastError();
 	if(temp_handle == NULL)
@@ -1844,19 +1898,19 @@ void init()
 	}
 	else if(err == ERROR_ALREADY_EXISTS)
 	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_data.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
 	}
 	else
 	{
-		glob_info->shm_handle = temp_handle;
+		glob_info->shm_data.handle = temp_handle;
 	}
-	glob_info->cur_seg_ptr = (byte_t*)MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->shm_seg_info->seg_sz);
+	glob_info->shm_data.ptr = (byte_t*)MapViewOfFile(glob_info->shm_data.handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->shm_updater.ptr->seg_sz);
 	glob_info->shm_is_used = TRUE;
 	glob_info->is_freed = FALSE;
 	
 	if(is_global_init)
 	{
-		memcpy(glob_info->cur_seg_ptr, &hdr, hdr.shmsiz);
+		memcpy(glob_info->shm_data.ptr, &hdr, hdr.shmsiz);
 	}
 	
 	mexAtExit(onExit);
@@ -1878,18 +1932,18 @@ void onExit(void)
 	
 	if(!glob_info->is_freed)
 	{
-		glob_info->shm_seg_info->num_procs -= 1;
+		glob_info->shm_updater.ptr->num_procs -= 1;
 	}
 	
 	if(glob_info->shm_is_used)
 	{
-		UnmapViewOfFile(glob_info->cur_seg_ptr);
-		CloseHandle(glob_info->shm_handle);
+		UnmapViewOfFile(glob_info->shm_data.ptr);
+		CloseHandle(glob_info->shm_data.handle);
 		glob_info->shm_is_used = FALSE;
 	}
 	
-	UnmapViewOfFile(glob_info->shm_seg_info);
-	CloseHandle(glob_info->shm_name_handle);
+	UnmapViewOfFile(glob_info->shm_updater.ptr);
+	CloseHandle(glob_info->shm_updater.handle);
 	
 	if(glob_info->is_proc_locked)
 	{
@@ -1912,9 +1966,9 @@ size_t pad_to_align(size_t size)
 void acquireProcLock(void)
 {
 	/* only request a lock if there is more than one process */
-	if(glob_info->shm_seg_info->num_procs > 1 && glob_info->is_mem_safe)
+	if(glob_info->shm_updater.ptr->num_procs > 1 && glob_info->is_mem_safe)
 	{
-		DWORD ret = WaitForSingleObject(glob_info->proc_lock, INFINITE);
+		uint32_t ret = WaitForSingleObject(glob_info->proc_lock, INFINITE);
 		if(ret == WAIT_ABANDONED)
 		{
 			mexErrMsgIdAndTxt("MATLAB:MatShare:acquireProcLock", "The wait for process lock was abandoned.");
@@ -2020,16 +2074,9 @@ msh_directive_t parseDirective(const mxArray* in)
 	{
 		mexErrMsgIdAndTxt("MATLAB:MatShare:parseDirective", "Directive must either be 'uint8' or 'char'.");
 	}
+	
+	return msh_DEBUG;
+	
 }
 
 
-/*
- * Possibly useful information/related work:
- *
- * http://www.mathworks.com/matlabcentral/fileexchange/24576
- * http://www.mathworks.in/matlabcentral/newsreader/view_thread/254813
- * http://www.mathworks.com/matlabcentral/newsreader/view_thread/247881#639280
- *
- * http://groups.google.com/group/comp.soft-sys.matlab/browse_thread/thread/c241d8821fb90275/47189d498d1f45b8?lnk=st&q=&rnum=1&hl=en#47189d498d1f45b8
- * http://www.mk.tu-berlin.de/Members/Benjamin/mex_sharedArrays
- */
