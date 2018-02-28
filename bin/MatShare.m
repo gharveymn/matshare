@@ -4,7 +4,7 @@ classdef MatShare < handle
 		deepdata
 	end
 	
-	properties (Dependent, GetObservable, SetObservable)
+	properties (Transient, Dependent, GetObservable, SetObservable)
 		data
 	end
 	
@@ -26,9 +26,9 @@ classdef MatShare < handle
 		function obj = MatShare(varargin)
 			if(nargin > 0 && strcmp('unsafe',varargin{1}))
 				% initialize as unsafe
-				obj.deepdata = matshare_(uint8(0), 1);
+				matshare_(uint8(0), 1);
 			else
-				obj.deepdata = matshare_(uint8(0));
+				matshare_(uint8(0));
 			end
 % 			addlistener(obj, 'data', 'PreSet', @(src,evnt)MatShare.preSetCallback(obj,src,evnt));	
 % 			addlistener(obj, 'data', 'PreGet', @(src,evnt)MatShare.preGetCallback(obj,src,evnt));	
@@ -51,12 +51,12 @@ classdef MatShare < handle
 			matshare_(uint8(9));
 		end
 		
-		function safefree(obj)
-			obj.deepdata = matshare_(uint8(4));
+		function safefree(~)
+			matshare_(uint8(4));
 		end
 		
-		function delete(obj)
-			obj.deepdata = matshare_(uint8(4));
+		function delete(~)
+			matshare_(uint8(4));
 			clear matshare_ obj.deepdata;
 		end
 		

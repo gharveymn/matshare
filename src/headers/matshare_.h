@@ -112,19 +112,19 @@ typedef struct {
                                 bit  5 = is sparse
                                 bit  9 = is numeric
                                 bits 24 - 31 = User Bits                     */
-	union {
+	union mdim_data{
 		size_t M;           /* Row size for 2D matrices, or                  */
 		size_t *dims;       /* Pointer to dims array for nD > 2 arrays       */
 	} Mdims;
 	size_t N;               /* Product of dims 2:end                         */
 	void *pr;               /* Real Data Pointer (or cell/field elements)    */
 	void *pi;               /* Imag Data Pointer (or field information)      */
-	union {
+	union ir_data{
 		mwIndex *ir;        /* Pointer to row values for sparse arrays       */
 		mxClassID ClassID;  /* New User Defined Class ID (classdef)          */
 		char *ClassName;    /* Pointer to Old User Defined Class Name        */
 	} irClassNameID;
-	union {
+	union jc_data{
 		mwIndex *jc;        /* Pointer to column values for sparse arrays    */
 		mxClassID ClassID;  /* Old User Defined Class ID                     */
 	} jcClassID;
@@ -226,6 +226,10 @@ void deepdetach(mxArray* ret_var);
 size_t shallowrestore(byte_t* shm, mxArray* ret_var);
 
 size_t shallowfetch(byte_t* shm, mxArray** ret_var);
+
+bool_t shallowcompare(byte_t* shm, const mxArray* comp_var, size_t* offset);
+
+size_t shallowrewrite(byte_t* shm, const mxArray* input_var);
 
 /* Recursively descend through Matlab matrix to assess how much space its    */
 /* serialization will require.                                               */

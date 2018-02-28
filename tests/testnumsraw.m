@@ -12,7 +12,7 @@ obj.DEEPCOPY = uint8(8);
 obj.DEBUG    = uint8(9);
 
 matshare_(obj.INIT,1);
-nums = 10000000;
+nums = 1000000;
 lents = 0;
 disp(getmem);
 tic
@@ -23,7 +23,7 @@ for i = 1:nums
 	matshare_(obj.CLONE, i);
 	
 	% assign to x
-	x = matshare_(obj.FETCH);	
+	x = matshare_(obj.FETCH);
 	
 % 	disp(a.shared.data);
 % 	timestr = sprintf('%d/%d', i, nums);

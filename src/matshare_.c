@@ -66,14 +66,34 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 			}
 			
+			acquireProcLock();
+			
 			/* clear the previous variable */
 			if(!mxIsEmpty(glob_shm_var))
 			{
-				deepdetach(glob_shm_var);
+				/* if the current shared variable shares all the same dimensions, etc. then just copy over the memory */
+				/* copy over the data at the same time since otherwise it will be gone */
+				if(shallowcompare(glob_info->cur_seg_ptr, mxInput, &sm_size) == TRUE)
+				{
+					/* update the revision number and indicate our info is current */
+					glob_info->shm_seg_info->rev_num += 1;
+					glob_info->cur_seg_info.rev_num = glob_info->shm_seg_info->rev_num;
+					
+					/* tell everyone to come back to this segment */
+					glob_info->shm_seg_info->seg_num = glob_info->cur_seg_info.seg_num;
+					glob_info->shm_seg_info->seg_sz = glob_info->cur_seg_info.seg_sz;
+					
+					shallowrewrite(glob_info->cur_seg_ptr, mxInput);
+					
+					releaseProcLock();
+					break;
+				}
+				else
+				{
+					deepdetach(glob_shm_var);
+				}
 			}
 			mxDestroyArray(glob_shm_var);
-			
-			acquireProcLock();
 			
 			/* scan input data */
 			sm_size = deepscan(&hdr, &dat, mxInput, NULL, &glob_shm_var);
@@ -87,6 +107,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				
 				/* tell everyone to come back to this segment */
 				glob_info->shm_seg_info->seg_num = glob_info->cur_seg_info.seg_num;
+				glob_info->shm_seg_info->seg_sz = glob_info->cur_seg_info.seg_sz;
 				
 				/* don't close the current file handle (obviously) */
 				
@@ -144,7 +165,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			deepfree(&dat);
 			
 			mexMakeArrayPersistent(glob_shm_var);
-			plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
 			
 			releaseProcLock();
 			
@@ -433,7 +453,7 @@ void deepdetach(mxArray* ret_var)
 /* Returns:                                                                  */
 /*    size of shared memory segment.                                         */
 /* ------------------------------------------------------------------------- */
-size_t shallowrestore(char* shm, mxArray* ret_var)
+size_t shallowrestore(byte_t* shm, mxArray* ret_var)
 {
 	
 	/* for working with shared memory ... */
@@ -711,6 +731,232 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 	return hdr->shmsiz;
 }
 
+
+bool_t shallowcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
+{
+	/* for working with shared memory ... */
+	size_t i, shmshift;
+	
+	/* for working with payload ... */
+	header_t* hdr;
+	mwSize* pSize;             /* pointer to the array dimensions */
+	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
+	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
+	
+	
+	/* for structures */
+	int field_num;                /* current field */
+	
+	/* retrieve the data */
+	hdr = (header_t*)shm;
+	shm += pad_to_align(sizeof(header_t));
+	
+	if(mxGetClassID(comp_var) != hdr->classid)
+	{
+		return FALSE;
+	}
+	
+	/* the size pointer */
+	pSize = (mwSize*)shm;
+	if(hdr->nDims != mxGetNumberOfDimensions(comp_var) || memcmp(pSize, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->nDims) != 0)
+	{
+		return FALSE;
+	}
+	
+	/* skip over the stored sizes */
+	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
+	
+	/* Structure case */
+	if(hdr->classid == mxSTRUCT_CLASS)
+	{
+		
+		char** field_names = (char**)mxCalloc((size_t)hdr->nFields, sizeof(char*));
+		PointCharArrayAtString(field_names, shm, hdr->nFields);
+		
+		/* skip over the stored field string */
+		shm += pad_to_align(hdr->strBytes);
+		
+		/* Go through each element */
+		for(i = 0; i < hdr->nzmax; i++)
+		{
+			for(field_num = 0, shmshift = 0; field_num < hdr->nFields; field_num++, shmshift = 0)     /* each field */
+			{
+				if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_names[field_num]) != 0)
+				{
+					return FALSE;
+				}
+				
+				
+				if(!shallowcompare(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
+				{
+					return FALSE;
+				}
+				else
+				{
+					shm += shmshift;
+				}
+			}
+		}
+	}
+	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
+	{
+		for(i = 0, shmshift = 0; i < hdr->nzmax; i++, shmshift = 0)
+		{
+			if(!shallowcompare(shm, mxGetCell(comp_var, i), &shmshift))
+			{
+				return FALSE;
+			}
+			else
+			{
+				shm += shmshift;
+			}
+		}
+	}
+	else     /*base case*/
+	{
+		
+		/* this is the address of the first data */
+		shm += pad_to_align(MXMALLOC_SIG_LEN);
+		shm_pr = (void*)shm;
+		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
+		
+		/* if complex get a pointer to the complex data */
+		if(hdr->complexity == mxCOMPLEX)
+		{
+			
+			if(mxIsComplex(comp_var) != TRUE)
+			{
+				return FALSE;
+			}
+			
+			shm += pad_to_align(MXMALLOC_SIG_LEN);
+			shm_pi = (void*)shm;
+			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
+			
+		}
+		
+		if(hdr->isSparse)
+		{
+			if(!mxIsSparse(comp_var))
+			{
+				return FALSE;
+			}
+			
+			shm_ir = (mwIndex*)shm;
+			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
+			
+			shm_jc = (mwIndex*)shm;
+			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
+			
+			if(hdr->nzmax != mxGetNzmax(comp_var))
+			{
+				return FALSE;
+			}
+			
+		}
+		else
+		{
+			if(hdr->nzmax != mxGetNumberOfElements(comp_var))
+			{
+				return FALSE;
+			}
+		}
+		
+	}
+	
+	*offset = hdr->shmsiz;
+	return TRUE;
+}
+
+
+size_t shallowrewrite(byte_t* shm, const mxArray* input_var)
+{
+	
+	/* for working with shared memory ... */
+	size_t i;
+	
+	/* for working with payload ... */
+	header_t* hdr;
+	mwSize* pSize;             /* pointer to the array dimensions */
+	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
+	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
+	
+	
+	/* for structures */
+	int field_num;                /* current field */
+	
+	/* retrieve the data */
+	hdr = (header_t*)shm;
+	shm += pad_to_align(sizeof(header_t));
+	
+	/* the size pointer */
+	pSize = (mwSize*)shm;
+	
+	/* skip over the stored sizes */
+	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
+	
+	
+	/* Structure case */
+	if(hdr->classid == mxSTRUCT_CLASS)
+	{
+		
+		/* skip over the stored field string */
+		shm += pad_to_align(hdr->strBytes);
+		
+		/* Go through each element */
+		for(i = 0; i < hdr->nzmax; i++)
+		{
+			for(field_num = 0; field_num < hdr->nFields; field_num++)     /* each field */
+			{
+				/* And fill it */
+				shm += shallowrewrite(shm, mxGetFieldByNumber(input_var, i, field_num));
+			}
+		}
+	}
+	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
+	{
+		for(i = 0; i < hdr->nzmax; i++)
+		{
+			/* And fill it */
+			shm += shallowrewrite(shm, mxGetCell(input_var, i));
+		}
+	}
+	else     /*base case*/
+	{
+		/* this is the address of the first data */
+		shm += pad_to_align(MXMALLOC_SIG_LEN);
+		shm_pr = (void*)shm;
+		memcpy(shm_pr, mxGetData(input_var), (hdr->nzmax)*(hdr->elemsiz));
+		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
+		
+		/* if complex get a pointer to the complex data */
+		if(hdr->complexity == mxCOMPLEX)
+		{
+			shm += pad_to_align(MXMALLOC_SIG_LEN);
+			shm_pi = (void*)shm;
+			memcpy(shm_pi, mxGetImagData(input_var), (hdr->nzmax)*(hdr->elemsiz));
+			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
+		}
+		
+		/* if sparse get a list of the elements */
+		if(hdr->isSparse)
+		{
+			
+			shm_ir = (mwIndex*)shm;
+			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
+			
+			shm_jc = (mwIndex*)shm;
+			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
+			
+			memcpy(shm_ir, mxGetIr(input_var), (hdr->nzmax)*sizeof(mwIndex));
+			memcpy(shm_jc, mxGetJc(input_var), (pSize[1] + 1)*sizeof(mwIndex));
+			
+		}
+		
+		
+	}
+	return hdr->shmsiz;
+}
 
 
 /* ------------------------------------------------------------------------- */
@@ -1032,6 +1278,9 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 		memcpy(shm_pr, dat->pr, n);
 		shm += pad_to_align(n);
 		
+		mxFree(mxGetData(ret_var));
+		mxSetData(ret_var, shm_pr);
+		
 		/* copy complex data as well */
 		if(hdr->complexity == mxCOMPLEX)
 		{
@@ -1041,15 +1290,10 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 			n = (hdr->nzmax)*(hdr->elemsiz);
 			memcpy(shm_pi, dat->pi, n);
 			shm += pad_to_align(n);
-		}
-		
-		/* set the real and imaginary data */
-		mxFree(mxGetData(ret_var));
-		mxSetData(ret_var, shm_pr);
-		if(hdr->complexity)
-		{
+			
 			mxFree(mxGetImagData(ret_var));
 			mxSetImagData(ret_var, shm_pi);
+			
 		}
 		
 		/* and the indices of the sparse data as well */
@@ -1072,10 +1316,13 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 			mxSetIr(ret_var, ret_ir);
 			
 			mxSetNzmax(ret_var, hdr->nzmax);
+			
 		}
 		else
 		{
+			
 			mxSetDimensions(ret_var, pSize, hdr->nDims);
+			
 		}
 	}
 }
@@ -1116,8 +1363,8 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	/* for working with payload ... */
 	header_t* hdr;
 	mwSize* pSize;             /* pointer to the array dimensions */
-	void* pr = NULL, * pi = NULL;  /* real and imaginary data pointers */
-	mwIndex* ir = NULL, * jc = NULL;  /* sparse matrix data indices */
+	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
+	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
 	
 	
 	/* for structures */
@@ -1129,14 +1376,14 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	
 	if(mxGetClassID(comp_var) != hdr->classid)
 	{
-		return false;
+		return FALSE;
 	}
 	
 	/* the size pointer */
 	pSize = (mwSize*)shm;
 	if(hdr->nDims != mxGetNumberOfDimensions(comp_var) || memcmp(pSize, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->nDims) != 0 || hdr->nzmax != mxGetNumberOfElements(comp_var))
 	{
-		return false;
+		return FALSE;
 	}
 	
 	/* skip over the stored sizes */
@@ -1160,13 +1407,13 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 			{
 				if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_names[field_num]) != 0)
 				{
-					return false;
+					return FALSE;
 				}
 				
 				
 				if(!deepcompare(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
 				{
-					return false;
+					return FALSE;
 				}
 				else
 				{
@@ -1181,7 +1428,7 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 		{
 			if(!deepcompare(shm, mxGetCell(comp_var, i), &shmshift))
 			{
-				return false;
+				return FALSE;
 			}
 			else
 			{
@@ -1193,26 +1440,31 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	{
 		/* this is the address of the first data */
 		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		pr = (void*)shm;
+		shm_pr = (void*)shm;
 		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
 		
 		//these should point to the same location
-		if(pr != mxGetData(comp_var))
+		if(shm_pr != mxGetData(comp_var))
 		{
-			return false;
+			return FALSE;
 		}
 		
 		/* if complex get a pointer to the complex data */
 		if(hdr->complexity == mxCOMPLEX)
 		{
+			if(mxIsComplex(comp_var) != TRUE)
+			{
+				return FALSE;
+			}
+			
 			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			pi = (void*)shm;
+			shm_pi = (void*)shm;
 			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
 			
 			//these should point to the same location
-			if(pi != mxGetImagData(comp_var))
+			if(shm_pi != mxGetImagData(comp_var))
 			{
-				return false;
+				return FALSE;
 			}
 			
 		}
@@ -1221,25 +1473,25 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 		{
 			if(!mxIsSparse(comp_var))
 			{
-				return false;
+				return FALSE;
 			}
 			
-			ir = (mwIndex*)shm;
+			shm_ir = (mwIndex*)shm;
 			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
 			
-			jc = (mwIndex*)shm;
+			shm_jc = (mwIndex*)shm;
 			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
 			
-			if(memcmp(ir, mxGetIr(comp_var), (hdr->nzmax)*sizeof(mwIndex)) != 0 || memcmp(jc, mxGetJc(comp_var), (pSize[1] + 1)*sizeof(mwIndex)) != 0)
+			if(memcmp(shm_ir, mxGetIr(comp_var), (hdr->nzmax)*sizeof(mwIndex)) != 0 || memcmp(shm_jc, mxGetJc(comp_var), (pSize[1] + 1)*sizeof(mwIndex)) != 0)
 			{
-				return false;
+				return FALSE;
 			}
 			
 		}
 		
 	}
 	*offset = hdr->shmsiz;
-	return true;
+	return TRUE;
 }
 
 
@@ -1384,7 +1636,7 @@ int PointCharArrayAtString(char** pCharArray, char* pString, int nFields)
 int NumFieldsFromString(const char* pString, size_t* pFields, size_t* pBytes)
 {
 	unsigned int stored_length;          /* the recorded length of the string */
-	bool_t term_found = false;          /* has the termination character been found? */
+	bool_t term_found = FALSE;          /* has the termination character been found? */
 	size_t i = 0;                              /* counter */
 	
 	pFields[0] = 0;                         /* the number of fields in the string */
@@ -1569,7 +1821,7 @@ void init()
 		glob_info->shm_seg_info->num_procs += 1;
 	}
 	
-	/* make sure to init local proc_lock flag as false */
+	/* make sure to init local proc_lock flag as FALSE */
 	glob_info->is_proc_locked = FALSE;
 	glob_info->is_mem_safe = TRUE;
 	acquireProcLock();
