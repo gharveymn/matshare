@@ -344,7 +344,7 @@ void deepdetach(mxArray* ret_var)
 {
 	
 	/* uses side-effects! */
-	mwSize dims[] = {0, 0};
+	mwSize null_dims[] = {0, 0};
 	mwSize nzmax = 0;
 	size_t i, n;
 	
@@ -390,9 +390,9 @@ void deepdetach(mxArray* ret_var)
 		if(mxIsSparse(ret_var))
 		{
 			/* I don't seem to be able to give sparse arrays zero size so (nzmax must be 1) */
-			dims[0] = dims[1] = 1;
+			null_dims[0] = null_dims[1] = 1;
 			nzmax = 1;
-			if(mxSetDimensions(ret_var, dims, num_dims))
+			if(mxSetDimensions(ret_var, null_dims, num_dims))
 			{
 				releaseProcLock();
 				mexErrMsgIdAndTxt("MATLAB:MatShare:Unknown", "detach: unable to resize the array.");
@@ -410,7 +410,7 @@ void deepdetach(mxArray* ret_var)
 		}
 		else
 		{
-			mxSetDimensions(ret_var, dims, num_dims);
+			mxSetDimensions(ret_var, null_dims, num_dims);
 			pr = mxMalloc(0);
 			mxSetData(ret_var, pr);
 			if(mxIsComplex(ret_var))
@@ -425,7 +425,7 @@ void deepdetach(mxArray* ret_var)
 		mxArray* link;
 		for(link = ((mxArrayStruct*)ret_var)->CrossLink; link != NULL && link != ret_var; link = ((mxArrayStruct*)link)->CrossLink)
 		{
-			mxSetDimensions(link, dims, num_dims);
+			mxSetDimensions(link, null_dims, num_dims);
 			mxSetData(link, pr);
 			if(mxIsComplex(ret_var))
 			{
@@ -461,7 +461,7 @@ size_t shallowrestore(byte_t* shm, mxArray* ret_var)
 	
 	/* for working with payload ... */
 	header_t* hdr;
-	mwSize* pSize;             /* pointer to the array dimensions */
+	mwSize* dims;             /* pointer to the array dimensions */
 	void* pr = NULL, * pi = NULL;  /* real and imaginary data pointers */
 	mwIndex* ir = NULL, * jc = NULL;  /* sparse matrix data indices */
 	
@@ -480,7 +480,7 @@ size_t shallowrestore(byte_t* shm, mxArray* ret_var)
 	}
 	
 	/* the size pointer */
-	pSize = (mwSize*)shm;
+	dims = (mwSize*)shm;
 	
 	/* skip over the stored sizes */
 	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
@@ -543,7 +543,7 @@ size_t shallowrestore(byte_t* shm, mxArray* ret_var)
 			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
 			
 			jc = (mwIndex*)shm;
-			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
+			shm += pad_to_align((dims[1] + 1)*sizeof(mwIndex));
 			
 			/* set the pointers relating to sparse (set the real and imaginary data later)*/
 			mxFree(mxGetIr(ret_var));
@@ -558,7 +558,7 @@ size_t shallowrestore(byte_t* shm, mxArray* ret_var)
 		{
 			
 			/*  rebuild constitute the array  */
-			mxSetDimensions(ret_var, pSize, hdr->nDims);
+			mxSetDimensions(ret_var, dims, hdr->nDims);
 			
 		}
 		
@@ -576,7 +576,7 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 	
 	/* for working with payload ... */
 	header_t* hdr;
-	mwSize* pSize;             /* pointer to the array dimensions */
+	mwSize* dims;             /* pointer to the array dimensions */
 	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
 	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
 	
@@ -590,7 +590,7 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 	
 	
 	/* the size pointer */
-	pSize = (mwSize*)shm;
+	dims = (mwSize*)shm;
 	
 	/* skip over the stored sizes */
 	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
@@ -602,7 +602,7 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 		if(hdr->isEmpty)
 		{
 			/* make this a separate case since there are no field names */
-			*ret_var = mxCreateStructArray(hdr->nDims, pSize, hdr->nFields, NULL);
+			*ret_var = mxCreateStructArray(hdr->nDims, dims, hdr->nFields, NULL);
 		}
 		else
 		{
@@ -612,7 +612,7 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 			/* skip over the stored field string */
 			shm += pad_to_align(hdr->strBytes);
 			
-			*ret_var = mxCreateStructArray(hdr->nDims, pSize, hdr->nFields, (const char**)field_names);
+			*ret_var = mxCreateStructArray(hdr->nDims, dims, hdr->nFields, (const char**)field_names);
 			
 			/* Go through each element */
 			for(i = 0; i < hdr->nzmax; i++)
@@ -627,7 +627,7 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 	}
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
-		*ret_var = mxCreateCellArray(hdr->nDims, pSize);
+		*ret_var = mxCreateCellArray(hdr->nDims, dims);
 		for(i = 0; i < hdr->nzmax; i++)
 		{
 			shm += shallowfetch(shm, &ret_child);
@@ -655,20 +655,19 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
 			
 			shm_jc = (mwIndex*)shm;
-			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
+			shm += pad_to_align((dims[1] + 1)*sizeof(mwIndex));
 			
 			if(hdr->isNumeric)
 			{
-				*ret_var = mxCreateSparse(pSize[0], pSize[1], 1, hdr->complexity);
+				*ret_var = mxCreateSparse(dims[0], dims[1], 1, hdr->complexity);
 			}
 			else
 			{
-				*ret_var = mxCreateSparseLogicalMatrix(pSize[0], pSize[1], 1);
+				*ret_var = mxCreateSparseLogicalMatrix(dims[0], dims[1], 1);
 			}
 			
 			mwIndex* ret_jc = mxGetJc(*ret_var);
-			memcpy(ret_jc, shm_jc, hdr->nzmax*sizeof(mwIndex));
-			ret_jc[pSize[1]] = 0;
+			memcpy(ret_jc, shm_jc, (dims[1] + 1)*sizeof(mwIndex));
 			
 			/* set the pointers relating to sparse (set the real and imaginary data later)*/
 			mxFree(mxGetIr(*ret_var));
@@ -686,15 +685,15 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 			{
 				if(hdr->isNumeric)
 				{
-					*ret_var = mxCreateNumericArray(hdr->nDims, pSize, hdr->classid, hdr->complexity);
+					*ret_var = mxCreateNumericArray(hdr->nDims, dims, hdr->classid, hdr->complexity);
 				}
 				else if(hdr->classid == mxLOGICAL_CLASS)
 				{
-					*ret_var = mxCreateLogicalArray(hdr->nDims, pSize);
+					*ret_var = mxCreateLogicalArray(hdr->nDims, dims);
 				}
 				else
 				{
-					*ret_var = mxCreateCharArray(hdr->nDims, pSize);
+					*ret_var = mxCreateCharArray(hdr->nDims, dims);
 				}
 			}
 			else
@@ -712,19 +711,19 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 					*ret_var = mxCreateCharArray(0, NULL);
 				}
 				
-				/* set the real and imaginary data */
-				mxFree(mxGetData(*ret_var));
-				mxSetData(*ret_var, shm_pr);
-				if(hdr->complexity)
-				{
-					mxFree(mxGetImagData(*ret_var));
-					mxSetImagData(*ret_var, shm_pi);
-				}
-				
-				mxSetDimensions(*ret_var, pSize, hdr->nDims);
+				mxSetDimensions(*ret_var, dims, hdr->nDims);
 				
 			}
 			
+		}
+		
+		/* set the real and imaginary data */
+		mxFree(mxGetData(*ret_var));
+		mxSetData(*ret_var, shm_pr);
+		if(hdr->complexity)
+		{
+			mxFree(mxGetImagData(*ret_var));
+			mxSetImagData(*ret_var, shm_pi);
 		}
 		
 	}
@@ -739,7 +738,7 @@ bool_t shallowcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	
 	/* for working with payload ... */
 	header_t* hdr;
-	mwSize* pSize;             /* pointer to the array dimensions */
+	mwSize* dims;             /* pointer to the array dimensions */
 	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
 	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
 	
@@ -757,8 +756,8 @@ bool_t shallowcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	}
 	
 	/* the size pointer */
-	pSize = (mwSize*)shm;
-	if(hdr->nDims != mxGetNumberOfDimensions(comp_var) || memcmp(pSize, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->nDims) != 0)
+	dims = (mwSize*)shm;
+	if(hdr->nDims != mxGetNumberOfDimensions(comp_var) || memcmp(dims, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->nDims) != 0)
 	{
 		return FALSE;
 	}
@@ -846,7 +845,7 @@ bool_t shallowcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
 			
 			shm_jc = (mwIndex*)shm;
-			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
+			shm += pad_to_align((dims[1] + 1)*sizeof(mwIndex));
 			
 			if(hdr->nzmax != mxGetNzmax(comp_var))
 			{
@@ -877,7 +876,7 @@ size_t shallowrewrite(byte_t* shm, const mxArray* input_var)
 	
 	/* for working with payload ... */
 	header_t* hdr;
-	mwSize* pSize;             /* pointer to the array dimensions */
+	mwSize* dims;             /* pointer to the array dimensions */
 	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
 	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
 	
@@ -890,7 +889,7 @@ size_t shallowrewrite(byte_t* shm, const mxArray* input_var)
 	shm += pad_to_align(sizeof(header_t));
 	
 	/* the size pointer */
-	pSize = (mwSize*)shm;
+	dims = (mwSize*)shm;
 	
 	/* skip over the stored sizes */
 	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
@@ -946,10 +945,10 @@ size_t shallowrewrite(byte_t* shm, const mxArray* input_var)
 			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
 			
 			shm_jc = (mwIndex*)shm;
-			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
+			shm += pad_to_align((dims[1] + 1)*sizeof(mwIndex));
 			
 			memcpy(shm_ir, mxGetIr(input_var), (hdr->nzmax)*sizeof(mwIndex));
-			memcpy(shm_jc, mxGetJc(input_var), (pSize[1] + 1)*sizeof(mwIndex));
+			memcpy(shm_jc, mxGetJc(input_var), (dims[1] + 1)*sizeof(mwIndex));
 			
 		}
 		
@@ -982,7 +981,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	int field_num;
 	
 	/* initialize data info; _possibly_ update these later */
-	dat->pSize = (mwSize*)NULL;
+	dat->dims = (mwSize*)NULL;
 	dat->pr = (void*)NULL;
 	dat->pi = (void*)NULL;
 	dat->ir = (mwIndex*)NULL;
@@ -1012,7 +1011,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 	hdr->strBytes = 0;                                   /* update this later */
 	
 	/* copy the size */
-	dat->pSize = (mwSize*)mxGetDimensions(mxInput);     /* some abuse of const for now, fix on deep copy*/
+	dat->dims = (mwSize*)mxGetDimensions(mxInput);     /* some abuse of const for now, fix on deep copy*/
 	
 	/* Add space for the dimensions */
 	hdr->shmsiz += pad_to_align(hdr->nDims*sizeof(mwSize));
@@ -1029,7 +1028,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 				releaseProcLock();
 				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "An empty struct array unexpectedly had more than one field");
 			}
-			*ret_var = mxCreateStructArray(hdr->nDims, dat->pSize, hdr->nFields, NULL);
+			*ret_var = mxCreateStructArray(hdr->nDims, dat->dims, hdr->nFields, NULL);
 		}
 		else
 		{
@@ -1051,7 +1050,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			/* make a record of the field names */
 			CopyFieldNames(mxInput, dat->field_str, field_names);
 			
-			*ret_var = mxCreateStructArray(hdr->nDims, dat->pSize, hdr->nFields, field_names);
+			*ret_var = mxCreateStructArray(hdr->nDims, dat->dims, hdr->nFields, field_names);
 			
 			/* go through each recursively */
 			count = 0;
@@ -1074,7 +1073,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 		
 		if(hdr->isEmpty)
 		{
-			*ret_var = mxCreateCellArray(hdr->nDims, dat->pSize);
+			*ret_var = mxCreateCellArray(hdr->nDims, dat->dims);
 		}
 		else
 		{
@@ -1083,7 +1082,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			dat->child_hdr = (header_t*)mxCalloc(hdr->nzmax, sizeof(header_t) + sizeof(data_t));
 			dat->child_dat = (data_t*)&dat->child_hdr[hdr->nzmax];
 			
-			*ret_var = mxCreateCellArray(hdr->nDims, dat->pSize);
+			*ret_var = mxCreateCellArray(hdr->nDims, dat->dims);
 			
 			/* go through each recursively */
 			for(i = 0; i < hdr->nzmax; i++)
@@ -1113,7 +1112,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			dat->ir = mxGetIr(mxInput);
 			dat->jc = mxGetJc(mxInput);
 			hdr->shmsiz += pad_to_align(sizeof(mwIndex)*(hdr->nzmax));      /* ensure both pointers are aligned individually */
-			hdr->shmsiz += pad_to_align(sizeof(mwIndex)*(dat->pSize[1] + 1));
+			hdr->shmsiz += pad_to_align(sizeof(mwIndex)*(dat->dims[1] + 1));
 			
 			if(hdr->isNumeric)
 			{
@@ -1125,8 +1124,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			}
 			
 			mwIndex* ret_jc = mxGetJc(*ret_var);
-			memcpy(ret_jc, dat->jc, hdr->nzmax*sizeof(mwIndex));
-			ret_jc[mxGetN(mxInput)] = 0;
+			memcpy(ret_jc, dat->jc, (dat->dims[1] + 1)*sizeof(mwIndex));
 			
 		}
 		else
@@ -1135,7 +1133,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			{
 				if(hdr->isEmpty)
 				{
-					*ret_var = mxCreateNumericArray(hdr->nDims, dat->pSize, hdr->classid, hdr->complexity);
+					*ret_var = mxCreateNumericArray(hdr->nDims, dat->dims, hdr->classid, hdr->complexity);
 				}
 				else
 				{
@@ -1146,7 +1144,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			{
 				if(hdr->isEmpty)
 				{
-					*ret_var = mxCreateLogicalArray(hdr->nDims, dat->pSize);
+					*ret_var = mxCreateLogicalArray(hdr->nDims, dat->dims);
 				}
 				else
 				{
@@ -1157,7 +1155,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			{
 				if(hdr->isEmpty)
 				{
-					*ret_var = mxCreateCharArray(hdr->nDims, dat->pSize);
+					*ret_var = mxCreateCharArray(hdr->nDims, dat->dims);
 				}
 				else
 				{
@@ -1204,27 +1202,27 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 {
 	
 	header_t* cpy_hdr;          /* the header in its copied location */
-	size_t i, n, offset = 0;
-	mwSize* pSize;               /* points to the size data */
+	size_t i, cpy_sz, offset = 0;
+	mwSize* dims;               /* points to the size data */
 	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
 	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
 	
 	/* load up the shared memory */
 	
 	/* copy the header */
-	n = sizeof(header_t);
-	memcpy(shm, hdr, n);
-	offset = pad_to_align(n);
+	cpy_sz = sizeof(header_t);
+	memcpy(shm, hdr, cpy_sz);
+	offset = pad_to_align(cpy_sz);
 	
 	/* for structures */
 	int field_num;                /* current field */
 	
 	/* copy the dimensions */
 	cpy_hdr = (header_t*)shm;
-	pSize = (mwSize*)&shm[offset];
+	dims = (mwSize*)&shm[offset];
 	for(i = 0; i < cpy_hdr->nDims; i++)
 	{
-		pSize[i] = dat->pSize[i];
+		dims[i] = dat->dims[i];
 	}
 	offset += pad_to_align(cpy_hdr->nDims*sizeof(mwSize));
 	
@@ -1274,9 +1272,9 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 		memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
 		shm += pad_to_align(MXMALLOC_SIG_LEN);
 		shm_pr = (void*)shm;
-		n = (hdr->nzmax)*(hdr->elemsiz);
-		memcpy(shm_pr, dat->pr, n);
-		shm += pad_to_align(n);
+		cpy_sz = (hdr->nzmax)*(hdr->elemsiz);
+		memcpy(shm_pr, dat->pr, cpy_sz);
+		shm += pad_to_align(cpy_sz);
 		
 		mxFree(mxGetData(ret_var));
 		mxSetData(ret_var, shm_pr);
@@ -1287,9 +1285,9 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 			memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
 			shm += pad_to_align(MXMALLOC_SIG_LEN);
 			shm_pi = (void*)shm;
-			n = (hdr->nzmax)*(hdr->elemsiz);
-			memcpy(shm_pi, dat->pi, n);
-			shm += pad_to_align(n);
+			cpy_sz = (hdr->nzmax)*(hdr->elemsiz);
+			memcpy(shm_pi, dat->pi, cpy_sz);
+			shm += pad_to_align(cpy_sz);
 			
 			mxFree(mxGetImagData(ret_var));
 			mxSetImagData(ret_var, shm_pi);
@@ -1300,14 +1298,14 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 		if(hdr->isSparse)
 		{
 			shm_ir = (void*)shm;
-			n = hdr->nzmax*sizeof(mwIndex);
-			memcpy(shm_ir, dat->ir, n);
-			shm += pad_to_align(n);
+			cpy_sz = hdr->nzmax*sizeof(mwIndex);
+			memcpy(shm_ir, dat->ir, cpy_sz);
+			shm += pad_to_align(cpy_sz);
 			
 			shm_jc = (void*)shm;
-			n = (pSize[1] + 1)*sizeof(mwIndex);
-			memcpy(shm_jc, dat->jc, n);
-			shm += pad_to_align(n);
+			cpy_sz = (dims[1] + 1)*sizeof(mwIndex);
+			memcpy(shm_jc, dat->jc, cpy_sz);
+			shm += pad_to_align(cpy_sz);
 			
 			/* set the pointers relating to sparse (set the real and imaginary data later)*/
 			mxFree(mxGetIr(ret_var));
@@ -1321,7 +1319,7 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 		else
 		{
 			
-			mxSetDimensions(ret_var, pSize, hdr->nDims);
+			mxSetDimensions(ret_var, dims, hdr->nDims);
 			
 		}
 	}
@@ -1362,7 +1360,7 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	
 	/* for working with payload ... */
 	header_t* hdr;
-	mwSize* pSize;             /* pointer to the array dimensions */
+	mwSize* dims;             /* pointer to the array dimensions */
 	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
 	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
 	
@@ -1380,8 +1378,8 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	}
 	
 	/* the size pointer */
-	pSize = (mwSize*)shm;
-	if(hdr->nDims != mxGetNumberOfDimensions(comp_var) || memcmp(pSize, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->nDims) != 0 || hdr->nzmax != mxGetNumberOfElements(comp_var))
+	dims = (mwSize*)shm;
+	if(hdr->nDims != mxGetNumberOfDimensions(comp_var) || memcmp(dims, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->nDims) != 0 || hdr->nzmax != mxGetNumberOfElements(comp_var))
 	{
 		return FALSE;
 	}
@@ -1480,9 +1478,9 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
 			
 			shm_jc = (mwIndex*)shm;
-			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
+			shm += pad_to_align((dims[1] + 1)*sizeof(mwIndex));
 			
-			if(memcmp(shm_ir, mxGetIr(comp_var), (hdr->nzmax)*sizeof(mwIndex)) != 0 || memcmp(shm_jc, mxGetJc(comp_var), (pSize[1] + 1)*sizeof(mwIndex)) != 0)
+			if(memcmp(shm_ir, mxGetIr(comp_var), (hdr->nzmax)*sizeof(mwIndex)) != 0 || memcmp(shm_jc, mxGetJc(comp_var), (dims[1] + 1)*sizeof(mwIndex)) != 0)
 			{
 				return FALSE;
 			}

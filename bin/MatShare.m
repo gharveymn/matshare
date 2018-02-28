@@ -94,6 +94,7 @@ classdef MatShare < handle
 		
 		function free()
 			matshare_(uint8(4));
+			clear matshare_
 		end
 		
 	end

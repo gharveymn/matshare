@@ -168,7 +168,7 @@ typedef struct
 /* structure used to record all of the data addresses */
 struct data
 {
-	mwSize* pSize;               /* pointer to the size array */
+	mwSize* dims;               /* pointer to the size array */
 	void* pr;                    /* real data portion */
 	union
 	{
