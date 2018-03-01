@@ -286,7 +286,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					glob_info->flags.is_shm_data_init = FALSE;
 				}
 				
-				shm_update_info->num_procs -= 1;
+				if(glob_info->flags.is_shm_update_mapped)
+				{
+					shm_update_info->num_procs -= 1;
+				}
 				
 				/* if the function is process locked be sure to release it (if not needed, but for clarity)*/
 				if(glob_info->flags.is_proc_locked)
@@ -295,10 +298,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				}
 				
 				glob_info->flags.is_freed = TRUE;
-				
+				mexUnlock();
 			}
 			
-			mexUnlock();
 			makeDummyVar(&plhs[0]);
 			
 			break;
@@ -2080,7 +2082,7 @@ void onExit(void)
 		mxDestroyArray(glob_shm_var);
 	}
 	
-	if(!glob_info->flags.is_freed)
+	if(!glob_info->flags.is_freed && glob_info->flags.is_shm_update_mapped)
 	{
 		shm_update_info->num_procs -= 1;
 	}
