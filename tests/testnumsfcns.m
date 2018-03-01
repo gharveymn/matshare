@@ -1,7 +1,7 @@
 clear x
 
 msh_init();
-nums = 1000000;
+nums = 10000000;
 lents = 0;
 disp(getmem);
 tic

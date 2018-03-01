@@ -1,25 +1,74 @@
 #include "headers/utils.h"
 
-void printShmError(int err)
+#ifdef MSH_UNIX
+
+void readMmapError_(const char* file_name, int line, int err)
 {
-	case EACCES:
-		readMXError("ShmAccessError", "The shared memory object exists and the permissions specified by oflag are denied, or the shared memory object does not exist and permission to create the shared memory object is denied, or O_TRUNC is specified and write permission is denied.");
-	case EINTR:
-		readMXError("ShmInterruptError", "The shm_open() operation was interrupted by a signal.");
-	case EINVAL:
-		readMXError("ShmNameError", "The shm_open() operation is not supported for the given name.");
-	case EMFILE:
-		readMXError("ShmTooManyFilesError", "Too many file descriptors are currently in use by this process.");
-	case ENFILE:
-		readMXError("ShmTooManySharedError", "Too many shared memory objects are currently open in the system.");
-	case ENOSPC:
-		readMXError("ShmSpaceError", "There is insufficient space for the creation of the new shared memory object.");
-	default:
-		readMXError("UnknownError", "An unknown error occurred (Error number: %i)", errno);
+	switch(err)
+	{
+		case EACCES:
+			readMXError_(file_name, line, "MmapAccessError", "The fildes argument is not open for read, regardless of the protection specified, or fildes is not open for write and PROT_WRITE was specified for a MAP_SHARED type mapping.");
+		case EBADF:
+			readMXError_(file_name, line, "MmapFileClosedError", "The fildes argument is not a file descriptor open for writing.");
+		case EMFILE:
+			readMXError_(file_name, line, "MmapNumMapsError", "The number of mapped regions would exceed an implementation-defined limit (per process or per system).");
+		case ENOMEM:
+			readMXError_(file_name, line, "MmapMemoryError", "Not enough unallocated memory resources remain in the typed memory object designated by fildes to allocate len bytes.");
+		case EFBIG:
+			readMXError_(file_name, line, "MmapBigError", "The file is a regular file and length is greater than the offset maximum established in the open file description associated with fildes.");
+		case EROFS:
+			readMXError_(file_name, line, "MmapReadOnlyError", "The named file resides on a read-only file system.");
+		default:
+			readMXError_(file_name, line, "MmapUnknownError", "An unknown error occurred (Error number: %i)", errno);
+	}
 }
 
-#undef readMXError
-void readMXError(const char* file_name, int line, const char error_id[], const char error_message[], ...)
+
+void readFtruncateError_(const char* file_name, int line, int err)
+{
+	switch(err)
+	{
+		case EINTR:
+			readMXError_(file_name, line, "FtrInterruptError", "A signal was caught during execution.");
+		case EIO:
+			readMXError_(file_name, line, "FtrIOError", "An I/O error occurred while reading from or writing to a file system.");
+		case EINVAL:
+			readMXError_(file_name, line, "FtrInvalidError", "There was an invalid argument passed to ftruncate.");
+		case EBADF:
+			readMXError_(file_name, line, "FtrFileClosedError", "The fildes argument is not a file descriptor open for writing.");
+		case EFBIG:
+			readMXError_(file_name, line, "FtrBigError", "The file is a regular file and length is greater than the offset maximum established in the open file description associated with fildes.");
+		case EROFS:
+			readMXError_(file_name, line, "FtrReadOnlyError", "The named file resides on a read-only file system.");
+		default:
+			readMXError_(file_name, line, "FtrUnknownError", "An unknown error occurred (Error number: %i)", errno);
+	}
+}
+
+void readShmError_(const char* file_name, int line, int err)
+{
+	switch(err)
+	{
+		case EACCES:
+			readMXError_(file_name, line, "ShmAccessError",
+					  "The shared memory object exists and the permissions specified by oflag are denied, or the shared memory object does not exist and permission to create the shared memory object is denied, or O_TRUNC is specified and write permission is denied.");
+		case EINTR:
+			readMXError_(file_name, line, "ShmInterruptError", "The shm_open() operation was interrupted by a signal.");
+		case EINVAL:
+			readMXError_(file_name, line, "ShmNameError", "The shm_open() operation is not supported for the given name.");
+		case EMFILE:
+			readMXError_(file_name, line, "ShmTooManyFilesError", "Too many file descriptors are currently in use by this process.");
+		case ENFILE:
+			readMXError_(file_name, line, "ShmTooManySharedError", "Too many shared memory objects are currently open in the system.");
+		case ENOSPC:
+			readMXError_(file_name, line, "ShmSpaceError", "There is insufficient space for the creation of the new shared memory object.");
+		default:
+			readMXError_(file_name, line, "ShmUnknownError", "An unknown error occurred (Error number: %i)", errno);
+	}
+}
+#endif
+
+void readMXError_(const char* file_name, int line, const char error_id[], const char error_message[], ...)
 {
 	
 	char full_message[FULL_ERROR_MESSAGE_SIZE] = {0};
@@ -52,7 +101,7 @@ void readMXWarn(const char warn_id[], const char warn_message[], ...)
 	char full_message[FULL_WARNING_MESSAGE_SIZE] = {0};
 	char message_buffer[WARNING_MESSAGE_SIZE] = {0};
 	char warn_id_buffer[ERROR_ID_SIZE] = {0};
-		
+	
 	va_list va;
 	va_start(va, warn_message);
 	vsprintf(message_buffer, warn_message, va);

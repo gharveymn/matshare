@@ -81,6 +81,7 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 #define MAX_UINT64_STR_LEN 16
 #define MSH_SEG_NAME_LEN (MSH_SEG_NAME_PREAMB_LEN + MAX_UINT64_STR_LEN)
 #define mexErrMsgIdAndTxt a
+#define MSH_MAX_NAME_LEN 64
 
 typedef struct data data_t;
 typedef char byte_t;
@@ -230,11 +231,22 @@ typedef struct
 
 typedef struct
 {
-	char seg_name[MSH_SEG_NAME_LEN + 1];		// segment name
 	uint64_t seg_num;						// segment number (iterated when a new file is needed)
 	uint64_t rev_num;						// total number of revisions (used for comparison, not indexing, so it's circular)
 	size_t seg_sz;							// size of the segment
-} segment_info;
+} lcl_segment_info;
+
+typedef struct
+{
+	char name[MSH_MAX_NAME_LEN];
+#ifdef MSH_WIN
+	HANDLE handle;
+#else
+	int handle;
+#endif
+	size_t reg_sz;
+	void* ptr;
+} mem_region;
 
 #ifdef MSH_UNIX
 typedef struct
@@ -246,56 +258,29 @@ typedef struct
 
 typedef struct
 {
-
+	mem_region shm_data_reg;
+	mem_region shm_update_reg;
+	
 #ifdef MSH_WIN
-	
-	struct
-	{
-		HANDLE handle;
-		byte_t* ptr;
-	} shm_data;
-	
-	struct
-	{
-		HANDLE handle;
-		shm_segment_info* ptr;
-	} shm_updater;
-	
 	HANDLE proc_lock;
 	SECURITY_ATTRIBUTES lock_sec;
-	
 #else
-	
-	struct
-	{
-		int handle;
-		byte_t* ptr;
-	} shm_data;
-	
-	struct
-	{
-		int handle;
-		shm_segment_info* ptr;
-	} shm_updater;
-	
-	struct
-	{
-		int handle;
-		lock_segment* shm_lock;
-	} proc_lock;
-	
+	sem_t proc_lock;
 #endif
-	
-	
+
 	bool_t is_freed;
 	bool_t shm_is_used;
 	bool_t is_proc_locked;
 	bool_t is_mem_safe;
-	segment_info cur_seg_info;
+	lcl_segment_info cur_seg_info;
 } mex_info;
 
 mxArray* glob_shm_var;
 mex_info* glob_info;
+#define shm_data_ptr ((byte_t*)glob_info->shm_data_reg.ptr)
+#define shm_update_info ((shm_segment_info*)glob_info->shm_update_reg.ptr)
+//shm_segment_info* shm_update_info;
+//byte_t* shm_data_ptr;
 
 void init();
 
