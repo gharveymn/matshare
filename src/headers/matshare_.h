@@ -76,7 +76,7 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 /* forward slash works fine on windows, and required for linux */
 #define MSH_UPDATE_SEGMENT_NAME "/MATSHARE_UPDATE_SEGMENT"
 #define MSH_LOCK_NAME "/MATSHARE_LOCK"
-#define MSH_SEGMENT_NAME "/MATSHARE_SEGMENT%0llx"
+#define MSH_SEGMENT_NAME "/MATSHARE_SEGMENT%0lx"
 #define MSH_SEG_NAME_PREAMB_LEN (sizeof(MSH_SEGMENT_NAME)-1)
 #define MAX_UINT64_STR_LEN 16
 #define MSH_SEG_NAME_LEN (MSH_SEG_NAME_PREAMB_LEN + MAX_UINT64_STR_LEN)
@@ -248,14 +248,6 @@ typedef struct
 	void* ptr;
 } mem_region;
 
-#ifdef MSH_UNIX
-typedef struct
-{
-	bool_t is_init;
-	sem_t lock;
-} lock_segment;
-#endif
-
 typedef struct
 {
 	mem_region shm_data_reg;
@@ -265,14 +257,26 @@ typedef struct
 	HANDLE proc_lock;
 	SECURITY_ATTRIBUTES lock_sec;
 #else
-	sem_t proc_lock;
+	sem_t* proc_lock;
 #endif
 
-	bool_t is_freed;
-	bool_t shm_is_used;
-	bool_t is_proc_locked;
-	bool_t is_mem_safe;
 	lcl_segment_info cur_seg_info;
+	struct
+	{
+		bool_t is_proc_lock_init;
+		
+		bool_t is_shm_update_init;
+		bool_t is_shm_update_mapped;
+		
+		bool_t is_shm_data_init;
+		bool_t is_shm_data_mapped;
+		
+		bool_t is_glob_shm_var_init;
+		
+		bool_t is_freed;
+		bool_t is_proc_locked;
+		bool_t is_mem_safe;
+	} flags;
 } mex_info;
 
 mxArray* glob_shm_var;
@@ -349,6 +353,8 @@ void releaseProcLock(void);
 void makeDummyVar(mxArray** out);
 
 msh_directive_t parseDirective(const mxArray* in);
+
+bool_t precheck(void);
 
 
 #endif
