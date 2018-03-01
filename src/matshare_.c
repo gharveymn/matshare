@@ -173,7 +173,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				glob_info->flags.is_shm_data_init = FALSE;
 				
 				// create the new mapping
-				glob_info->shm_data_reg.handle = shm_open(glob_info->shm_data_reg.name, O_RDWR, O_CREAT);
+				glob_info->shm_data_reg.handle = shm_open(glob_info->shm_data_reg.name, O_RDWR | O_CREAT, S_IRWXU);
 				if(glob_info->shm_data_reg.handle == -1)
 				{
 					releaseProcLock();
@@ -371,7 +371,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					glob_info->flags.is_shm_data_init = FALSE;
 					
 					// create the new mapping
-					glob_info->shm_data_reg.handle = shm_open(glob_info->shm_data_reg.name, O_RDWR, O_CREAT);
+					glob_info->shm_data_reg.handle = shm_open(glob_info->shm_data_reg.name, O_RDWR | O_CREAT, S_IRWXU);
 					if(glob_info->shm_data_reg.handle == -1)
 					{
 						releaseProcLock();
@@ -1902,7 +1902,7 @@ void init()
 	
 #else
 	
-	glob_info->proc_lock = sem_open(MSH_LOCK_NAME, O_CREAT, O_RDWR, 0);
+	glob_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, S_IRWXU, 0);
 	if(glob_info->proc_lock == SEM_FAILED)
 	{
 		switch(errno)
@@ -1929,14 +1929,18 @@ void init()
 	glob_info->flags.is_proc_lock_init = TRUE;
 	
 	/* Try to open an already created segment so we can get the global init signal */
-	glob_info->shm_update_reg.handle = shm_open(MSH_UPDATE_SEGMENT_NAME, O_RDWR, 0);
 	strcpy(glob_info->shm_update_reg.name, MSH_UPDATE_SEGMENT_NAME);
+	glob_info->shm_update_reg.handle = shm_open(MSH_UPDATE_SEGMENT_NAME, O_RDWR, S_IRWXU);
 	if(glob_info->shm_update_reg.handle == -1)
 	{
 		is_global_init = TRUE;
 		if(errno == ENOENT)
 		{
-			glob_info->shm_update_reg.handle = shm_open(MSH_UPDATE_SEGMENT_NAME, O_RDWR, O_CREAT);
+			glob_info->shm_update_reg.handle = shm_open(MSH_UPDATE_SEGMENT_NAME, O_RDWR | O_CREAT, S_IRWXU);
+			if(glob_info->shm_update_reg.handle == -1)
+			{
+				readShmError(errno);
+			}
 		}
 		else
 		{
@@ -2037,7 +2041,7 @@ void init()
 	}
 #else
 	
-	glob_info->shm_data_reg.handle = shm_open(glob_info->shm_data_reg.name, O_RDWR, O_CREAT);
+	glob_info->shm_data_reg.handle = shm_open(glob_info->shm_data_reg.name, O_RDWR | O_CREAT, S_IRWXU);
 	if(glob_info->shm_data_reg.handle == -1)
 	{
 		readShmError(errno);

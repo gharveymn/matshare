@@ -36,10 +36,9 @@
 #elif defined(MATLAB_WINDOWS)
 #  define MSH_WIN
 #elif defined(DEBUG_UNIX)
-#  include "../extlib/mman-win32/sys/mman.h"
+#  include <sys/mman.h>
+#  include <sys/stat.h>
 #  define MSH_UNIX
-extern int shm_open(const char *name, int oflag, mode_t mode);
-extern int shm_unlink(const char *name);
 #elif defined(DEBUG_WINDOWS)
 #  define MSH_WIN
 #else
@@ -82,6 +81,7 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 #define MSH_SEG_NAME_LEN (MSH_SEG_NAME_PREAMB_LEN + MAX_UINT64_STR_LEN)
 #define mexErrMsgIdAndTxt a
 #define MSH_MAX_NAME_LEN 64
+#define O_ALL_ACCESS 0777
 
 typedef struct data data_t;
 typedef char byte_t;

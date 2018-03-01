@@ -52,14 +52,20 @@ void readShmError_(const char* file_name, int line, int err)
 		case EACCES:
 			readMXError_(file_name, line, "ShmAccessError",
 					  "The shared memory object exists and the permissions specified by oflag are denied, or the shared memory object does not exist and permission to create the shared memory object is denied, or O_TRUNC is specified and write permission is denied.");
+		case EEXIST:
+			readMXError_(file_name, line, "ShmExistError", "O_CREAT and O_EXCL are set and the named shared memory object already exists.");
 		case EINTR:
 			readMXError_(file_name, line, "ShmInterruptError", "The shm_open() operation was interrupted by a signal.");
 		case EINVAL:
 			readMXError_(file_name, line, "ShmNameError", "The shm_open() operation is not supported for the given name.");
 		case EMFILE:
 			readMXError_(file_name, line, "ShmTooManyFilesError", "Too many file descriptors are currently in use by this process.");
+		case ENAMETOOLONG:
+			readMXError_(file_name, line, "ShmNameTooLongError", "The length of the name argument exceeds {PATH_MAX} or a pathname component is longer than {NAME_MAX}.");
 		case ENFILE:
 			readMXError_(file_name, line, "ShmTooManySharedError", "Too many shared memory objects are currently open in the system.");
+		case ENOENT:
+			readMXError_(file_name, line, "ShmNoCreateNotExistError", "O_CREAT is not set and the named shared memory object does not exist.");
 		case ENOSPC:
 			readMXError_(file_name, line, "ShmSpaceError", "There is insufficient space for the creation of the new shared memory object.");
 		default:
