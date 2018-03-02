@@ -179,7 +179,8 @@ struct data
 typedef struct
 {
 	uint16_t num_procs;
-	uint64_t lead_num;		/* 64 bit width is temporary ugly fix for theoretical issue of name collision */
+	uint64_t lead_seg_num;		/* 64 bit width is temporary ugly fix for theoretical issue of name collision */
+	uint64_t lead_rev_num;
 	uint64_t seg_num;
 	uint64_t rev_num;
 	size_t seg_sz;
