@@ -15,6 +15,7 @@ res/*
 *~
 *.o
 *mapping
+pathdef.m
 
 *ipch/
 *.aps
