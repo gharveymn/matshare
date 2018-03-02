@@ -75,7 +75,7 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 
 /* these are used for recording structure field names */
 const char term_char = ';';          /*use this character to terminate a string containing the list of fields.  Do this because it can't be in a valid field name*/
-const size_t align_size = 32;   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
+#define align_size (size_t)0x20   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
 
 /* HACK */
 #define MXMALLOC_SIG_LEN 16

@@ -1925,7 +1925,7 @@ void onExit(void)
 size_t pad_to_align(size_t size)
 {
 	/* bitwise expression is equiv to (size % align_size) since align_size is a power of 2 */
-	return size + align_size - (size | ~align_size);
+	return size + align_size - (size & (align_size-1));
 }
 
 
