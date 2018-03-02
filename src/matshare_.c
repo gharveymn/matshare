@@ -1,4 +1,5 @@
 #include "headers/matshare_.h"
+#include "headers/msh_types.h"
 
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
@@ -78,6 +79,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			acquireProcLock();
 			
+			shm_update_info->upd_pid = glob_info->this_pid;
+			
 			/* clear the previous variable */
 			if(!mxIsEmpty(glob_shm_var))
 			{
@@ -91,6 +94,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					/* tell everyone to come back to this segment */
 					shm_update_info->seg_num = glob_info->cur_seg_info.seg_num;
 					shm_update_info->seg_sz = glob_info->cur_seg_info.seg_sz;
+					shm_update_info->rev_num = glob_info->cur_seg_info.rev_num;
 					
 					shallowrewrite(shm_data_ptr, mxInput);
 					
@@ -109,8 +113,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			sm_size = deepscan(&hdr, &dat, mxInput, NULL, &glob_shm_var);
 			
 			/* update the revision number and indicate our info is current */
-			shm_update_info->rev_num += 1;
-			glob_info->cur_seg_info.rev_num = shm_update_info->rev_num;
+			shm_update_info->lead_rev_num += 1;
+			shm_update_info->rev_num = shm_update_info->lead_rev_num;
+			glob_info->cur_seg_info.rev_num = shm_update_info->lead_rev_num;
 			if(sm_size <= glob_info->cur_seg_info.seg_sz)
 			{
 				/* reuse the current segment, which we should still be mapped to */
@@ -127,16 +132,15 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				
 				// get current map number
 				
-				/* warning: this may cause a collision in the rare case where one process is still at seg_num = 0 and lead_num = UINT32_MAX; very unlikely, so the overhead isn't worth it */
-				shm_update_info->lead_num += 1;
+				/* warning: this may cause a collision in the rare case where one process is still at seg_num = 0 and lead_seg_num = UINT32_MAX; very unlikely, so the overhead isn't worth it */
+				shm_update_info->lead_seg_num += 1;
 				
-				glob_info->cur_seg_info.seg_num = shm_update_info->lead_num;
-				shm_update_info->seg_num = glob_info->cur_seg_info.seg_num;
+				glob_info->cur_seg_info.seg_num = shm_update_info->lead_seg_num;
+				shm_update_info->seg_num = shm_update_info->lead_seg_num;
 				shm_update_info->seg_sz = sm_size;
 				glob_info->cur_seg_info.seg_sz = sm_size;
-				shm_update_info->upd_pid = glob_info->this_pid;
 				
-				sprintf(glob_info->shm_data_reg.name, MSH_SEGMENT_NAME, shm_update_info->seg_num);
+				sprintf(glob_info->shm_data_reg.name, MSH_SEGMENT_NAME, (unsigned long long)shm_update_info->seg_num);
 				
 #ifdef MSH_WIN
 				
@@ -215,6 +219,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			mexMakeArrayPersistent(glob_shm_var);
 			glob_info->flags.is_glob_shm_var_init = TRUE;
+
+#ifdef MSH_UNIX
+			msync(shm_update_info, glob_info->shm_update_reg.reg_sz, MS_SYNC|MS_INVALIDATE);
+			msync(shm_data_ptr, glob_info->shm_data_reg.reg_sz, MS_SYNC|MS_INVALIDATE);
+#endif
 			
 			releaseProcLock();
 			
@@ -284,7 +293,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				if(glob_info->cur_seg_info.seg_num != shm_update_info->seg_num)
 				{
 					glob_info->cur_seg_info.seg_num = shm_update_info->seg_num;
-					sprintf(glob_info->shm_data_reg.name, MSH_SEGMENT_NAME, glob_info->cur_seg_info.seg_num);
+					sprintf(glob_info->shm_data_reg.name, MSH_SEGMENT_NAME, (unsigned long long)glob_info->cur_seg_info.seg_num);
 					
 #ifdef MSH_WIN
 					
@@ -733,6 +742,19 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 			
 			mxSetNzmax(*ret_var, hdr->nzmax);
 			
+			if(!hdr->isEmpty)
+			{
+				/* set the real and imaginary data */
+				mxFree(mxGetData(*ret_var));
+				mxSetData(*ret_var, shm_pr);
+				if(hdr->complexity)
+				{
+					mxFree(mxGetImagData(*ret_var));
+					mxSetImagData(*ret_var, shm_pi);
+				}
+			}
+			
+			
 		}
 		else
 		{
@@ -767,19 +789,19 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 					*ret_var = mxCreateCharArray(0, NULL);
 				}
 				
+				/* set the real and imaginary data */
+				mxFree(mxGetData(*ret_var));
+				mxSetData(*ret_var, shm_pr);
+				if(hdr->complexity)
+				{
+					mxFree(mxGetImagData(*ret_var));
+					mxSetImagData(*ret_var, shm_pi);
+				}
+				
 				mxSetDimensions(*ret_var, dims, hdr->nDims);
 				
 			}
 			
-		}
-		
-		/* set the real and imaginary data */
-		mxFree(mxGetData(*ret_var));
-		mxSetData(*ret_var, shm_pr);
-		if(hdr->complexity)
-		{
-			mxFree(mxGetImagData(*ret_var));
-			mxSetImagData(*ret_var, shm_pi);
 		}
 		
 	}

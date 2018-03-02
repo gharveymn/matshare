@@ -1,4 +1,6 @@
 #include "headers/init.h"
+#include "headers/msh_types.h"
+
 
 static bool_t is_glob_init;
 static bool_t is_proc_init;
@@ -98,7 +100,7 @@ void procStartup(void)
 
 	/* if MatShare fails here then we have a critical error */
 	
-	temp_info->startup_flag.reg_sz = sizeof(MSH_STARTUP_SIG);
+	temp_info->startup_flag.reg_sz = MSH_MAX_NAME_LEN;
 	
 #ifdef MSH_WIN
 	
@@ -149,49 +151,61 @@ void procStartup(void)
 	temp_info->this_pid = getpid();
 	
 	sprintf(temp_info->startup_flag.name, MATSHARE_STARTUP_FLAG_PRENAME, (unsigned long)temp_info->this_pid);
-	temp_info->startup_flag.handle = shm_open(temp_info->startup_flag.name, O_RDWR, S_IRWXU);
+	temp_info->startup_flag.handle = shm_open(temp_info->startup_flag.name, O_RDWR|O_CREAT|O_EXCL, S_IRWXU);
 	if(temp_info->startup_flag.handle == -1)
 	{
-		is_proc_init = TRUE;
-		if(errno == ENOENT)
-		{
-			temp_info->startup_flag.handle = shm_open(MSH_UPDATE_SEGMENT_NAME, O_RDWR | O_CREAT, S_IRWXU);
-			if(temp_info->startup_flag.handle == -1)
-			{
-				readShmError(errno);
-			}
-			temp_info->startup_flag.is_init = TRUE;
-			
-			temp_info->startup_flag.ptr = mmap(NULL, temp_info->startup_flag.reg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, temp_info->startup_flag.handle, 0);
-			if(temp_info->startup_flag.ptr == MAP_FAILED)
-			{
-				readMmapError(errno);
-			}
-			temp_info->startup_flag.is_mapped = TRUE;
-			
-			/* Check if this is really the first one or the file was hanging around in the namespace */
-			if(memcmp(temp_info->startup_flag.ptr, MSH_STARTUP_SIG, sizeof(MSH_STARTUP_SIG)) == 0)
-			{
-				/* then this has already been started */
-				is_proc_init = FALSE;
-			}
-			else
-			{
-				/* the file still existed in the namespace, but was not cleared when closed */
-				is_proc_init = TRUE;
-			}
-			
-		}
-		else
+		
+		/* already exists */
+		
+		is_proc_init = FALSE;
+		if(errno != EEXIST)
 		{
 			readShmError(errno);
 		}
+		
+		temp_info->startup_flag.handle = shm_open(temp_info->startup_flag.name, O_RDWR, S_IRWXU);
+		if(temp_info->startup_flag.handle == -1)
+		{
+			readShmError(errno);
+		}
+		
 	}
 	else
 	{
-		is_proc_init = FALSE;
+		
+		temp_info->startup_flag.is_init = TRUE;
+		if(ftruncate(temp_info->startup_flag.handle, temp_info->startup_flag.reg_sz) != 0)
+		{
+			readFtruncateError(errno);
+		}
+		temp_info->startup_flag.is_init = TRUE;
+		
+		is_proc_init = TRUE;
+		
 	}
-
+	
+	temp_info->startup_flag.ptr = mmap(NULL, temp_info->startup_flag.reg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, temp_info->startup_flag.handle, 0);
+	if(temp_info->startup_flag.ptr == MAP_FAILED)
+	{
+		readMmapError(errno);
+	}
+	temp_info->startup_flag.is_mapped = TRUE;
+	
+	if(is_proc_init == FALSE)
+	{
+		/* Check if this is really the first one or the file was hanging around in the namespace */
+		if(memcmp(temp_info->startup_flag.ptr, MSH_STARTUP_SIG, sizeof(MSH_STARTUP_SIG)) == 0)
+		{
+			/* then this has already been started */
+			is_proc_init = FALSE;
+		}
+		else
+		{
+			/* the file still existed in the namespace, but was not cleared when closed */
+			is_proc_init = TRUE;
+		}
+	}
+	
 #endif
 	
 	if(is_proc_init)
@@ -211,6 +225,9 @@ void procStartup(void)
 		
 		/*copy over the startup signature */
 		strcpy(glob_info->startup_flag.ptr, MSH_STARTUP_SIG);
+#ifdef MSH_UNIX
+		msync(glob_info->startup_flag.ptr, glob_info->startup_flag.reg_sz, MS_SYNC|MS_INVALIDATE);
+#endif
 		
 		glob_info->flags.is_glob_shm_var_init = FALSE;
 		
@@ -221,6 +238,14 @@ void procStartup(void)
 	}
 	else
 	{
+
+#ifdef MSH_WIN
+		UnmapViewOfFile(temp_info->startup_flag.ptr);
+#else
+		munmap(temp_info->startup_flag.ptr, temp_info->startup_flag.reg_sz);
+		shm_unlink(temp_info->startup_flag.name);
+#endif
+		
 		mxFree(temp_info);
 		glob_info->num_lcl_objs_using += 1;
 	}
@@ -254,7 +279,7 @@ void initProcLock(void)
 
 #else
 	
-	glob_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, S_IRWXU, 0);
+	glob_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, S_IRWXU, 1);
 	if(glob_info->proc_lock == SEM_FAILED)
 	{
 		switch(errno)
@@ -300,6 +325,7 @@ void initUpdateSegment(void)
 		releaseProcLock();
 		readMXError("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).");
 	}
+	glob_info->shm_update_reg.is_init = TRUE;
 	
 	if(err == ERROR_ALREADY_EXISTS)
 	{
@@ -338,17 +364,16 @@ void initUpdateSegment(void)
 	{
 		is_glob_init = FALSE;
 	}
+	glob_info->shm_update_reg.is_init = TRUE;
 	
-	if(ftruncate(glob_info->shm_update_reg.handle, (off32_t)glob_info->shm_update_reg.reg_sz) != 0)
+	if(ftruncate(glob_info->shm_update_reg.handle, glob_info->shm_update_reg.reg_sz) != 0)
 	{
 		readFtruncateError(errno);
 	}
 	
 
 #endif
-	
-	glob_info->shm_update_reg.is_init = TRUE;
-	
+
 }
 
 void mapUpdateSegment(void)
@@ -401,7 +426,7 @@ void globStartup(header_t* hdr)
 		shm_update_info->num_procs = 1;
 		shm_update_info->seg_num = 0;
 		shm_update_info->rev_num = 0;
-		shm_update_info->lead_num = 0;
+		shm_update_info->lead_seg_num = 0;
 		shm_update_info->upd_pid = glob_info->this_pid;
 		shm_update_info->seg_sz = hdr->shmsiz;
 	}
@@ -419,7 +444,7 @@ void initDataSegment(void)
 {
 	
 	glob_info->shm_data_reg.reg_sz = shm_update_info->seg_sz;
-	sprintf(glob_info->shm_data_reg.name, MSH_SEGMENT_NAME, shm_update_info->seg_num);
+	sprintf(glob_info->shm_data_reg.name, MSH_SEGMENT_NAME, (unsigned long long)shm_update_info->seg_num);
 
 #ifdef MSH_WIN
 	
@@ -432,7 +457,9 @@ void initDataSegment(void)
 		releaseProcLock();
 		readMXError("CreateFileError", "Error creating the file mapping (Error Number %u)", err);
 	}
-	else if(err == ERROR_ALREADY_EXISTS)
+	glob_info->shm_data_reg.is_init = TRUE;
+	
+	if(err == ERROR_ALREADY_EXISTS)
 	{
 		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_data_reg.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
 	}
@@ -448,15 +475,15 @@ void initDataSegment(void)
 	{
 		readShmError(errno);
 	}
-	if(ftruncate64(glob_info->shm_data_reg.handle, shm_update_info->seg_sz) != 0)
+	glob_info->shm_data_reg.is_init = TRUE;
+	
+	if(ftruncate(glob_info->shm_data_reg.handle, shm_update_info->seg_sz) != 0)
 	{
 		readFtruncateError(errno);
 	}
 	
 #endif
-	
-	glob_info->shm_data_reg.is_init = TRUE;
-	
+
 }
 
 
