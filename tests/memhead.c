@@ -58,14 +58,28 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	int bytes = (int)*(double*)mxGetData(prhs[0]);
 // 	mexPrintf("%i",bytes);
 	uint8_T* mem = mxMalloc(bytes);
-	plhs[0] = mxCreateNumericMatrix(1, 16, mxUINT8_CLASS, mxREAL);
-	memcpy(mxGetData(plhs[0]), mem - 16, 16);
+	int i;
+// 	for(i=16;i>0;i--)
+// 	{
+// 		mexPrintf("%X\n",*(mem-i));
+// 	}
+	plhs[0] = mxCreateNumericMatrix(1, 8, mxUINT8_CLASS, mxREAL);
+	memcpy(mxGetData(plhs[0]), mem - 16, 8);
 	plhs[1] = mxCreateDoubleScalar((double)((size_t)mem));
 	plhs[2] = mxCreateDoubleScalar((double)((size_t)(mem+bytes)));
 	mxFree(mem);
 	
-// 	plhs[0] = mxCreateDoubleScalar(17);
-// 	mxArrayStruct* arr = (mxArrayStruct*)plhs[0];
-// 	arr->pr = mem;
+// 	mexPrintf("\n");
+	
+// 	mem = malloc(1);
+// 	*mem = 7;
+// 	for(i=16;i>0;i--)
+// 	{
+// 		mexPrintf("%X\n",*(mem-i));
+// 	}
+//  	plhs[3] = mxCreateDoubleScalar(17);
+// 	mxSetData(plhs[3],mem);
+ 	//mxArrayStruct* arr = (mxArrayStruct*)plhs[0];
+ 	//arr->pr = mem;
 	//memcpy(mxGetData(plhs[0]), mem-16,16);
 }

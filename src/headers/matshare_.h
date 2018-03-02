@@ -80,7 +80,19 @@ const char term_char = ';';          /*use this character to terminate a string 
 /* HACK */
 #define MXMALLOC_SIG_LEN 16
 const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
-
+/*
+ * NEW MXMALLOC SIGNATURE INFO:
+ * HEADER:
+ * 		bytes 0-7 - size iterator, increases as (size/16+1)*16 mod 256
+ * 			byte 0 = (((size+16-1)/2^4)%2^4)*2^4
+ * 			byte 1 = (((size+16-1)/2^8)%2^8)
+ * 			byte 2 = (((size+16-1)/2^16)%2^16)
+ * 			byte n = (((size+16-1)/2^(2^(2+n)))%2^(2^(2+n)))
+ *
+ * 		bytes  8-11 - a signature for the vector check
+ * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
+ * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
+ */
 
 mxArray* glob_shm_var;
 mex_info* glob_info;
@@ -152,6 +164,8 @@ msh_directive_t parseDirective(const mxArray* in);
 bool_t precheck(void);
 
 void nullfcn(void);
+
+void make_mxmalloc_signature(uint8_t sig[MXMALLOC_SIG_LEN], size_t seg_size);
 
 extern void init(bool_t is_mem_safe);
 extern void makeDummyVar(mxArray**);
