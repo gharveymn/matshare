@@ -3,8 +3,11 @@ output_path = [pwd '/bin'];
 
 try
 	
-	sources = {'src/matshare_.c',...
-			'src/utils.c'};
+	sources = {
+			'src/matshare_.c',...
+			'src/utils.c',...
+			'src/init.c'
+			};
 	
 	mexflags = {'-g', '-v', '-outdir', output_path};
 	

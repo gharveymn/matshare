@@ -8,7 +8,15 @@ INCLUDE_DIRECTORIES(${MATLAB_INCLUDE_DIR})
 SET(SOURCE_FILES
 		${MATLAB_INCLUDE_DIR}/mex.h
 		matshare_.c headers/matshare_.h
-	   utils.c headers/utils.h)
+	   utils.c headers/utils.h init.c headers/init.h headers/msh_types.h)
+
+IF(UXWIN)
+	SET(SOURCE_FILES
+			${MATLAB_INCLUDE_DIR}/mex.h
+			matshare_.c headers/matshare_.h
+			utils.c headers/utils.h init.c headers/init.h headers/msh_types.h
+			extlib/mman-win32/sys/mman.h)
+ENDIF(UXWIN)
 
 ADD_LIBRARY(${MEX_FILE_NAME} SHARED ${SOURCE_FILES} ${CMAKE_SOURCE_DIR}/Matlabdef.def)
 

@@ -6,6 +6,8 @@
 /* ------------------------------------------------------------------------- */
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
+
+//	mexPrintf("%s\n", mexIsLocked()? "MEX is locked": "MEX is unlocked" );
 	
 	/* For inputs */
 	const mxArray* mxDirective;			/* Directive {clone, attach, detach, free} */
@@ -33,18 +35,24 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	directive = parseDirective(mxDirective);
 	uint32_t hi_sz, lo_sz, err;
 	mxArrayStruct* arr;
-
+	bool_t is_mem_safe;
+	
 #ifdef MSH_WIN
 	HANDLE temp_handle;
 #endif
+	
+	if(directive != msh_INIT && directive != msh_FREE && directive != msh_DETACH && !precheck())
+	{
+		readMXError("NotInitializedError", "At least one of the needed shared memory segments has not been initialized. Cannot continue.");
+	}
 	
 	/* Switch yard {clone, attach, detach, free} */
 	switch(directive)
 	{
 		case msh_INIT:
-			init();
-			glob_info->flags.is_mem_safe = (bool_t)(nrhs <= 1);
-			makeDummyVar(&plhs[0]);
+			/* for now just indicate memory safety by putting two arguments */
+			is_mem_safe = (bool_t)(nrhs == 1);
+			init(is_mem_safe);
 			break;
 		
 		case msh_CLONE:
@@ -126,6 +134,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				shm_update_info->seg_num = glob_info->cur_seg_info.seg_num;
 				shm_update_info->seg_sz = sm_size;
 				glob_info->cur_seg_info.seg_sz = sm_size;
+				shm_update_info->upd_pid = glob_info->this_pid;
 				
 				sprintf(glob_info->shm_data_reg.name, MSH_SEGMENT_NAME, shm_update_info->seg_num);
 				
@@ -133,10 +142,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				
 				/* decrement the kernel handle count and tell onExit not to do this twice */
 				UnmapViewOfFile(shm_data_ptr);
-				glob_info->flags.is_shm_data_mapped = FALSE;
+				glob_info->shm_data_reg.is_mapped = FALSE;
 				
 				CloseHandle(glob_info->shm_data_reg.handle);
-				glob_info->flags.is_shm_data_init = FALSE;
+				glob_info->shm_data_reg.is_init = FALSE;
 				
 				// create the new mapping
 				lo_sz = (uint32_t)(sm_size & 0xFFFFFFFFL);
@@ -158,19 +167,19 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				{
 					glob_info->shm_data_reg.handle = temp_handle;
 				}
-				glob_info->flags.is_shm_data_init = TRUE;
+				glob_info->shm_data_reg.is_init = TRUE;
 				
 				glob_info->shm_data_reg.ptr = MapViewOfFile(glob_info->shm_data_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, sm_size);
-				glob_info->flags.is_shm_data_mapped = TRUE;
+				glob_info->shm_data_reg.is_mapped = TRUE;
 				
 #else
 				
 				/* decrement the kernel handle count and tell onExit not to do this twice */
 				munmap(shm_data_ptr, glob_info->shm_data_reg.reg_sz);
-				glob_info->flags.is_shm_data_mapped = FALSE;
+				glob_info->shm_data_reg.is_mapped = FALSE;
 				
 				shm_unlink(glob_info->shm_data_reg.name);
-				glob_info->flags.is_shm_data_init = FALSE;
+				glob_info->shm_data_reg.is_init = FALSE;
 				
 				// create the new mapping
 				glob_info->shm_data_reg.handle = shm_open(glob_info->shm_data_reg.name, O_RDWR | O_CREAT, S_IRWXU);
@@ -179,7 +188,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					releaseProcLock();
 					readShmError(errno);
 				}
-				glob_info->flags.is_shm_data_init = TRUE;
+				glob_info->shm_data_reg.is_init = TRUE;
 				
 				if(ftruncate64(glob_info->shm_data_reg.handle, shm_update_info->seg_sz) != 0)
 				{
@@ -193,9 +202,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					releaseProcLock();
 					readMmapError(errno);
 				}
+				glob_info->shm_data_reg.is_mapped = TRUE;
 #endif
-				glob_info->flags.is_shm_data_mapped = TRUE;
-				
+			
 			}
 			
 			/* copy data to the shared memory */
@@ -205,6 +214,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			deepfree(&dat);
 			
 			mexMakeArrayPersistent(glob_shm_var);
+			glob_info->flags.is_glob_shm_var_init = TRUE;
 			
 			releaseProcLock();
 			
@@ -228,80 +238,23 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/********************/
 			/*	Dettach case	*/
 			/********************/
-			
-			if(glob_info->flags.is_glob_shm_var_init)
-			{
-				if(!mxIsEmpty(glob_shm_var))
-				{
-					/* NULL all of the Matlab pointers */
-					deepdetach(glob_shm_var);
-				}
-				mxDestroyArray(glob_shm_var);
-			}
-			glob_info->flags.is_glob_shm_var_init = FALSE;
-			
-			makeDummyVar(&plhs[0]);
-			
-			break;
 		
 		case msh_FREE:
 			/********************/
 			/*	free case		*/
 			/********************/
 			
-			/* this is the same as DETACH, but unlocks the mex file, and closes the segment */
+			/* this only actually frees if it is the last object using the function in the current process */
 			
-			if(glob_info->flags.is_glob_shm_var_init)
+			if(glob_info->num_lcl_objs_using == 1)
 			{
-				if(!mxIsEmpty(glob_shm_var))
-				{
-					/* NULL all of the Matlab pointers */
-					deepdetach(glob_shm_var);
-				}
-				mxDestroyArray(glob_shm_var);
-				glob_info->flags.is_glob_shm_var_init = FALSE;
-			}
-			
-			if(!glob_info->flags.is_freed)
-			{
-				
-				/* decrement the kernel handle count and tell onExit not to do this twice */
-				if(glob_info->flags.is_shm_data_mapped)
-				{
-#ifdef MSH_WIN
-					UnmapViewOfFile(shm_data_ptr);
-#else
-					munmap(shm_data_ptr, glob_info->shm_data_reg.reg_sz);
-#endif
-					glob_info->flags.is_shm_data_mapped = FALSE;
-				}
-				
-				if(glob_info->flags.is_shm_data_init)
-				{
-#ifdef MSH_WIN
-					CloseHandle(glob_info->shm_data_reg.handle);
-#else
-					shm_unlink(glob_info->shm_data_reg.name);
-#endif
-					glob_info->flags.is_shm_data_init = FALSE;
-				}
-				
-				if(glob_info->flags.is_shm_update_mapped)
-				{
-					shm_update_info->num_procs -= 1;
-				}
-				
-				/* if the function is process locked be sure to release it (if not needed, but for clarity)*/
-				if(glob_info->flags.is_proc_locked)
-				{
-					releaseProcLock();
-				}
-				
-				glob_info->flags.is_freed = TRUE;
+				onExit();
 				mexUnlock();
 			}
-			
-			makeDummyVar(&plhs[0]);
+			else
+			{
+				glob_info->num_lcl_objs_using--;
+			}
 			
 			break;
 		case msh_FETCH:
@@ -309,7 +262,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			acquireProcLock();
 			
 			/* check if the current revision number is the same as the shm revision number */
-			if(glob_info->cur_seg_info.rev_num == shm_update_info->rev_num)
+			if(glob_info->cur_seg_info.rev_num == shm_update_info->rev_num || glob_info->this_pid == shm_update_info->upd_pid)
 			{
 				//return a shallow copy of the variable
 				plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
@@ -336,10 +289,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 #ifdef MSH_WIN
 					
 					UnmapViewOfFile(shm_data_ptr);
-					glob_info->flags.is_shm_data_mapped = FALSE;
+					glob_info->shm_data_reg.is_mapped = FALSE;
 					
 					CloseHandle(glob_info->shm_data_reg.handle);
-					glob_info->flags.is_shm_data_init = FALSE;
+					glob_info->shm_data_reg.is_init = FALSE;
 					
 					temp_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, glob_info->shm_data_reg.name);
 					err = GetLastError();
@@ -350,7 +303,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 						readMXError("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
 					}
 					DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_data_reg.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
-					glob_info->flags.is_shm_data_init = TRUE;
+					glob_info->shm_data_reg.is_init = TRUE;
 					
 					glob_info->shm_data_reg.ptr = MapViewOfFile(glob_info->shm_data_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->cur_seg_info.seg_sz);
 					err = GetLastError();
@@ -360,15 +313,15 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 						releaseProcLock();
 						readMXError("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
 					}
-					glob_info->flags.is_shm_data_mapped = TRUE;
+					glob_info->shm_data_reg.is_mapped = TRUE;
 					
 #else
 					
 					munmap(shm_data_ptr, glob_info->shm_data_reg.reg_sz);
-					glob_info->flags.is_shm_data_mapped = FALSE;
+					glob_info->shm_data_reg.is_mapped = FALSE;
 					
 					shm_unlink(glob_info->shm_data_reg.name);
-					glob_info->flags.is_shm_data_init = FALSE;
+					glob_info->shm_data_reg.is_init = FALSE;
 					
 					// create the new mapping
 					glob_info->shm_data_reg.handle = shm_open(glob_info->shm_data_reg.name, O_RDWR | O_CREAT, S_IRWXU);
@@ -377,7 +330,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 						releaseProcLock();
 						readShmError(errno);
 					}
-					glob_info->flags.is_shm_data_init = TRUE;
+					glob_info->shm_data_reg.is_init = TRUE;
 					
 					if(ftruncate64(glob_info->shm_data_reg.handle, shm_update_info->seg_sz) != 0)
 					{
@@ -391,7 +344,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 						releaseProcLock();
 						readMmapError(errno);
 					}
-					glob_info->flags.is_shm_data_mapped = TRUE;
+					glob_info->shm_data_reg.is_mapped = TRUE;
 #endif
 				
 				}
@@ -426,8 +379,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			readMXError("UnknownDirectiveError", "Unrecognized directive.");
 			break;
 	}
-
-//	mexPrintf("%s\n", mexIsLocked()? "TRUE": "FALSE" );
 
 
 }
@@ -1822,257 +1773,6 @@ int BytesFromStringEnd(const char* pString, size_t* pBytes)
 }
 
 
-void init()
-{
-	
-	mexLock();
-	
-	bool_t is_global_init;
-	
-	glob_info = (mex_info*)mxMalloc(sizeof(mex_info));
-	mexMakeMemoryPersistent(glob_info);
-	
-	glob_info->flags.is_proc_lock_init = FALSE;
-	
-	glob_info->flags.is_shm_update_init = FALSE;
-	glob_info->flags.is_shm_update_mapped = FALSE;
-	
-	glob_info->flags.is_shm_data_init = FALSE;
-	glob_info->flags.is_shm_data_mapped = FALSE;
-	
-	glob_info->flags.is_glob_shm_var_init = FALSE;
-	
-	glob_info->flags.is_freed = FALSE;
-	glob_info->flags.is_proc_locked = FALSE;
-	glob_info->flags.is_mem_safe = TRUE;
-
-#ifdef MSH_WIN
-	DWORD err;
-	HANDLE temp_handle;
-	glob_info->lock_sec.nLength = sizeof(SECURITY_ATTRIBUTES);
-	glob_info->lock_sec.lpSecurityDescriptor = NULL;
-	glob_info->lock_sec.bInheritHandle = TRUE;
-	
-	temp_handle = CreateMutex(&glob_info->lock_sec, FALSE, MSH_LOCK_NAME);
-	err = GetLastError();
-	if(temp_handle == NULL)
-	{
-		readMXError("Internal:InitMutexError", "Failed to create the mutex (Error number: %u).");
-	}
-	else if(err == ERROR_ALREADY_EXISTS)
-	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->proc_lock, 0, TRUE, DUPLICATE_SAME_ACCESS);
-	}
-	else
-	{
-		glob_info->proc_lock = temp_handle;
-	}
-	glob_info->flags.is_proc_lock_init = TRUE;
-	
-	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(lcl_segment_info), MSH_UPDATE_SEGMENT_NAME);
-	err = GetLastError();
-	if(temp_handle == NULL)
-	{
-		releaseProcLock();
-		readMXError("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).");
-	}
-	
-	if(err == ERROR_ALREADY_EXISTS)
-	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_update_reg.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
-		is_global_init = FALSE;
-	}
-	else
-	{
-		/* will initialize */
-		glob_info->shm_update_reg.handle = temp_handle;
-		is_global_init = TRUE;
-	}
-	glob_info->flags.is_shm_update_init = TRUE;
-	
-	glob_info->shm_update_reg.ptr = MapViewOfFile(glob_info->shm_update_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(shm_segment_info));
-	if(shm_update_info == NULL)
-	{
-		err = GetLastError();
-		releaseProcLock();
-		readMXError("MapUpdateSegError", "Could not map the update memory segment (Error number %u)");
-		exit(1);
-	}
-	glob_info->flags.is_shm_update_mapped = TRUE;
-	
-#else
-	
-	glob_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, S_IRWXU, 0);
-	if(glob_info->proc_lock == SEM_FAILED)
-	{
-		switch(errno)
-		{
-			case EACCES:
-				readMXError("SemOpenAccessError", "The named semaphore exists and the permissions specified by oflag are denied, or the named semaphore does not exist and permission to create the named semaphore is denied.");
-			case EINTR:
-				readMXError("SemOpenInterruptError", "The sem_open() operation was interrupted by a signal.");
-			case EINVAL:
-				readMXError("SemOpenInvalidError", "The sem_open() operation is not supported for the given name.");
-			case EMFILE:
-				readMXError("SemOpenTooManyFilesError", "Too many semaphore descriptors or file descriptors are currently in use by this process.");
-			case ENFILE:
-				readMXError("SemOpenTooManySemsError", "Too many semaphores are currently open in the system.");
-			case ENOSPC:
-				readMXError("SemOpenNoSpaceError", "There is insufficient space for the creation of the new named semaphore.");
-			case ENOSYS:
-				readMXError("SemOpenNotSupportedError", "The function sem_open() is not supported by this implementation.");
-			default:
-				readMXError("SemOpenUnknownError", "An unknown error occurred.");
-			
-		}
-	}
-	glob_info->flags.is_proc_lock_init = TRUE;
-	
-	/* Try to open an already created segment so we can get the global init signal */
-	strcpy(glob_info->shm_update_reg.name, MSH_UPDATE_SEGMENT_NAME);
-	glob_info->shm_update_reg.handle = shm_open(MSH_UPDATE_SEGMENT_NAME, O_RDWR, S_IRWXU);
-	if(glob_info->shm_update_reg.handle == -1)
-	{
-		is_global_init = TRUE;
-		if(errno == ENOENT)
-		{
-			glob_info->shm_update_reg.handle = shm_open(MSH_UPDATE_SEGMENT_NAME, O_RDWR | O_CREAT, S_IRWXU);
-			if(glob_info->shm_update_reg.handle == -1)
-			{
-				readShmError(errno);
-			}
-		}
-		else
-		{
-			readShmError(errno);
-		}
-	}
-	else
-	{
-		is_global_init = FALSE;
-	}
-	glob_info->flags.is_shm_update_init = TRUE;
-	
-	if(ftruncate(glob_info->shm_update_reg.handle, sizeof(shm_segment_info)) != 0)
-	{
-		readFtruncateError(errno);
-	}
-	
-	glob_info->shm_update_reg.ptr = mmap(NULL, sizeof(shm_segment_info), PROT_READ|PROT_WRITE, MAP_SHARED, glob_info->shm_update_reg.handle, 0);
-	if(shm_update_info == MAP_FAILED)
-	{
-		readMmapError(errno);
-	}
-	glob_info->flags.is_shm_update_mapped = TRUE;
-	
-#endif
-	
-	header_t hdr;
-	if(is_global_init)
-	{
-		/* this is the first region created */
-		/* this info shouldn't ever actually be used */
-		/* but make sure the memory segment is consistent */
-		hdr.isNumeric = 1;
-		hdr.isSparse = 0;
-		hdr.isEmpty = 1;
-		hdr.complexity = mxREAL;
-		hdr.classid = mxDOUBLE_CLASS;
-		hdr.nDims = 2;
-		hdr.elemsiz = sizeof(mxDouble);
-		hdr.nzmax = 0;      /* update this later on sparse*/
-		hdr.nFields = 0;                                 /* update this later */
-		hdr.shmsiz = pad_to_align(sizeof(header_t));     /* update this later */
-		hdr.strBytes = 0;
-		hdr.par_hdr_off = 0;
-		
-		shm_update_info->num_procs = 1;
-		shm_update_info->seg_num = 0;
-		shm_update_info->rev_num = 0;
-		shm_update_info->lead_num = 0;
-		shm_update_info->seg_sz = hdr.shmsiz;
-	}
-	else
-	{
-		shm_update_info->num_procs += 1;
-	}
-	
-	/* make sure to init local proc_lock flag as FALSE */
-	glob_info->flags.is_proc_locked = FALSE;
-	glob_info->flags.is_mem_safe = TRUE;
-	acquireProcLock();
-	
-	/* in any case we want to make sure that the current segment is either
-	 * the null case, or differs from the current shared segment number */
-	glob_info->cur_seg_info.rev_num = 0;
-	glob_info->cur_seg_info.seg_num = 0;
-	glob_info->cur_seg_info.seg_sz = 0;
-	
-	sprintf(glob_info->shm_data_reg.name, MSH_SEGMENT_NAME, shm_update_info->seg_num);
-	
-#ifdef MSH_WIN
-	uint32_t lo_sz = (uint32_t)(shm_update_info->seg_sz & 0xFFFFFFFFL);
-	uint32_t hi_sz = (uint32_t)((shm_update_info->seg_sz >> 32) & 0xFFFFFFFFL);
-	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->shm_data_reg.name);
-	err = GetLastError();
-	if(temp_handle == NULL)
-	{
-		releaseProcLock();
-		mexPrintf("Error number: %d\n", err);
-		readMXError("CreateFileError", "Error creating the file mapping (Error Number %u)", err);
-	}
-	else if(err == ERROR_ALREADY_EXISTS)
-	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_data_reg.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
-	}
-	else
-	{
-		glob_info->shm_data_reg.handle = temp_handle;
-	}
-	glob_info->flags.is_shm_data_init = TRUE;
-	
-	glob_info->shm_data_reg.ptr = MapViewOfFile(glob_info->shm_data_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, shm_update_info->seg_sz);
-	if(shm_data_ptr == NULL)
-	{
-		err = GetLastError();
-		releaseProcLock();
-		readMXError("MapDataSegError", "Could not map the update memory segment (Error number %u)");
-		exit(1);
-	}
-#else
-	
-	glob_info->shm_data_reg.handle = shm_open(glob_info->shm_data_reg.name, O_RDWR | O_CREAT, S_IRWXU);
-	if(glob_info->shm_data_reg.handle == -1)
-	{
-		readShmError(errno);
-	}
-	if(ftruncate64(glob_info->shm_data_reg.handle, shm_update_info->seg_sz) != 0)
-	{
-		readFtruncateError(errno);
-	}
-	
-	glob_info->shm_data_reg.ptr = mmap(NULL, shm_update_info->seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, glob_info->shm_data_reg.handle, 0);
-	if(shm_data_ptr == MAP_FAILED)
-	{
-		readMmapError(errno);
-	}
-#endif
-	glob_info->flags.is_shm_data_mapped = TRUE;
-	
-	glob_info->flags.is_freed = FALSE;
-	
-	if(is_global_init)
-	{
-		memcpy(shm_data_ptr, &hdr, hdr.shmsiz);
-	}
-	
-	mexAtExit(onExit);
-	
-	releaseProcLock();
-	
-}
-
-
 void onExit(void)
 {
 	
@@ -2085,36 +1785,32 @@ void onExit(void)
 		}
 		mxDestroyArray(glob_shm_var);
 	}
-	
-	if(!glob_info->flags.is_freed && glob_info->flags.is_shm_update_mapped)
-	{
-		shm_update_info->num_procs -= 1;
-	}
 
 #ifdef MSH_WIN
 	
-	if(glob_info->flags.is_shm_data_mapped)
+	if(glob_info->shm_data_reg.is_mapped)
 	{
 		UnmapViewOfFile(shm_data_ptr);
-		glob_info->flags.is_shm_data_mapped = FALSE;
+		glob_info->shm_data_reg.is_mapped = FALSE;
 	}
 	
-	if(glob_info->flags.is_shm_data_init)
+	if(glob_info->shm_data_reg.is_init)
 	{
 		CloseHandle(glob_info->shm_data_reg.handle);
-		glob_info->flags.is_shm_data_init = FALSE;
+		glob_info->shm_data_reg.is_init = FALSE;
 	}
 	
-	if(glob_info->flags.is_shm_update_mapped)
+	if(glob_info->shm_update_reg.is_mapped)
 	{
+		shm_update_info->num_procs -= 1;
 		UnmapViewOfFile(shm_update_info);
-		glob_info->flags.is_shm_update_mapped = FALSE;
+		glob_info->shm_update_reg.is_mapped = FALSE;
 	}
 	
-	if(glob_info->flags.is_shm_update_init)
+	if(glob_info->shm_update_reg.is_init)
 	{
 		CloseHandle(glob_info->shm_update_reg.handle);
-		glob_info->flags.is_shm_update_init = FALSE;
+		glob_info->shm_update_reg.is_init = FALSE;
 	}
 	
 	if(glob_info->flags.is_proc_lock_init)
@@ -2124,32 +1820,47 @@ void onExit(void)
 			releaseProcLock();
 		}
 		CloseHandle(glob_info->proc_lock);
+		glob_info->flags.is_proc_lock_init = FALSE;
+	}
+	
+	if(glob_info->startup_flag.is_mapped)
+	{
+		strcpy(glob_info->startup_flag.ptr, MSH_END_SIG);
+		UnmapViewOfFile(glob_info->startup_flag.ptr);
+		glob_info->startup_flag.is_mapped = FALSE;
+	}
+	
+	if(glob_info->startup_flag.is_init)
+	{
+		CloseHandle(glob_info->startup_flag.handle);
+		glob_info->startup_flag.is_init = FALSE;
 	}
 	
 #else
 	
-	if(glob_info->flags.is_shm_data_mapped)
+	if(glob_info->shm_data_reg.is_mapped)
 	{
 		munmap(shm_data_ptr, glob_info->shm_data_reg.reg_sz);
-		glob_info->flags.is_shm_data_mapped = FALSE;
+		glob_info->shm_data_reg.is_mapped = FALSE;
 	}
 	
-	if(glob_info->flags.is_shm_data_init)
+	if(glob_info->shm_data_reg.is_init)
 	{
 		shm_unlink(glob_info->shm_data_reg.name);
-		glob_info->flags.is_shm_data_init = FALSE;
+		glob_info->shm_data_reg.is_init = FALSE;
 	}
 	
-	if(glob_info->flags.is_shm_update_mapped)
+	if(glob_info->shm_update_reg.is_mapped)
 	{
+		shm_update_info->num_procs -= 1;
 		munmap(shm_update_info, glob_info->shm_update_reg.reg_sz);
-		glob_info->flags.is_shm_update_mapped = FALSE;
+		glob_info->shm_update_reg.is_mapped = FALSE;
 	}
 	
-	if(glob_info->flags.is_shm_update_init)
+	if(glob_info->shm_update_reg.is_init)
 	{
 		shm_unlink(glob_info->shm_update_reg.name);
-		glob_info->flags.is_shm_update_init = FALSE;
+		glob_info->shm_update_reg.is_init = FALSE;
 	}
 	
 	if(glob_info->flags.is_proc_lock_init)
@@ -2165,9 +1876,26 @@ void onExit(void)
 		}
 		glob_info->flags.is_proc_lock_init = FALSE;
 	}
+	
+	if(glob_info->startup_flag.is_mapped)
+	{
+		strcpy(glob_info->startup_flag.ptr, MSH_END_SIG);
+		munmap(glob_info->startup_flag.ptr, glob_info->shm_update_reg.reg_sz);
+		glob_info->startup_flag.is_mapped = FALSE;
+	}
+	
+	if(glob_info->startup_flag.is_init)
+	{
+		shm_unlink(glob_info->startup_flag.name);
+		glob_info->startup_flag.is_init = FALSE;
+	}
+	
 #endif
 	
 	mxFree(glob_info);
+	glob_info = NULL;
+	
+	mexAtExit(nullfcn);
 	
 }
 
@@ -2243,15 +1971,6 @@ void releaseProcLock(void)
 #endif
 		glob_info->flags.is_proc_locked = FALSE;
 	}
-}
-
-
-void makeDummyVar(mxArray** out)
-{
-	glob_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
-	mexMakeArrayPersistent(glob_shm_var);
-	*out = mxCreateSharedDataCopy(glob_shm_var);
-	glob_info->flags.is_glob_shm_var_init = TRUE;
 }
 
 msh_directive_t parseDirective(const mxArray* in)
@@ -2333,11 +2052,15 @@ msh_directive_t parseDirective(const mxArray* in)
 bool_t precheck(void)
 {
 	return glob_info->flags.is_proc_lock_init
-			& glob_info->flags.is_shm_update_init
-			& glob_info->flags.is_shm_update_mapped
-			& glob_info->flags.is_shm_data_init
-			& glob_info->flags.is_shm_data_mapped
+			& glob_info->shm_update_reg.is_init
+			& glob_info->shm_update_reg.is_mapped
+			& glob_info->shm_data_reg.is_init
+			& glob_info->shm_data_reg.is_mapped
 			& glob_info->flags.is_glob_shm_var_init;
 }
 
+void nullfcn(void)
+{
+	// does nothing
+}
 

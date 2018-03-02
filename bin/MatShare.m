@@ -8,7 +8,7 @@ classdef MatShare < handle
 		data
 	end
 	
-	properties (Constant)
+	properties (Constant, Access=private)
 		% These are just for documentation since it's faster to just use the numbers directly
 		INIT     = uint8(0);
 		CLONE    = uint8(1);
@@ -51,13 +51,9 @@ classdef MatShare < handle
 			matshare_(uint8(9));
 		end
 		
-		function safefree(~)
-			matshare_(uint8(4));
-		end
-		
 		function delete(~)
 			matshare_(uint8(4));
-			clear matshare_ obj.deepdata;
+			clear matshare_
 		end
 		
 	end
@@ -90,11 +86,6 @@ classdef MatShare < handle
 		function out = fetch()
 			% get callback
 			out = matshare_(uint8(5));
-		end
-		
-		function free()
-			matshare_(uint8(4));
-			clear matshare_
 		end
 		
 	end

@@ -54,11 +54,11 @@ res/*
 [Rr]elease/
 [Rr]eleases/
 bld/
-[Bb]in/*
 !*pthreadVC2.dll
 !*pthreadGC2.dll
 [Oo]bj/
 [Ll]og/
-!bin/MatShare.m
-!bin/mshdata.m
 /src/extlib
+/bin/examine.c
+/bin/examine.mexw64
+/bin/matshare_.mexw64.pdb
