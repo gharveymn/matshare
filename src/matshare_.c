@@ -1338,10 +1338,14 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 	else /* base case */
 	{
 		/* copy real data */
-		memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
+		cpy_sz = (hdr->nzmax)*(hdr->elemsiz);
+		
+		uint8_t mxmalloc_sig[MXMALLOC_SIG_LEN];
+		make_mxmalloc_signature(mxmalloc_sig, cpy_sz);
+		
+		memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), mxmalloc_sig, MXMALLOC_SIG_LEN);
 		shm += pad_to_align(MXMALLOC_SIG_LEN);
 		shm_pr = (void*)shm;
-		cpy_sz = (hdr->nzmax)*(hdr->elemsiz);
 		memcpy(shm_pr, dat->pr, cpy_sz);
 		shm += pad_to_align(cpy_sz);
 		
@@ -1351,10 +1355,9 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 		/* copy complex data as well */
 		if(hdr->complexity == mxCOMPLEX)
 		{
-			memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
+			memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), mxmalloc_sig, MXMALLOC_SIG_LEN);
 			shm += pad_to_align(MXMALLOC_SIG_LEN);
 			shm_pi = (void*)shm;
-			cpy_sz = (hdr->nzmax)*(hdr->elemsiz);
 			memcpy(shm_pi, dat->pi, cpy_sz);
 			shm += pad_to_align(cpy_sz);
 			
@@ -1911,7 +1914,35 @@ void onExit(void)
 size_t pad_to_align(size_t size)
 {
 	/* bitwise expression is equiv to (size % align_size) since align_size is a power of 2 */
-	return size + align_size - (size | ~align_size);
+	return size + align_size - (size & (align_size-1));
+}
+
+
+void make_mxmalloc_signature(uint8_t sig[MXMALLOC_SIG_LEN], size_t seg_size)
+{
+	/*
+	 * NEW MXMALLOC SIGNATURE INFO:
+	 * HEADER:
+	 * 		bytes 0-7 - size iterator, increases as (size/16+1)*16 mod 256
+	 * 			byte 0 = (((size+16-1)/2^4)%2^4)*2^4
+	 * 			byte 1 = (((size+16-1)/2^8)%2^8)
+	 * 			byte 2 = (((size+16-1)/2^16)%2^16)
+	 * 			byte n = (((size+16-1)/2^(2^(2+n)))%2^(2^(2+n)))
+	 *
+	 * 		bytes  8-11 - a signature for the vector check
+	 * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
+	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
+	 */
+	
+	memcpy(sig, MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
+	size_t multi = 1 << 4;
+	sig[0] = (uint8_t)((((seg_size + 0x0F)/multi)%multi)*multi);
+	for(int i = 1; i < 8; i++)
+	{
+		multi = (size_t)1 << (1 << (2 + i));
+		sig[i] = (uint8_t)(((seg_size + 0x0F)/multi)%multi);
+	}
+	
 }
 
 
@@ -1980,6 +2011,7 @@ void releaseProcLock(void)
 		glob_info->flags.is_proc_locked = FALSE;
 	}
 }
+
 
 msh_directive_t parseDirective(const mxArray* in)
 {
