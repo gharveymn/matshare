@@ -88,7 +88,6 @@ void init(bool_t is_mem_safe)
 		}
 	}
 	
-	mexAtExit(onExit);
 	releaseProcLock();
 	
 }
@@ -115,33 +114,14 @@ void procStartup(void)
 		readMXError("MshStartupFlagError", "Could not create or open the update memory segment (Error number: %u).", err);
 	}
 	temp_info->startup_flag.is_init = TRUE;
-
-	temp_info->startup_flag.ptr = MapViewOfFile(temp_info->startup_flag.handle, FILE_MAP_ALL_ACCESS, 0, 0, temp_info->startup_flag.reg_sz);
-	if(temp_info->startup_flag.ptr == NULL)
-	{
-		readMXError("MapStartupFlagError", "Could not map the startup memory segment (Error number %u)", GetLastError());
-	}
-	temp_info->startup_flag.is_mapped = TRUE;
 	
 	if(err == ERROR_ALREADY_EXISTS)
 	{
-		/* this may only exist uncleared in the namespace so we have to check the file contents */
-		
-		if(memcmp(temp_info->startup_flag.ptr, MSH_STARTUP_SIG, sizeof(MSH_STARTUP_SIG)) == 0)
-		{
-			/* then this has already been started */
-			is_proc_init = FALSE;
-		}
-		else
-		{
-			/* the file still existed in the namespace, but was not cleared when closed */
-			is_proc_init = TRUE;
-		}
-	
+		/* then this has already been started */
+		is_proc_init = FALSE;
 	}
 	else
 	{
-		/* we definitely will initialize in this case*/
 		is_proc_init = TRUE;
 	}
 
@@ -154,58 +134,19 @@ void procStartup(void)
 	temp_info->startup_flag.handle = shm_open(temp_info->startup_flag.name, O_RDWR|O_CREAT|O_EXCL, S_IRWXU);
 	if(temp_info->startup_flag.handle == -1)
 	{
-		
 		/* already exists */
-		
-		is_proc_init = FALSE;
 		if(errno != EEXIST)
 		{
 			readShmError(errno);
 		}
-		
-		temp_info->startup_flag.handle = shm_open(temp_info->startup_flag.name, O_RDWR, S_IRWXU);
-		if(temp_info->startup_flag.handle == -1)
-		{
-			readShmError(errno);
-		}
-		
+		is_proc_init = FALSE;
 	}
 	else
 	{
-		
-		temp_info->startup_flag.is_init = TRUE;
-		if(ftruncate(temp_info->startup_flag.handle, temp_info->startup_flag.reg_sz) != 0)
-		{
-			readFtruncateError(errno);
-		}
-		temp_info->startup_flag.is_init = TRUE;
-		
 		is_proc_init = TRUE;
-		
 	}
-	
-	temp_info->startup_flag.ptr = mmap(NULL, temp_info->startup_flag.reg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, temp_info->startup_flag.handle, 0);
-	if(temp_info->startup_flag.ptr == MAP_FAILED)
-	{
-		readMmapError(errno);
-	}
-	temp_info->startup_flag.is_mapped = TRUE;
-	
-	if(is_proc_init == FALSE)
-	{
-		/* Check if this is really the first one or the file was hanging around in the namespace */
-		if(memcmp(temp_info->startup_flag.ptr, MSH_STARTUP_SIG, sizeof(MSH_STARTUP_SIG)) == 0)
-		{
-			/* then this has already been started */
-			is_proc_init = FALSE;
-		}
-		else
-		{
-			/* the file still existed in the namespace, but was not cleared when closed */
-			is_proc_init = TRUE;
-		}
-	}
-	
+	temp_info->startup_flag.is_init = TRUE;
+
 #endif
 	
 	if(is_proc_init)
@@ -223,11 +164,7 @@ void procStartup(void)
 		glob_info->shm_data_reg.is_init = FALSE;
 		glob_info->shm_data_reg.is_mapped = FALSE;
 		
-		/*copy over the startup signature */
-		strcpy(glob_info->startup_flag.ptr, MSH_STARTUP_SIG);
-#ifdef MSH_UNIX
-		msync(glob_info->startup_flag.ptr, glob_info->startup_flag.reg_sz, MS_SYNC|MS_INVALIDATE);
-#endif
+		temp_info->startup_flag.is_mapped = FALSE;
 		
 		glob_info->flags.is_glob_shm_var_init = FALSE;
 		
@@ -235,17 +172,13 @@ void procStartup(void)
 		glob_info->flags.is_proc_locked = FALSE;
 		
 		glob_info->num_lcl_objs_using = 1;
+		
+		mexAtExit(onExit);
+		
 	}
 	else
 	{
-
-#ifdef MSH_WIN
-		UnmapViewOfFile(temp_info->startup_flag.ptr);
-#else
-		munmap(temp_info->startup_flag.ptr, temp_info->startup_flag.reg_sz);
-		shm_unlink(temp_info->startup_flag.name);
-#endif
-		
+		CloseHandle(temp_info->startup_flag.handle);
 		mxFree(temp_info);
 		glob_info->num_lcl_objs_using += 1;
 	}

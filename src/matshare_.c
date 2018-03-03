@@ -1845,13 +1845,6 @@ void onExit(void)
 		glob_info->flags.is_proc_lock_init = FALSE;
 	}
 	
-	if(glob_info->startup_flag.is_mapped)
-	{
-		strcpy(glob_info->startup_flag.ptr, MSH_END_SIG);
-		UnmapViewOfFile(glob_info->startup_flag.ptr);
-		glob_info->startup_flag.is_mapped = FALSE;
-	}
-	
 	if(glob_info->startup_flag.is_init)
 	{
 		CloseHandle(glob_info->startup_flag.handle);
@@ -1897,13 +1890,6 @@ void onExit(void)
 			readMXError("SemCloseInvalidError", "The sem argument is not a valid semaphore descriptor.");
 		}
 		glob_info->flags.is_proc_lock_init = FALSE;
-	}
-	
-	if(glob_info->startup_flag.is_mapped)
-	{
-		strcpy(glob_info->startup_flag.ptr, MSH_END_SIG);
-		munmap(glob_info->startup_flag.ptr, glob_info->shm_update_reg.reg_sz);
-		glob_info->startup_flag.is_mapped = FALSE;
 	}
 	
 	if(glob_info->startup_flag.is_init)
