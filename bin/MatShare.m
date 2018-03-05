@@ -6,17 +6,20 @@ classdef MatShare < handle
 	
 	properties (Constant, Access=private)
 		% These are just for documentation since it's faster to just use the numbers directly
-		SHARE    = uint8(0);
-        FETCH    = uint8(1);
-		DETACH   = uint8(2);
-        PARAM    = uint8(3);
-		DEEPCOPY = uint8(4);
-		DEBUG    = uint8(5);
+		SHARE      = uint8(0);
+          FETCH      = uint8(1);
+		DETACH     = uint8(2);
+          PARAM      = uint8(3);
+		DEEPCOPY   = uint8(4);
+		DEBUG      = uint8(5);
+		REGISTER   = uint8(6);
+		DEREGISTER = uint8(7);
 	end
 	
 	methods
 		function obj = MatShare
 			% does nothing
+			matshare_(MatShare.REGISTER);
 		end
 		
 		function set.data(~,in)
@@ -36,7 +39,7 @@ classdef MatShare < handle
 		end
 		
 		function delete(~)
-			matshare_(MatShare.DETACH);
+			matshare_(MatShare.DEREGISTER);
 			clear matshare_
 		end
 		

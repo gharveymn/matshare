@@ -135,25 +135,27 @@ typedef enum
 	msh_DETACH,
 	msh_PARAM,
 	msh_DEEPCOPY,
-	msh_DEBUG
+	msh_DEBUG,
+	msh_OBJ_REGISTER,
+	msh_OBJ_DEREGISTER
 } msh_directive_t;
 
 /* captures fundamentals of the mxArray */
 /* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
 typedef struct
 {
-	bool_t isSparse;
-	bool_t isNumeric;
-	bool_t isEmpty;
+	bool_t is_sparse;
+	bool_t is_numeric;
+	bool_t is_empty;
 	mxComplexity complexity;
 	mxClassID classid;       /* matlab class id */
-	size_t nDims;         /* dimensionality of the matrix.  The size array immediately follows the header */
-	size_t elemsiz;       /* size of each element in pr and pi */
-	size_t nzmax;         /* length of pr,pi */
-	int nFields;       /* the number of fields.  The field string immediately follows the size array */
+	size_t num_dims;         /* dimensionality of the matrix.  The size array immediately follows the header */
+	size_t elem_size;       /* size of each element in pr and pi */
+	size_t num_elems;         /* length of pr,pi */
+	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
 	int par_hdr_off;   /* offset to the parent's header, add this to help backwards searches (double linked... sort of)*/
-	size_t shmsiz;            /* size of serialized object (header + size array + field names string) */
-	size_t  strBytes;
+	size_t shm_sz;            /* size of serialized object (header + size array + field names string) */
+	size_t  str_sz;
 } header_t;
 
 /* structure used to record all of the data addresses */
@@ -192,7 +194,6 @@ typedef struct
 {
 	uint64_t seg_num;						// segment number (iterated when a new file is needed)
 	uint64_t rev_num;						// total number of revisions (used for comparison, not indexing, so it's circular)
-	size_t seg_sz;							// size of the segment
 } lcl_segment_info;
 
 typedef struct
@@ -205,14 +206,14 @@ typedef struct
 #else
 	int handle;
 #endif
-	size_t reg_sz;
+	size_t seg_sz;
 	void* ptr;
-} mem_region;
+} mem_segment;
 
 typedef struct
 {
-	mem_region shm_data_reg;
-	mem_region shm_update_reg;
+	mem_segment shm_data_reg;
+	mem_segment shm_update_reg;
 
 #ifdef MSH_WIN
 	HANDLE proc_lock;
@@ -227,7 +228,6 @@ typedef struct
 		bool_t is_proc_lock_init;
 		bool_t is_glob_shm_var_init;
 		
-		bool_t is_freed;
 		bool_t is_proc_locked;
 		bool_t is_mem_safe;
 	} flags;
@@ -237,6 +237,8 @@ typedef struct
 #else
 	pid_t this_pid;
 #endif
+	
+	uint32_t num_lcl_objs;
 
 } mex_info;
 

@@ -46,14 +46,13 @@ void init()
 	
 	if(is_glob_init)
 	{
-		memcpy(shm_data_ptr, &hdr, hdr.shmsiz);
+		memcpy(shm_data_ptr, &hdr, hdr.shm_sz);
 	}
 	
 	glob_info->cur_seg_info.rev_num = shm_update_info->rev_num;
 	glob_info->cur_seg_info.seg_num = shm_update_info->seg_num;
-	glob_info->cur_seg_info.seg_sz = shm_update_info->seg_sz;
+	glob_info->shm_data_reg.seg_sz = shm_update_info->seg_sz;
 	
-	glob_info->flags.is_freed = FALSE;
 	
 	if(!glob_info->flags.is_glob_shm_var_init)
 	{
@@ -85,7 +84,12 @@ void procStartup(void)
 {
 	glob_info = mxCalloc(1, sizeof(mex_info));
 	mexMakeMemoryPersistent(glob_info);
+
+#ifdef MSH_WIN
+	glob_info->this_pid = GetProcessId(GetCurrentProcess());
+#else
 	glob_info->this_pid = getpid();
+#endif
 	
 	
 	/* mxCalloc guarantees that these are zeroed
@@ -106,6 +110,7 @@ void procStartup(void)
 	glob_info->flags.is_proc_locked = FALSE;
 	*/
 	
+	glob_info->num_lcl_objs = 0;
 	glob_info->flags.is_mem_safe = TRUE; /** default value **/
 	
 	mexAtExit(onExit);
@@ -147,11 +152,11 @@ void initProcLock(void)
 void initUpdateSegment(void)
 {
 
-	glob_info->shm_update_reg.reg_sz = sizeof(shm_segment_info);
+	glob_info->shm_update_reg.seg_sz = sizeof(shm_segment_info);
 	
 #ifdef MSH_WIN
 	
-	glob_info->shm_update_reg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)glob_info->shm_update_reg.reg_sz, MSH_UPDATE_SEGMENT_NAME);
+	glob_info->shm_update_reg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)glob_info->shm_update_reg.seg_sz, MSH_UPDATE_SEGMENT_NAME);
 	DWORD err = GetLastError();
 	if(glob_info->shm_update_reg.handle == NULL)
 	{
@@ -191,7 +196,7 @@ void initUpdateSegment(void)
 	}
 	glob_info->shm_update_reg.is_init = TRUE;
 	
-	if(ftruncate(glob_info->shm_update_reg.handle, glob_info->shm_update_reg.reg_sz) != 0)
+	if(ftruncate(glob_info->shm_update_reg.handle, glob_info->shm_update_reg.seg_sz) != 0)
 	{
 		readFtruncateError(errno);
 	}
@@ -205,17 +210,18 @@ void mapUpdateSegment(void)
 {
 #ifdef MSH_WIN
 	
-	glob_info->shm_update_reg.ptr = MapViewOfFile(glob_info->shm_update_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->shm_update_reg.reg_sz);
+	glob_info->shm_update_reg.ptr = MapViewOfFile(glob_info->shm_update_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->shm_update_reg.seg_sz);
+	DWORD err = GetLastError();
 	if(shm_update_info == NULL)
 	{
 		releaseProcLock();
-		readMXError("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", GetLastError());
+		readMXError("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", err);
 	}
 
 #else
 	
 	/* `shm_update_info` is this but casted to type `shm_segment_info` */
-	glob_info->shm_update_reg.ptr = mmap(NULL, glob_info->shm_update_reg.reg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, glob_info->shm_update_reg.handle, 0);
+	glob_info->shm_update_reg.ptr = mmap(NULL, glob_info->shm_update_reg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, glob_info->shm_update_reg.handle, 0);
 	if(shm_update_info == MAP_FAILED)
 	{
 		readMmapError(errno);
@@ -236,17 +242,17 @@ void globStartup(header_t* hdr)
 		/* this is the first region created */
 		/* this info shouldn't ever actually be used */
 		/* but make sure the memory segment is consistent */
-		hdr->isNumeric = 1;
-		hdr->isSparse = 0;
-		hdr->isEmpty = 1;
+		hdr->is_numeric = 1;
+		hdr->is_sparse = 0;
+		hdr->is_empty = 1;
 		hdr->complexity = mxREAL;
 		hdr->classid = mxDOUBLE_CLASS;
-		hdr->nDims = 2;
-		hdr->elemsiz = sizeof(mxDouble);
-		hdr->nzmax = 0;      /* update this later on sparse*/
-		hdr->nFields = 0;                                 /* update this later */
-		hdr->shmsiz = pad_to_align(sizeof(header_t));     /* update this later */
-		hdr->strBytes = 0;
+		hdr->num_dims = 2;
+		hdr->elem_size = sizeof(mxDouble);
+		hdr->num_elems = 0;      /* update this later on sparse*/
+		hdr->num_fields = 0;                                 /* update this later */
+		hdr->shm_sz = pad_to_align(sizeof(header_t));     /* update this later */
+		hdr->str_sz = 0;
 		hdr->par_hdr_off = 0;
 		
 //		shm_update_info->error_flag = FALSE;
@@ -255,7 +261,7 @@ void globStartup(header_t* hdr)
 		shm_update_info->rev_num = 0;
 		shm_update_info->lead_seg_num = 0;
 		shm_update_info->upd_pid = glob_info->this_pid;
-		shm_update_info->seg_sz = hdr->shmsiz;
+		shm_update_info->seg_sz = hdr->shm_sz;
 	}
 	else
 	{
@@ -267,13 +273,13 @@ void globStartup(header_t* hdr)
 void initDataSegment(void)
 {
 	
-	glob_info->shm_data_reg.reg_sz = shm_update_info->seg_sz;
+	glob_info->shm_data_reg.seg_sz = shm_update_info->seg_sz;
 	sprintf(glob_info->shm_data_reg.name, MSH_SEGMENT_NAME, (unsigned long long)shm_update_info->seg_num);
 
 #ifdef MSH_WIN
 	
-	uint32_t lo_sz = (uint32_t)(glob_info->shm_data_reg.reg_sz & 0xFFFFFFFFL);
-	uint32_t hi_sz = (uint32_t)((glob_info->shm_data_reg.reg_sz >> 32) & 0xFFFFFFFFL);
+	uint32_t lo_sz = (uint32_t)(glob_info->shm_data_reg.seg_sz & 0xFFFFFFFFL);
+	uint32_t hi_sz = (uint32_t)((glob_info->shm_data_reg.seg_sz >> 32) & 0xFFFFFFFFL);
 	glob_info->shm_data_reg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->shm_data_reg.name);
 	DWORD err = GetLastError();
 	if(glob_info->shm_data_reg.handle == NULL)
@@ -306,7 +312,7 @@ void mapDataSegment(void)
 {
 #ifdef MSH_WIN
 	
-	glob_info->shm_data_reg.ptr = MapViewOfFile(glob_info->shm_data_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->shm_data_reg.reg_sz);
+	glob_info->shm_data_reg.ptr = MapViewOfFile(glob_info->shm_data_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->shm_data_reg.seg_sz);
 	if(shm_data_ptr == NULL)
 	{
 		releaseProcLock();
@@ -315,7 +321,7 @@ void mapDataSegment(void)
 	
 #else
 	
-	glob_info->shm_data_reg.ptr = mmap(NULL, glob_info->shm_data_reg.reg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, glob_info->shm_data_reg.handle, 0);
+	glob_info->shm_data_reg.ptr = mmap(NULL, glob_info->shm_data_reg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, glob_info->shm_data_reg.handle, 0);
 	if(shm_data_ptr == MAP_FAILED)
 	{
 		readMmapError(errno);
