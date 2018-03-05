@@ -195,19 +195,11 @@ void initProcLock(void)
 	glob_info->lock_sec.lpSecurityDescriptor = NULL;
 	glob_info->lock_sec.bInheritHandle = TRUE;
 	
-	HANDLE temp_handle = CreateMutex(&glob_info->lock_sec, FALSE, MSH_LOCK_NAME);
+	glob_info->proc_lock = CreateMutex(&glob_info->lock_sec, FALSE, MSH_LOCK_NAME);
 	DWORD err = GetLastError();
-	if(temp_handle == NULL)
+	if(glob_info->proc_lock == NULL)
 	{
 		readMXError("Internal:InitMutexError", "Failed to create the mutex (Error number: %u).");
-	}
-	else if(err == ERROR_ALREADY_EXISTS)
-	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->proc_lock, 0, TRUE, DUPLICATE_SAME_ACCESS);
-	}
-	else
-	{
-		glob_info->proc_lock = temp_handle;
 	}
 
 #else
@@ -233,7 +225,6 @@ void initProcLock(void)
 				readMXError("SemOpenNotSupportedError", "The function sem_open() is not supported by this implementation.");
 			default:
 				readMXError("SemOpenUnknownError", "An unknown error occurred.");
-			
 		}
 	}
 
@@ -251,38 +242,30 @@ void initUpdateSegment(void)
 	
 #ifdef MSH_WIN
 	
-	HANDLE temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)glob_info->shm_update_reg.reg_sz, MSH_UPDATE_SEGMENT_NAME);
+	glob_info->shm_update_reg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)glob_info->shm_update_reg.reg_sz, MSH_UPDATE_SEGMENT_NAME);
 	DWORD err = GetLastError();
-	if(temp_handle == NULL)
+	if(glob_info->shm_update_reg.handle == NULL)
 	{
 		releaseProcLock();
 		readMXError("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).");
 	}
 	glob_info->shm_update_reg.is_init = TRUE;
 	
-	if(err == ERROR_ALREADY_EXISTS)
-	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_update_reg.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
-		is_glob_init = FALSE;
-	}
-	else
-	{
-		/* will initialize */
-		glob_info->shm_update_reg.handle = temp_handle;
-		is_glob_init = TRUE;
-	}
-
+	is_glob_init = (bool_t)(err != ERROR_ALREADY_EXISTS); /* initialize if the segment does not already exist */
+	
 #else
 	
 	/* Try to open an already created segment so we can get the global init signal */
 	strcpy(glob_info->shm_update_reg.name, MSH_UPDATE_SEGMENT_NAME);
-	glob_info->shm_update_reg.handle = shm_open(glob_info->shm_update_reg.name, O_RDWR, S_IRWXU);
+	glob_info->shm_update_reg.handle = shm_open(glob_info->shm_update_reg.name, O_RDWR | O_CREAT | O_EXCL, S_IRWXU);
 	if(glob_info->shm_update_reg.handle == -1)
 	{
-		is_glob_init = TRUE;
-		if(errno == ENOENT)
+		/* then the segment has already been initialized */
+		is_glob_init = FALSE;
+		
+		if(errno == EEXIST)
 		{
-			glob_info->shm_update_reg.handle = shm_open(glob_info->shm_update_reg.name, O_RDWR | O_CREAT, S_IRWXU);
+			glob_info->shm_update_reg.handle = shm_open(glob_info->shm_update_reg.name, O_RDWR, S_IRWXU);
 			if(glob_info->shm_update_reg.handle == -1)
 			{
 				readShmError(errno);
@@ -295,7 +278,7 @@ void initUpdateSegment(void)
 	}
 	else
 	{
-		is_glob_init = FALSE;
+		is_glob_init = TRUE;
 	}
 	glob_info->shm_update_reg.is_init = TRUE;
 	
@@ -383,23 +366,14 @@ void initDataSegment(void)
 	
 	uint32_t lo_sz = (uint32_t)(glob_info->shm_data_reg.reg_sz & 0xFFFFFFFFL);
 	uint32_t hi_sz = (uint32_t)((glob_info->shm_data_reg.reg_sz >> 32) & 0xFFFFFFFFL);
-	HANDLE temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->shm_data_reg.name);
+	glob_info->shm_data_reg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->shm_data_reg.name);
 	DWORD err = GetLastError();
-	if(temp_handle == NULL)
+	if(glob_info->shm_data_reg.handle == NULL)
 	{
 		releaseProcLock();
 		readMXError("CreateFileError", "Error creating the file mapping (Error Number %u)", err);
 	}
 	glob_info->shm_data_reg.is_init = TRUE;
-	
-	if(err == ERROR_ALREADY_EXISTS)
-	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_data_reg.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
-	}
-	else
-	{
-		glob_info->shm_data_reg.handle = temp_handle;
-	}
 	
 #else
 	
@@ -443,13 +417,4 @@ void mapDataSegment(void)
 	
 	glob_info->shm_data_reg.is_mapped = TRUE;
 	
-}
-
-
-void makeDummyVar(mxArray** out)
-{
-	glob_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
-	mexMakeArrayPersistent(glob_shm_var);
-	*out = mxCreateSharedDataCopy(glob_shm_var);
-	glob_info->flags.is_glob_shm_var_init = TRUE;
 }

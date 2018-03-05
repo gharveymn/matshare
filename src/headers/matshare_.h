@@ -119,7 +119,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray* ret_var);
 
 /* Descend through header and data structure and free the memory.            */
-void deepfree(data_t* dat);
+void deepfreetmp(data_t* dat);
 
 mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset);
 
@@ -167,8 +167,9 @@ void nullfcn(void);
 
 void make_mxmalloc_signature(uint8_t sig[MXMALLOC_SIG_LEN], size_t seg_size);
 
+void makeDummyVar(mxArray**);
+
 extern void init(bool_t is_mem_safe);
-extern void makeDummyVar(mxArray**);
 
 
 #endif

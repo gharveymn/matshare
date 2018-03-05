@@ -16,7 +16,6 @@ void mapUpdateSegment(void);
 void globStartup(header_t* hdr);
 void initDataSegment(void);
 void mapDataSegment(void);
-void makeDummyVar(mxArray**);
 
 extern size_t shallowfetch(byte_t* shm, mxArray** ret_var);
 extern mxArray* mxCreateSharedDataCopy(mxArray *);

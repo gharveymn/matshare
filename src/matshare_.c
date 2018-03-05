@@ -38,10 +38,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	mxArrayStruct* arr;
 	bool_t is_mem_safe;
 	
-#ifdef MSH_WIN
-	HANDLE temp_handle;
-#endif
-	
 	if(directive != msh_INIT && directive != msh_FREE && directive != msh_DETACH && !precheck())
 	{
 		readMXError("NotInitializedError", "At least one of the needed shared memory segments has not been initialized. Cannot continue.");
@@ -154,22 +150,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				// create the new mapping
 				lo_sz = (uint32_t)(sm_size & 0xFFFFFFFFL);
 				hi_sz = (uint32_t)((sm_size >> 32) & 0xFFFFFFFFL);
-				temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->shm_data_reg.name);
+				glob_info->shm_data_reg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->shm_data_reg.name);
 				err = GetLastError();
-				if(temp_handle == NULL)
+				if(glob_info->shm_data_reg.handle == NULL)
 				{
 					// throw error if it already exists because that shouldn't happen
 					makeDummyVar(&plhs[0]);
 					releaseProcLock();
-					readMXError("CreateFileError", "Error creating the file mapping (Error Number %u)", err);
-				}
-				else if(err == ERROR_ALREADY_EXISTS)
-				{
-					DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_data_reg.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
-				}
-				else
-				{
-					glob_info->shm_data_reg.handle = temp_handle;
+					readMXError("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
 				}
 				glob_info->shm_data_reg.is_init = TRUE;
 				
@@ -215,7 +203,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			deepcopy(&hdr, &dat, shm_data_ptr, NULL, glob_shm_var);
 			
 			/* free temporary allocation */
-			deepfree(&dat);
+			deepfreetmp(&dat);
 			
 			mexMakeArrayPersistent(glob_shm_var);
 			glob_info->flags.is_glob_shm_var_init = TRUE;
@@ -303,15 +291,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					CloseHandle(glob_info->shm_data_reg.handle);
 					glob_info->shm_data_reg.is_init = FALSE;
 					
-					temp_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, glob_info->shm_data_reg.name);
+					glob_info->shm_data_reg.handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, glob_info->shm_data_reg.name);
 					err = GetLastError();
-					if(temp_handle == NULL)
+					if(glob_info->shm_data_reg.handle == NULL)
 					{
 						makeDummyVar(&plhs[0]);
 						releaseProcLock();
 						readMXError("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
 					}
-					DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_data_reg.handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
 					glob_info->shm_data_reg.is_init = TRUE;
 					
 					glob_info->shm_data_reg.ptr = MapViewOfFile(glob_info->shm_data_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->cur_seg_info.seg_sz);
@@ -1399,7 +1386,7 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 
 
 /* ------------------------------------------------------------------------- */
-/* deepfree                                                                  */
+/* deepfreetmp                                                                  */
 /*                                                                           */
 /* Descend through header and data structure and free the memory.            */
 /*                                                                           */
@@ -1408,13 +1395,13 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 /* Returns:                                                                  */
 /*    void                                                                   */
 /* ------------------------------------------------------------------------- */
-void deepfree(data_t* dat)
+void deepfreetmp(data_t* dat)
 {
 	
 	/* recurse to the bottom */
 	if(dat->child_dat)
 	{
-		deepfree(dat->child_dat);
+		deepfreetmp(dat->child_dat);
 	}
 	
 	/* free on the way back up */
@@ -1699,104 +1686,6 @@ int PointCharArrayAtString(char** pCharArray, char* pString, int nFields)
 	return 0;
 }
 
-/* This function finds the number of fields contained within in a string */
-/* the string is terminated by term_char, a character that can't be in a field name */
-/* returns the number of field names found */
-/* returns -1 if unaligned field names are found */
-int NumFieldsFromString(const char* pString, size_t* pFields, size_t* pBytes)
-{
-	unsigned int stored_length;          /* the recorded length of the string */
-	bool_t term_found = FALSE;          /* has the termination character been found? */
-	size_t i = 0;                              /* counter */
-	
-	pFields[0] = 0;                         /* the number of fields in the string */
-	pBytes[0] = 0;
-	
-	
-	/* and recover them */
-	while(!term_found)
-	{
-		/* scan past null termination chars */
-		while(!pString[i])
-		{
-			i++;
-		}
-		
-		/* is this the special termination character? */
-		term_found = (bool_t)(pString[i] == term_char);
-		
-		if(!term_found)
-		{
-			/* Check the address is aligned (assume every forth bytes is aligned) */
-			if(i%align_size)
-			{
-				return -1;
-			}
-			
-			/* a new field */
-			pFields[0]++;
-			
-			/* continue until a null termination char */
-			while(pString[i] && (pString[i] != term_char))
-			{
-				i++;
-			}
-			
-			/* check there wasn't the terminal character immediately after the field */
-			if(pString[i] == term_char)
-			{
-				return -2;
-			}
-			
-		}
-	}
-	pBytes[0] = i;
-	
-	/* return the aligned size */
-	pBytes[0] = pad_to_align(pBytes[0]);
-	
-	/* Check what's recovered matches the stored length */
-	stored_length = *(unsigned int*)&pString[pBytes[0]];       /* the recorded length of the string */
-	pBytes[0] += align_size;                                          /* add the extra space for the record */
-	
-	/* Check on it */
-	if(stored_length != pBytes[0])
-	{
-		return -3;
-	}
-	
-	return 0;
-	
-}
-
-/* Function to find the bytes in the string starting from the end of the string (i.e. the last element is pString[-1])*/
-/* returns < 0 on error */
-int BytesFromStringEnd(const char* pString, size_t* pBytes)
-{
-	
-	int offset = (int)align_size;            /* start from the end of the string */
-	pBytes[0] = 0;                           /* default */
-	
-	/* Grab it directly from the string */
-	pBytes[0] = (*(size_t*)&pString[-offset]);
-	
-	/* scan for the termination character */
-	while((offset < 2*align_size) && (pString[-offset] != term_char))
-	{
-		offset++;
-	}
-	
-	if(offset == align_size)
-	{
-		return -1;
-	}/* failure to find the control character */
-	else
-	{
-		return 0;
-	}/* happy */
-	
-}
-
 
 void onExit(void)
 {
@@ -1955,7 +1844,7 @@ void acquireProcLock(void)
 		uint32_t ret = WaitForSingleObject(glob_info->proc_lock, INFINITE);
 		if(ret == WAIT_ABANDONED)
 		{
-			readMXError("WaitProcLockAbandonedError", "The wait for process lock was abandoned (Error number: %u).", GetLastError());
+			readMXError("WaitProcLockAbandonedError", "One of the processes failed while using the lock. Cannot safely continue (Error number: %u).", GetLastError());
 		}
 		else if(ret == WAIT_FAILED)
 		{
@@ -2097,6 +1986,14 @@ bool_t precheck(void)
 			& glob_info->shm_data_reg.is_init
 			& glob_info->shm_data_reg.is_mapped
 			& glob_info->flags.is_glob_shm_var_init;
+}
+
+void makeDummyVar(mxArray** out)
+{
+	glob_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
+	mexMakeArrayPersistent(glob_shm_var);
+	*out = mxCreateSharedDataCopy(glob_shm_var);
+	glob_info->flags.is_glob_shm_var_init = TRUE;
 }
 
 void nullfcn(void)
