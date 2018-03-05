@@ -57,8 +57,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/*	Clone case		*/
 			/********************/
 			
-			//TODO if every all dimensions are the same size, just copy over the data and don't reattach etc.
-			
 			/* check the inputs */
 			if(nrhs < 2)
 			{
@@ -1091,7 +1089,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			if(hdr->nFields)
 			{
 				releaseProcLock();
-				readMXError("UnexpectedError", "An empty struct array unexpectedly had more than one field");
+				readMXError("UnexpectedError", "An empty struct array unexpectedly had more than one field. This is undefined behavior.");
 			}
 			*ret_var = mxCreateStructArray(hdr->nDims, dat->dims, hdr->nFields, NULL);
 		}

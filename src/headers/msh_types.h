@@ -178,6 +178,7 @@ struct data
 
 typedef struct
 {
+//	bool_t error_flag;
 	uint16_t num_procs;
 	uint64_t lead_seg_num;		/* 64 bit width is temporary ugly fix for theoretical issue of name collision */
 	uint64_t lead_rev_num;

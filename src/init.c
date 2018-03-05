@@ -178,7 +178,9 @@ void procStartup(void)
 	}
 	else
 	{
+#ifdef MSH_WIN
 		CloseHandle(temp_info->startup_flag.handle);
+#endif
 		mxFree(temp_info);
 		glob_info->num_lcl_objs_using += 1;
 	}
@@ -196,10 +198,9 @@ void initProcLock(void)
 	glob_info->lock_sec.bInheritHandle = TRUE;
 	
 	glob_info->proc_lock = CreateMutex(&glob_info->lock_sec, FALSE, MSH_LOCK_NAME);
-	DWORD err = GetLastError();
 	if(glob_info->proc_lock == NULL)
 	{
-		readMXError("Internal:InitMutexError", "Failed to create the mutex (Error number: %u).");
+		readMXError("Internal:InitMutexError", "Failed to create the mutex (Error number: %u).", GetLastError());
 	}
 
 #else
@@ -207,25 +208,7 @@ void initProcLock(void)
 	glob_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, S_IRWXU, 1);
 	if(glob_info->proc_lock == SEM_FAILED)
 	{
-		switch(errno)
-		{
-			case EACCES:
-				readMXError("SemOpenAccessError", "The named semaphore exists and the permissions specified by oflag are denied, or the named semaphore does not exist and permission to create the named semaphore is denied.");
-			case EINTR:
-				readMXError("SemOpenInterruptError", "The sem_open() operation was interrupted by a signal.");
-			case EINVAL:
-				readMXError("SemOpenInvalidError", "The sem_open() operation is not supported for the given name.");
-			case EMFILE:
-				readMXError("SemOpenTooManyFilesError", "Too many semaphore descriptors or file descriptors are currently in use by this process.");
-			case ENFILE:
-				readMXError("SemOpenTooManySemsError", "Too many semaphores are currently open in the system.");
-			case ENOSPC:
-				readMXError("SemOpenNoSpaceError", "There is insufficient space for the creation of the new named semaphore.");
-			case ENOSYS:
-				readMXError("SemOpenNotSupportedError", "The function sem_open() is not supported by this implementation.");
-			default:
-				readMXError("SemOpenUnknownError", "An unknown error occurred.");
-		}
+		readSemError(errno);
 	}
 
 #endif
@@ -305,6 +288,7 @@ void mapUpdateSegment(void)
 
 #else
 	
+	/* `shm_update_info` is this but casted to type `shm_segment_info` */
 	glob_info->shm_update_reg.ptr = mmap(NULL, glob_info->shm_update_reg.reg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, glob_info->shm_update_reg.handle, 0);
 	if(shm_update_info == MAP_FAILED)
 	{
@@ -339,6 +323,7 @@ void globStartup(header_t* hdr)
 		hdr->strBytes = 0;
 		hdr->par_hdr_off = 0;
 		
+//		shm_update_info->error_flag = FALSE;
 		shm_update_info->num_procs = 1;
 		shm_update_info->seg_num = 0;
 		shm_update_info->rev_num = 0;
