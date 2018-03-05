@@ -156,8 +156,10 @@ void procStartup(void)
 		glob_info = temp_info;
 		mexMakeMemoryPersistent(glob_info);
 		
+		/* mxCalloc guarantees that these are zeroed
 		glob_info->flags.is_proc_lock_init = FALSE;
 		
+		glob_info->shm_data_reg = {0};
 		glob_info->shm_update_reg.is_init = FALSE;
 		glob_info->shm_update_reg.is_mapped = FALSE;
 		
@@ -170,6 +172,7 @@ void procStartup(void)
 		
 		glob_info->flags.is_freed = FALSE;
 		glob_info->flags.is_proc_locked = FALSE;
+		*/
 		
 		glob_info->num_lcl_objs_using = 1;
 		

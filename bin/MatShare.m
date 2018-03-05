@@ -11,7 +11,7 @@ classdef MatShare < handle
 	properties (Constant, Access=private)
 		% These are just for documentation since it's faster to just use the numbers directly
 		INIT     = uint8(0);
-		CLONE    = uint8(1);
+		SHARE    = uint8(1);
 		ATTACH   = uint8(2);
 		DETACH   = uint8(3);
 		FREE     = uint8(4);

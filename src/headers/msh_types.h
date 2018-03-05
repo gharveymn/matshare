@@ -131,7 +131,7 @@ typedef struct {
 typedef enum
 {
 	msh_INIT,
-	msh_CLONE,
+	msh_SHARE,
 	msh_ATTACH,
 	msh_DETACH,
 	msh_FREE,

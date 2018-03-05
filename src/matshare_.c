@@ -9,6 +9,27 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
 
 //	mexPrintf("%s\n", mexIsLocked()? "MEX is locked": "MEX is unlocked" );
+
+//	int hdl = shm_open("test", O_RDWR|O_CREAT|O_EXCL, S_IRWXU);
+//	if(hdl == -1)
+//	{
+//		/* already exists */
+//		if(errno != EEXIST)
+//		{
+//			readShmError(errno);
+//		}
+//	}
+//	else
+//	{
+//	}
+	
+	//TODO use mexIsLocked() to check if running for the first time; it has low enough overhead to eliminate the need for the init command
+	
+//	bool_t tst = mexIsLocked();
+//	if(tst)
+//	{
+//		; //blah
+//	}
 	
 	/* For inputs */
 	const mxArray* mxDirective;			/* Directive {clone, attach, detach, free} */
@@ -52,9 +73,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			init(is_mem_safe);
 			break;
 		
-		case msh_CLONE:
+		case msh_SHARE:
 			/********************/
-			/*	Clone case		*/
+			/*	Clone case	*/
 			/********************/
 			
 			/* check the inputs */
@@ -75,11 +96,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			shm_update_info->upd_pid = glob_info->this_pid;
 			
-			/* clear the previous variable */
+			/* clear the previous variable if needed */
 			if(!mxIsEmpty(glob_shm_var))
 			{
 				/* if the current shared variable shares all the same dimensions, etc. then just copy over the memory */
-				/* copy over the data at the same time since otherwise it will be gone */
 				if(shallowcompare(shm_data_ptr, mxInput, &sm_size) == TRUE)
 				{
 					/* DON'T INCREMENT THE REVISION NUMBER */
@@ -90,6 +110,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					shm_update_info->seg_sz = glob_info->cur_seg_info.seg_sz;
 					shm_update_info->rev_num = glob_info->cur_seg_info.rev_num;
 					
+					/* do the rewrite after checking because the comparison is cheap */
 					shallowrewrite(shm_data_ptr, mxInput);
 					
 					releaseProcLock();
@@ -97,6 +118,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				}
 				else
 				{
+					/* otherwise we'll detach and start over */
 					deepdetach(glob_shm_var);
 				}
 			}
@@ -124,7 +146,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			else
 			{
 				
-				// get current map number
+				/* update the current map number if we can't reuse the current segment */
 				
 				/* warning: this may cause a collision in the rare case where one process is still at seg_num = 0 and lead_seg_num = UINT32_MAX; very unlikely, so the overhead isn't worth it */
 				shm_update_info->lead_seg_num += 1;
@@ -171,7 +193,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				shm_unlink(glob_info->shm_data_reg.name);
 				glob_info->shm_data_reg.is_init = FALSE;
 				
-				// create the new mapping
+				/* create the new mapping */
 				glob_info->shm_data_reg.handle = shm_open(glob_info->shm_data_reg.name, O_RDWR | O_CREAT, S_IRWXU);
 				if(glob_info->shm_data_reg.handle == -1)
 				{
@@ -180,7 +202,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				}
 				glob_info->shm_data_reg.is_init = TRUE;
 				
-				if(ftruncate64(glob_info->shm_data_reg.handle, shm_update_info->seg_sz) != 0)
+				if(ftruncate(glob_info->shm_data_reg.handle, shm_update_info->seg_sz) != 0)
 				{
 					releaseProcLock();
 					readFtruncateError(errno);
@@ -205,11 +227,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			mexMakeArrayPersistent(glob_shm_var);
 			glob_info->flags.is_glob_shm_var_init = TRUE;
-
-#ifdef MSH_UNIX
-			msync(shm_update_info, glob_info->shm_update_reg.reg_sz, MS_SYNC|MS_INVALIDATE);
-			msync(shm_data_ptr, glob_info->shm_data_reg.reg_sz, MS_SYNC|MS_INVALIDATE);
-#endif
 			
 			releaseProcLock();
 			
@@ -326,7 +343,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					}
 					glob_info->shm_data_reg.is_init = TRUE;
 					
-					if(ftruncate64(glob_info->shm_data_reg.handle, shm_update_info->seg_sz) != 0)
+					if(ftruncate(glob_info->shm_data_reg.handle, shm_update_info->seg_sz) != 0)
 					{
 						releaseProcLock();
 						readFtruncateError(errno);
@@ -1873,6 +1890,16 @@ void acquireProcLock(void)
 
 void releaseProcLock(void)
 {
+#ifdef MSH_WIN
+	/* not sure if this is required on windows, but it doesn't hurt */
+	FlushViewOfFile(shm_update_info, glob_info->shm_update_reg.reg_sz);
+	FlushViewOfFile(shm_data_ptr, glob_info->shm_data_reg.reg_sz);
+#else
+	/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
+	 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
+	msync(shm_update_info, glob_info->shm_update_reg.reg_sz, MS_SYNC|MS_INVALIDATE);
+	msync(shm_data_ptr, glob_info->shm_data_reg.reg_sz, MS_SYNC|MS_INVALIDATE);
+#endif
 	if(glob_info->flags.is_proc_locked)
 	{
 
@@ -1920,9 +1947,9 @@ msh_directive_t parseDirective(const mxArray* in)
 		{
 			return msh_INIT;
 		}
-		else if(strcmp(dir_str, "clone") == 0)
+		else if(strcmp(dir_str, "share") == 0)
 		{
-			return msh_CLONE;
+			return msh_SHARE;
 		}
 		else if(strcmp(dir_str, "attach") == 0)
 		{
@@ -1956,9 +1983,9 @@ msh_directive_t parseDirective(const mxArray* in)
 		{
 			return msh_DEBUG;
 		}
-		else if(strcmp(dir_str, "share") == 0)
+		else if(strcmp(dir_str, "clone") == 0)
 		{
-			return msh_CLONE;
+			return msh_SHARE;
 		}
 		else
 		{
