@@ -3,20 +3,17 @@
 
 
 static bool_t is_glob_init;
-static bool_t is_proc_init;
 
-void init(bool_t is_mem_safe)
+void init()
 {
 	
 	header_t hdr;
 	
 	//assume not
 	is_glob_init = FALSE;
-	is_proc_init = FALSE;
 	
 	/* find out if this has been initialized yet in this process */
 	procStartup();
-	glob_info->flags.is_mem_safe = is_mem_safe;
 
 	if(!glob_info->flags.is_proc_lock_init)
 	{
@@ -58,34 +55,25 @@ void init(bool_t is_mem_safe)
 	
 	glob_info->flags.is_freed = FALSE;
 	
-	if(is_proc_init)
+	if(!glob_info->flags.is_glob_shm_var_init)
 	{
-		if(!glob_info->flags.is_glob_shm_var_init)
+		
+		if(is_glob_init)
 		{
-			
-			if(is_glob_init)
-			{
-				glob_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
-			}
-			else
-			{
-				/* fetch the data rather than create a dummy variable */
-				shallowfetch(shm_data_ptr, &glob_shm_var);
-			}
-			mexMakeArrayPersistent(glob_shm_var);
-			glob_info->flags.is_glob_shm_var_init = TRUE;
+			glob_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
+			/* TODO MATLAB is crashing because not pointing to shm here, and then trying to free, fix this */
 		}
 		else
 		{
-			readMXError("ShmVarInitError", "The globally shared variable was unexpectedly already initialized before startup.");
+			/* fetch the data rather than create a dummy variable */
+			shallowfetch(shm_data_ptr, &glob_shm_var);
 		}
+		mexMakeArrayPersistent(glob_shm_var);
+		glob_info->flags.is_glob_shm_var_init = TRUE;
 	}
 	else
 	{
-		if(!glob_info->flags.is_glob_shm_var_init)
-		{
-			readMXError("ShmVarInitError", "The globally shared variable was unexpectedly not initialized after startup.");
-		}
+		readMXError("ShmVarInitError", "The globally shared variable was unexpectedly already initialized before startup.");
 	}
 	
 	releaseProcLock();
@@ -95,98 +83,33 @@ void init(bool_t is_mem_safe)
 
 void procStartup(void)
 {
-	mex_info* temp_info = mxCalloc(1, sizeof(mex_info));
-
-	/* if MatShare fails here then we have a critical error */
+	glob_info = mxCalloc(1, sizeof(mex_info));
+	mexMakeMemoryPersistent(glob_info);
+	glob_info->this_pid = getpid();
 	
-	temp_info->startup_flag.reg_sz = MSH_MAX_NAME_LEN;
 	
-#ifdef MSH_WIN
+	/* mxCalloc guarantees that these are zeroed
+	glob_info->flags.is_proc_lock_init = FALSE;
 	
-	temp_info->this_pid = GetProcessId(GetCurrentProcess());
+	glob_info->shm_data_reg = {0};
+	glob_info->shm_update_reg.is_init = FALSE;
+	glob_info->shm_update_reg.is_mapped = FALSE;
 	
-	sprintf(temp_info->startup_flag.name, MATSHARE_STARTUP_FLAG_PRENAME, temp_info->this_pid);
-	temp_info->startup_flag.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(MSH_STARTUP_SIG), temp_info->startup_flag.name);
-	DWORD err = GetLastError();
-	if(temp_info->startup_flag.handle == NULL)
-	{
-		mxFree(temp_info);
-		readMXError("MshStartupFlagError", "Could not create or open the update memory segment (Error number: %u).", err);
-	}
-	temp_info->startup_flag.is_init = TRUE;
+	glob_info->shm_data_reg.is_init = FALSE;
+	glob_info->shm_data_reg.is_mapped = FALSE;
 	
-	if(err == ERROR_ALREADY_EXISTS)
-	{
-		/* then this has already been started */
-		is_proc_init = FALSE;
-	}
-	else
-	{
-		is_proc_init = TRUE;
-	}
-
-#else
+	temp_info->startup_flag.is_mapped = FALSE;
 	
-	/* Try to open an already created segment so we can get the proc init signal */
-	temp_info->this_pid = getpid();
+	glob_info->flags.is_glob_shm_var_init = FALSE;
 	
-	sprintf(temp_info->startup_flag.name, MATSHARE_STARTUP_FLAG_PRENAME, (unsigned long)temp_info->this_pid);
-	temp_info->startup_flag.handle = shm_open(temp_info->startup_flag.name, O_RDWR|O_CREAT|O_EXCL, S_IRWXU);
-	if(temp_info->startup_flag.handle == -1)
-	{
-		/* already exists */
-		if(errno != EEXIST)
-		{
-			readShmError(errno);
-		}
-		is_proc_init = FALSE;
-	}
-	else
-	{
-		is_proc_init = TRUE;
-	}
-	temp_info->startup_flag.is_init = TRUE;
-
-#endif
+	glob_info->flags.is_freed = FALSE;
+	glob_info->flags.is_proc_locked = FALSE;
+	*/
 	
-	if(is_proc_init)
-	{
-		mexLock();
-		
-		glob_info = temp_info;
-		mexMakeMemoryPersistent(glob_info);
-		
-		/* mxCalloc guarantees that these are zeroed
-		glob_info->flags.is_proc_lock_init = FALSE;
-		
-		glob_info->shm_data_reg = {0};
-		glob_info->shm_update_reg.is_init = FALSE;
-		glob_info->shm_update_reg.is_mapped = FALSE;
-		
-		glob_info->shm_data_reg.is_init = FALSE;
-		glob_info->shm_data_reg.is_mapped = FALSE;
-		
-		temp_info->startup_flag.is_mapped = FALSE;
-		
-		glob_info->flags.is_glob_shm_var_init = FALSE;
-		
-		glob_info->flags.is_freed = FALSE;
-		glob_info->flags.is_proc_locked = FALSE;
-		*/
-		
-		glob_info->num_lcl_objs_using = 1;
-		
-		mexAtExit(onExit);
-		
-	}
-	else
-	{
-#ifdef MSH_WIN
-		CloseHandle(temp_info->startup_flag.handle);
-#endif
-		mxFree(temp_info);
-		glob_info->num_lcl_objs_using += 1;
-	}
+	glob_info->flags.is_mem_safe = TRUE; /** default value **/
+	
+	mexAtExit(onExit);
+	
 	
 }
 
@@ -336,10 +259,7 @@ void globStartup(header_t* hdr)
 	}
 	else
 	{
-		if(is_proc_init)
-		{
-			shm_update_info->num_procs += 1;
-		}
+		shm_update_info->num_procs += 1;
 	}
 }
 

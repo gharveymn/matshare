@@ -169,7 +169,7 @@ void make_mxmalloc_signature(uint8_t sig[MXMALLOC_SIG_LEN], size_t seg_size);
 
 void makeDummyVar(mxArray**);
 
-extern void init(bool_t is_mem_safe);
+extern void init();
 
 
 #endif

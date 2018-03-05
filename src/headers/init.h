@@ -8,7 +8,7 @@
 #define MATSHARE_STARTUP_FLAG_PRENAME "MATSHARE_STARTUP_FLAG%lu"
 
 
-void init(bool_t is_mem_safe);
+void init();
 void procStartup(void);
 void initProcLock(void);
 void initUpdateSegment(void);

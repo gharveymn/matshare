@@ -9,38 +9,27 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
 
 //	mexPrintf("%s\n", mexIsLocked()? "MEX is locked": "MEX is unlocked" );
-
-//	int hdl = shm_open("test", O_RDWR|O_CREAT|O_EXCL, S_IRWXU);
-//	if(hdl == -1)
-//	{
-//		/* already exists */
-//		if(errno != EEXIST)
-//		{
-//			readShmError(errno);
-//		}
-//	}
-//	else
-//	{
-//	}
 	
-	//TODO use mexIsLocked() to check if running for the first time; it has low enough overhead to eliminate the need for the init command
-	
-//	bool_t tst = mexIsLocked();
-//	if(tst)
-//	{
-//		; //blah
-//	}
+	if(!mexIsLocked())
+	{
+		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
+		mexLock();
+		init();
+	}
 	
 	/* For inputs */
 	const mxArray* mxDirective;			/* Directive {clone, attach, detach, free} */
 	const mxArray* mxInput;           		/* Input array (for clone) */
+	
+	/* hack */
+	mxArrayStruct* arr;
 	
 	/* For storing inputs */
 	msh_directive_t directive;
 	
 	size_t sm_size;					/* size required by the shared memory */
 	
-	/* for storing the mxArrays ... */
+	/* for storing the mxArrays */
 	header_t hdr;
 	data_t dat;
 	
@@ -55,11 +44,12 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	/* get the directive */
 	directive = parseDirective(mxDirective);
-	uint32_t hi_sz, lo_sz, err;
-	mxArrayStruct* arr;
-	bool_t is_mem_safe;
+
+#ifdef MSH_WIN
+	DWORD hi_sz, lo_sz, err;
+#endif
 	
-	if(directive != msh_INIT && directive != msh_FREE && directive != msh_DETACH && !precheck())
+	if(directive != msh_DETACH && precheck() != TRUE)
 	{
 		readMXError("NotInitializedError", "At least one of the needed shared memory segments has not been initialized. Cannot continue.");
 	}
@@ -67,15 +57,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* Switch yard {clone, attach, detach, free} */
 	switch(directive)
 	{
-		case msh_INIT:
-			/* for now just indicate memory safety by putting two arguments */
-			is_mem_safe = (bool_t)(nrhs == 1);
-			init(is_mem_safe);
-			break;
-		
 		case msh_SHARE:
 			/********************/
-			/*	Clone case	*/
+			/*	Share case	*/
 			/********************/
 			
 			/* check the inputs */
@@ -148,7 +132,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				
 				/* update the current map number if we can't reuse the current segment */
 				
-				/* warning: this may cause a collision in the rare case where one process is still at seg_num = 0 and lead_seg_num = UINT32_MAX; very unlikely, so the overhead isn't worth it */
+				/* warning: this may cause a collision in the rare case where one process is still at seg_num == 0
+				 * and lead_seg_num == UINT64_MAX; very unlikely, so the overhead isn't worth it */
 				shm_update_info->lead_seg_num += 1;
 				
 				glob_info->cur_seg_info.seg_num = shm_update_info->lead_seg_num;
@@ -231,44 +216,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			releaseProcLock();
 			
 			break;
-		
-		case msh_ATTACH:
-			/********************/
-			/*	Attach case	*/
-			/********************/
 			
-			
-			/* Restore the segment if this an initialized region */
-			shallowrestore(shm_data_ptr, glob_shm_var);
-			
-			/* proc_lock was acquired either in CLONE or FETCH */
-//			releaseProcLock();
-			
-			break;
-		
-		case msh_DETACH:
-			/********************/
-			/*	Dettach case	*/
-			/********************/
-		
-		case msh_FREE:
-			/********************/
-			/*	free case		*/
-			/********************/
-			
-			/* this only actually frees if it is the last object using the function in the current process */
-			
-			if(glob_info->num_lcl_objs_using == 1)
-			{
-				onExit();
-				mexUnlock();
-			}
-			else
-			{
-				glob_info->num_lcl_objs_using--;
-			}
-			
-			break;
 		case msh_FETCH:
 			
 			acquireProcLock();
@@ -371,14 +319,24 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			break;
 		
-		case msh_COMPARE:
-			acquireProcLock();
-			plhs[0] = mxCreateLogicalScalar((mxLogical)(glob_info->cur_seg_info.seg_num != shm_update_info->seg_num));
-			releaseProcLock();
+		case msh_DETACH:
+			/********************/
+			/*	Dettach case	*/
+			/********************/
+			
+			/* this only actually frees if it is the last object using the function in the current process */
+			
+			
+			onExit();
+			mexUnlock();
+			
 			break;
-		case msh_COPY:
-			plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
+			
+		case msh_PARAM:
+			/* set parameters for matshare to use */
+			
 			break;
+		
 		case msh_DEEPCOPY:
 			plhs[0] = mxDuplicateArray(glob_shm_var);
 			break;
@@ -1799,12 +1757,6 @@ void onExit(void)
 		glob_info->flags.is_proc_lock_init = FALSE;
 	}
 	
-	if(glob_info->startup_flag.is_init)
-	{
-		shm_unlink(glob_info->startup_flag.name);
-		glob_info->startup_flag.is_init = FALSE;
-	}
-	
 #endif
 	
 	mxFree(glob_info);
@@ -1817,7 +1769,7 @@ void onExit(void)
 
 size_t pad_to_align(size_t size)
 {
-	/* bitwise expression is equiv to (size % align_size) since align_size is a power of 2 */
+	/* note: (x % 2^n) == (x & (2^n - 1)) */
 	return size + align_size - (size & (align_size-1));
 }
 
@@ -1825,7 +1777,10 @@ size_t pad_to_align(size_t size)
 void make_mxmalloc_signature(uint8_t sig[MXMALLOC_SIG_LEN], size_t seg_size)
 {
 	/*
-	 * NEW MXMALLOC SIGNATURE INFO:
+	 * MXMALLOC SIGNATURE INFO:
+	 * 	mxMalloc adjusts the size of memory for 32 byte alignment (shifts either 16 or 32 bytes)
+	 * 	it appends the following 16 byte header immediately before data segment
+	 *
 	 * HEADER:
 	 * 		bytes 0-7 - size iterator, increases as (size/16+1)*16 mod 256
 	 * 			byte 0 = (((size+16-1)/2^4)%2^4)*2^4
@@ -1840,11 +1795,15 @@ void make_mxmalloc_signature(uint8_t sig[MXMALLOC_SIG_LEN], size_t seg_size)
 	
 	memcpy(sig, MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
 	size_t multi = 1 << 4;
-	sig[0] = (uint8_t)((((seg_size + 0x0F)/multi)%multi)*multi);
-	for(int i = 1; i < 8; i++)
+	
+	/* note: (x % 2^n) == (x & (2^n - 1)) */
+	sig[0] = (uint8_t)((((seg_size + 0x0F)/multi) & (multi - 1))*multi);
+	
+	/* note: this only does bits 1 to 4 because of 64 bit precision limit (maybe implement bit 5 in the future?)*/
+	for(int i = 1; i < 5; i++)
 	{
 		multi = (size_t)1 << (1 << (2 + i));
-		sig[i] = (uint8_t)(((seg_size + 0x0F)/multi)%multi);
+		sig[i] = (uint8_t)(((seg_size + 0x0F)/multi) & (multi - 1));
 	}
 	
 }
@@ -1943,37 +1902,17 @@ msh_directive_t parseDirective(const mxArray* in)
 			dir_str[i] = (char)tolower(dir_str[i]);
 		}
 		
-		if(strcmp(dir_str, "init") == 0)
-		{
-			return msh_INIT;
-		}
-		else if(strcmp(dir_str, "share") == 0)
+		if(strcmp(dir_str, "share") == 0)
 		{
 			return msh_SHARE;
-		}
-		else if(strcmp(dir_str, "attach") == 0)
-		{
-			return msh_ATTACH;
 		}
 		else if(strcmp(dir_str, "detach") == 0)
 		{
 			return msh_DETACH;
 		}
-		else if(strcmp(dir_str, "free") == 0)
-		{
-			return msh_FREE;
-		}
 		else if(strcmp(dir_str, "fetch") == 0)
 		{
 			return msh_FETCH;
-		}
-		else if(strcmp(dir_str, "compare") == 0)
-		{
-			return msh_COMPARE;
-		}
-		else if(strcmp(dir_str, "copy") == 0)
-		{
-			return msh_COPY;
 		}
 		else if(strcmp(dir_str, "deepcopy") == 0)
 		{

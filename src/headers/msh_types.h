@@ -130,14 +130,10 @@ typedef struct {
 
 typedef enum
 {
-	msh_INIT,
 	msh_SHARE,
-	msh_ATTACH,
-	msh_DETACH,
-	msh_FREE,
 	msh_FETCH,
-	msh_COMPARE,
-	msh_COPY,
+	msh_DETACH,
+	msh_PARAM,
 	msh_DEEPCOPY,
 	msh_DEBUG
 } msh_directive_t;
@@ -217,7 +213,6 @@ typedef struct
 {
 	mem_region shm_data_reg;
 	mem_region shm_update_reg;
-	mem_region startup_flag;
 
 #ifdef MSH_WIN
 	HANDLE proc_lock;
@@ -242,9 +237,7 @@ typedef struct
 #else
 	pid_t this_pid;
 #endif
-	
-	int num_lcl_objs_using;
-	
+
 } mex_info;
 
 #define shm_data_ptr ((byte_t*)glob_info->shm_data_reg.ptr)
