@@ -4,6 +4,7 @@
 #include "mex.h"
 #include <stdint.h>
 
+
 #define MSH_UPDATE_SEGMENT_NAME "/MATSHARE_UPDATE_SEGMENT"
 #define MSH_LOCK_NAME "/MATSHARE_LOCK"
 #define MSH_SEGMENT_NAME "/MATSHARE_SEGMENT%0llx"
@@ -44,6 +45,8 @@ extern int shm_unlink(const char *name);
 
 #ifdef MSH_WIN
 #  include <windows.h>
+
+
 #else
 #  include <unistd.h>
 #  include <semaphore.h>
@@ -62,11 +65,11 @@ extern int shm_unlink(const char *name);
 #if UINTPTR_MAX == 0xffffffffffffffff
 typedef int64_t address_t;
 typedef int64_t index_t;
-	#define UNDEF_ADDR (address_t)0xffffffffffffffff
+#define UNDEF_ADDR (address_t)0xffffffffffffffff
 #elif UINTPTR_MAX == 0xffffffff
 typedef uint32_t address_t;
 	typedef uint32_t index_t;
-	#define UNDEF_ADDR (address_t)0xffffffff
+#define UNDEF_ADDR (address_t)0xffffffff
 #else
 #error Your architecture is weird
 #endif
@@ -75,8 +78,9 @@ typedef struct data data_t;
 typedef char byte_t;
 typedef bool bool_t;
 
-typedef struct {
-	void *name;             /*   prev - R2008b: Name of variable in workspace
+typedef struct
+{
+	void* name;             /*   prev - R2008b: Name of variable in workspace
 				               R2009a - R2010b: NULL
 				               R2011a - later : Reverse CrossLink pointer    */
 	mxClassID ClassID;      /*  0 = unknown     10 = int16
@@ -98,7 +102,7 @@ typedef struct {
                                 5 = (unknown)
                                 6 = property of opaque class object
                                 7 = (unknown)                                */
-	mxArray *CrossLink;     /* Address of next shared-data variable          */
+	mxArray* CrossLink;     /* Address of next shared-data variable          */
 	size_t ndim;            /* Number of dimensions                          */
 	unsigned int RefCount;  /* Number of extra sub-element copies            */
 	unsigned int flags;     /*  bit  0 = is scalar double full
@@ -107,20 +111,23 @@ typedef struct {
                                 bit  5 = is sparse
                                 bit  9 = is numeric
                                 bits 24 - 31 = User Bits                     */
-	union mdim_data{
+	union mdim_data
+	{
 		size_t M;           /* Row size for 2D matrices, or                  */
-		size_t *dims;       /* Pointer to dims array for nD > 2 arrays       */
+		size_t* dims;       /* Pointer to dims array for nD > 2 arrays       */
 	} Mdims;
 	size_t N;               /* Product of dims 2:end                         */
-	void *pr;               /* Real Data Pointer (or cell/field elements)    */
-	void *pi;               /* Imag Data Pointer (or field information)      */
-	union ir_data{
-		mwIndex *ir;        /* Pointer to row values for sparse arrays       */
+	void* pr;               /* Real Data Pointer (or cell/field elements)    */
+	void* pi;               /* Imag Data Pointer (or field information)      */
+	union ir_data
+	{
+		mwIndex* ir;        /* Pointer to row values for sparse arrays       */
 		mxClassID ClassID;  /* New User Defined Class ID (classdef)          */
-		char *ClassName;    /* Pointer to Old User Defined Class Name        */
+		char* ClassName;    /* Pointer to Old User Defined Class Name        */
 	} irClassNameID;
-	union jc_data{
-		mwIndex *jc;        /* Pointer to column values for sparse arrays    */
+	union jc_data
+	{
+		mwIndex* jc;        /* Pointer to column values for sparse arrays    */
 		mxClassID ClassID;  /* Old User Defined Class ID                     */
 	} jcClassID;
 	size_t nzmax;           /* Number of elements allocated for sparse       */
@@ -130,14 +137,7 @@ typedef struct {
 
 typedef enum
 {
-	msh_SHARE,
-	msh_FETCH,
-	msh_DETACH,
-	msh_PARAM,
-	msh_DEEPCOPY,
-	msh_DEBUG,
-	msh_OBJ_REGISTER,
-	msh_OBJ_DEREGISTER
+	msh_SHARE, msh_FETCH, msh_DETACH, msh_PARAM, msh_DEEPCOPY, msh_DEBUG, msh_OBJ_REGISTER, msh_OBJ_DEREGISTER
 } msh_directive_t;
 
 /* captures fundamentals of the mxArray */
@@ -155,7 +155,7 @@ typedef struct
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
 	int par_hdr_off;   /* offset to the parent's header, add this to help backwards searches (double linked... sort of)*/
 	size_t shm_sz;            /* size of serialized object (header + size array + field names string) */
-	size_t  str_sz;
+	size_t str_sz;
 } header_t;
 
 /* structure used to record all of the data addresses */
@@ -178,7 +178,7 @@ typedef struct
 {
 //	bool_t error_flag;
 	uint16_t num_procs;
-	uint64_t lead_seg_num;		/* 64 bit width is temporary ugly fix for theoretical issue of name collision */
+	uint64_t lead_seg_num;          /* 64 bit width is temporary ugly fix for theoretical issue of name collision */
 	uint64_t lead_rev_num;
 	uint64_t seg_num;
 	uint64_t rev_num;
@@ -192,8 +192,8 @@ typedef struct
 
 typedef struct
 {
-	uint64_t seg_num;						// segment number (iterated when a new file is needed)
-	uint64_t rev_num;						// total number of revisions (used for comparison, not indexing, so it's circular)
+	uint64_t seg_num;                              // segment number (iterated when a new file is needed)
+	uint64_t rev_num;                              // total number of revisions (used for comparison, not indexing, so it's circular)
 } lcl_segment_info;
 
 typedef struct
@@ -231,7 +231,7 @@ typedef struct
 		bool_t is_proc_locked;
 		bool_t is_mem_safe;
 	} flags;
-	
+
 #ifdef MSH_WIN
 	DWORD this_pid;
 #else
@@ -239,7 +239,7 @@ typedef struct
 #endif
 	
 	uint32_t num_lcl_objs;
-
+	
 } mex_info;
 
 #define shm_data_ptr ((byte_t*)glob_info->shm_data_reg.ptr)

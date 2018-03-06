@@ -99,29 +99,29 @@ mex_info* glob_info;
 
 /* Remove shared memory references to input matrix (in-situ), recursively    */
 /* if needed.                                                                */
-void deepdetach(mxArray* ret_var);
+void shmdetach(mxArray* ret_var);
 
 /* Shallow copy matrix from shared memory into Matlab form.                  */
-size_t shallowrestore(byte_t* shm, mxArray* ret_var);
+size_t shmrestore(byte_t* shm, mxArray* ret_var);
 
-size_t shallowfetch(byte_t* shm, mxArray** ret_var);
+size_t shmfetch(byte_t* shm, mxArray** ret_var);
 
-bool_t shallowcompare(byte_t* shm, const mxArray* comp_var, size_t* offset);
+bool_t shmcomparecontent(byte_t* shm, const mxArray* comp_var, size_t* offset);
 
 size_t shallowrewrite(byte_t* shm, const mxArray* input_var);
 
 /* Recursively descend through Matlab matrix to assess how much space its    */
 /* serialization will require.                                               */
-size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray** ret_var);
+size_t shmscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray** ret_var);
 
 /* Descend through header and data structure and copy relevent data to       */
 /* shared memory.                                                            */
-void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray* ret_var);
+void shmcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray* ret_var);
 
 /* Descend through header and data structure and free the memory.            */
-void deepfreetmp(data_t* dat);
+void freetmp(data_t* dat);
 
-mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset);
+mxLogical shmcomparelocale(byte_t* shm, const mxArray* comp_var, size_t* offset);
 
 void onExit(void);
 
@@ -165,7 +165,7 @@ bool_t precheck(void);
 
 void nullfcn(void);
 
-void make_mxmalloc_signature(uint8_t sig[MXMALLOC_SIG_LEN], size_t seg_size);
+void makemxmallocsignature(uint8_t* sig, size_t seg_size);
 
 void makeDummyVar(mxArray**);
 

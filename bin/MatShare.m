@@ -1,9 +1,9 @@
 classdef MatShare < handle
-    
+
 	properties (Transient, Dependent, GetObservable, SetObservable)
 		data
 	end
-	
+
 	properties (Constant, Access=private)
 		% These are just for documentation since it's faster to just use the numbers directly
 		SHARE      = uint8(0);
@@ -15,51 +15,51 @@ classdef MatShare < handle
 		REGISTER   = uint8(6);
 		DEREGISTER = uint8(7);
 	end
-	
+
 	methods
 		function obj = MatShare
 			% does nothing
 			matshare_(MatShare.REGISTER);
 		end
-		
+
 		function set.data(~,in)
 			matshare_(MatShare.SHARE, in);
 		end
-		
+
 		function out = get.data(~)
  			out = matshare_(MatShare.FETCH);
 		end
-		
-		function ret = deepcopy(~)
+
+		function ret = shmcopy(~)
 			ret = matshare_(MatShare.DEEPCOPY);
 		end
-		
+
 		function debug(~)
 			matshare_(MatShare.DEBUG);
 		end
-		
+
 		function delete(~)
 			matshare_(MatShare.DEREGISTER);
 			clear matshare_
 		end
-		
+
 	end
-	
+
 	methods (Static)
-		
+
 		function share(in)
 			matshare_(MatShare.SHARE, in);
 		end
-		
+
 		function out = fetch()
 			% get callback
 			out = matshare_(MatShare.FETCH);
         end
-        
+
         function detach()
-           matshare_(MatShare.DETACH); 
+           matshare_(MatShare.DETACH);
         end
-		
+
 	end
 end
 

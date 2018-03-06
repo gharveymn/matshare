@@ -65,7 +65,7 @@ void init()
 		else
 		{
 			/* fetch the data rather than create a dummy variable */
-			shallowfetch(shm_data_ptr, &glob_shm_var);
+			shmfetch(shm_data_ptr, &glob_shm_var);
 		}
 		mexMakeArrayPersistent(glob_shm_var);
 		glob_info->flags.is_glob_shm_var_init = TRUE;

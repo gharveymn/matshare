@@ -84,7 +84,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			if(!mxIsEmpty(glob_shm_var))
 			{
 				/* if the current shared variable shares all the same dimensions, etc. then just copy over the memory */
-				if(shallowcompare(shm_data_ptr, mxInput, &sm_size) == TRUE)
+				if(shmcomparecontent(shm_data_ptr, mxInput, &sm_size) == TRUE)
 				{
 					/* DON'T INCREMENT THE REVISION NUMBER */
 					/* this is an in-place change, so everyone is still fine */
@@ -103,14 +103,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				else
 				{
 					/* otherwise we'll detach and start over */
-					deepdetach(glob_shm_var);
+					shmdetach(glob_shm_var);
 				}
 			}
 			mxDestroyArray(glob_shm_var);
 			glob_info->flags.is_glob_shm_var_init = FALSE;
 			
 			/* scan input data */
-			sm_size = deepscan(&hdr, &dat, mxInput, NULL, &glob_shm_var);
+			sm_size = shmscan(&hdr, &dat, mxInput, NULL, &glob_shm_var);
 			
 			/* update the revision number and indicate our info is current */
 			shm_update_info->lead_rev_num += 1;
@@ -153,8 +153,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				glob_info->shm_data_reg.is_init = FALSE;
 				
 				// create the new mapping
-				lo_sz = (uint32_t)(glob_info->shm_data_reg.seg_sz & 0xFFFFFFFFL);
-				hi_sz = (uint32_t)((glob_info->shm_data_reg.seg_sz >> 32) & 0xFFFFFFFFL);
+				lo_sz = (DWORD)(glob_info->shm_data_reg.seg_sz & 0xFFFFFFFFL);
+				hi_sz = (DWORD)((glob_info->shm_data_reg.seg_sz >> 32) & 0xFFFFFFFFL);
 				glob_info->shm_data_reg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->shm_data_reg.name);
 				err = GetLastError();
 				if(glob_info->shm_data_reg.handle == NULL)
@@ -212,10 +212,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			}
 			
 			/* copy data to the shared memory */
-			deepcopy(&hdr, &dat, shm_data_ptr, NULL, glob_shm_var);
+			shmcopy(&hdr, &dat, shm_data_ptr, NULL, glob_shm_var);
 			
 			/* free temporary allocation */
-			deepfreetmp(&dat);
+			freetmp(&dat);
 			
 			mexMakeArrayPersistent(glob_shm_var);
 			glob_info->flags.is_glob_shm_var_init = TRUE;
@@ -259,7 +259,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				if(!mxIsEmpty(glob_shm_var))
 				{
 					/* NULL all of the Matlab pointers */
-					deepdetach(glob_shm_var);
+					shmdetach(glob_shm_var);
 				}
 				mxDestroyArray(glob_shm_var);
 				
@@ -334,7 +334,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				
 				}
 				
-				shallowfetch(shm_data_ptr, &glob_shm_var);
+				shmfetch(shm_data_ptr, &glob_shm_var);
 				
 				mexMakeArrayPersistent(glob_shm_var);
 				
@@ -399,7 +399,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
 
 /* ------------------------------------------------------------------------- */
-/* deepdetach                                                                */
+/* shmdetach                                                                */
 /*                                                                           */
 /* Remove shared memory references to input matrix (in-situ), recursively    */
 /* if needed.                                                                */
@@ -409,7 +409,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 /* Returns:                                                                  */
 /*    Pointer to start of shared memory segment.                             */
 /* ------------------------------------------------------------------------- */
-void deepdetach(mxArray* ret_var)
+void shmdetach(mxArray* ret_var)
 {
 	
 	/* uses side-effects! */
@@ -434,7 +434,7 @@ void deepdetach(mxArray* ret_var)
 		{
 			for(j = 0; j < nFields; j++)               /* field */
 			{
-				deepdetach(mxGetFieldByNumber(ret_var, i, j));
+				shmdetach(mxGetFieldByNumber(ret_var, i, j));
 			}/* detach this one */
 		}
 	}
@@ -444,7 +444,7 @@ void deepdetach(mxArray* ret_var)
 		n = mxGetNumberOfElements(ret_var);
 		for(i = 0; i < n; i++)
 		{
-			deepdetach(mxGetCell(ret_var, i));
+			shmdetach(mxGetCell(ret_var, i));
 		}/* detach this one */
 		
 	}
@@ -513,7 +513,7 @@ void deepdetach(mxArray* ret_var)
 
 
 /* ------------------------------------------------------------------------- */
-/* shallowrestore                                                            */
+/* shmrestore                                                            */
 /*                                                                           */
 /* Shallow copy matrix from shared memory into Matlab form.                  */
 /*                                                                           */
@@ -523,7 +523,7 @@ void deepdetach(mxArray* ret_var)
 /* Returns:                                                                  */
 /*    size of shared memory segment.                                         */
 /* ------------------------------------------------------------------------- */
-size_t shallowrestore(byte_t* shm, mxArray* ret_var)
+size_t shmrestore(byte_t* shm, mxArray* ret_var)
 {
 	
 	/* for working with shared memory ... */
@@ -569,7 +569,7 @@ size_t shallowrestore(byte_t* shm, mxArray* ret_var)
 			for(field_num = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 			{
 				/* And fill it */
-				shm += shallowrestore(shm, mxGetFieldByNumber(ret_var, i, field_num));
+				shm += shmrestore(shm, mxGetFieldByNumber(ret_var, i, field_num));
 			}
 		}
 	}
@@ -578,7 +578,7 @@ size_t shallowrestore(byte_t* shm, mxArray* ret_var)
 		for(i = 0; i < hdr->num_elems; i++)
 		{
 			/* And fill it */
-			shm += shallowrestore(shm, mxGetCell(ret_var, i));
+			shm += shmrestore(shm, mxGetCell(ret_var, i));
 		}
 	}
 	else     /*base case*/
@@ -638,7 +638,7 @@ size_t shallowrestore(byte_t* shm, mxArray* ret_var)
 }
 
 
-size_t shallowfetch(byte_t* shm, mxArray** ret_var)
+size_t shmfetch(byte_t* shm, mxArray** ret_var)
 {
 	/* for working with shared memory ... */
 	size_t i;
@@ -689,7 +689,7 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 			{
 				for(field_num = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 				{
-					shm += shallowfetch(shm, &ret_child);
+					shm += shmfetch(shm, &ret_child);
 					mxSetFieldByNumber(*ret_var, i, field_num, ret_child);
 				}
 			}
@@ -700,7 +700,7 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 		*ret_var = mxCreateCellArray(hdr->num_dims, dims);
 		for(i = 0; i < hdr->num_elems; i++)
 		{
-			shm += shallowfetch(shm, &ret_child);
+			shm += shmfetch(shm, &ret_child);
 			mxSetCell(*ret_var, i, ret_child);
 		}
 	}
@@ -814,7 +814,7 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 }
 
 
-bool_t shallowcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
+bool_t shmcomparecontent(byte_t* shm, const mxArray* comp_var, size_t* offset)
 {
 	/* for working with shared memory ... */
 	size_t i, shmshift;
@@ -869,7 +869,7 @@ bool_t shallowcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 				}
 				
 				
-				if(!shallowcompare(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
+				if(!shmcomparecontent(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
 				{
 					return FALSE;
 				}
@@ -884,7 +884,7 @@ bool_t shallowcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	{
 		for(i = 0, shmshift = 0; i < hdr->num_elems; i++, shmshift = 0)
 		{
-			if(!shallowcompare(shm, mxGetCell(comp_var, i), &shmshift))
+			if(!shmcomparecontent(shm, mxGetCell(comp_var, i), &shmshift))
 			{
 				return FALSE;
 			}
@@ -1042,7 +1042,7 @@ size_t shallowrewrite(byte_t* shm, const mxArray* input_var)
 
 
 /* ------------------------------------------------------------------------- */
-/* deepscan                                                                  */
+/* shmscan                                                                  */
 /*                                                                           */
 /* Recursively descend through Matlab matrix to assess how much space its    */
 /* serialization will require.                                               */
@@ -1054,7 +1054,7 @@ size_t shallowrewrite(byte_t* shm, const mxArray* input_var)
 /* Returns:                                                                  */
 /*    size that shared memory segment will need to be.                       */
 /* ------------------------------------------------------------------------- */
-size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray** ret_var)
+size_t shmscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray** ret_var)
 {
 	/* counter */
 	size_t i, count;
@@ -1142,7 +1142,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 				for(field_num = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 				{
 					/* call recursivley */
-					hdr->shm_sz += deepscan(&(dat->child_hdr[count]), &(dat->child_dat[count]), mxGetFieldByNumber(mxInput, i, field_num), hdr, &ret_child);
+					hdr->shm_sz += shmscan(&(dat->child_hdr[count]), &(dat->child_dat[count]), mxGetFieldByNumber(mxInput, i, field_num), hdr, &ret_child);
 					mxSetFieldByNumber(*ret_var, i, field_num, ret_child);
 					
 					count++; /* progress */
@@ -1170,7 +1170,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 			/* go through each recursively */
 			for(i = 0; i < hdr->num_elems; i++)
 			{
-				hdr->shm_sz += deepscan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr, &ret_child);
+				hdr->shm_sz += shmscan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr, &ret_child);
 				mxSetCell(*ret_var, i, ret_child);
 			}
 		}
@@ -1260,7 +1260,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 
 
 /* ------------------------------------------------------------------------- */
-/* deepcopy                                                                  */
+/* shmcopy                                                                  */
 /*                                                                           */
 /* Descend through header and data structure and copy relevent data to       */
 /* shared memory.                                                            */
@@ -1272,7 +1272,7 @@ size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* pa
 /* Returns:                                                                  */
 /*    void                                                                   */
 /* ------------------------------------------------------------------------- */
-void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray* ret_var)
+void shmcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray* ret_var)
 {
 	
 	header_t* cpy_hdr;          /* the header in its copied location */
@@ -1324,7 +1324,7 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 			{
 				/* And fill it */
 				size_t idx = i*hdr->num_elems + field_num;
-				deepcopy(&(dat->child_hdr[idx]), &(dat->child_dat[idx]), shm, cpy_hdr, mxGetFieldByNumber(ret_var, i, field_num));
+				shmcopy(&(dat->child_hdr[idx]), &(dat->child_dat[idx]), shm, cpy_hdr, mxGetFieldByNumber(ret_var, i, field_num));
 				shm += (dat->child_hdr[idx]).shm_sz;
 			}
 		}
@@ -1336,7 +1336,7 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 		/* recurse through each cell */
 		for(i = 0; i < hdr->num_elems; i++)
 		{
-			deepcopy(&(dat->child_hdr[i]), &(dat->child_dat[i]), shm, cpy_hdr, mxGetCell(ret_var, i));
+			shmcopy(&(dat->child_hdr[i]), &(dat->child_dat[i]), shm, cpy_hdr, mxGetCell(ret_var, i));
 			shm += (dat->child_hdr[i]).shm_sz;
 		}
 	}
@@ -1346,7 +1346,7 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 		cpy_sz = (hdr->num_elems)*(hdr->elem_size);
 		
 		uint8_t mxmalloc_sig[MXMALLOC_SIG_LEN];
-		make_mxmalloc_signature(mxmalloc_sig, cpy_sz);
+		makemxmallocsignature(mxmalloc_sig, cpy_sz);
 		
 		memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), mxmalloc_sig, MXMALLOC_SIG_LEN);
 		shm += pad_to_align(MXMALLOC_SIG_LEN);
@@ -1410,7 +1410,7 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 
 
 /* ------------------------------------------------------------------------- */
-/* deepfreetmp                                                                  */
+/* freetmp                                                                  */
 /*                                                                           */
 /* Descend through header and data structure and free the memory.            */
 /*                                                                           */
@@ -1419,13 +1419,13 @@ void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArra
 /* Returns:                                                                  */
 /*    void                                                                   */
 /* ------------------------------------------------------------------------- */
-void deepfreetmp(data_t* dat)
+void freetmp(data_t* dat)
 {
 	
 	/* recurse to the bottom */
 	if(dat->child_dat)
 	{
-		deepfreetmp(dat->child_dat);
+		freetmp(dat->child_dat);
 	}
 	
 	/* free on the way back up */
@@ -1436,7 +1436,7 @@ void deepfreetmp(data_t* dat)
 }
 
 
-mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
+mxLogical shmcomparelocale(byte_t* shm, const mxArray* comp_var, size_t* offset)
 {
 	/* for working with shared memory ... */
 	size_t i, shmshift;
@@ -1492,7 +1492,7 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 				}
 				
 				
-				if(!deepcompare(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
+				if(!shmcomparelocale(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
 				{
 					return FALSE;
 				}
@@ -1507,7 +1507,7 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	{
 		for(i = 0, shmshift = 0; i < hdr->num_elems; i++, shmshift = 0)
 		{
-			if(!deepcompare(shm, mxGetCell(comp_var, i), &shmshift))
+			if(!shmcomparelocale(shm, mxGetCell(comp_var, i), &shmshift))
 			{
 				return FALSE;
 			}
@@ -1719,7 +1719,7 @@ void onExit(void)
 		if(!mxIsEmpty(glob_shm_var))
 		{
 			/* NULL all of the Matlab pointers */
-			deepdetach(glob_shm_var);
+			shmdetach(glob_shm_var);
 		}
 		mxDestroyArray(glob_shm_var);
 	}
@@ -1823,7 +1823,7 @@ size_t pad_to_align(size_t size)
 }
 
 
-void make_mxmalloc_signature(uint8_t sig[MXMALLOC_SIG_LEN], size_t seg_size)
+void makemxmallocsignature(uint8_t* sig, size_t seg_size)
 {
 	/*
 	 * MXMALLOC SIGNATURE INFO:
@@ -1953,7 +1953,7 @@ msh_directive_t parseDirective(const mxArray* in)
 		{
 			return msh_FETCH;
 		}
-		else if(strcmp(dir_str, "deepcopy") == 0)
+		else if(strcmp(dir_str, "shmcopy") == 0)
 		{
 			return msh_DEEPCOPY;
 		}

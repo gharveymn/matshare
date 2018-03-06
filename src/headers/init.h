@@ -17,7 +17,7 @@ void globStartup(header_t* hdr);
 void initDataSegment(void);
 void mapDataSegment(void);
 
-extern size_t shallowfetch(byte_t* shm, mxArray** ret_var);
+extern size_t shmfetch(byte_t* shm, mxArray** ret_var);
 extern mxArray* mxCreateSharedDataCopy(mxArray *);
 extern mxArray* glob_shm_var;
 extern mex_info* glob_info;
