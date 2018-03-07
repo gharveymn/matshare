@@ -1,10 +1,10 @@
-#include "headers/utils.h"
+#include "headers/matlabutils.h"
 
 #ifdef MSH_UNIX
 
 void readSemError_(const char* file_name, int line, int err)
 {
-	switch(errno)
+	switch(err)
 	{
 		case EACCES:
 			readMXError_(file_name, line, "SemOpenAccessError", "The named semaphore exists and the permissions specified by oflag are denied, or the named semaphore does not exist and permission to create the named semaphore is denied.");

@@ -1,4 +1,4 @@
-function out = msh_fetch
+function out = mshfetch
 	% get callback
 	out = matshare_(uint8(1));
 end

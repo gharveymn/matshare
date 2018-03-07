@@ -30,7 +30,7 @@ classdef MatShare < handle
  			out = matshare_(MatShare.FETCH);
 		end
 
-		function ret = shmcopy(~)
+		function ret = shmCopy(~)
 			ret = matshare_(MatShare.DEEPCOPY);
 		end
 

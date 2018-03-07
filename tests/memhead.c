@@ -1,5 +1,6 @@
 #include "mex.h"
-#include "matrix.h"
+
+extern mxArray* mxCreateSharedDataCopy(mxArray *);
 
 typedef struct {
 	void *name;             /*   prev - R2008b: Name of variable in workspace
@@ -55,19 +56,54 @@ typedef struct {
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-	int bytes = (int)*(double*)mxGetData(prhs[0]);
+	
+// 	mxArray* in = mxCreateDoubleMatrix(3,3,mxREAL);
+// 	mxArray* shared = mxCreateSharedDataCopy(in);
+	mxArray* in = prhs[0];
+	mxArrayStruct* in_tag = (mxArrayStruct*)in;
+// 	mxArrayStruct* shared_tag = (mxArrayStruct*)shared;
+// 
+// 
+	in = in;
+// 	mexPrintf("addr in %p\n", in_tag);
+// 	mexPrintf("addr in crosslink %p\n", in_tag->CrossLink);
+// 	mexPrintf("addr in dat %p\n\n", in_tag->pr);
+// 
+// 	mexPrintf("addr shared %p\n", shared_tag);
+// 	mexPrintf("addr shared crosslink %p\n", shared_tag->CrossLink);
+// 	mexPrintf("addr shared dat %p\n\n\n", shared_tag->pr);
+		
+// 		mxFree(mxGetData(in));
+// 		mxSetData(in, mxMalloc(9));
+// 		
+// 		mexPrintf("addr in %p\n", in_tag);
+// 		mexPrintf("addr in crosslink %p\n", in_tag->CrossLink);
+// 		mexPrintf("addr in dat %p\n\n", in_tag->pr);
+// 		
+// 		mexPrintf("addr shared %p\n", shared_tag);
+// 		mexPrintf("addr shared crosslink %p\n", shared_tag->CrossLink);
+// 		mexPrintf("addr shared dat %p\n\n\n", shared_tag->pr);
+// 		
+// 		mxDestroyArray(in);
+// 		
+// 		mexPrintf("addr shared %p\n", shared_tag);
+// 		mexPrintf("addr shared crosslink %p\n", shared_tag->CrossLink);
+// 		mexPrintf("addr shared dat %p\n", shared_tag->pr);
+// 		
+// 		mxDestroyArray(shared);
+// 	int bytes = (int)*(double*)mxGetData(prhs[0]);
 // 	mexPrintf("%i",bytes);
-	uint8_T* mem = mxMalloc(bytes);
-	int i;
+// 	uint8_T* mem = mxMalloc(bytes);
+// 	int i;
 // 	for(i=16;i>0;i--)
 // 	{
 // 		mexPrintf("%X\n",*(mem-i));
 // 	}
-	plhs[0] = mxCreateNumericMatrix(1, 8, mxUINT8_CLASS, mxREAL);
-	memcpy(mxGetData(plhs[0]), mem - 16, 8);
-	plhs[1] = mxCreateDoubleScalar((double)((size_t)mem));
-	plhs[2] = mxCreateDoubleScalar((double)((size_t)(mem+bytes)));
-	mxFree(mem);
+// 	plhs[0] = mxCreateNumericMatrix(1, 8, mxUINT8_CLASS, mxREAL);
+// 	memcpy(mxGetData(plhs[0]), mem - 16, 8);
+// 	plhs[1] = mxCreateDoubleScalar((double)((size_t)mem));
+// 	plhs[2] = mxCreateDoubleScalar((double)((size_t)(mem+bytes)));
+// 	mxFree(mem);
 	
 // 	mexPrintf("\n");
 	

@@ -31,7 +31,7 @@ IF("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 
 	SET(SOURCE_FILES
 			src/matshare_.c src/headers/matshare_.h
-		   src/utils.c src/headers/utils.h src/init.c src/headers/init.h src/headers/msh_types.h)
+		   src/matlabutils.c src/headers/matlabutils.h src/init.c src/headers/init.h src/headers/mshtypes.h src/headers/externtypes.h src/mshutils.c src/headers/mshutils.h)
 
 	ADD_EXECUTABLE(${OUT_NAME} ${SOURCE_FILES})
 

@@ -16,8 +16,8 @@
 	#elif defined(DEBUG_UNIX)
 #  include "../extlib/mman-win32/sys/mman.h"
 #  define MSH_UNIX
-extern int shm_open(const char *name, int oflag, mode_t mode);
-extern int shm_unlink(const char *name);
+extern int shm_open(const char_t *name, int oflag, mode_t mode);
+extern int shm_unlink(const char_t *name);
 #elif defined(DEBUG_UNIX_ON_WINDOWS)
 #  include "../extlib/mman-win32/sys/mman.h"
 extern int shm_open(const char *name, int oflag, mode_t mode);
@@ -54,8 +54,8 @@ void readSemError_(const char* file_name, int line, int err);
 void readFtruncateError_(const char* file_name, int line, int err);
 void readShmError_(const char* file_name, int line, int err);
 void readMmapError_(const char* file_name, int line, int err);
-#define readSemError(err) readSemError_(__FILE__ , __LINE__, err);
-#define readFtruncateError(err) readFtruncateError_(__FILE__ , __LINE__, err);
+#define readSemError(err) readSemError_(__FILE__ , __LINE__, err)
+#define readFtruncateError(err) readFtruncateError_(__FILE__ , __LINE__, err)
 #define readShmError(err) readShmError_(__FILE__ , __LINE__, err)
 #define readMmapError(err) readMmapError_(__FILE__ , __LINE__, err)
 #endif
