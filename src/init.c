@@ -71,7 +71,7 @@ void init()
 	}
 	else
 	{
-		readMXError("ShmVarInitError", "The globally shared variable was unexpectedly already initialized before startup.");
+		readErrorMex("ShmVarInitError", "The globally shared variable was unexpectedly already initialized before startup.");
 	}
 	
 	releaseProcLock();
@@ -130,7 +130,7 @@ void initProcLock(void)
 	g_info->proc_lock = CreateMutex(&g_info->lock_sec, FALSE, MSH_LOCK_NAME);
 	if(g_info->proc_lock == NULL)
 	{
-		readMXError("Internal:InitMutexError", "Failed to create the mutex (Error number: %u).", GetLastError());
+		readErrorMex("Internal:InitMutexError", "Failed to create the mutex (Error number: %u).", GetLastError());
 	}
 
 #else
@@ -160,7 +160,7 @@ void initUpdateSegment(void)
 	if(g_info->shm_update_reg.handle == NULL)
 	{
 		releaseProcLock();
-		readMXError("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).");
+		readErrorMex("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).");
 	}
 	g_info->shm_update_reg.is_init = TRUE;
 	
@@ -214,7 +214,7 @@ void mapUpdateSegment(void)
 	if(shm_update_info == NULL)
 	{
 		releaseProcLock();
-		readMXError("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", err);
+		readErrorMex("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", err);
 	}
 
 #else
@@ -284,7 +284,7 @@ void initDataSegment(void)
 	if(g_info->shm_data_reg.handle == NULL)
 	{
 		releaseProcLock();
-		readMXError("CreateFileError", "Error creating the file mapping (Error Number %u)", err);
+		readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u)", err);
 	}
 	g_info->shm_data_reg.is_init = TRUE;
 	
@@ -315,7 +315,7 @@ void mapDataSegment(void)
 	if(shm_data_ptr == NULL)
 	{
 		releaseProcLock();
-		readMXError("MapDataSegError", "Could not map the update memory segment (Error number %u)", GetLastError());
+		readErrorMex("MapDataSegError", "Could not map the update memory segment (Error number %u)", GetLastError());
 	}
 	
 #else

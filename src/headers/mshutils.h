@@ -21,6 +21,7 @@ int pointCharArrayAtString(char_t** pCharArray, char_t* pString, int nFields);
 void onExit(void);
 
 /* Pads the size to something that guarantees pointer alignment.			*/
+size_t memCpyMex(byte_t* dest, byte_t* orig, byte_t** data_ptr, size_t cpy_sz);
 size_t padToAlign(size_t size);
 void makeMxMallocSignature(uint8_t* sig, size_t seg_size);
 void acquireProcLock(void);

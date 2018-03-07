@@ -32,7 +32,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		readMXError("NotEnoughInputsError", "Minimum input arguments missing; must supply a directive.");
+		readErrorMex("NotEnoughInputsError", "Minimum input arguments missing; must supply a directive.");
 	}
 	
 	/* assign inputs */
@@ -50,7 +50,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	if(directive != msh_DETACH && precheck() != TRUE)
 	{
-		readMXError("NotInitializedError", "At least one of the needed shared memory segments has not been initialized. Cannot continue.");
+		readErrorMex("NotInitializedError", "At least one of the needed shared memory segments has not been initialized. Cannot continue.");
 	}
 	
 	/* Switch yard {clone, attach, detach, free} */
@@ -64,7 +64,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* check the inputs */
 			if(nrhs < 2)
 			{
-				readMXError("NoVariableError", "No variable supplied to clone.");
+				readErrorMex("NoVariableError", "No variable supplied to clone.");
 			}
 			
 			/* Assign */
@@ -72,7 +72,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			if(!(mxIsNumeric(mxInput) || mxIsLogical(mxInput) || mxIsChar(mxInput) || mxIsStruct(mxInput) || mxIsCell(mxInput)))
 			{
-				readMXError("InvalidTypeError", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+				readErrorMex("InvalidTypeError", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 			}
 			
 			acquireProcLock();
@@ -83,7 +83,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			if(!mxIsEmpty(g_shm_var))
 			{
 				/* if the current shared variable shares all the same dimensions, etc. then just copy over the memory */
-				if(shmCompareContent(shm_data_ptr, mxInput, &sm_size) == TRUE)
+				if(shmCompareSize(shm_data_ptr, mxInput, &sm_size) == TRUE)
 				{
 					/* DON'T INCREMENT THE REVISION NUMBER */
 					/* this is an in-place change, so everyone is still fine */
@@ -94,7 +94,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					shm_update_info->rev_num = g_info->cur_seg_info.rev_num;
 					
 					/* do the rewrite after checking because the comparison is cheap */
-					shallowRewrite(shm_data_ptr, mxInput);
+					shmRewrite(shm_data_ptr, mxInput);
 					
 					releaseProcLock();
 					break;
@@ -161,7 +161,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					// throw error if it already exists because that shouldn't happen
 					makeDummyVar(&plhs[0]);
 					releaseProcLock();
-					readMXError("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
+					readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
 				}
 				g_info->shm_data_reg.is_init = TRUE;
 				
@@ -171,7 +171,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				{
 					makeDummyVar(&plhs[0]);
 					releaseProcLock();
-					readMXError("MapDataSegError", "Could not map the data memory segment (Error number %u)", err);
+					readErrorMex("MapDataSegError", "Could not map the data memory segment (Error number %u)", err);
 				}
 				g_info->shm_data_reg.is_mapped = TRUE;
 				
@@ -272,7 +272,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					{
 						makeDummyVar(&plhs[0]);
 						releaseProcLock();
-						readMXError("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
+						readErrorMex("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
 					}
 					g_info->shm_data_reg.is_init = TRUE;
 					
@@ -282,7 +282,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					{
 						makeDummyVar(&plhs[0]);
 						releaseProcLock();
-						readMXError("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
+						readErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
 					}
 					g_info->shm_data_reg.is_mapped = TRUE;
 					
@@ -368,7 +368,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			g_info->num_lcl_objs += 1;
 			break;
 		default:
-			readMXError("UnknownDirectiveError", "Unrecognized directive.");
+			readErrorMex("UnknownDirectiveError", "Unrecognized directive.");
 			break;
 	}
 
@@ -442,7 +442,7 @@ void shmDetach(mxArray* ret_var)
 			{
 				//error for debugging---this is kinda iffy
 				releaseProcLock();
-				readMXError("DetachDimensionsError", "Unable to resize the array.");
+				readErrorMex("DetachDimensionsError", "Unable to resize the array.");
 			}
 			
 			/* allocate 1 element */
@@ -457,7 +457,7 @@ void shmDetach(mxArray* ret_var)
 			new_ir = mxCalloc(nzmax, sizeof(mwSize));
 			mxSetIr(ret_var, new_ir);
 			
-			new_jc = mxCalloc(null_dims[2], sizeof(mwSize));
+			new_jc = mxCalloc(null_dims[1] + 1, sizeof(mwSize));
 			mxSetJc(ret_var, new_jc);
 			
 			mxSetNzmax(ret_var, nzmax);
@@ -485,6 +485,7 @@ void shmDetach(mxArray* ret_var)
 			}
 			if(mxIsSparse(link))
 			{
+				mxSetNzmax(ret_var, nzmax);
 				mxSetIr(link, new_ir);
 				mxSetJc(link, new_jc);
 			}
@@ -494,7 +495,7 @@ void shmDetach(mxArray* ret_var)
 	else
 	{
 		releaseProcLock();
-		readMXError("InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
+		readErrorMex("InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
 	}
 }
 
@@ -599,15 +600,15 @@ size_t shmFetch(byte_t* shm, mxArray** ret_var)
 			else
 			{
 				releaseProcLock();
-				readMXError("UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'numeric' or 'logical'");
+				readErrorMex("UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'numeric' or 'logical'");
 			}
-			
-			mwIndex* ret_jc = mxGetJc(*ret_var);
-			memcpy(ret_jc, shm_jc, (dims[1] + 1)*sizeof(mwIndex));
 			
 			/* set the pointers relating to sparse (set the real and imaginary data later)*/
 			mxFree(mxGetIr(*ret_var));
 			mxSetIr(*ret_var, shm_ir);
+			
+			mxFree(mxGetJc(*ret_var));
+			mxSetJc(*ret_var, shm_jc);
 			
 			mxSetNzmax(*ret_var, hdr->num_elems);
 			
@@ -622,6 +623,8 @@ size_t shmFetch(byte_t* shm, mxArray** ret_var)
 					mxSetImagData(*ret_var, shm_pi);
 				}
 			}
+			
+			mxSetDimensions(*ret_var, dims, hdr->num_dims);
 			
 			
 		}
@@ -676,7 +679,7 @@ size_t shmFetch(byte_t* shm, mxArray** ret_var)
 }
 
 
-bool_t shmCompareContent(byte_t* shm, const mxArray* comp_var, size_t* offset)
+bool_t shmCompareSize(byte_t* shm, const mxArray* comp_var, size_t* offset)
 {
 	/* for working with shared memory ... */
 	size_t i, shmshift;
@@ -731,7 +734,7 @@ bool_t shmCompareContent(byte_t* shm, const mxArray* comp_var, size_t* offset)
 				}
 				
 				
-				if(!shmCompareContent(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
+				if(!shmCompareSize(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
 				{
 					return FALSE;
 				}
@@ -746,7 +749,7 @@ bool_t shmCompareContent(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	{
 		for(i = 0, shmshift = 0; i < hdr->num_elems; i++, shmshift = 0)
 		{
-			if(!shmCompareContent(shm, mxGetCell(comp_var, i), &shmshift))
+			if(!shmCompareSize(shm, mxGetCell(comp_var, i), &shmshift))
 			{
 				return FALSE;
 			}
@@ -760,46 +763,49 @@ bool_t shmCompareContent(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	{
 		
 		/* this is the address of the first data */
-		shm += padToAlign(MXMALLOC_SIG_LEN);
-		shm_pr = (void*)shm;
-		shm += padToAlign((hdr->num_elems) * (hdr->elem_size));          /* takes us to the end of the real data */
+//		shm += padToAlign(MXMALLOC_SIG_LEN);
+//		shm_pr = (void*)shm;
+//		shm += padToAlign((hdr->num_elems) * (hdr->elem_size));          /* takes us to the end of the real data */
 		
 		/* if complex get a pointer to the complex data */
-		if(hdr->complexity == mxCOMPLEX)
+		if(hdr->complexity != mxIsComplex(comp_var))
 		{
 			
-			if(mxIsComplex(comp_var) != TRUE)
-			{
-				return FALSE;
-			}
+			return FALSE;
 			
-			shm += padToAlign(MXMALLOC_SIG_LEN);
-			shm_pi = (void*)shm;
-			shm += padToAlign((hdr->num_elems) * (hdr->elem_size));     /* takes us to the end of the complex data */
-			
+//			shm += padToAlign(MXMALLOC_SIG_LEN);
+//			shm_pi = (void*)shm;
+//			shm += padToAlign((hdr->num_elems) * (hdr->elem_size));     /* takes us to the end of the complex data */
+		
 		}
 		
 		if(hdr->is_sparse)
 		{
-			if(!mxIsSparse(comp_var))
+			if(mxIsSparse(comp_var) != TRUE)
+			{
+				return FALSE;
+			}
+
+			if(hdr->num_elems != mxGetNzmax(comp_var)
+			   || dims[1] != mxGetN(comp_var))
 			{
 				return FALSE;
 			}
 			
-			shm_ir = (mwIndex*)shm;
-			shm += padToAlign((hdr->num_elems) * sizeof(mwIndex));
-			
-			shm_jc = (mwIndex*)shm;
-			shm += padToAlign((dims[1] + 1) * sizeof(mwIndex));
-			
-			if(hdr->num_elems != mxGetNzmax(comp_var))
-			{
-				return FALSE;
-			}
+//			shm_ir = (mwIndex*)shm;
+//			shm += padToAlign((hdr->num_elems) * sizeof(mwIndex));
+
+//			shm_jc = (mwIndex*)shm;
+//			shm += padToAlign((dims[1] + 1) * sizeof(mwIndex));
 			
 		}
 		else
 		{
+			if(mxIsSparse(comp_var) == TRUE)
+			{
+				return FALSE;
+			}
+
 			if(hdr->num_elems != mxGetNumberOfElements(comp_var))
 			{
 				return FALSE;
@@ -813,7 +819,7 @@ bool_t shmCompareContent(byte_t* shm, const mxArray* comp_var, size_t* offset)
 }
 
 
-size_t shallowRewrite(byte_t* shm, const mxArray* input_var)
+size_t shmRewrite(byte_t* shm, const mxArray* in_var)
 {
 	
 	/* for working with shared memory ... */
@@ -853,7 +859,7 @@ size_t shallowRewrite(byte_t* shm, const mxArray* input_var)
 			for(field_num = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 			{
 				/* And fill it */
-				shm += shallowRewrite(shm, mxGetFieldByNumber(input_var, i, field_num));
+				shm += shmRewrite(shm, mxGetFieldByNumber(in_var, i, field_num));
 			}
 		}
 	}
@@ -862,23 +868,21 @@ size_t shallowRewrite(byte_t* shm, const mxArray* input_var)
 		for(i = 0; i < hdr->num_elems; i++)
 		{
 			/* And fill it */
-			shm += shallowRewrite(shm, mxGetCell(input_var, i));
+			shm += shmRewrite(shm, mxGetCell(in_var, i));
 		}
 	}
 	else     /*base case*/
 	{
 		/* this is the address of the first data */
 		shm += padToAlign(MXMALLOC_SIG_LEN);
-		shm_pr = (void*)shm;
-		memcpy(shm_pr, mxGetData(input_var), (hdr->num_elems)*(hdr->elem_size));
+		memcpy(shm, mxGetData(in_var), (hdr->num_elems)*(hdr->elem_size));
 		shm += padToAlign((hdr->num_elems) * (hdr->elem_size));          /* takes us to the end of the real data */
 		
 		/* if complex get a pointer to the complex data */
 		if(hdr->complexity == mxCOMPLEX)
 		{
 			shm += padToAlign(MXMALLOC_SIG_LEN);
-			shm_pi = (void*)shm;
-			memcpy(shm_pi, mxGetImagData(input_var), (hdr->num_elems)*(hdr->elem_size));
+			memcpy(shm, mxGetImagData(in_var), (hdr->num_elems)*(hdr->elem_size));
 			shm += padToAlign((hdr->num_elems) * (hdr->elem_size));     /* takes us to the end of the complex data */
 		}
 		
@@ -886,14 +890,13 @@ size_t shallowRewrite(byte_t* shm, const mxArray* input_var)
 		if(hdr->is_sparse)
 		{
 			
-			shm_ir = (mwIndex*)shm;
+			shm += padToAlign(MXMALLOC_SIG_LEN);
+			memcpy(shm, mxGetIr(in_var), (hdr->num_elems)*sizeof(mwIndex));
 			shm += padToAlign((hdr->num_elems) * sizeof(mwIndex));
 			
-			shm_jc = (mwIndex*)shm;
+			shm += padToAlign(MXMALLOC_SIG_LEN);
+			memcpy(shm, mxGetJc(in_var), (dims[1] + 1)*sizeof(mwIndex));
 			shm += padToAlign((dims[1] + 1) * sizeof(mwIndex));
-			
-			memcpy(shm_ir, mxGetIr(input_var), (hdr->num_elems)*sizeof(mwIndex));
-			memcpy(shm_jc, mxGetJc(input_var), (dims[1] + 1)*sizeof(mwIndex));
 			
 		}
 		
@@ -939,7 +942,7 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 	if(mxInput == NULL)
 	{
 		releaseProcLock();
-		readMXError("UnexpectedError", "Input variable was unexpectedly NULL.");
+		readErrorMex("UnexpectedError", "Input variable was unexpectedly NULL.");
 	}
 	
 	/* initialize header info */
@@ -971,7 +974,7 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 			if(hdr->num_fields)
 			{
 				releaseProcLock();
-				readMXError("UnexpectedError", "An empty struct array unexpectedly had more than one field. This is undefined behavior.");
+				readErrorMex("UnexpectedError", "An empty struct array unexpectedly had more than one field. This is undefined behavior.");
 			}
 			*ret_var = mxCreateStructArray(hdr->num_dims, dat->dims, hdr->num_fields, NULL);
 		}
@@ -1050,21 +1053,23 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 			hdr->num_elems = (size_t)mxGetNzmax(mxInput);
 			dat->ir = mxGetIr(mxInput);
 			dat->jc = mxGetJc(mxInput);
+			hdr->shm_sz += padToAlign(MXMALLOC_SIG_LEN);
 			hdr->shm_sz += padToAlign(sizeof(mwIndex) * (hdr->num_elems));      /* ensure both pointers are aligned individually */
+			hdr->shm_sz += padToAlign(MXMALLOC_SIG_LEN);
 			hdr->shm_sz += padToAlign(sizeof(mwIndex) * (dat->dims[1] + 1));
 			
 			if(hdr->is_numeric)
 			{
-				*ret_var = mxCreateSparse(1, 1, 1, hdr->complexity);
+				*ret_var = mxCreateSparse(0, 0, 1, hdr->complexity);
 			}
 			else if(hdr->classid == mxLOGICAL_CLASS)
 			{
-				*ret_var = mxCreateSparseLogicalMatrix(1, 1, 1);
+				*ret_var = mxCreateSparseLogicalMatrix(0, 0, 1);
 			}
 			else
 			{
 				releaseProcLock();
-				readMXError("UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'numeric' or 'logical'");
+				readErrorMex("UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'numeric' or 'logical'");
 			}
 			
 		}
@@ -1100,6 +1105,7 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 				{
 					*ret_var = mxCreateCharArray(0, NULL);
 				}
+			}
 		}
 		
 		/* ensure both pointers are aligned individually */
@@ -1114,7 +1120,7 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 	else
 	{
 		releaseProcLock();
-		readMXError("Internal:UnexpectedError", "Tried to clone an unsupported type.");
+		readErrorMex("Internal:UnexpectedError", "Tried to clone an unsupported type.");
 	}
 	
 	
@@ -1141,8 +1147,8 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray
 	header_t* cpy_hdr;          /* the header in its copied location */
 	size_t i, cpy_sz, offset = 0;
 	mwSize* dims;               /* points to the size data */
-	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
-	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
+	byte_t* shm_pr, * shm_pi;  /* real and imaginary data pointers */
+	byte_t* shm_ir, * shm_jc;  /* sparse matrix data indices */
 	
 	/* load up the shared memory */
 	
@@ -1208,15 +1214,7 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray
 	{
 		/* copy real data */
 		cpy_sz = (hdr->num_elems)*(hdr->elem_size);
-		
-		uint8_t mxmalloc_sig[MXMALLOC_SIG_LEN];
-		makeMxMallocSignature(mxmalloc_sig, cpy_sz);
-		
-		memcpy(shm + (padToAlign(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), mxmalloc_sig, MXMALLOC_SIG_LEN);
-		shm += padToAlign(MXMALLOC_SIG_LEN);
-		shm_pr = (void*)shm;
-		memcpy(shm_pr, dat->pr, cpy_sz);
-		shm += padToAlign(cpy_sz);
+		shm += memCpyMex(shm, dat->pr, &shm_pr, cpy_sz);
 		
 		if(!hdr->is_empty)
 		{
@@ -1227,11 +1225,8 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray
 		/* copy complex data as well */
 		if(hdr->complexity == mxCOMPLEX)
 		{
-			memcpy(shm + (padToAlign(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), mxmalloc_sig, MXMALLOC_SIG_LEN);
-			shm += padToAlign(MXMALLOC_SIG_LEN);
-			shm_pi = (void*)shm;
-			memcpy(shm_pi, dat->pi, cpy_sz);
-			shm += padToAlign(cpy_sz);
+			
+			shm += memCpyMex(shm, dat->pi, &shm_pi, cpy_sz);
 			
 			if(!hdr->is_empty)
 			{
@@ -1244,38 +1239,30 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray
 		/* and the indices of the sparse data as well */
 		if(hdr->is_sparse)
 		{
-			shm_ir = (void*)shm;
 			cpy_sz = hdr->num_elems*sizeof(mwIndex);
-			memcpy(shm_ir, dat->ir, cpy_sz);
-			shm += padToAlign(cpy_sz);
+			shm += memCpyMex(shm, (byte_t*)dat->ir, &shm_ir, cpy_sz);
 			
-			shm_jc = (void*)shm;
 			cpy_sz = (dims[1] + 1)*sizeof(mwIndex);
-			memcpy(shm_jc, dat->jc, cpy_sz);
-			shm += padToAlign(cpy_sz);
+			shm += memCpyMex(shm, (byte_t*)dat->jc, &shm_jc, cpy_sz);
 			
 			/* set the pointers relating to sparse (set the real and imaginary data later)*/
 			mxFree(mxGetIr(ret_var));
-			mxSetIr(ret_var, shm_ir);
+			mxSetIr(ret_var, (mwSize*)shm_ir);
 			
 			mxFree(mxGetJc(ret_var));
-			mxSetJc(ret_var, shm_jc);
+			mxSetJc(ret_var, (mwSize*)shm_jc);
 			
 			mxSetNzmax(ret_var, hdr->num_elems);
-			mxSetDimensions(ret_var, dims, hdr->num_dims);
 			
 		}
-		else
-		{
-			
-			mxSetDimensions(ret_var, dims, hdr->num_dims);
-			
-		}
+		
+		mxSetDimensions(ret_var, dims, hdr->num_dims);
+		
 	}
 }
 
 
-mxLogical shmCompareLocale(byte_t* shm, const mxArray* comp_var, size_t* offset)
+mxLogical shmCompareContent(byte_t* shm, const mxArray* comp_var, size_t* offset)
 {
 	/* for working with shared memory ... */
 	size_t i, shmshift;
@@ -1331,7 +1318,7 @@ mxLogical shmCompareLocale(byte_t* shm, const mxArray* comp_var, size_t* offset)
 				}
 				
 				
-				if(!shmCompareLocale(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
+				if(!shmCompareContent(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
 				{
 					return FALSE;
 				}
@@ -1346,7 +1333,7 @@ mxLogical shmCompareLocale(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	{
 		for(i = 0, shmshift = 0; i < hdr->num_elems; i++, shmshift = 0)
 		{
-			if(!shmCompareLocale(shm, mxGetCell(comp_var, i), &shmshift))
+			if(!shmCompareContent(shm, mxGetCell(comp_var, i), &shmshift))
 			{
 				return FALSE;
 			}
@@ -1415,27 +1402,5 @@ mxLogical shmCompareLocale(byte_t* shm, const mxArray* comp_var, size_t* offset)
 }
 
 
-/* ------------------------------------------------------------------------- */
-/* freeTmp                                                                  */
-/*                                                                           */
-/* Descend through header and data structure and free the memory.            */
-/*                                                                           */
-/* Arguments:                                                                */
-/*    data container                                                         */
-/* Returns:                                                                  */
-/*    void                                                                   */
-
-
-/* Function to find the number of bytes required to store all of the */
-
-
-/* Function to copy all of the field names to a character array    */
-/* Use fieldNamesSize() to allocate the required size of the array */
-
-/*Function to take point a each element of the char_t** array at a list of names contained in string */
-/*ppCharArray must be allocated to length num_names */
-/*names are seperated by null termination characters */
-/*each name must start on an aligned address (see copyFieldNames()) */
-/*e.g. pCharArray[0] = &name_1, pCharArray[1] = &name_2 ...         */
 
 

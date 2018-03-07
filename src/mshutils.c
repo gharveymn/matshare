@@ -15,6 +15,22 @@
  */
 const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
 
+
+size_t memCpyMex(byte_t* dest, byte_t* orig, byte_t** data_ptr, size_t cpy_sz)
+{
+	size_t offset = padToAlign(MXMALLOC_SIG_LEN);
+	
+	uint8_t mxmalloc_sig[MXMALLOC_SIG_LEN];
+	makeMxMallocSignature(mxmalloc_sig, cpy_sz);
+	
+	*data_ptr = dest + offset;
+	memcpy(*data_ptr - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
+	memcpy(*data_ptr, orig, cpy_sz);
+	return offset + padToAlign(cpy_sz);
+	
+}
+
+
 /* ------------------------------------------------------------------------- */
 void freeTmp(data_t* dat)
 {
@@ -251,7 +267,7 @@ void onExit(void)
 		
 		if(sem_close(g_info->proc_lock) != 0)
 		{
-			readMXError("SemCloseInvalidError", "The sem argument is not a valid semaphore descriptor.");
+			readErrorMex("SemCloseInvalidError", "The sem argument is not a valid semaphore descriptor.");
 		}
 		g_info->flags.is_proc_lock_init = FALSE;
 	}
@@ -317,11 +333,11 @@ void acquireProcLock(void)
 		uint32_t ret = WaitForSingleObject(g_info->proc_lock, INFINITE);
 		if(ret == WAIT_ABANDONED)
 		{
-			readMXError("WaitProcLockAbandonedError", "One of the processes failed while using the lock. Cannot safely continue (Error number: %u).", GetLastError());
+			readErrorMex("WaitProcLockAbandonedError", "One of the processes failed while using the lock. Cannot safely continue (Error number: %u).", GetLastError());
 		}
 		else if(ret == WAIT_FAILED)
 		{
-			readMXError("WaitProcLockFailedError", "The wait for process lock failed (Error number: %u).", GetLastError());
+			readErrorMex("WaitProcLockFailedError", "The wait for process lock failed (Error number: %u).", GetLastError());
 		}
 #else
 		if(sem_wait(g_info->proc_lock) != 0)
@@ -329,15 +345,15 @@ void acquireProcLock(void)
 			switch(errno)
 			{
 				case EINVAL:
-					readMXError("SemWaitInvalid", "The sem argument does not refer to a valid semaphore.");
+					readErrorMex("SemWaitInvalid", "The sem argument does not refer to a valid semaphore.");
 				case ENOSYS:
-					readMXError("SemWaitNotSupportedError", "The functions sem_wait() and sem_trywait() are not supported by this implementation.");
+					readErrorMex("SemWaitNotSupportedError", "The functions sem_wait() and sem_trywait() are not supported by this implementation.");
 				case EDEADLK:
-					readMXError("SemWaitDeadlockError", "A deadlock condition was detected.");
+					readErrorMex("SemWaitDeadlockError", "A deadlock condition was detected.");
 				case EINTR:
-					readMXError("SemWaitInterruptError", "A signal interrupted this function.");
+					readErrorMex("SemWaitInterruptError", "A signal interrupted this function.");
 				default:
-					readMXError("SemWaitUnknownError", "An unknown error occurred (Error number: %i)", errno);
+					readErrorMex("SemWaitUnknownError", "An unknown error occurred (Error number: %i)", errno);
 			}
 		}
 #endif
@@ -354,7 +370,7 @@ void releaseProcLock(void)
 #ifdef MSH_WIN
 		if(ReleaseMutex(g_info->proc_lock) == 0)
 		{
-			readMXError("ReleaseMutexError", "The process lock release failed (Error number: %u).", GetLastError());
+			readErrorMex("ReleaseMutexError", "The process lock release failed (Error number: %u).", GetLastError());
 		}
 #else
 		if(sem_post(g_info->proc_lock) != 0)
@@ -362,11 +378,11 @@ void releaseProcLock(void)
 			switch(errno)
 			{
 				case EINVAL:
-					readMXError("SemPostInvalid", "The sem argument does not refer to a valid semaphore.");
+					readErrorMex("SemPostInvalid", "The sem argument does not refer to a valid semaphore.");
 				case ENOSYS:
-					readMXError("SemPostError", "The function sem_post() is not supported by this implementation.");
+					readErrorMex("SemPostError", "The function sem_post() is not supported by this implementation.");
 				default:
-					readMXError("SemPostUnknownError", "An unknown error occurred (Error number: %i)", errno);
+					readErrorMex("SemPostUnknownError", "An unknown error occurred (Error number: %i)", errno);
 			}
 		}
 #endif
@@ -417,13 +433,13 @@ msh_directive_t parseDirective(const mxArray* in)
 		}
 		else
 		{
-			readMXError("InvalidDirectiveError", "Directive not recognized.");
+			readErrorMex("InvalidDirectiveError", "Directive not recognized.");
 		}
 		
 	}
 	else
 	{
-		readMXError("InvalidDirectiveError", "Directive must either be 'uint8' or 'char_t'.");
+		readErrorMex("InvalidDirectiveError", "Directive must either be 'uint8' or 'char_t'.");
 	}
 	
 	return msh_DEBUG;

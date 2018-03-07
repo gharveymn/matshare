@@ -28,7 +28,7 @@ function [ret, numvarsz, teststrs] = randVarGen_(maxDepth, currDepth, maxElement
 	if(maxDepth <= currDepth)
 		%dont make another layer
 		vartypegen = randi(16) + 2;
-		%vartypegen = 16;
+		%vartypegen = 17;
 	else
 		vartypegen = randi(18);
 		%vartypegen = 2;
@@ -208,7 +208,11 @@ function [ret, numvarsz, teststrs] = randVarGen_(maxDepth, currDepth, maxElement
 			% 	17	mxOPAQUE_CLASS,
 			% not sure how to generate, generate a sparse array instead
 			if(numel(dims) == 2)
-				ret = sparse(logical(rand(dims{:}) > 0.5).*rand(dims{:},'double'));
+				if(rand > 0.5)
+					ret = sparse(logical(rand(dims{:}) > 0.5).*rand(dims{:},'double'));
+				else
+					ret = sparse(logical(rand(dims{:}) > 0.5));
+				end
 			else
 				ret = rand(dims{:},'double');
 			end

@@ -1,4 +1,7 @@
 #include "headers/matlabutils.h"
+#include "headers/mshtypes.h"
+#include "headers/mshutils.h"
+
 
 #ifdef MSH_UNIX
 
@@ -97,7 +100,8 @@ void readShmError_(const char* file_name, int line, int err)
 }
 #endif
 
-void readMXError_(const char* file_name, int line, const char error_id[], const char error_message[], ...)
+
+void readErrorMex_(const char* file_name, int line, const char* error_id, const char* error_message, ...)
 {
 	
 	char full_message[FULL_ERROR_MESSAGE_SIZE] = {0};
@@ -125,7 +129,7 @@ void readMXError_(const char* file_name, int line, const char error_id[], const 
 }
 
 
-void readMXWarn(const char warn_id[], const char warn_message[], ...)
+void readWarnMex(const char* warn_id, const char* warn_message, ...)
 {
 	char full_message[FULL_WARNING_MESSAGE_SIZE] = {0};
 	char message_buffer[WARNING_MESSAGE_SIZE] = {0};

@@ -42,11 +42,12 @@ extern int shm_unlink(const char *name);
 #define MATLAB_HELP_MESSAGE ""
 #define MATLAB_WARN_MESSAGE ""
 
-void readMXError_(const char* file_name, int line, const char error_id[], const char error_message[], ...);
-void readMXWarn(const char warn_id[], const char warn_message[], ...);
+
+void readErrorMex_(const char* file_name, int line, const char* error_id, const char* error_message, ...);
+void readWarnMex(const char* warn_id, const char* warn_message, ...);
 
 /* defined so we don't have write __FILE__, __LINE__ every time */
-#define readMXError(error_id, error_message, ...) readMXError_(__FILE__ , __LINE__, error_id, error_message , ##__VA_ARGS__)
+#define readErrorMex(error_id, error_message, ...) readErrorMex_(__FILE__ , __LINE__, error_id, error_message , ##__VA_ARGS__)
 
 
 #ifdef MSH_UNIX

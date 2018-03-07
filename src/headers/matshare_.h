@@ -13,9 +13,9 @@ void shmDetach(mxArray* ret_var);
 
 size_t shmFetch(byte_t* shm, mxArray** ret_var);
 
-bool_t shmCompareContent(byte_t* shm, const mxArray* comp_var, size_t* offset);
+bool_t shmCompareSize(byte_t* shm, const mxArray* comp_var, size_t* offset);
 
-size_t shallowRewrite(byte_t* shm, const mxArray* input_var);
+size_t shmRewrite(byte_t* shm, const mxArray* in_var);
 
 /* Recursively descend through Matlab matrix to assess how much space its    */
 /* serialization will require.                                               */
@@ -25,7 +25,7 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 /* shared memory.                                                            */
 void shmCopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray* ret_var);
 
-mxLogical shmCompareLocale(byte_t* shm, const mxArray* comp_var, size_t* offset);
+mxLogical shmCompareContent(byte_t* shm, const mxArray* comp_var, size_t* offset);
 
 
 /*Function to find the number of bytes required to store all of the			 */
