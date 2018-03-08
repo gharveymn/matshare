@@ -1,9 +1,9 @@
 rng('shuffle')
 numtests = 1;
-numsamples = 10000;
+numsamples = 1000;
 lents = 0;
 
-maxDepth = 1;
+maxDepth = 2;
 minelem = 5;
 maxelem = 10;
 maxElementsv = round(linspace(minelem,maxelem,numtests));
@@ -13,6 +13,7 @@ mvgavgtime = zeros(stride,1);
 mvgavgtimeload = zeros(stride,1);
 avgnumelems = zeros(stride,1);
 data = zeros(numtests,2);
+pidstr = num2str(feature('getpid'));
 
 doplot = false;
 donames = true;
@@ -24,12 +25,12 @@ for j = 1:numtests
 	maxElements = maxElementsv(j);
 	for i = 1:numsamples
 		if(mod(i,2) == 0)
-			[ts1, avgnumelems(mod(i-1,stride)+1), names]  = randVarGen(maxDepth, maxElements, ignoreUnusables, donames, 'test_struct1');
-			delete(['res/statetwofe' num2str(feature('getpid')) '.mat']);
-			save(['res/stateonesh' num2str(feature('getpid')) '.mat']);
+			[ts1, avgnumelems(mod(i-1,stride)+1), names] = randVarGen(maxDepth, maxElements, ignoreUnusables, donames, 'ts1');
+			delete(['res/statetwofe' pidstr '.mat']);
+			save(['res/stateonesh' pidstr '.mat']);
 			mshshare(ts1);
-			delete(['res/stateonesh' num2str(feature('getpid')) '.mat']);
-			save(['res/stateonefe' num2str(feature('getpid')) '.mat']);
+			delete(['res/stateonesh' pidstr '.mat']);
+			save(['res/stateonefe' pidstr '.mat']);
 			x1 = mshfetch;
 			
 			if(doCompare)
@@ -46,12 +47,12 @@ for j = 1:numtests
 			fprintf([repmat('\b',1,lents) timestr]);
 			lents = numel(timestr);
 		else
-			[ts2, avgnumelems(mod(i-1,stride)+1), names]  = randVarGen(maxDepth, maxElements, ignoreUnusables, donames, 'test_struct1');
-			delete(['res/stateonefe' num2str(feature('getpid')) '.mat']);
-			save(['res/statetwosh' num2str(feature('getpid')) '.mat']);
+			[ts2, avgnumelems(mod(i-1,stride)+1), names]  = randVarGen(maxDepth, maxElements, ignoreUnusables, donames, 'ts2');
+			delete(['res/stateonefe' pidstr '.mat']);
+			save(['res/statetwosh' pidstr '.mat']);
 			mshshare(ts2);
-			delete(['res/statetwosh' num2str(feature('getpid')) '.mat']);
-			save(['res/statetwofe' num2str(feature('getpid')) '.mat']);
+			delete(['res/statetwosh' pidstr '.mat']);
+			save(['res/statetwofe' pidstr '.mat']);
 			x2 = mshfetch;
 			
 			if(doCompare)

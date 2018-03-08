@@ -57,7 +57,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	{
 		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
 		{
-			CloseHandle(temp_handle);
+			if(CloseHandle(temp_handle) == 0)
+			{
+				readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
+			}
 			return;
 		}
 		
@@ -70,7 +73,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	}
 	else
 	{
-		CloseHandle(temp_handle);
+		if(CloseHandle(temp_handle) == 0)
+		{
+			readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
+		}
 	}
 #else
 	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, getpid());
@@ -449,10 +455,10 @@ void shmDetach(mxArray* ret_var)
 	void* new_pr = NULL, * new_pi = NULL;
 	void* new_ir = NULL, * new_jc = NULL;
 	mwSize nzmax = 0;
-	size_t i, n;
+	mwIndex i, n;
 	
 	/*for structure */
-	int nFields, j;
+	int num_fields, j;
 	
 	/* restore matlab  memory */
 	if(ret_var == (mxArray*)NULL || mxIsEmpty(ret_var))
@@ -463,10 +469,10 @@ void shmDetach(mxArray* ret_var)
 	{
 		/* detach each field for each element */
 		n = mxGetNumberOfElements(ret_var);
-		nFields = mxGetNumberOfFields(ret_var);
+		num_fields = mxGetNumberOfFields(ret_var);
 		for(i = 0; i < n; i++)                         /* element */
 		{
-			for(j = 0; j < nFields; j++)               /* field */
+			for(j = 0; j < num_fields; j++)               /* field */
 			{
 				shmDetach(mxGetFieldByNumber(ret_var, i, j));
 			}/* detach this one */
@@ -493,7 +499,7 @@ void shmDetach(mxArray* ret_var)
 			nzmax = 1;
 			if(mxSetDimensions(ret_var, null_dims, num_dims))
 			{
-				//error for debugging---this is kinda iffy
+				/* error for debugging---this is kinda iffy */
 				releaseProcLock();
 				readErrorMex("DetachDimensionsError", "Unable to resize the array.");
 			}
@@ -502,19 +508,21 @@ void shmDetach(mxArray* ret_var)
 			
 			/* allocate 1 element */
 			new_pr = mxCalloc(nzmax, mxGetElementSize(ret_var));
+			mexMakeMemoryPersistent(new_pr);
 			mxSetData(ret_var, new_pr);
 			if(mxIsComplex(ret_var))
 			{
 				new_pi = mxCalloc(nzmax, mxGetElementSize(ret_var));
+				mexMakeMemoryPersistent(new_pi);
 				mxSetImagData(ret_var, new_pi);
 			}
 			
 			new_ir = mxCalloc(nzmax, sizeof(mwIndex));
-//			mexMakeMemoryPersistent(new_ir);
+			mexMakeMemoryPersistent(new_ir);
 			mxSetIr(ret_var, new_ir);
 			
 			new_jc = mxCalloc(null_dims[1] + 1, sizeof(mwIndex));
-//			mexMakeMemoryPersistent(new_jc);
+			mexMakeMemoryPersistent(new_jc);
 			mxSetJc(ret_var, new_jc);
 			
 		}
@@ -587,7 +595,7 @@ size_t shmFetch(byte_t* shm_anchor, mxArray** ret_var)
 		}
 		else
 		{
-			char_t** field_names = (char_t**)mxCalloc((size_t)hdr->num_fields, sizeof(char_t*));
+			char_t** field_names = (char_t**)mxMalloc(hdr->num_fields * sizeof(char_t*));
 			pointCharArrayAtString(field_names, shm_anchor + hdr->data_off.field_str, hdr->num_fields);
 			
 			*ret_var = mxCreateStructArray(hdr->num_dims, (mwSize*)(shm_anchor + hdr->data_off.dims), hdr->num_fields, (const char_t**)field_names);
@@ -923,14 +931,15 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 	int field_num;
 	
 	/* initialize data info; _possibly_ update these later */
-	dat->dims = (mwSize*)NULL;
+	dat->dims = NULL;
 	dat->pr = NULL;
 	dat->pi = NULL;
-	dat->ir = (mwIndex*)NULL;
-	dat->jc = (mwIndex*)NULL;
-	dat->child_dat = (data_t*)NULL;
-	dat->child_hdr = (header_t*)NULL;
-	dat->field_str = (char_t*)NULL;
+	dat->ir = NULL;
+	dat->jc = NULL;
+	dat->num_children = 0;
+	dat->child_dat = NULL;
+	dat->child_hdr = NULL;
+	dat->field_str = NULL;
 	
 	if(mxInput == NULL)
 	{
@@ -991,17 +1000,20 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 			hdr->str_sz = (size_t) fieldNamesSize(mxInput);     /* always a multiple of alignment size */
 			hdr->shm_sz += padToAlign(hdr->str_sz);                   /* Add space for the field string */
 			
-			/* use mxCalloc so mem is freed on error via garbage collection */
-			dat->child_hdr = (header_t*)mxCalloc(hdr->num_elems*hdr->num_fields*(sizeof(header_t) + sizeof(data_t)) + hdr->str_sz, 1); /* extra space for the field string */
-			dat->child_dat = (data_t*)&dat->child_hdr[hdr->num_fields*hdr->num_elems];
-			dat->field_str = (char_t*)&dat->child_dat[hdr->num_fields*hdr->num_elems];
+			/* use mxMalloc so mem is freed on error via garbage collection */
+			dat->num_children = hdr->num_elems*hdr->num_fields;
+			dat->child_hdr = mxMalloc(dat->num_children*sizeof(header_t*)); /* extra space for the field string */
+			dat->child_dat = mxMalloc(dat->num_children*sizeof(data_t*));
+			dat->field_str = mxMalloc(hdr->str_sz*sizeof(char));
 			
-			const char_t** field_names = (const char_t**)mxMalloc(hdr->num_fields*sizeof(char_t*));
+			const char_t** field_names = mxMalloc(hdr->num_fields*sizeof(char_t*));
 			
 			/* make a record of the field names */
 			copyFieldNames(mxInput, dat->field_str, field_names);
 			
 			*ret_var = mxCreateStructArray(hdr->num_dims, dat->dims, hdr->num_fields, field_names);
+			
+			mxFree((void*)field_names);
 			
 			/* go through each recursively */
 			count = 0;
@@ -1009,8 +1021,11 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 			{
 				for(field_num = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 				{
+					dat->child_hdr[count] = mxMalloc(sizeof(header_t));
+					dat->child_dat[count] = mxMalloc(sizeof(data_t));
+					
 					/* call recursivley */
-					hdr->shm_sz += shmScan(&(dat->child_hdr[count]), &(dat->child_dat[count]),
+					hdr->shm_sz += shmScan(dat->child_hdr[count], dat->child_dat[count],
 									   mxGetFieldByNumber(mxInput, i, field_num), hdr, &ret_child);
 					mxSetFieldByNumber(*ret_var, i, field_num, ret_child);
 					
@@ -1030,16 +1045,19 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 		else
 		{
 			
-			/* use mxCalloc so mem is freed on error via garbage collection */
-			dat->child_hdr = (header_t*)mxCalloc(hdr->num_elems, sizeof(header_t) + sizeof(data_t));
-			dat->child_dat = (data_t*)&dat->child_hdr[hdr->num_elems];
+			/* use mxMalloc so mem is freed on error via garbage collection */
+			dat->num_children = hdr->num_elems;
+			dat->child_hdr = mxMalloc(dat->num_children * sizeof(header_t*));
+			dat->child_dat = mxMalloc(dat->num_children * sizeof(data_t*));
 			
 			*ret_var = mxCreateCellArray(hdr->num_dims, dat->dims);
 			
 			/* go through each recursively */
 			for(i = 0; i < hdr->num_elems; i++)
 			{
-				hdr->shm_sz += shmScan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr,
+				dat->child_hdr[i] = mxMalloc(sizeof(header_t));
+				dat->child_dat[i] = mxMalloc(sizeof(data_t));
+				hdr->shm_sz += shmScan(dat->child_hdr[i], dat->child_dat[i], mxGetCell(mxInput, i), hdr,
 								   &ret_child);
 				mxSetCell(*ret_var, i, ret_child);
 			}
@@ -1148,7 +1166,7 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm_anchor, header_t* par_hdr, 
 {
 	byte_t* shm = shm_anchor;
 	
-	size_t i, cpy_sz, total_offset = 0, shift;
+	size_t i, cpy_sz, total_offset = 0, shift, count;
 	
 	/* load up the shared memory */
 	
@@ -1193,17 +1211,18 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm_anchor, header_t* par_hdr, 
 		hdr->data_off.child_hdr = total_offset;
 		
 		/* copy the children recursively */
+		count = 0;
 		for(i = 0; i < hdr->num_elems; i++)
 		{
 			for(field_num = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 			{
 				/* And fill it */
-				size_t idx = i*hdr->num_elems + field_num;
-				shmCopy(&(dat->child_hdr[idx]), &(dat->child_dat[idx]), shm, hdr,
+				shmCopy(dat->child_hdr[count], dat->child_dat[count], shm, hdr,
 					   mxGetFieldByNumber(ret_var, i, field_num));
-				shift = (dat->child_hdr[idx]).shm_sz;
+				shift = (dat->child_hdr[count])->shm_sz;
 				total_offset += shift;
 				shm += shift;
+				count++;
 			}
 		}
 	}
@@ -1214,8 +1233,8 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm_anchor, header_t* par_hdr, 
 		/* recurse for each cell element */
 		for(i = 0; i < hdr->num_elems; i++)
 		{
-			shmCopy(&(dat->child_hdr[i]), &(dat->child_dat[i]), shm, hdr, mxGetCell(ret_var, i));
-			shift = (dat->child_hdr[i]).shm_sz;
+			shmCopy(dat->child_hdr[i], dat->child_dat[i], shm, hdr, mxGetCell(ret_var, i));
+			shift = (dat->child_hdr[i])->shm_sz;
 			total_offset += shift;
 			shm += shift;
 		}

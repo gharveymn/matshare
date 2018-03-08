@@ -30,7 +30,7 @@ function [ret, numvarsz, teststrs] = randVarGen_(maxDepth, currDepth, maxElement
 		%vartypegen = randi(16) + 2;
 		vartypegen = 17;
 	else
-		vartypegen = randi(18);
+		vartypegen = randi(2);
 		%vartypegen = 2;
 	end
 
@@ -214,7 +214,7 @@ function [ret, numvarsz, teststrs] = randVarGen_(maxDepth, currDepth, maxElement
 					ret = sparse(logical(rand(dims{:}) > 0.5));
 				end
 			else
-				ret = rand(dims{:},'double');
+				ret = rand(dims{:},'double') +  1i*rand(dims{:},'double');
 			end
 		case(18)
 			% 	18	mxOBJECT_CLASS,

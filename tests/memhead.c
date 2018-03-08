@@ -4,36 +4,36 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 
 typedef struct {
 	void *name;             /*   prev - R2008b: Name of variable in workspace
-				               R2009a - R2010b: NULL
-				               R2011a - later : Reverse CrossLink pointer    */
+	 * R2009a - R2010b: NULL
+	 * R2011a - later : Reverse CrossLink pointer    */
 	mxClassID ClassID;      /*  0 = unknown     10 = int16
-                                1 = cell        11 = uint16
-                                2 = struct      12 = int32
-                                3 = logical     13 = uint32
-                                4 = char        14 = int64
-                                5 = void        15 = uint64
-                                6 = double      16 = function_handle
-                                7 = single      17 = opaque (classdef)
-                                8 = int8        18 = object (old style)
-                                9 = uint8       19 = index (deprecated)
-                               10 = int16       20 = sparse (deprecated)     */
+	 * 1 = cell        11 = uint16
+	 * 2 = struct      12 = int32
+	 * 3 = logical     13 = uint32
+	 * 4 = char        14 = int64
+	 * 5 = void        15 = uint64
+	 * 6 = double      16 = function_handle
+	 * 7 = single      17 = opaque (classdef)
+	 * 8 = int8        18 = object (old style)
+	 * 9 = uint8       19 = index (deprecated)
+	 * 10 = int16       20 = sparse (deprecated)     */
 	int VariableType;       /*  0 = normal
-                                1 = persistent
-                                2 = global
-                                3 = sub-element (field or cell)
-                                4 = temporary
-                                5 = (unknown)
-                                6 = property of opaque class object
-                                7 = (unknown)                                */
+	 * 1 = persistent
+	 * 2 = global
+	 * 3 = sub-element (field or cell)
+	 * 4 = temporary
+	 * 5 = (unknown)
+	 * 6 = property of opaque class object
+	 * 7 = (unknown)                                */
 	mxArray *CrossLink;     /* Address of next shared-data variable          */
 	size_t ndim;            /* Number of dimensions                          */
 	unsigned int RefCount;  /* Number of extra sub-element copies            */
 	unsigned int flags;     /*  bit  0 = is scalar double full
-                                bit  2 = is empty double full
-                                bit  4 = is temporary
-                                bit  5 = is sparse
-                                bit  9 = is numeric
-                                bits 24 - 31 = User Bits                     */
+	 * bit  2 = is empty double full
+	 * bit  4 = is temporary
+	 * bit  5 = is sparse
+	 * bit  9 = is numeric
+	 * bits 24 - 31 = User Bits                     */
 	union mdim_data{
 		size_t M;           /* Row size for 2D matrices, or                  */
 		size_t *dims;       /* Pointer to dims array for nD > 2 arrays       */
@@ -51,7 +51,7 @@ typedef struct {
 		mxClassID ClassID;  /* Old User Defined Class ID                     */
 	} jcClassID;
 	size_t nzmax;           /* Number of elements allocated for sparse       */
-/*  size_t reserved;           Don't believe this! It is not really there!   */
+	/*  size_t reserved;           Don't believe this! It is not really there!   */
 } mxArrayStruct;
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
@@ -59,39 +59,41 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	
 // 	mxArray* in = mxCreateDoubleMatrix(3,3,mxREAL);
 // 	mxArray* shared = mxCreateSharedDataCopy(in);
-	mxArray* in = prhs[0];
-	mxArrayStruct* in_tag = (mxArrayStruct*)in;
-    mxArray* in2 = prhs[1];
-    mxArrayStruct* in_tag2 = (mxArrayStruct*)in2;
+// 	mxArray* in = prhs[0];
+// 	mxArrayStruct* in_tag = (mxArrayStruct*)in;
+// 	mxArray* in2 = prhs[1];
+// 	mxArrayStruct* in_tag2 = (mxArrayStruct*)in2;
 // 	mxArrayStruct* shared_tag = (mxArrayStruct*)shared;
-// 
-// 
-	in = in;
-// 	mexPrintf("addr in %p\n", in_tag);
-// 	mexPrintf("addr in crosslink %p\n", in_tag->CrossLink);
-// 	mexPrintf("addr in dat %p\n\n", in_tag->pr);
-// 
+//
+//
+	mxArray* sps = mxCreateSparse(2,3,7,mxREAL);
+	mxArrayStruct* in_tag = (mxArrayStruct*)sps;
+	mexPrintf("addr in %p\n", in_tag);
+	mexPrintf("addr in crosslink %p\n", in_tag->CrossLink);
+	mexPrintf("addr in dat %p\n\n", in_tag->pr);
+	mxDestroyArray(sps);
+//
 // 	mexPrintf("addr shared %p\n", shared_tag);
 // 	mexPrintf("addr shared crosslink %p\n", shared_tag->CrossLink);
 // 	mexPrintf("addr shared dat %p\n\n\n", shared_tag->pr);
-		
+	
 // 		mxFree(mxGetData(in));
 // 		mxSetData(in, mxMalloc(9));
-// 		
+//
 // 		mexPrintf("addr in %p\n", in_tag);
 // 		mexPrintf("addr in crosslink %p\n", in_tag->CrossLink);
 // 		mexPrintf("addr in dat %p\n\n", in_tag->pr);
-// 		
+//
 // 		mexPrintf("addr shared %p\n", shared_tag);
 // 		mexPrintf("addr shared crosslink %p\n", shared_tag->CrossLink);
 // 		mexPrintf("addr shared dat %p\n\n\n", shared_tag->pr);
-// 		
+//
 // 		mxDestroyArray(in);
-// 		
+//
 // 		mexPrintf("addr shared %p\n", shared_tag);
 // 		mexPrintf("addr shared crosslink %p\n", shared_tag->CrossLink);
 // 		mexPrintf("addr shared dat %p\n", shared_tag->pr);
-// 		
+//
 // 		mxDestroyArray(shared);
 // 	int bytes = (int)*(double*)mxGetData(prhs[0]);
 // 	mexPrintf("%i",bytes);
@@ -117,7 +119,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 // 	}
 //  	plhs[3] = mxCreateDoubleScalar(17);
 // 	mxSetData(plhs[3],mem);
- 	//mxArrayStruct* arr = (mxArrayStruct*)plhs[0];
- 	//arr->pr = mem;
+	//mxArrayStruct* arr = (mxArrayStruct*)plhs[0];
+	//arr->pr = mem;
 	//memcpy(mxGetData(plhs[0]), mem-16,16);
 }

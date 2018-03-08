@@ -124,17 +124,18 @@ struct header_tag
 typedef struct data_tag data_t;
 struct data_tag
 {
-	mwSize* dims;               /* pointer to the size array */
-	void* pr;                    /* real data portion */
+	mwSize* dims;               		/* pointer to the size array */
+	void* pr;                    		/* real data portion */
 	union
 	{
-		void* pi;               /* imaginary data portion */
-		char_t* field_str;   /* list of a structures fields, each field name will be seperated by a null character and terminated with a ";" */
+		void* pi;               		/* imaginary data portion */
+		char_t* field_str;   		/* list of a structures fields, each field name will be seperated by a null character and terminated with a ";" */
 	};
-	mwIndex* ir;                    /* row indexes, for sparse */
-	mwIndex* jc;                    /* cumulative column counts, for sparse */
-	data_t* child_dat;          /* array of children data structures, for cell */
-	header_t* child_hdr;          /* array of corresponding children header structures, for cell */
+	mwIndex* ir;                    	/* row indexes, for sparse */
+	mwIndex* jc;                  	/* cumulative column counts, for sparse */
+	size_t num_children;
+	data_t** child_dat;         		/* array of children data structures, for cell */
+	header_t** child_hdr;          	/* array of corresponding children header structures, for cell */
 };
 
 typedef struct ShmSegmentInfo_tag ShmSegmentInfo_t;

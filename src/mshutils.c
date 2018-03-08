@@ -37,17 +37,37 @@ size_t memCpyMex(byte_t* dest, byte_t* orig, size_t* data_off, size_t dest_off, 
 void freeTmp(data_t* dat)
 {
 	
+	size_t i;
+	
 	/* recurse to the bottom */
-	if(dat->child_dat)
+	if(dat->child_dat != NULL)
 	{
-		freeTmp(dat->child_dat);
+		for(i = 0; i < dat->num_children; i++)
+		{
+			freeTmp(dat->child_dat[i]);
+			mxFree(dat->child_dat[i]);
+		}
+		mxFree(dat->child_dat);
 	}
 	
-	/* free on the way back up */
-	mxFree(dat->child_hdr);
-	dat->child_hdr = (header_t*)NULL;
-	dat->child_dat = (data_t*)NULL;
-	dat->field_str = (char_t*)NULL;
+	if(dat->child_hdr != NULL)
+	{
+		for(i = 0; i < dat->num_children; i++)
+		{
+			mxFree(dat->child_hdr[i]);
+		}
+		mxFree(dat->child_hdr);
+	}
+	
+	if(dat->field_str != NULL)
+	{
+		mxFree(dat->field_str);
+	}
+	
+	dat->child_hdr = NULL;
+	dat->child_dat = NULL;
+	dat->field_str = NULL;
+	
 }
 
 
@@ -97,7 +117,7 @@ size_t fieldNamesSize(const mxArray* mxStruct)
 
 
 /* returns the number of bytes used in pList					   */
-size_t copyFieldNames(const mxArray* mxStruct, char_t* pList, const char_t** field_names)
+size_t copyFieldNames(const mxArray* mxStruct, char_t* field_str, const char_t** field_names)
 {
 	const char_t* field_name_ptr;    /* name of the field to add to the list */
 	int num_fields;                    /* the number of fields */
@@ -116,26 +136,26 @@ size_t copyFieldNames(const mxArray* mxStruct, char_t* pList, const char_t** fie
 		j = 0;
 		while(field_name_ptr[j])
 		{
-			pList[offset++] = field_name_ptr[j++];
+			field_str[offset++] = field_name_ptr[j++];
 		}
-		pList[offset++] = 0; /* add the null termination */
+		field_str[offset++] = 0; /* add the null termination */
 		
 		/* if this is last entry indicate the end of the string */
 		if(i == (num_fields - 1))
 		{
-			pList[offset++] = TERM_CHAR;
-			pList[offset++] = 0;  /* another null termination just to be safe */
+			field_str[offset++] = TERM_CHAR;
+			field_str[offset++] = 0;  /* another null termination just to be safe */
 		}
 		
 		/* Pad it out to 8 bytes */
 		while(offset%ALIGN_SIZE)
 		{
-			pList[offset++] = 0;
+			field_str[offset++] = 0;
 		}
 	}
 	
 	/* Add an extra alignment size to store the length of the string (in Bytes) */
-	*(unsigned int*)&pList[offset] = (unsigned int)(offset + ALIGN_SIZE);
+	*(unsigned int*)&field_str[offset] = (unsigned int)(offset + ALIGN_SIZE);
 	offset += ALIGN_SIZE;
 	
 	return offset;
@@ -196,13 +216,19 @@ void onExit(void)
 	
 	if(g_info->shm_data_seg.is_mapped)
 	{
-		UnmapViewOfFile(shm_data_ptr);
+		if(UnmapViewOfFile(shm_data_ptr) == 0)
+		{
+			readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
+		}
 		g_info->shm_data_seg.is_mapped = FALSE;
 	}
 	
 	if(g_info->shm_data_seg.is_init)
 	{
-		CloseHandle(g_info->shm_data_seg.handle);
+		if(CloseHandle(g_info->shm_data_seg.handle) == 0)
+		{
+			readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
+		}
 		g_info->shm_data_seg.is_init = FALSE;
 	}
 	
@@ -211,7 +237,10 @@ void onExit(void)
 		
 		acquireProcLock();
 		shm_update_info->num_procs -= 1;
-		UnmapViewOfFile(shm_update_info);
+		if(UnmapViewOfFile(shm_update_info) == 0)
+		{
+			readErrorMex("UnmapFileError", "Error unmapping the update file (Error Number %u)", GetLastError());
+		}
 		releaseProcLock();
 		
 		g_info->shm_update_seg.is_mapped = FALSE;
@@ -219,7 +248,10 @@ void onExit(void)
 	
 	if(g_info->shm_update_seg.is_init)
 	{
-		CloseHandle(g_info->shm_update_seg.handle);
+		if(CloseHandle(g_info->shm_update_seg.handle) == 0)
+		{
+			readErrorMex("CloseHandleError", "Error closing the update file handle (Error Number %u)", GetLastError());
+		}
 		g_info->shm_update_seg.is_init = FALSE;
 	}
 	
@@ -229,13 +261,19 @@ void onExit(void)
 		{
 			releaseProcLock();
 		}
-		CloseHandle(g_info->proc_lock);
+		if(CloseHandle(g_info->proc_lock) == 0)
+		{
+			readErrorMex("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
+		}
 		g_info->flags.is_proc_lock_init = FALSE;
 	}
 	
 	if(g_info->init_seg.is_init)
 	{
-		CloseHandle(g_info->init_seg.handle);
+		if(CloseHandle(g_info->init_seg.handle) == 0)
+		{
+			readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
+		}
 		g_info->init_seg.is_init = FALSE;
 	}
 	
@@ -603,10 +641,9 @@ void parseParams(int num_params, const mxArray* in[])
 			readErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_MEMSAFE_U);
 		}
 		
-		
-		
 		mxFree(param_str);
 		mxFree(val_str);
+	
 	}
 }
 
@@ -619,8 +656,14 @@ void updateAll(void)
 	shm_update_info->seg_sz = g_info->shm_data_seg.seg_sz;
 #ifdef MSH_WIN
 	/* not sure if this is required on windows, but it doesn't hurt */
-	FlushViewOfFile(shm_update_info, g_info->shm_update_seg.seg_sz);
-	FlushViewOfFile(shm_data_ptr, g_info->shm_data_seg.seg_sz);
+	if(FlushViewOfFile(shm_update_info, g_info->shm_update_seg.seg_sz) == 0)
+	{
+		readErrorMex("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
+	}
+	if(FlushViewOfFile(shm_data_ptr, g_info->shm_data_seg.seg_sz) == 0)
+	{
+		readErrorMex("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
+	}
 #else
 	/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
 	 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
@@ -661,5 +704,5 @@ void makeDummyVar(mxArray** out)
 
 void nullfcn(void)
 {
-	// does nothing
+	/* does nothing (so we can reset the mexAtExit function, since NULL is undocumented) */
 }
