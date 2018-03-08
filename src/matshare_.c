@@ -77,8 +77,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			acquireProcLock();
 			
-			shm_update_info->upd_pid = g_info->this_pid;
-			
 			/* clear the previous variable if needed */
 			if(!mxIsEmpty(g_shm_var))
 			{
@@ -92,11 +90,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					shmRewrite(shm_data_ptr, mxInput);
 					
 					/* tell everyone to come back to this segment */
-					shm_update_info->seg_num = g_info->cur_seg_info.seg_num;
-					shm_update_info->seg_sz = g_info->shm_data_reg.seg_sz;
-					shm_update_info->rev_num = g_info->cur_seg_info.rev_num;
+					updateAll();
 					
 					releaseProcLock();
+					
+					/* BREAK DON'T DO ANYTHING ELSE */
 					break;
 				}
 				else
@@ -171,12 +169,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				/* decrement the kernel handle count and tell onExit not to do this twice */
 				if(munmap(shm_data_ptr, g_info->shm_data_reg.seg_sz) != 0)
 				{
+					releaseProcLock();
 					readMunmapError(errno);
 				}
 				g_info->shm_data_reg.is_mapped = FALSE;
 				
 				if(shm_unlink(g_info->shm_data_reg.name) != 0)
 				{
+					releaseProcLock();
 					readShmUnlinkError(errno);
 				}
 				g_info->shm_data_reg.is_init = FALSE;
@@ -224,20 +224,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			g_info->flags.is_glob_shm_var_init = TRUE;
 			
 			/* make sure all of above is actually done before telling everyone to move to the new segment */
-			shm_update_info->rev_num = g_info->cur_seg_info.rev_num;
-			shm_update_info->seg_num = g_info->cur_seg_info.seg_num;
-			shm_update_info->seg_sz = g_info->shm_data_reg.seg_sz;
-
-#ifdef MSH_WIN
-			/* not sure if this is required on windows, but it doesn't hurt */
-			FlushViewOfFile(shm_update_info, g_info->shm_update_reg.seg_sz);
-			FlushViewOfFile(shm_data_ptr, g_info->shm_data_reg.seg_sz);
-#else
-			/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
-			 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
-			msync(shm_update_info, g_info->shm_update_reg.seg_sz, MS_SYNC|MS_INVALIDATE);
-			msync(shm_data_ptr, g_info->shm_data_reg.seg_sz, MS_SYNC|MS_INVALIDATE);
-#endif
+			updateAll();
 			
 			releaseProcLock();
 			
@@ -299,12 +286,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					
 					if(munmap(shm_data_ptr, g_info->shm_data_reg.seg_sz) != 0)
 					{
+						releaseProcLock();
 						readMunmapError(errno);
 					}
 					g_info->shm_data_reg.is_mapped = FALSE;
 					
 					if(shm_unlink(g_info->shm_data_reg.name) != 0)
 					{
+						releaseProcLock();
 						readShmUnlinkError(errno);
 					}
 					g_info->shm_data_reg.is_init = FALSE;

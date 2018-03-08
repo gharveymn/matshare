@@ -28,6 +28,7 @@ void acquireProcLock(void);
 void releaseProcLock(void);
 msh_directive_t parseDirective(const mxArray* in);
 bool_t precheck(void);
+void updateAll(void);
 void makeDummyVar(mxArray**);
 void nullfcn(void);
 

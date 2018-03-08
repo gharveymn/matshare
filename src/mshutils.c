@@ -459,6 +459,33 @@ msh_directive_t parseDirective(const mxArray* in)
 }
 
 
+void updateAll(void)
+{
+	shm_update_info->upd_pid = g_info->this_pid;
+	shm_update_info->rev_num = g_info->cur_seg_info.rev_num;
+	shm_update_info->seg_num = g_info->cur_seg_info.seg_num;
+	shm_update_info->seg_sz = g_info->shm_data_reg.seg_sz;
+#ifdef MSH_WIN
+	/* not sure if this is required on windows, but it doesn't hurt */
+	FlushViewOfFile(shm_update_info, g_info->shm_update_reg.seg_sz);
+	FlushViewOfFile(shm_data_ptr, g_info->shm_data_reg.seg_sz);
+#else
+	/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
+	 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
+	if(msync(shm_update_info, g_info->shm_update_reg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
+	{
+		releaseProcLock();
+		readMsyncError(errno);
+	}
+	if(msync(shm_data_ptr, g_info->shm_data_reg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
+	{
+		releaseProcLock();
+		readMsyncError(errno);
+	}
+#endif
+}
+
+
 /* checks if everything is in working order before doing the operation */
 bool_t precheck(void)
 {

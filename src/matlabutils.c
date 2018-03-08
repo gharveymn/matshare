@@ -50,13 +50,15 @@ void readMmapError_(const char* file_name, int line, int err)
 	{
 		case EACCES:
 			readErrorMex_(file_name, line, "MmapAccessError",
-					    "The fildes argument is not open for read, regardless of the protection specified, or fildes is not open for write and PROT_WRITE was specified for a MAP_SHARED type mapping.");
+					    "The fildes argument is not open for read, regardless of the protection specified, or fildes is not open for write and "
+							    "PROT_WRITE was specified for a MAP_SHARED type mapping.");
 		case EBADF:
 			readErrorMex_(file_name, line, "MmapFileClosedError", "The fildes argument is not a file descriptor open for writing.");
 		case EMFILE:
 			readErrorMex_(file_name, line, "MmapNumMapsError", "The number of mapped regions would exceed an implementation-defined limit (per process or per system).");
 		case ENOMEM:
-			readErrorMex_(file_name, line, "MmapMemoryError", "Not enough unallocated memory resources remain in the typed memory object designated by fildes to allocate len bytes.");
+			readErrorMex_(file_name, line, "MmapMemoryError", "Not enough unallocated memory resources remain in the typed memory object "
+					"designated by fildes to allocate len bytes.");
 		case EFBIG:
 			readErrorMex_(file_name, line, "MmapBigError",
 					    "The file is a regular file and length is greater than the offset maximum established in the open file description associated with fildes.");
@@ -97,7 +99,9 @@ void readShmOpenError_(const char* file_name, int line, int err)
 	{
 		case EACCES:
 			readErrorMex_(file_name, line, "ShmOpenAccessError",
-					    "The shared memory object exists and the permissions specified by oflag are denied, or the shared memory object does not exist and permission to create the shared memory object is denied, or O_TRUNC is specified and write permission is denied.");
+					    "The shared memory object exists and the permissions specified by oflag are denied, or the shared memory object "
+							    "does not exist and permission to create the shared memory object is denied, or O_TRUNC is specified "
+							    "and write permission is denied.");
 		case EEXIST:
 			readErrorMex_(file_name, line, "ShmOpenExistError", "O_CREAT and O_EXCL are set and the named shared memory object already exists.");
 		case EINTR:
@@ -132,6 +136,26 @@ void readShmUnlinkError_(const char* file_name, int line, int err)
 			readErrorMex_(file_name, line, "ShmUnlinkNotExistError", "The named shared memory object does not exist.");
 		default:
 			readErrorMex_(file_name, line, "ShmUnlinkUnknownError", "An unknown error occurred (Error number: %i)", errno);
+	}
+}
+
+
+void readMsyncError_(const char* file_name, int line, int err)
+{
+	switch(err)
+	{
+		case EBUSY:
+			readErrorMex_(file_name, line, "MsyncBusyError",
+					    "Some or all of the addresses in the range starting at addr and continuing for len bytes are locked, and MS_INVALIDATE is specified.");
+		case EINVAL:
+			readErrorMex_(file_name, line, "MsyncInvalidError", "Msync failed because of one of the following:\n"
+					"\tThe value of flags is invalid.\n"
+					"\tThe value of addr is not a multiple of the page size {PAGESIZE}.");
+		case ENOMEM:
+			readErrorMex_(file_name, line, "MsyncNoMemError", "The addresses in the range starting at addr and continuing for len bytes are outside the "
+					"range allowed for the address space of a process or specify one or more pages that are not mapped.");
+		default:
+			readErrorMex_(file_name, line, "MsyncUnknownError", "An unknown error occurred (Error number: %i)", errno);
 	}
 }
 
