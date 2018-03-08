@@ -45,9 +45,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	directive = parseDirective(mxDirective);
 	
 	char init_check_name[MSH_MAX_NAME_LEN];
-	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, getpid());
 #ifdef MSH_WIN
-	HANDLE temp_handle; = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 1, init_check_name);
+	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, GetProcessId(GetCurrentProcess()));
+	HANDLE temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 1, init_check_name);
 	err = GetLastError();
 	if(temp_handle == NULL)
 	{
@@ -66,12 +66,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		init();
 		g_info->init_seg.handle = temp_handle;
 		memcpy(g_info->init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
+		g_info->init_seg.is_init = TRUE;
 	}
 	else
 	{
 		CloseHandle(temp_handle);
 	}
 #else
+	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, getpid());
 	int temp_handle;
 	if((temp_handle = shm_open(init_check_name, O_RDWR|O_CREAT|O_EXCL, S_IRWXU))  == -1)
 	{
@@ -97,6 +99,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		init();
 		g_info->init_seg.handle = temp_handle;
 		memcpy(g_info->init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
+		g_info->init_seg.is_init = TRUE;
 	}
 #endif
 	
@@ -197,13 +200,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				/* change the file name */
 				snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
 				
-				// create the new mapping
+				/* create the new mapping */
 				lo_sz = (DWORD)(g_info->shm_data_seg.seg_sz & 0xFFFFFFFFL);
 				hi_sz = (DWORD)((g_info->shm_data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
 				g_info->shm_data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->shm_data_seg.name);
 				if(g_info->shm_data_seg.handle == NULL)
 				{
-					// throw error if it already exists because that shouldn't happen
+					/* throw error if it already exists because that shouldn't happen */
 					err = GetLastError();
 					releaseProcLock();
 					readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
@@ -487,7 +490,6 @@ void shmDetach(mxArray* ret_var)
 		{
 			/* I don't seem to be able to give sparse arrays zero size so (num_elems must be 1) */
 			num_dims = 2;
-			null_dims[0] = null_dims[1] = 1;
 			nzmax = 1;
 			if(mxSetDimensions(ret_var, null_dims, num_dims))
 			{
@@ -508,11 +510,11 @@ void shmDetach(mxArray* ret_var)
 			}
 			
 			new_ir = mxCalloc(nzmax, sizeof(mwIndex));
-			mexMakeMemoryPersistent(new_ir);
+//			mexMakeMemoryPersistent(new_ir);
 			mxSetIr(ret_var, new_ir);
 			
 			new_jc = mxCalloc(null_dims[1] + 1, sizeof(mwIndex));
-			mexMakeMemoryPersistent(new_jc);
+//			mexMakeMemoryPersistent(new_jc);
 			mxSetJc(ret_var, new_jc);
 			
 		}
@@ -966,7 +968,6 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 	/* Add space for the dimensions */
 	hdr->shm_sz += padToAlign(hdr->num_dims * sizeof(mwSize));
 	
-	
 	/* Structure case */
 	if(hdr->classid == mxSTRUCT_CLASS)
 	{
@@ -1328,6 +1329,7 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var, size_t*
 		{
 			for(field_num = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 			{
+				
 				if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_names[field_num]) != 0)
 				{
 					return FALSE;
@@ -1341,6 +1343,7 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var, size_t*
 				{
 					shm += shmshift;
 				}
+				
 			}
 		}
 	}
@@ -1390,11 +1393,11 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var, size_t*
 		
 		if(hdr->is_sparse)
 		{
+			
 			if(!mxIsSparse(comp_var))
 			{
 				return FALSE;
 			}
-			
 			
 			if((mwIndex*)(shm_anchor + hdr->data_off.ir) != mxGetIr(comp_var)
 			   || (mwIndex*)(shm_anchor + hdr->data_off.jc) != mxGetJc(comp_var))

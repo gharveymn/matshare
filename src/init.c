@@ -288,12 +288,10 @@ void globStartup(header_t* hdr)
 
 void initDataSegment(void)
 {
-	
-	g_info->shm_data_seg.seg_sz = shm_update_info->seg_sz;
 
 #ifdef MSH_WIN
 	
-	snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)shm_update_info->seg_num);
+	snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
 	uint32_t lo_sz = (uint32_t)(g_info->shm_data_seg.seg_sz & 0xFFFFFFFFL);
 	uint32_t hi_sz = (uint32_t)((g_info->shm_data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
 	g_info->shm_data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->shm_data_seg.name);
@@ -316,7 +314,7 @@ void initDataSegment(void)
 	}
 	g_info->shm_data_seg.is_init = TRUE;
 	
-	if(ftruncate(g_info->shm_data_seg.handle, shm_update_info->seg_sz) != 0)
+	if(ftruncate(g_info->shm_data_seg.handle, g_info->shm_data_seg.seg_sz) != 0)
 	{
 		readFtruncateError(errno);
 	}
@@ -340,7 +338,7 @@ void mapDataSegment(void)
 #else
 	
 	g_info->shm_data_seg.ptr = mmap(NULL, g_info->shm_data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_seg.handle, 0);
-	if(shm_data_ptr == MAP_FAILED)
+	if(g_info->shm_data_seg.ptr == MAP_FAILED)
 	{
 		readMmapError(errno);
 	}

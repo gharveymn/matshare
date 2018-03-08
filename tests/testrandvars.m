@@ -16,7 +16,7 @@ data = zeros(numtests,2);
 
 doplot = false;
 donames = true;
-doCompare = false;
+doCompare = true;
 numelems = 0;
 avgmultiplier = 0;
 
@@ -26,48 +26,50 @@ for j = 1:numtests
 		if(mod(i,2) == 0)
 			[ts1, avgnumelems(mod(i-1,stride)+1), names]  = randVarGen(maxDepth, maxElements, ignoreUnusables, donames, 'test_struct1');
 			delete(['res/statetwofe' num2str(feature('getpid')) '.mat']);
-            save(['res/stateonesh' num2str(feature('getpid')) '.mat']);
-            mshshare(ts1);
-            delete(['res/stateonesh' num2str(feature('getpid')) '.mat']);
-            save(['res/stateonefe' num2str(feature('getpid')) '.mat']);
+			save(['res/stateonesh' num2str(feature('getpid')) '.mat']);
+			mshshare(ts1);
+			delete(['res/stateonesh' num2str(feature('getpid')) '.mat']);
+			save(['res/stateonefe' num2str(feature('getpid')) '.mat']);
 			x1 = mshfetch;
-
+			
 			if(doCompare)
-			    [similarity,gmv,ld] = compstruct(x1, ts1);
-			    if(~isempty(gmv) || ~isempty(ld))
-				   %diffs = find(gmv ~= ld);
-				   %mindiffind = min(find(gmv ~= ld));
-				   save('res/failure.mat')
-				   error('matshare failed 1');
-			    end
+				[similarity,gmv,ld] = compstruct(x1, ts1);
+				if(~isempty(gmv) || ~isempty(ld))
+					%diffs = find(gmv ~= ld);
+					%mindiffind = min(find(gmv ~= ld));
+					save('res/failure.mat')
+					error('matshare failed 1');
+				end
 			end
-
+			
 			timestr = sprintf('Test %d of %d | Sample %d of %d',j,numtests,i,numsamples);
 			fprintf([repmat('\b',1,lents) timestr]);
 			lents = numel(timestr);
 		else
 			[ts2, avgnumelems(mod(i-1,stride)+1), names]  = randVarGen(maxDepth, maxElements, ignoreUnusables, donames, 'test_struct1');
 			delete(['res/stateonefe' num2str(feature('getpid')) '.mat']);
-            save(['res/statetwosh' num2str(feature('getpid')) '.mat']);
-            mshshare(ts2);
-            delete(['res/statetwosh' num2str(feature('getpid')) '.mat']);
-            save(['res/statetwofe' num2str(feature('getpid')) '.mat']);
+			save(['res/statetwosh' num2str(feature('getpid')) '.mat']);
+			mshshare(ts2);
+			delete(['res/statetwosh' num2str(feature('getpid')) '.mat']);
+			save(['res/statetwofe' num2str(feature('getpid')) '.mat']);
 			x2 = mshfetch;
-
+			
 			if(doCompare)
-			    [similarity,gmv,ld] = compstruct(x2, ts2);
-			    if(~isempty(gmv) || ~isempty(ld))
-				   %diffs = find(gmv ~= ld);
-				   %mindiffind = min(find(gmv ~= ld));
-				   save('res/failure.mat')
-				   error('matshare failed 2');
-			    end
+				[similarity,gmv,ld] = compstruct(x2, ts2);
+				if(~isempty(gmv) || ~isempty(ld))
+					%diffs = find(gmv ~= ld);
+					%mindiffind = min(find(gmv ~= ld));
+					save('res/failure.mat')
+					error('matshare failed 2');
+				end
 			end
-
+			
 			timestr = sprintf('Test %d of %d | Sample %d of %d',j,numtests,i,numsamples);
 			fprintf([repmat('\b',1,lents) timestr]);
 			lents = numel(timestr);
 		end
-			
+		
 	end
 end
+
+fprintf('\n');

@@ -233,6 +233,12 @@ void onExit(void)
 		g_info->flags.is_proc_lock_init = FALSE;
 	}
 	
+	if(g_info->init_seg.is_init)
+	{
+		CloseHandle(g_info->init_seg.handle);
+		g_info->init_seg.is_init = FALSE;
+	}
+	
 #else
 	
 	if(g_info->shm_data_seg.is_mapped)
@@ -291,10 +297,13 @@ void onExit(void)
 //		}
 		g_info->flags.is_proc_lock_init = FALSE;
 	}
-	
-	if(shm_unlink(g_info->init_seg.name) != 0)
+	if(g_info->init_seg.is_init)
 	{
-		readShmUnlinkError(errno);
+		if(shm_unlink(g_info->init_seg.name) != 0)
+		{
+			readShmUnlinkError(errno);
+		}
+		g_info->init_seg.is_init = FALSE;
 	}
 	
 #endif
@@ -578,6 +587,7 @@ void parseParams(int num_params, const mxArray* in[])
 		}
 		else if(strcmp(param_str, MSH_PARAM_SECURITY_L) == 0)
 		{
+#ifdef MSH_UNIX
 			if(vs_len < 3 || vs_len > 4)
 			{
 				readErrorMex("InvalidParamValueError", "Too many or too few digits in \"%s\" for parameter \"%s\". Must have either 3 or 4 digits.", val_str, MSH_PARAM_MEMSAFE_U);
@@ -586,6 +596,7 @@ void parseParams(int num_params, const mxArray* in[])
 			{
 				sscanf("%o", val_str_l, &shm_update_info->security);
 			}
+#endif
 		}
 		else
 		{
