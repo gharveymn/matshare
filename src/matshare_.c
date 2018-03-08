@@ -41,6 +41,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* get the directive */
 	directive = parseDirective(mxDirective);
 	
+//	char init_check[MSH_MAX_NAME_LEN];
+//	sprintf(init_check, MSH_INIT_CHECK_NAME, getpid());
 	if(!mexIsLocked())
 	{
 		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
@@ -139,7 +141,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				}
 				g_info->shm_data_reg.is_init = FALSE;
 				
+				/* change the map size */
 				g_info->shm_data_reg.seg_sz = sm_size;
+				
+				/* change the file name */
 				sprintf(g_info->shm_data_reg.name, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
 				
 				// create the new mapping
@@ -166,7 +171,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				
 #else
 				
-				/* decrement the kernel handle count and tell onExit not to do this twice */
+				/* unmap in preparation for size change */
 				if(munmap(shm_data_ptr, g_info->shm_data_reg.seg_sz) != 0)
 				{
 					releaseProcLock();
@@ -174,31 +179,16 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				}
 				g_info->shm_data_reg.is_mapped = FALSE;
 				
-				if(shm_unlink(g_info->shm_data_reg.name) != 0)
-				{
-					releaseProcLock();
-					readShmUnlinkError(errno);
-				}
-				g_info->shm_data_reg.is_init = FALSE;
-				
 				g_info->shm_data_reg.seg_sz = sm_size;
-				sprintf(g_info->shm_data_reg.name, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
 				
-				/* create the new mapping */
-				g_info->shm_data_reg.handle = shm_open(g_info->shm_data_reg.name, O_RDWR | O_CREAT, S_IRWXU);
-				if(g_info->shm_data_reg.handle == -1)
-				{
-					releaseProcLock();
-					readShmOpenError(errno);
-				}
-				g_info->shm_data_reg.is_init = TRUE;
-				
+				/* change the map size */
 				if(ftruncate(g_info->shm_data_reg.handle, g_info->shm_data_reg.seg_sz) != 0)
 				{
 					releaseProcLock();
 					readFtruncateError(errno);
 				}
 				
+				/* remap the shared memory */
 				g_info->shm_data_reg.ptr = mmap(NULL, g_info->shm_data_reg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_reg.handle, 0);
 				if(shm_data_ptr == MAP_FAILED)
 				{
@@ -246,21 +236,35 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				mxDestroyArray(g_shm_var);
 				
 				g_info->cur_seg_info.rev_num = shm_update_info->rev_num;
-				g_info->shm_data_reg.seg_sz = shm_update_info->seg_sz;
 				
 				/* Update the mapping if this is on a new segment */
 				if(g_info->cur_seg_info.seg_num != shm_update_info->seg_num)
 				{
 					g_info->cur_seg_info.seg_num = shm_update_info->seg_num;
-					sprintf(g_info->shm_data_reg.name, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
 					
 #ifdef MSH_WIN
 					
-					UnmapViewOfFile(shm_data_ptr);
+					if(UnmapViewOfFile(shm_data_ptr) == 0)
+					{
+						makeDummyVar(&plhs[0]);
+						releaseProcLock();
+						readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u)", err);
+					}
 					g_info->shm_data_reg.is_mapped = FALSE;
 					
-					CloseHandle(g_info->shm_data_reg.handle);
+					if(CloseHandle(g_info->shm_data_reg.handle) == 0)
+					{
+						makeDummyVar(&plhs[0]);
+						releaseProcLock();
+						readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u)", err);
+					}
 					g_info->shm_data_reg.is_init = FALSE;
+					
+					/* update the size */
+					g_info->shm_data_reg.seg_sz = shm_update_info->seg_sz;
+					
+					/* update the region name */
+					sprintf(g_info->shm_data_reg.name, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
 					
 					g_info->shm_data_reg.handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, g_info->shm_data_reg.name);
 					err = GetLastError();
@@ -284,6 +288,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					
 #else
 					
+					/* unmap the current mapping */
 					if(munmap(shm_data_ptr, g_info->shm_data_reg.seg_sz) != 0)
 					{
 						releaseProcLock();
@@ -291,29 +296,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					}
 					g_info->shm_data_reg.is_mapped = FALSE;
 					
-					if(shm_unlink(g_info->shm_data_reg.name) != 0)
-					{
-						releaseProcLock();
-						readShmUnlinkError(errno);
-					}
-					g_info->shm_data_reg.is_init = FALSE;
+					/* update the size */
+					g_info->shm_data_reg.seg_sz = shm_update_info->seg_sz;
 					
-					// create the new mapping
-					g_info->shm_data_reg.handle = shm_open(g_info->shm_data_reg.name, O_RDWR | O_CREAT, S_IRWXU);
-					if(g_info->shm_data_reg.handle == -1)
-					{
-						releaseProcLock();
-						readShmOpenError(errno);
-					}
-					g_info->shm_data_reg.is_init = TRUE;
-					
-					if(ftruncate(g_info->shm_data_reg.handle, shm_update_info->seg_sz) != 0)
-					{
-						releaseProcLock();
-						readFtruncateError(errno);
-					}
-					
-					g_info->shm_data_reg.ptr = mmap(NULL, shm_update_info->seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_reg.handle, 0);
+					/* remap with the updated size */
+					g_info->shm_data_reg.ptr = mmap(NULL, g_info->shm_data_reg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_reg.handle, 0);
 					if(shm_data_ptr == MAP_FAILED)
 					{
 						releaseProcLock();
