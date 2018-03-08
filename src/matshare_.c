@@ -1,4 +1,5 @@
 #include "headers/matshare_.h"
+#include "headers/mshtypes.h"
 
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
@@ -12,6 +13,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* For inputs */
 	const mxArray* mxDirective;			/* Directive {clone, attach, detach, free} */
 	const mxArray* mxInput;           		/* Input array (for clone) */
+	
+	int num_params;
 	
 	/* hack */
 	mxArrayStruct* arr;
@@ -41,14 +44,61 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* get the directive */
 	directive = parseDirective(mxDirective);
 	
-//	char init_check[MSH_MAX_NAME_LEN];
-//	sprintf(init_check, MSH_INIT_CHECK_NAME, getpid());
-	if(!mexIsLocked())
+	char init_check_name[MSH_MAX_NAME_LEN];
+	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, getpid());
+#ifdef MSH_WIN
+	HANDLE temp_handle; = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 1, init_check_name);
+	err = GetLastError();
+	if(temp_handle == NULL)
 	{
+		readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
+	}
+	else if(err != ERROR_ALREADY_EXISTS)
+	{
+		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
+		{
+			CloseHandle(temp_handle);
+			return;
+		}
+		
 		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
 		mexLock();
 		init();
+		g_info->init_seg.handle = temp_handle;
+		memcpy(g_info->init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
 	}
+	else
+	{
+		CloseHandle(temp_handle);
+	}
+#else
+	int temp_handle;
+	if((temp_handle = shm_open(init_check_name, O_RDWR|O_CREAT|O_EXCL, S_IRWXU))  == -1)
+	{
+		/* we want this to error if it does exist */
+		if(errno != EEXIST)
+		{
+			readShmOpenError(errno);
+		}
+	}
+	else
+	{
+		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
+		{
+			if(shm_unlink(init_check_name) != 0)
+			{
+				readShmUnlinkError(errno);
+			}
+			return;
+		}
+		
+		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
+		mexLock();
+		init();
+		g_info->init_seg.handle = temp_handle;
+		memcpy(g_info->init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
+	}
+#endif
 	
 	if(directive != msh_DETACH && precheck() != TRUE)
 	{
@@ -113,7 +163,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			/* update the revision number and indicate our info is current */
 			g_info->cur_seg_info.rev_num = shm_update_info->rev_num + 1;
-			if(sm_size > g_info->shm_data_reg.seg_sz)
+			if(sm_size > g_info->shm_data_seg.seg_sz)
 			{
 				
 				/* update the current map number if we can't reuse the current segment */
@@ -131,71 +181,71 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					releaseProcLock();
 					readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u).", err);
 				}
-				g_info->shm_data_reg.is_mapped = FALSE;
+				g_info->shm_data_seg.is_mapped = FALSE;
 				
-				if(CloseHandle(g_info->shm_data_reg.handle) == 0)
+				if(CloseHandle(g_info->shm_data_seg.handle) == 0)
 				{
 					err = GetLastError();
 					releaseProcLock();
 					readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u).", err);
 				}
-				g_info->shm_data_reg.is_init = FALSE;
+				g_info->shm_data_seg.is_init = FALSE;
 				
 				/* change the map size */
-				g_info->shm_data_reg.seg_sz = sm_size;
+				g_info->shm_data_seg.seg_sz = sm_size;
 				
 				/* change the file name */
-				sprintf(g_info->shm_data_reg.name, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
+				snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
 				
 				// create the new mapping
-				lo_sz = (DWORD)(g_info->shm_data_reg.seg_sz & 0xFFFFFFFFL);
-				hi_sz = (DWORD)((g_info->shm_data_reg.seg_sz >> 32) & 0xFFFFFFFFL);
-				g_info->shm_data_reg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->shm_data_reg.name);
-				if(g_info->shm_data_reg.handle == NULL)
+				lo_sz = (DWORD)(g_info->shm_data_seg.seg_sz & 0xFFFFFFFFL);
+				hi_sz = (DWORD)((g_info->shm_data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
+				g_info->shm_data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->shm_data_seg.name);
+				if(g_info->shm_data_seg.handle == NULL)
 				{
 					// throw error if it already exists because that shouldn't happen
 					err = GetLastError();
 					releaseProcLock();
 					readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
 				}
-				g_info->shm_data_reg.is_init = TRUE;
+				g_info->shm_data_seg.is_init = TRUE;
 				
-				g_info->shm_data_reg.ptr = MapViewOfFile(g_info->shm_data_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_data_reg.seg_sz);
-				if(g_info->shm_data_reg.ptr == NULL)
+				g_info->shm_data_seg.ptr = MapViewOfFile(g_info->shm_data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_data_seg.seg_sz);
+				if(g_info->shm_data_seg.ptr == NULL)
 				{
 					err = GetLastError();
 					releaseProcLock();
 					readErrorMex("MapDataSegError", "Could not map the data memory segment (Error number %u)", err);
 				}
-				g_info->shm_data_reg.is_mapped = TRUE;
+				g_info->shm_data_seg.is_mapped = TRUE;
 				
 #else
 				
 				/* unmap in preparation for size change */
-				if(munmap(shm_data_ptr, g_info->shm_data_reg.seg_sz) != 0)
+				if(munmap(shm_data_ptr, g_info->shm_data_seg.seg_sz) != 0)
 				{
 					releaseProcLock();
 					readMunmapError(errno);
 				}
-				g_info->shm_data_reg.is_mapped = FALSE;
+				g_info->shm_data_seg.is_mapped = FALSE;
 				
-				g_info->shm_data_reg.seg_sz = sm_size;
+				g_info->shm_data_seg.seg_sz = sm_size;
 				
 				/* change the map size */
-				if(ftruncate(g_info->shm_data_reg.handle, g_info->shm_data_reg.seg_sz) != 0)
+				if(ftruncate(g_info->shm_data_seg.handle, g_info->shm_data_seg.seg_sz) != 0)
 				{
 					releaseProcLock();
 					readFtruncateError(errno);
 				}
 				
 				/* remap the shared memory */
-				g_info->shm_data_reg.ptr = mmap(NULL, g_info->shm_data_reg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_reg.handle, 0);
+				g_info->shm_data_seg.ptr = mmap(NULL, g_info->shm_data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_seg.handle, 0);
 				if(shm_data_ptr == MAP_FAILED)
 				{
 					releaseProcLock();
 					readMmapError(errno);
 				}
-				g_info->shm_data_reg.is_mapped = TRUE;
+				g_info->shm_data_seg.is_mapped = TRUE;
 #endif
 				
 				/* warning: this may cause a collision in the rare case where one process is still at seg_num == 0
@@ -250,33 +300,33 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 						releaseProcLock();
 						readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u)", err);
 					}
-					g_info->shm_data_reg.is_mapped = FALSE;
+					g_info->shm_data_seg.is_mapped = FALSE;
 					
-					if(CloseHandle(g_info->shm_data_reg.handle) == 0)
+					if(CloseHandle(g_info->shm_data_seg.handle) == 0)
 					{
 						makeDummyVar(&plhs[0]);
 						releaseProcLock();
 						readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u)", err);
 					}
-					g_info->shm_data_reg.is_init = FALSE;
+					g_info->shm_data_seg.is_init = FALSE;
 					
 					/* update the size */
-					g_info->shm_data_reg.seg_sz = shm_update_info->seg_sz;
+					g_info->shm_data_seg.seg_sz = shm_update_info->seg_sz;
 					
 					/* update the region name */
-					sprintf(g_info->shm_data_reg.name, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
+					snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
 					
-					g_info->shm_data_reg.handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, g_info->shm_data_reg.name);
+					g_info->shm_data_seg.handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, g_info->shm_data_seg.name);
 					err = GetLastError();
-					if(g_info->shm_data_reg.handle == NULL)
+					if(g_info->shm_data_seg.handle == NULL)
 					{
 						makeDummyVar(&plhs[0]);
 						releaseProcLock();
 						readErrorMex("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
 					}
-					g_info->shm_data_reg.is_init = TRUE;
+					g_info->shm_data_seg.is_init = TRUE;
 					
-					g_info->shm_data_reg.ptr = MapViewOfFile(g_info->shm_data_reg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_data_reg.seg_sz);
+					g_info->shm_data_seg.ptr = MapViewOfFile(g_info->shm_data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_data_seg.seg_sz);
 					err = GetLastError();
 					if(shm_data_ptr == NULL)
 					{
@@ -284,29 +334,29 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 						releaseProcLock();
 						readErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
 					}
-					g_info->shm_data_reg.is_mapped = TRUE;
+					g_info->shm_data_seg.is_mapped = TRUE;
 					
 #else
 					
 					/* unmap the current mapping */
-					if(munmap(shm_data_ptr, g_info->shm_data_reg.seg_sz) != 0)
+					if(munmap(shm_data_ptr, g_info->shm_data_seg.seg_sz) != 0)
 					{
 						releaseProcLock();
 						readMunmapError(errno);
 					}
-					g_info->shm_data_reg.is_mapped = FALSE;
+					g_info->shm_data_seg.is_mapped = FALSE;
 					
 					/* update the size */
-					g_info->shm_data_reg.seg_sz = shm_update_info->seg_sz;
+					g_info->shm_data_seg.seg_sz = shm_update_info->seg_sz;
 					
 					/* remap with the updated size */
-					g_info->shm_data_reg.ptr = mmap(NULL, g_info->shm_data_reg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_reg.handle, 0);
+					g_info->shm_data_seg.ptr = mmap(NULL, g_info->shm_data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_seg.handle, 0);
 					if(shm_data_ptr == MAP_FAILED)
 					{
 						releaseProcLock();
 						readMmapError(errno);
 					}
-					g_info->shm_data_reg.is_mapped = TRUE;
+					g_info->shm_data_seg.is_mapped = TRUE;
 #endif
 				
 				}
@@ -343,6 +393,15 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 		case msh_PARAM:
 			/* set parameters for matshare to use */
+			
+			num_params = nrhs - 1;
+			
+			if(num_params % 2 != 0)
+			{
+				readErrorMex("InvalNumArgsError", "The number of parameters input must be a multiple of two.");
+			}
+			
+			parseParams(num_params, prhs + 1);
 			
 			break;
 		
@@ -382,7 +441,7 @@ void shmDetach(mxArray* ret_var)
 {
 	
 	/* uses side-effects! */
-	size_t num_dims = 2;
+	size_t num_dims = 0;
 	mwSize null_dims[] = {0, 0};
 	void* new_pr = NULL, * new_pi = NULL;
 	void* new_ir = NULL, * new_jc = NULL;
@@ -427,6 +486,7 @@ void shmDetach(mxArray* ret_var)
 		if(mxIsSparse(ret_var))
 		{
 			/* I don't seem to be able to give sparse arrays zero size so (num_elems must be 1) */
+			num_dims = 2;
 			null_dims[0] = null_dims[1] = 1;
 			nzmax = 1;
 			if(mxSetDimensions(ret_var, null_dims, num_dims))
@@ -435,6 +495,8 @@ void shmDetach(mxArray* ret_var)
 				releaseProcLock();
 				readErrorMex("DetachDimensionsError", "Unable to resize the array.");
 			}
+			
+			mxSetNzmax(ret_var, nzmax);
 			
 			/* allocate 1 element */
 			new_pr = mxCalloc(nzmax, mxGetElementSize(ret_var));
@@ -445,13 +507,14 @@ void shmDetach(mxArray* ret_var)
 				mxSetImagData(ret_var, new_pi);
 			}
 			
-			new_ir = mxCalloc(nzmax, sizeof(mwSize));
+			new_ir = mxCalloc(nzmax, sizeof(mwIndex));
+			mexMakeMemoryPersistent(new_ir);
 			mxSetIr(ret_var, new_ir);
 			
-			new_jc = mxCalloc(null_dims[1] + 1, sizeof(mwSize));
+			new_jc = mxCalloc(null_dims[1] + 1, sizeof(mwIndex));
+			mexMakeMemoryPersistent(new_jc);
 			mxSetJc(ret_var, new_jc);
 			
-			mxSetNzmax(ret_var, nzmax);
 		}
 		else
 		{
@@ -474,6 +537,7 @@ void shmDetach(mxArray* ret_var)
 			{
 				mxSetImagData(link, new_pi);
 			}
+			
 			if(mxIsSparse(link))
 			{
 				mxSetNzmax(ret_var, nzmax);
@@ -517,16 +581,16 @@ size_t shmFetch(byte_t* shm_anchor, mxArray** ret_var)
 		if(hdr->is_empty)
 		{
 			/* make this a separate case since there are no field names */
-			*ret_var = mxCreateStructArray(hdr->num_dims, hdr->data.dims, hdr->num_fields, NULL);
+			*ret_var = mxCreateStructArray(hdr->num_dims, (mwSize*)(shm_anchor + hdr->data_off.dims), hdr->num_fields, NULL);
 		}
 		else
 		{
 			char_t** field_names = (char_t**)mxCalloc((size_t)hdr->num_fields, sizeof(char_t*));
-			pointCharArrayAtString(field_names, hdr->data.field_str, hdr->num_fields);
+			pointCharArrayAtString(field_names, shm_anchor + hdr->data_off.field_str, hdr->num_fields);
 			
-			*ret_var = mxCreateStructArray(hdr->num_dims, hdr->data.dims, hdr->num_fields, (const char_t**)field_names);
+			*ret_var = mxCreateStructArray(hdr->num_dims, (mwSize*)(shm_anchor + hdr->data_off.dims), hdr->num_fields, (const char_t**)field_names);
 			
-			shm = (byte_t*)hdr->data.child_hdr;
+			shm = shm_anchor + hdr->data_off.child_hdr;
 			/* Go through each element */
 			for(i = 0; i < hdr->num_elems; i++)
 			{
@@ -540,8 +604,8 @@ size_t shmFetch(byte_t* shm_anchor, mxArray** ret_var)
 	}
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
-		*ret_var = mxCreateCellArray(hdr->num_dims, hdr->data.dims);
-		shm = (byte_t*)hdr->data.child_hdr;
+		*ret_var = mxCreateCellArray(hdr->num_dims, (mwSize*)(shm_anchor + hdr->data_off.dims));
+		shm = shm_anchor + hdr->data_off.child_hdr;
 		for(i = 0; i < hdr->num_elems; i++)
 		{
 			shm += shmFetch(shm, &ret_child);
@@ -572,23 +636,23 @@ size_t shmFetch(byte_t* shm_anchor, mxArray** ret_var)
 			{
 				/* set the real and imaginary data */
 				mxFree(mxGetData(*ret_var));
-				mxSetData(*ret_var, hdr->data.pr);
+				mxSetData(*ret_var, shm_anchor + hdr->data_off.pr);
 				if(hdr->complexity)
 				{
 					mxFree(mxGetImagData(*ret_var));
-					mxSetImagData(*ret_var, hdr->data.pi);
+					mxSetImagData(*ret_var, shm_anchor + hdr->data_off.pi);
 				}
 			}
 			
 			/* set the pointers relating to sparse */
 			mxFree(mxGetIr(*ret_var));
-			mxSetIr(*ret_var, hdr->data.ir);
+			mxSetIr(*ret_var, (mwIndex*)(shm_anchor + hdr->data_off.ir));
 			
 			mxFree(mxGetJc(*ret_var));
-			mxSetJc(*ret_var, hdr->data.jc);
+			mxSetJc(*ret_var, (mwIndex*)(shm_anchor + hdr->data_off.jc));
 			
 			mxSetNzmax(*ret_var, hdr->num_elems);
-			mxSetDimensions(*ret_var, hdr->data.dims, hdr->num_dims);
+			mxSetDimensions(*ret_var, (mwSize*)(shm_anchor + hdr->data_off.dims), hdr->num_dims);
 			
 		}
 		else
@@ -598,15 +662,15 @@ size_t shmFetch(byte_t* shm_anchor, mxArray** ret_var)
 			{
 				if(hdr->is_numeric)
 				{
-					*ret_var = mxCreateNumericArray(hdr->num_dims, hdr->data.dims, hdr->classid, hdr->complexity);
+					*ret_var = mxCreateNumericArray(hdr->num_dims, (mwSize*)(shm_anchor + hdr->data_off.dims), hdr->classid, hdr->complexity);
 				}
 				else if(hdr->classid == mxLOGICAL_CLASS)
 				{
-					*ret_var = mxCreateLogicalArray(hdr->num_dims, hdr->data.dims);
+					*ret_var = mxCreateLogicalArray(hdr->num_dims, (mwSize*)(shm_anchor + hdr->data_off.dims));
 				}
 				else
 				{
-					*ret_var = mxCreateCharArray(hdr->num_dims, hdr->data.dims);
+					*ret_var = mxCreateCharArray(hdr->num_dims, (mwSize*)(shm_anchor + hdr->data_off.dims));
 				}
 			}
 			else
@@ -625,13 +689,13 @@ size_t shmFetch(byte_t* shm_anchor, mxArray** ret_var)
 				}
 				
 				/* set the real and imaginary data */
-				mxSetData(*ret_var, hdr->data.pr);
+				mxSetData(*ret_var, shm_anchor + hdr->data_off.pr);
 				if(hdr->complexity)
 				{
-					mxSetImagData(*ret_var, hdr->data.pi);
+					mxSetImagData(*ret_var, shm_anchor + hdr->data_off.pi);
 				}
 				
-				mxSetDimensions(*ret_var, hdr->data.dims, hdr->num_dims);
+				mxSetDimensions(*ret_var, (mwSize*)(shm_anchor + hdr->data_off.dims), hdr->num_dims);
 				
 			}
 			
@@ -666,7 +730,8 @@ bool_t shmCompareSize(byte_t* shm_anchor, const mxArray* comp_var, size_t* offse
 	}
 	
 	/* the size pointer */
-	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var) || memcmp(hdr->data.dims, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0)
+	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var)
+	   || memcmp((mwSize*)(shm_anchor + hdr->data_off.dims), mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0)
 	{
 		return FALSE;
 	}
@@ -676,10 +741,10 @@ bool_t shmCompareSize(byte_t* shm_anchor, const mxArray* comp_var, size_t* offse
 	{
 		
 		char_t** field_names = (char_t**)mxCalloc((size_t)hdr->num_fields, sizeof(char_t*));
-		pointCharArrayAtString(field_names, hdr->data.field_str, hdr->num_fields);
+		pointCharArrayAtString(field_names, shm_anchor + hdr->data_off.field_str, hdr->num_fields);
 		
 		
-		shm = (byte_t*)hdr->data.child_hdr;
+		shm = shm_anchor + hdr->data_off.child_hdr;
 		/* Go through each element */
 		for(i = 0; i < hdr->num_elems; i++)
 		{
@@ -705,7 +770,7 @@ bool_t shmCompareSize(byte_t* shm_anchor, const mxArray* comp_var, size_t* offse
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
 		
-		shm = (byte_t*)hdr->data.child_hdr;
+		shm = shm_anchor + hdr->data_off.child_hdr;
 		for(i = 0, shmshift = 0; i < hdr->num_elems; i++, shmshift = 0)
 		{
 			if(!shmCompareSize(shm, mxGetCell(comp_var, i), &shmshift))
@@ -737,7 +802,7 @@ bool_t shmCompareSize(byte_t* shm_anchor, const mxArray* comp_var, size_t* offse
 			}
 
 			if(hdr->num_elems != mxGetNzmax(comp_var)
-			   || hdr->data.dims[1] != mxGetN(comp_var))
+			   || ((mwSize*)(shm_anchor + hdr->data_off.dims))[1] != mxGetN(comp_var))
 			{
 				return FALSE;
 			}
@@ -764,8 +829,9 @@ bool_t shmCompareSize(byte_t* shm_anchor, const mxArray* comp_var, size_t* offse
 }
 
 
-size_t shmRewrite(byte_t* shm, const mxArray* in_var)
+size_t shmRewrite(byte_t* shm_anchor, const mxArray* in_var)
 {
+	byte_t* shm;
 	
 	/* for working with shared memory ... */
 	size_t i;
@@ -777,14 +843,14 @@ size_t shmRewrite(byte_t* shm, const mxArray* in_var)
 	int field_num;                /* current field */
 	
 	/* retrieve the data */
-	hdr = (header_t*)shm;
+	hdr = (header_t*)shm_anchor;
 	
 	
 	/* Structure case */
 	if(hdr->classid == mxSTRUCT_CLASS)
 	{
 		
-		shm = (byte_t*)hdr->data.child_hdr;
+		shm = shm_anchor + hdr->data_off.child_hdr;
 		
 		/* Go through each element */
 		for(i = 0; i < hdr->num_elems; i++)
@@ -799,7 +865,7 @@ size_t shmRewrite(byte_t* shm, const mxArray* in_var)
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
 		
-		shm = (byte_t*)hdr->data.child_hdr;
+		shm = shm_anchor + hdr->data_off.child_hdr;
 		
 		for(i = 0; i < hdr->num_elems; i++)
 		{
@@ -810,19 +876,19 @@ size_t shmRewrite(byte_t* shm, const mxArray* in_var)
 	else     /*base case*/
 	{
 		/* this is the address of the first data */
-		memcpy(hdr->data.pr, mxGetData(in_var), (hdr->num_elems)*(hdr->elem_size));
+		memcpy(shm_anchor + hdr->data_off.pr, mxGetData(in_var), (hdr->num_elems)*(hdr->elem_size));
 		
 		/* if complex get a pointer to the complex data */
 		if(hdr->complexity == mxCOMPLEX)
 		{
-			memcpy(hdr->data.pi, mxGetImagData(in_var), (hdr->num_elems)*(hdr->elem_size));
+			memcpy(shm_anchor + hdr->data_off.pi, mxGetImagData(in_var), (hdr->num_elems)*(hdr->elem_size));
 		}
 		
 		/* if sparse get a list of the elements */
 		if(hdr->is_sparse)
 		{
-			memcpy(hdr->data.ir, mxGetIr(in_var), (hdr->num_elems)*sizeof(mwIndex));
-			memcpy(hdr->data.jc, mxGetJc(in_var), (hdr->data.dims[1] + 1)*sizeof(mwIndex));
+			memcpy(shm_anchor + hdr->data_off.ir, mxGetIr(in_var), (hdr->num_elems)*sizeof(mwIndex));
+			memcpy(shm_anchor + hdr->data_off.jc, mxGetJc(in_var), (((mwSize*)(shm_anchor + hdr->data_off.dims))[1] + 1)*sizeof(mwIndex));
 		}
 		
 		
@@ -873,13 +939,14 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 	/* initialize header info */
 	
 	/* these are updated when the data is copied over */
-	hdr->data.dims = (mwSize*)NULL;
-	hdr->data.pr = NULL;
-	hdr->data.pi = NULL;
-	hdr->data.ir = (mwIndex*)NULL;
-	hdr->data.jc = (mwIndex*)NULL;
-	hdr->data.child_hdr = (header_t*)NULL;
-	hdr->data.field_str = (char_t*)NULL;
+	hdr->data_off.dims = SIZE_MAX;
+	hdr->data_off.pr = SIZE_MAX;
+	hdr->data_off.pi = SIZE_MAX;
+	hdr->data_off.ir = SIZE_MAX;
+	hdr->data_off.jc = SIZE_MAX;
+	hdr->data_off.field_str = SIZE_MAX;
+	hdr->data_off.child_hdr = SIZE_MAX;
+	hdr->data_off.parent_hdr = INT_MAX;
 	
 	hdr->is_numeric = mxIsNumeric(mxInput);
 	hdr->is_sparse = mxIsSparse(mxInput);
@@ -890,7 +957,6 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 	hdr->elem_size = mxGetElementSize(mxInput);
 	hdr->num_elems = mxGetNumberOfElements(mxInput);      /* update this later on sparse*/
 	hdr->num_fields = 0;                                 /* update this later */
-	hdr->par_hdr_off = 0;
 	hdr->shm_sz = padToAlign(sizeof(header_t));     /* update this later */
 	hdr->str_sz = 0;                                   /* update this later */
 	
@@ -1060,7 +1126,6 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 		readErrorMex("Internal:UnexpectedError", "Tried to clone an unsupported type.");
 	}
 	
-	
 	return hdr->shm_sz;
 }
 
@@ -1082,28 +1147,31 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm_anchor, header_t* par_hdr, 
 {
 	byte_t* shm = shm_anchor;
 	
-	size_t i, cpy_sz, offset = 0;
+	size_t i, cpy_sz, total_offset = 0, shift;
 	
 	/* load up the shared memory */
 	
 	/* copy the header */
 	cpy_sz = sizeof(header_t);
-	offset = padToAlign(cpy_sz);
+	shift = padToAlign(cpy_sz);
+	total_offset += shift;
+	shm += shift;
 	
 	/* for structures */
 	int field_num;                /* current field */
 	
 	/* copy the dimensions */
-	hdr->data.dims = (mwSize*)&shm[offset];
+	hdr->data_off.dims = total_offset;
 	for(i = 0; i < hdr->num_dims; i++)
 	{
-		hdr->data.dims[i] = dat->dims[i];
+		((mwSize*)shm)[i] = dat->dims[i];
 	}
-	offset += padToAlign(hdr->num_dims * sizeof(mwSize));
+	shift = padToAlign(hdr->num_dims * sizeof(mwSize));
+	total_offset += shift;
+	shm += shift;
 	
 	/* assign the parent header  */
-	hdr->par_hdr_off = (NULL == par_hdr)? 0 : (int)(par_hdr - (header_t*)shm_anchor);
-	shm += offset;
+	hdr->data_off.parent_hdr = (NULL == par_hdr)? 0 : (int)(par_hdr - (header_t*)shm_anchor);
 	
 	/* Structure case */
 	if(hdr->classid == mxSTRUCT_CLASS)
@@ -1112,15 +1180,16 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm_anchor, header_t* par_hdr, 
 		/* place the field names next in shared memory */
 		
 		/* copy the field string */
-		hdr->data.field_str = shm;
+		hdr->data_off.field_str = total_offset;
 		for(i = 0; i < hdr->str_sz; i++)
 		{
-			hdr->data.field_str[i] = dat->field_str[i];
+			((char_t*)shm)[i] = dat->field_str[i];
 		}
-		shm += padToAlign(hdr->str_sz);
+		shift = padToAlign(hdr->str_sz);
+		total_offset += shift;
+		shm += shift;
 		
-		
-		hdr->data.child_hdr = (header_t*)shm;
+		hdr->data_off.child_hdr = total_offset;
 		
 		/* copy the children recursively */
 		for(i = 0; i < hdr->num_elems; i++)
@@ -1131,43 +1200,51 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm_anchor, header_t* par_hdr, 
 				size_t idx = i*hdr->num_elems + field_num;
 				shmCopy(&(dat->child_hdr[idx]), &(dat->child_dat[idx]), shm, hdr,
 					   mxGetFieldByNumber(ret_var, i, field_num));
-				shm += (dat->child_hdr[idx]).shm_sz;
+				shift = (dat->child_hdr[idx]).shm_sz;
+				total_offset += shift;
+				shm += shift;
 			}
 		}
 	}
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
 		
-		hdr->data.child_hdr = (header_t*)shm;
+		hdr->data_off.child_hdr = total_offset;
 		/* recurse for each cell element */
 		for(i = 0; i < hdr->num_elems; i++)
 		{
 			shmCopy(&(dat->child_hdr[i]), &(dat->child_dat[i]), shm, hdr, mxGetCell(ret_var, i));
-			shm += (dat->child_hdr[i]).shm_sz;
+			shift = (dat->child_hdr[i]).shm_sz;
+			total_offset += shift;
+			shm += shift;
 		}
 	}
 	else /* base case */
 	{
 		/* copy real data */
 		cpy_sz = (hdr->num_elems)*(hdr->elem_size);
-		shm += memCpyMex(shm, dat->pr, (byte_t**)&hdr->data.pr, cpy_sz);
+		shift = memCpyMex(shm, dat->pr, &hdr->data_off.pr, total_offset, cpy_sz);
+		total_offset += shift;
+		shm += shift;
 		
 		if(!hdr->is_empty)
 		{
 			mxFree(mxGetData(ret_var));
-			mxSetData(ret_var, hdr->data.pr);
+			mxSetData(ret_var, shm_anchor + hdr->data_off.pr);
 		}
 		
 		/* copy complex data as well */
 		if(hdr->complexity == mxCOMPLEX)
 		{
 			
-			shm += memCpyMex(shm, dat->pi, (byte_t**)&hdr->data.pi, cpy_sz);
+			shift = memCpyMex(shm, dat->pi, &hdr->data_off.pi, total_offset, cpy_sz);
+			total_offset += shift;
+			shm += shift;
 			
 			if(!hdr->is_empty)
 			{
 				mxFree(mxGetImagData(ret_var));
-				mxSetImagData(ret_var, hdr->data.pi);
+				mxSetImagData(ret_var, shm_anchor + hdr->data_off.pi);
 			}
 			
 		}
@@ -1176,27 +1253,31 @@ void shmCopy(header_t* hdr, data_t* dat, byte_t* shm_anchor, header_t* par_hdr, 
 		if(hdr->is_sparse)
 		{
 			cpy_sz = hdr->num_elems*sizeof(mwIndex);
-			shm += memCpyMex(shm, (byte_t*)dat->ir, (byte_t**)&hdr->data.ir, cpy_sz);
+			shift = memCpyMex(shm, (byte_t*)dat->ir, &hdr->data_off.ir, total_offset, cpy_sz);
+			total_offset += shift;
+			shm += shift;
 			
-			cpy_sz = (hdr->data.dims[1] + 1)*sizeof(mwIndex);
-			shm += memCpyMex(shm, (byte_t*)dat->jc, (byte_t**)&hdr->data.jc, cpy_sz);
+			cpy_sz = (((mwSize*)(shm_anchor + hdr->data_off.dims))[1] + 1)*sizeof(mwIndex);
+			shift = memCpyMex(shm, (byte_t*)dat->jc, &hdr->data_off.jc, total_offset, cpy_sz);
+			total_offset += shift;
+			shm += shift;
 			
 			/* set the pointers relating to sparse (set the real and imaginary data later)*/
 			mxFree(mxGetIr(ret_var));
-			mxSetIr(ret_var, hdr->data.ir);
+			mxSetIr(ret_var, ((mwIndex*)(shm_anchor + hdr->data_off.ir)));
 			
 			mxFree(mxGetJc(ret_var));
-			mxSetJc(ret_var, hdr->data.jc);
+			mxSetJc(ret_var, ((mwIndex*)(shm_anchor + hdr->data_off.jc)));
 			
 			mxSetNzmax(ret_var, hdr->num_elems);
 			
 		}
 		
-		mxSetDimensions(ret_var, hdr->data.dims, hdr->num_dims);
+		mxSetDimensions(ret_var, ((mwSize*)(shm_anchor + hdr->data_off.dims)), hdr->num_dims);
 		
 	}
 	
-	memcpy(shm, hdr, cpy_sz);
+	memcpy(shm_anchor, hdr, sizeof(header_t));
 	
 }
 
@@ -1225,7 +1306,9 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var, size_t*
 	}
 	
 	/* the size pointer */
-	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var) || memcmp(hdr->data.dims, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0 || hdr->num_elems != mxGetNumberOfElements(comp_var))
+	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var)
+	   || memcmp(((mwSize*)(shm_anchor + hdr->data_off.dims)), mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0
+	   || hdr->num_elems != mxGetNumberOfElements(comp_var))
 	{
 		return FALSE;
 	}
@@ -1238,7 +1321,7 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var, size_t*
 		char_t** field_names = (char_t**)mxCalloc((size_t)hdr->num_fields, sizeof(char_t*));
 		pointCharArrayAtString(field_names, shm, hdr->num_fields);
 		
-		shm = (byte_t*)hdr->data.child_hdr;
+		shm = shm_anchor + hdr->data_off.child_hdr;
 		
 		/* Go through each element */
 		for(i = 0; i < hdr->num_elems; i++)
@@ -1264,7 +1347,7 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var, size_t*
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
 		
-		shm = (byte_t*)hdr->data.child_hdr;
+		shm = shm_anchor + hdr->data_off.child_hdr;
 		
 		for(i = 0, shmshift = 0; i < hdr->num_elems; i++, shmshift = 0)
 		{
@@ -1283,7 +1366,7 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var, size_t*
 		/* this is the address of the first data */
 		
 		//these should point to the same location
-		if(hdr->data.pr != mxGetData(comp_var))
+		if(shm_anchor + hdr->data_off.pr != mxGetData(comp_var))
 		{
 			return FALSE;
 		}
@@ -1298,7 +1381,7 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var, size_t*
 			
 			
 			//these should point to the same location
-			if(hdr->data.pi != mxGetImagData(comp_var))
+			if(shm_anchor + hdr->data_off.pi != mxGetImagData(comp_var))
 			{
 				return FALSE;
 			}
@@ -1313,7 +1396,8 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var, size_t*
 			}
 			
 			
-			if(hdr->data.ir != mxGetIr(comp_var) || hdr->data.jc != mxGetJc(comp_var))
+			if((mwIndex*)(shm_anchor + hdr->data_off.ir) != mxGetIr(comp_var)
+			   || (mwIndex*)(shm_anchor + hdr->data_off.jc) != mxGetJc(comp_var))
 			{
 				return FALSE;
 			}

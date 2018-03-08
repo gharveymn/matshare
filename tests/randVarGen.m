@@ -27,8 +27,8 @@ function [ret, numvarsz, teststrs] = randVarGen_(maxDepth, currDepth, maxElement
 
 	if(maxDepth <= currDepth)
 		%dont make another layer
-		vartypegen = randi(16) + 2;
-		%vartypegen = 17;
+		%vartypegen = randi(16) + 2;
+		vartypegen = 17;
 	else
 		vartypegen = randi(18);
 		%vartypegen = 2;

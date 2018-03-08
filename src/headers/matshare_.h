@@ -15,7 +15,7 @@ size_t shmFetch(byte_t* shm, mxArray** ret_var);
 
 bool_t shmCompareSize(byte_t* shm, const mxArray* comp_var, size_t* offset);
 
-size_t shmRewrite(byte_t* shm, const mxArray* in_var);
+size_t shmRewrite(byte_t* shm_anchor, const mxArray* in_var);
 
 /* Recursively descend through Matlab matrix to assess how much space its    */
 /* serialization will require.                                               */

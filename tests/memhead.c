@@ -61,6 +61,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 // 	mxArray* shared = mxCreateSharedDataCopy(in);
 	mxArray* in = prhs[0];
 	mxArrayStruct* in_tag = (mxArrayStruct*)in;
+    mxArray* in2 = prhs[1];
+    mxArrayStruct* in_tag2 = (mxArrayStruct*)in2;
 // 	mxArrayStruct* shared_tag = (mxArrayStruct*)shared;
 // 
 // 

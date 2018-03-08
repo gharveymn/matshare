@@ -1,6 +1,6 @@
 rng('shuffle')
 numtests = 1;
-numsamples = 1000;
+numsamples = 10000;
 lents = 0;
 
 maxDepth = 1;
@@ -25,7 +25,11 @@ for j = 1:numtests
 	for i = 1:numsamples
 		if(mod(i,2) == 0)
 			[ts1, avgnumelems(mod(i-1,stride)+1), names]  = randVarGen(maxDepth, maxElements, ignoreUnusables, donames, 'test_struct1');
-			mshshare(ts1);
+			delete(['res/statetwofe' num2str(feature('getpid')) '.mat']);
+            save(['res/stateonesh' num2str(feature('getpid')) '.mat']);
+            mshshare(ts1);
+            delete(['res/stateonesh' num2str(feature('getpid')) '.mat']);
+            save(['res/stateonefe' num2str(feature('getpid')) '.mat']);
 			x1 = mshfetch;
 
 			if(doCompare)
@@ -43,7 +47,11 @@ for j = 1:numtests
 			lents = numel(timestr);
 		else
 			[ts2, avgnumelems(mod(i-1,stride)+1), names]  = randVarGen(maxDepth, maxElements, ignoreUnusables, donames, 'test_struct1');
-			mshshare(ts2);
+			delete(['res/stateonefe' num2str(feature('getpid')) '.mat']);
+            save(['res/statetwosh' num2str(feature('getpid')) '.mat']);
+            mshshare(ts2);
+            delete(['res/statetwosh' num2str(feature('getpid')) '.mat']);
+            save(['res/statetwofe' num2str(feature('getpid')) '.mat']);
 			x2 = mshfetch;
 
 			if(doCompare)

@@ -91,30 +91,28 @@ typedef enum
 /* captures fundamentals of the mxArray */
 /* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
 typedef struct header_tag header_t;
-
-
 struct header_tag
 {
 	struct
 	{
-		mwSize* dims;
-		void* pr;
+		size_t dims;
+		size_t pr;
 		union
 		{
-			void* pi;
-			char_t* field_str;
+			size_t pi;
+			size_t field_str;
 		};
-		mwIndex* ir;
-		mwIndex* jc;
-		header_t* child_hdr;
-	} data;
+		size_t ir;
+		size_t jc;
+		size_t child_hdr;
+		int parent_hdr;
+	} data_off; 			/* these are actually the relative offsets of data */
 	size_t num_dims;         /* dimensionality of the matrix.  The size array immediately follows the header */
 	size_t elem_size;       /* size of each element in pr and pi */
 	size_t num_elems;         /* length of pr,pi */
 	size_t shm_sz;            /* size of serialized object (header + size array + field names string) */
 	size_t str_sz;
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
-	int par_hdr_off;   /* offset to the parent's header, add this to help backwards searches (double linked... sort of)*/
 	mxComplexity complexity;
 	mxClassID classid;       /* matlab class id */
 	bool_t is_sparse;
@@ -152,6 +150,7 @@ struct ShmSegmentInfo_tag
 	DWORD upd_pid;
 #else
 	pid_t upd_pid;
+	mode_t security;
 #endif
 };
 
@@ -180,8 +179,9 @@ struct MemorySegment_tag
 typedef struct MexInfo_tag MexInfo_t;
 struct MexInfo_tag
 {
-	MemorySegment_t shm_data_reg;
-	MemorySegment_t shm_update_reg;
+	MemorySegment_t shm_data_seg;
+	MemorySegment_t shm_update_seg;
+	MemorySegment_t init_seg;
 
 #ifdef MSH_WIN
 	HANDLE proc_lock;
@@ -207,13 +207,12 @@ struct MexInfo_tag
 #endif
 	
 	uint32_t num_lcl_objs;
-	
 };
 
 mxArray* g_shm_var;
 MexInfo_t* g_info;
 
-#define shm_data_ptr ((byte_t*)g_info->shm_data_reg.ptr)
-#define shm_update_info ((ShmSegmentInfo_t*)g_info->shm_update_reg.ptr)
+#define shm_data_ptr ((byte_t*)g_info->shm_data_seg.ptr)
+#define shm_update_info ((ShmSegmentInfo_t*)g_info->shm_update_seg.ptr)
 
 #endif //MATSHARE_MSH_TYPES_H

@@ -1,4 +1,6 @@
 #include "headers/mshutils.h"
+#include "headers/mshtypes.h"
+
 
 /*
  * NEW MXMALLOC SIGNATURE INFO:
@@ -16,16 +18,16 @@
 const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
 
 
-size_t memCpyMex(byte_t* dest, byte_t* orig, byte_t** data_ptr, size_t cpy_sz)
+size_t memCpyMex(byte_t* dest, byte_t* orig, size_t* data_off, size_t dest_off, size_t cpy_sz)
 {
 	size_t offset = padToAlign(MXMALLOC_SIG_LEN);
 	
 	uint8_t mxmalloc_sig[MXMALLOC_SIG_LEN];
 	makeMxMallocSignature(mxmalloc_sig, cpy_sz);
 	
-	*data_ptr = dest + offset;
-	memcpy(*data_ptr - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
-	memcpy(*data_ptr, orig, cpy_sz);
+	*data_off = dest_off + offset;
+	memcpy(dest + offset - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
+	memcpy(dest + offset, orig, cpy_sz);
 	return offset + padToAlign(cpy_sz);
 	
 }
@@ -192,19 +194,19 @@ void onExit(void)
 
 #ifdef MSH_WIN
 	
-	if(g_info->shm_data_reg.is_mapped)
+	if(g_info->shm_data_seg.is_mapped)
 	{
 		UnmapViewOfFile(shm_data_ptr);
-		g_info->shm_data_reg.is_mapped = FALSE;
+		g_info->shm_data_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->shm_data_reg.is_init)
+	if(g_info->shm_data_seg.is_init)
 	{
-		CloseHandle(g_info->shm_data_reg.handle);
-		g_info->shm_data_reg.is_init = FALSE;
+		CloseHandle(g_info->shm_data_seg.handle);
+		g_info->shm_data_seg.is_init = FALSE;
 	}
 	
-	if(g_info->shm_update_reg.is_mapped)
+	if(g_info->shm_update_seg.is_mapped)
 	{
 		
 		acquireProcLock();
@@ -212,13 +214,13 @@ void onExit(void)
 		UnmapViewOfFile(shm_update_info);
 		releaseProcLock();
 		
-		g_info->shm_update_reg.is_mapped = FALSE;
+		g_info->shm_update_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->shm_update_reg.is_init)
+	if(g_info->shm_update_seg.is_init)
 	{
-		CloseHandle(g_info->shm_update_reg.handle);
-		g_info->shm_update_reg.is_init = FALSE;
+		CloseHandle(g_info->shm_update_seg.handle);
+		g_info->shm_update_seg.is_init = FALSE;
 	}
 	
 	if(g_info->flags.is_proc_lock_init)
@@ -233,41 +235,41 @@ void onExit(void)
 	
 #else
 	
-	if(g_info->shm_data_reg.is_mapped)
+	if(g_info->shm_data_seg.is_mapped)
 	{
-		if(munmap(shm_data_ptr, g_info->shm_data_reg.seg_sz) != 0)
+		if(munmap(shm_data_ptr, g_info->shm_data_seg.seg_sz) != 0)
 		{
 			readMunmapError(errno);
 		}
-		g_info->shm_data_reg.is_mapped = FALSE;
+		g_info->shm_data_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->shm_data_reg.is_init)
+	if(g_info->shm_data_seg.is_init)
 	{
-		if(shm_unlink(g_info->shm_data_reg.name) != 0)
+		if(shm_unlink(g_info->shm_data_seg.name) != 0)
 		{
 			readShmUnlinkError(errno);
 		}
-		g_info->shm_data_reg.is_init = FALSE;
+		g_info->shm_data_seg.is_init = FALSE;
 	}
 	
-	if(g_info->shm_update_reg.is_mapped)
+	if(g_info->shm_update_seg.is_mapped)
 	{
 		shm_update_info->num_procs -= 1;
-		if(munmap(shm_update_info, g_info->shm_update_reg.seg_sz) != 0)
+		if(munmap(shm_update_info, g_info->shm_update_seg.seg_sz) != 0)
 		{
 			readMunmapError(errno);
 		}
-		g_info->shm_update_reg.is_mapped = FALSE;
+		g_info->shm_update_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->shm_update_reg.is_init)
+	if(g_info->shm_update_seg.is_init)
 	{
-		if(shm_unlink(g_info->shm_update_reg.name) != 0)
+		if(shm_unlink(g_info->shm_update_seg.name) != 0)
 		{
 			readShmUnlinkError(errno);
 		}
-		g_info->shm_update_reg.is_init = FALSE;
+		g_info->shm_update_seg.is_init = FALSE;
 	}
 	
 	if(g_info->flags.is_proc_lock_init)
@@ -288,6 +290,11 @@ void onExit(void)
 //			readErrorMex("SemCloseInvalidError", "The sem argument is not a valid semaphore descriptor.");
 //		}
 		g_info->flags.is_proc_lock_init = FALSE;
+	}
+	
+	if(shm_unlink(g_info->init_seg.name) != 0)
+	{
+		readShmUnlinkError(errno);
 	}
 	
 #endif
@@ -512,25 +519,106 @@ msh_directive_t parseDirective(const mxArray* in)
 }
 
 
+void parseParams(int num_params, const mxArray* in[])
+{
+	int i, ps_len, vs_len;
+	char* param_str,* val_str;
+	char param_str_l[MSH_MAX_NAME_LEN], val_str_l[MSH_MAX_NAME_LEN];
+	const mxArray* param,* val;
+	for(i = 0; i < num_params/2; i++)
+	{
+		param = in[2*i];
+		val = in[2*i + 1];
+		
+		if(!mxIsChar(param) || !mxIsChar(val))
+		{
+			readErrorMex("InvalidArgumentError", "All parameters and values must be input as character arrays.");
+		}
+		
+		
+		param_str = mxArrayToString(param);
+		val_str = mxArrayToString(val);
+		
+		ps_len = (int)mxGetNumberOfElements(param);
+		vs_len =  (int)mxGetNumberOfElements(val);
+		
+		if(ps_len >= MSH_MAX_NAME_LEN)
+		{
+			readErrorMex("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
+		}
+		else if(vs_len >= MSH_MAX_NAME_LEN)
+		{
+			readErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, param_str);
+		}
+		
+		for(int j = 0; j < ps_len; j++)
+		{
+			param_str_l[j] = (char)tolower(param_str[j]);
+		}
+		
+		for(int j = 0; j < vs_len; j++)
+		{
+			val_str_l[j] = (char)tolower(val_str[j]);
+		}
+		
+		if(strcmp(param_str_l, MSH_PARAM_MEMSAFE_L) == 0)
+		{
+			if(strcmp(val_str_l, "true") == 0)
+			{
+				g_info->flags.is_mem_safe = TRUE;
+			}
+			else if(strcmp(val_str_l, "false") == 0)
+			{
+				g_info->flags.is_mem_safe = FALSE;
+			}
+			else
+			{
+				readErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_MEMSAFE_U);
+			}
+		}
+		else if(strcmp(param_str, MSH_PARAM_SECURITY_L) == 0)
+		{
+			if(vs_len < 3 || vs_len > 4)
+			{
+				readErrorMex("InvalidParamValueError", "Too many or too few digits in \"%s\" for parameter \"%s\". Must have either 3 or 4 digits.", val_str, MSH_PARAM_MEMSAFE_U);
+			}
+			else
+			{
+				sscanf("%o", val_str_l, &shm_update_info->security);
+			}
+		}
+		else
+		{
+			readErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_MEMSAFE_U);
+		}
+		
+		
+		
+		mxFree(param_str);
+		mxFree(val_str);
+	}
+}
+
+
 void updateAll(void)
 {
 	shm_update_info->upd_pid = g_info->this_pid;
 	shm_update_info->rev_num = g_info->cur_seg_info.rev_num;
 	shm_update_info->seg_num = g_info->cur_seg_info.seg_num;
-	shm_update_info->seg_sz = g_info->shm_data_reg.seg_sz;
+	shm_update_info->seg_sz = g_info->shm_data_seg.seg_sz;
 #ifdef MSH_WIN
 	/* not sure if this is required on windows, but it doesn't hurt */
-	FlushViewOfFile(shm_update_info, g_info->shm_update_reg.seg_sz);
-	FlushViewOfFile(shm_data_ptr, g_info->shm_data_reg.seg_sz);
+	FlushViewOfFile(shm_update_info, g_info->shm_update_seg.seg_sz);
+	FlushViewOfFile(shm_data_ptr, g_info->shm_data_seg.seg_sz);
 #else
 	/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
 	 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
-	if(msync(shm_update_info, g_info->shm_update_reg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
+	if(msync(shm_update_info, g_info->shm_update_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
 	{
 		releaseProcLock();
 		readMsyncError(errno);
 	}
-	if(msync(shm_data_ptr, g_info->shm_data_reg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
+	if(msync(shm_data_ptr, g_info->shm_data_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
 	{
 		releaseProcLock();
 		readMsyncError(errno);
@@ -543,10 +631,10 @@ void updateAll(void)
 bool_t precheck(void)
 {
 	return g_info->flags.is_proc_lock_init
-			& g_info->shm_update_reg.is_init
-			& g_info->shm_update_reg.is_mapped
-			& g_info->shm_data_reg.is_init
-			& g_info->shm_data_reg.is_mapped
+			& g_info->shm_update_seg.is_init
+			& g_info->shm_update_seg.is_mapped
+			& g_info->shm_data_seg.is_init
+			& g_info->shm_data_seg.is_mapped
 			& g_info->flags.is_glob_shm_var_init;
 }
 

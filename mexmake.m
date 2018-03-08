@@ -10,7 +10,7 @@ try
 			'src/init.c'
 			};
 	
-	mexflags = {'-g', '-v', '-outdir', output_path};
+	mexflags = {'-g', '-v', 'CXXFLAGS="$CXXFLAGS -Wall"',  '-outdir', output_path};
 	
 	if(ispc)
 		mexflags = [mexflags,{'-DMATLAB_WINDOWS'}];
