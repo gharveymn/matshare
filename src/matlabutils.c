@@ -3,12 +3,29 @@
 
 #ifdef MSH_UNIX
 
+
+void readMunmapError_(const char* file_name, int line, int err)
+{
+	switch(err)
+	{
+		case EINVAL:
+			readErrorMex_(file_name, line, "MunmapInvalidError", "Munmap failed because of one of the following:\n"
+					"\tAddresses in the range [addr,addr+len) are outside the valid range for the address space of a process.\n"
+					"\tThe len argument is 0.\n"
+					"\tThe addr argument is not a multiple of the page size as returned by sysconf().");
+		default:
+			readErrorMex_(file_name, line, "MunmapUnknownError", "An unknown error occurred.");
+	}
+}
+
+
 void readSemError_(const char* file_name, int line, int err)
 {
 	switch(err)
 	{
 		case EACCES:
-			readErrorMex_(file_name, line, "SemOpenAccessError", "The named semaphore exists and the permissions specified by oflag are denied, or the named semaphore does not exist and permission to create the named semaphore is denied.");
+			readErrorMex_(file_name, line, "SemOpenAccessError",
+					    "The named semaphore exists and the permissions specified by oflag are denied, or the named semaphore does not exist and permission to create the named semaphore is denied.");
 		case EINTR:
 			readErrorMex_(file_name, line, "SemOpenInterruptError", "The sem_open() operation was interrupted by a signal.");
 		case EINVAL:
@@ -26,12 +43,14 @@ void readSemError_(const char* file_name, int line, int err)
 	}
 }
 
+
 void readMmapError_(const char* file_name, int line, int err)
 {
 	switch(err)
 	{
 		case EACCES:
-			readErrorMex_(file_name, line, "MmapAccessError", "The fildes argument is not open for read, regardless of the protection specified, or fildes is not open for write and PROT_WRITE was specified for a MAP_SHARED type mapping.");
+			readErrorMex_(file_name, line, "MmapAccessError",
+					    "The fildes argument is not open for read, regardless of the protection specified, or fildes is not open for write and PROT_WRITE was specified for a MAP_SHARED type mapping.");
 		case EBADF:
 			readErrorMex_(file_name, line, "MmapFileClosedError", "The fildes argument is not a file descriptor open for writing.");
 		case EMFILE:
@@ -39,7 +58,8 @@ void readMmapError_(const char* file_name, int line, int err)
 		case ENOMEM:
 			readErrorMex_(file_name, line, "MmapMemoryError", "Not enough unallocated memory resources remain in the typed memory object designated by fildes to allocate len bytes.");
 		case EFBIG:
-			readErrorMex_(file_name, line, "MmapBigError", "The file is a regular file and length is greater than the offset maximum established in the open file description associated with fildes.");
+			readErrorMex_(file_name, line, "MmapBigError",
+					    "The file is a regular file and length is greater than the offset maximum established in the open file description associated with fildes.");
 		case EROFS:
 			readErrorMex_(file_name, line, "MmapReadOnlyError", "The named file resides on a read-only file system.");
 		default:
@@ -61,7 +81,8 @@ void readFtruncateError_(const char* file_name, int line, int err)
 		case EBADF:
 			readErrorMex_(file_name, line, "FtrFileClosedError", "The fildes argument is not a file descriptor open for writing.");
 		case EFBIG:
-			readErrorMex_(file_name, line, "FtrBigError", "The file is a regular file and length is greater than the offset maximum established in the open file description associated with fildes.");
+			readErrorMex_(file_name, line, "FtrBigError",
+					    "The file is a regular file and length is greater than the offset maximum established in the open file description associated with fildes.");
 		case EROFS:
 			readErrorMex_(file_name, line, "FtrReadOnlyError", "The named file resides on a read-only file system.");
 		default:
@@ -69,33 +90,52 @@ void readFtruncateError_(const char* file_name, int line, int err)
 	}
 }
 
-void readShmError_(const char* file_name, int line, int err)
+
+void readShmOpenError_(const char* file_name, int line, int err)
 {
 	switch(err)
 	{
 		case EACCES:
-			readErrorMex_(file_name, line, "ShmAccessError",
-					  "The shared memory object exists and the permissions specified by oflag are denied, or the shared memory object does not exist and permission to create the shared memory object is denied, or O_TRUNC is specified and write permission is denied.");
+			readErrorMex_(file_name, line, "ShmOpenAccessError",
+					    "The shared memory object exists and the permissions specified by oflag are denied, or the shared memory object does not exist and permission to create the shared memory object is denied, or O_TRUNC is specified and write permission is denied.");
 		case EEXIST:
-			readErrorMex_(file_name, line, "ShmExistError", "O_CREAT and O_EXCL are set and the named shared memory object already exists.");
+			readErrorMex_(file_name, line, "ShmOpenExistError", "O_CREAT and O_EXCL are set and the named shared memory object already exists.");
 		case EINTR:
-			readErrorMex_(file_name, line, "ShmInterruptError", "The shm_open() operation was interrupted by a signal.");
+			readErrorMex_(file_name, line, "ShmOpenInterruptError", "The shm_open() operation was interrupted by a signal.");
 		case EINVAL:
-			readErrorMex_(file_name, line, "ShmNameError", "The shm_open() operation is not supported for the given name.");
+			readErrorMex_(file_name, line, "ShmOpenNameError", "The shm_open() operation is not supported for the given name.");
 		case EMFILE:
-			readErrorMex_(file_name, line, "ShmTooManyFilesError", "Too many file descriptors are currently in use by this process.");
+			readErrorMex_(file_name, line, "ShmOpenTooManyFilesError", "Too many file descriptors are currently in use by this process.");
 		case ENAMETOOLONG:
-			readErrorMex_(file_name, line, "ShmNameTooLongError", "The length of the name argument exceeds {PATH_MAX} or a pathname component is longer than {NAME_MAX}.");
+			readErrorMex_(file_name, line, "ShmOpenNameTooLongError", "The length of the name argument exceeds {PATH_MAX} or a pathname component is longer than {NAME_MAX}.");
 		case ENFILE:
-			readErrorMex_(file_name, line, "ShmTooManySharedError", "Too many shared memory objects are currently open in the system.");
+			readErrorMex_(file_name, line, "ShmOpenTooManySharedError", "Too many shared memory objects are currently open in the system.");
 		case ENOENT:
-			readErrorMex_(file_name, line, "ShmNoCreateNotExistError", "O_CREAT is not set and the named shared memory object does not exist.");
+			readErrorMex_(file_name, line, "ShmOpenNoCreateNotExistError", "O_CREAT is not set and the named shared memory object does not exist.");
 		case ENOSPC:
-			readErrorMex_(file_name, line, "ShmSpaceError", "There is insufficient space for the creation of the new shared memory object.");
+			readErrorMex_(file_name, line, "ShmOpenSpaceError", "There is insufficient space for the creation of the new shared memory object.");
 		default:
-			readErrorMex_(file_name, line, "ShmUnknownError", "An unknown error occurred (Error number: %i)", errno);
+			readErrorMex_(file_name, line, "ShmOpenUnknownError", "An unknown error occurred (Error number: %i)", errno);
 	}
 }
+
+
+void readShmUnlinkError_(const char* file_name, int line, int err)
+{
+	switch(err)
+	{
+		case EACCES:
+			readErrorMex_(file_name, line, "ShmUnlinkAccessError", "Permission is denied to unlink the named shared memory object.");
+		case ENAMETOOLONG:
+			readErrorMex_(file_name, line, "ShmUnlinkNameTooLongError", "The length of the name argument exceeds {PATH_MAX} or a pathname component is longer than {NAME_MAX}.");
+		case ENOENT:
+			readErrorMex_(file_name, line, "ShmUnlinkNotExistError", "The named shared memory object does not exist.");
+		default:
+			readErrorMex_(file_name, line, "ShmUnlinkUnknownError", "An unknown error occurred (Error number: %i)", errno);
+	}
+}
+
+
 #endif
 
 

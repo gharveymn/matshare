@@ -50,12 +50,16 @@ void readWarnMex(const char* warn_id, const char* warn_message, ...);
 #ifdef MSH_UNIX
 void readSemError_(const char* file_name, int line, int err);
 void readFtruncateError_(const char* file_name, int line, int err);
-void readShmError_(const char* file_name, int line, int err);
+void readShmOpenError_(const char* file_name, int line, int err);
+void readShmUnlinkError_(const char* file_name, int line, int err);
 void readMmapError_(const char* file_name, int line, int err);
+void readMunmapError_(const char* file_name, int line, int err);
 #define readSemError(err) readSemError_(__FILE__ , __LINE__, err)
 #define readFtruncateError(err) readFtruncateError_(__FILE__ , __LINE__, err)
-#define readShmError(err) readShmError_(__FILE__ , __LINE__, err)
+#define readShmOpenError(err) readShmOpenError_(__FILE__ , __LINE__, err)
+#define readShmUnlinkError(err) readShmUnlinkError_(__FILE__ , __LINE__, err)
 #define readMmapError(err) readMmapError_(__FILE__ , __LINE__, err)
+#define readMunmapError(err) readMunmapError_(__FILE__ , __LINE__, err)
 #endif
 
 #endif //MATSHARE_UTILS_H

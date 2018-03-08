@@ -182,12 +182,12 @@ void initUpdateSegment(void)
 			g_info->shm_update_reg.handle = shm_open(g_info->shm_update_reg.name, O_RDWR, S_IRWXU);
 			if(g_info->shm_update_reg.handle == -1)
 			{
-				readShmError(errno);
+				readShmOpenError(errno);
 			}
 		}
 		else
 		{
-			readShmError(errno);
+			readShmOpenError(errno);
 		}
 	}
 	else
@@ -293,7 +293,7 @@ void initDataSegment(void)
 	g_info->shm_data_reg.handle = shm_open(g_info->shm_data_reg.name, O_RDWR | O_CREAT, S_IRWXU);
 	if(g_info->shm_data_reg.handle == -1)
 	{
-		readShmError(errno);
+		readShmOpenError(errno);
 	}
 	g_info->shm_data_reg.is_init = TRUE;
 	

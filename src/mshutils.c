@@ -235,26 +235,38 @@ void onExit(void)
 	
 	if(g_info->shm_data_reg.is_mapped)
 	{
-		munmap(shm_data_ptr, g_info->shm_data_reg.seg_sz);
+		if(munmap(shm_data_ptr, g_info->shm_data_reg.seg_sz) != 0)
+		{
+			readMunmapError(errno);
+		}
 		g_info->shm_data_reg.is_mapped = FALSE;
 	}
 	
 	if(g_info->shm_data_reg.is_init)
 	{
-		shm_unlink(g_info->shm_data_reg.name);
+		if(shm_unlink(g_info->shm_data_reg.name) != 0)
+		{
+			readShmUnlinkError(errno);
+		}
 		g_info->shm_data_reg.is_init = FALSE;
 	}
 	
 	if(g_info->shm_update_reg.is_mapped)
 	{
 		shm_update_info->num_procs -= 1;
-		munmap(shm_update_info, g_info->shm_update_reg.seg_sz);
+		if(munmap(shm_update_info, g_info->shm_update_reg.seg_sz) != 0)
+		{
+			readMunmapError(errno);
+		}
 		g_info->shm_update_reg.is_mapped = FALSE;
 	}
 	
 	if(g_info->shm_update_reg.is_init)
 	{
-		shm_unlink(g_info->shm_update_reg.name);
+		if(shm_unlink(g_info->shm_update_reg.name) != 0)
+		{
+			readShmUnlinkError(errno);
+		}
 		g_info->shm_update_reg.is_init = FALSE;
 	}
 	
