@@ -136,11 +136,17 @@ void initProcLock(void)
 
 #else
 	
-	g_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, S_IRWXU, 1);
-	if(g_info->proc_lock == SEM_FAILED)
+	g_info->proc_lock = shm_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, S_IRWXU);
+	if(g_info->proc_lock == -1)
 	{
-		readSemError(errno);
+		readShmOpenError(errno);
 	}
+	
+//	g_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, S_IRWXU, 1);
+//	if(g_info->proc_lock == SEM_FAILED)
+//	{
+//		readSemError(errno);
+//	}
 
 #endif
 	

@@ -186,7 +186,7 @@ struct MexInfo_tag
 	HANDLE proc_lock;
 	SECURITY_ATTRIBUTES lock_sec;
 #else
-	sem_t* proc_lock;
+	int proc_lock;
 #endif
 	
 	LocalSegmentInfo_t cur_seg_info;

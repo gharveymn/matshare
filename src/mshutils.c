@@ -277,10 +277,16 @@ void onExit(void)
 			releaseProcLock();
 		}
 		
-		if(sem_close(g_info->proc_lock) != 0)
+		
+		if(shm_unlink(MSH_LOCK_NAME) != 0)
 		{
-			readErrorMex("SemCloseInvalidError", "The sem argument is not a valid semaphore descriptor.");
+			readShmUnlinkError(errno);
 		}
+		
+//		if(sem_close(g_info->proc_lock) != 0)
+//		{
+//			readErrorMex("SemCloseInvalidError", "The sem argument is not a valid semaphore descriptor.");
+//		}
 		g_info->flags.is_proc_lock_init = FALSE;
 	}
 	
@@ -352,22 +358,51 @@ void acquireProcLock(void)
 			readErrorMex("WaitProcLockFailedError", "The wait for process lock failed (Error number: %u).", GetLastError());
 		}
 #else
-		if(sem_wait(g_info->proc_lock) != 0)
+		
+		if(lockf(g_info->proc_lock, F_LOCK, 0) != 0)
 		{
 			switch(errno)
 			{
-				case EINVAL:
-					readErrorMex("SemWaitInvalid", "The sem argument does not refer to a valid semaphore.");
-				case ENOSYS:
-					readErrorMex("SemWaitNotSupportedError", "The functions sem_wait() and sem_trywait() are not supported by this implementation.");
+				case EBADF:
+					readErrorMex("LockfBadFileError", "The fildes argument is not a valid open file descriptor; "
+							"or function is F_LOCK or F_TLOCK and fildes is not a valid file descriptor open for writing.");
+				case EACCES:
+					readErrorMex("LockfAccessError", "The function argument is F_TLOCK or F_TEST and the section is already locked by another process.");
 				case EDEADLK:
-					readErrorMex("SemWaitDeadlockError", "A deadlock condition was detected.");
-				case EINTR:
-					readErrorMex("SemWaitInterruptError", "A signal interrupted this function.");
+					readErrorMex("LockfDeadlockError", "lockf failed because of one of the following:\n"
+							"\tThe function argument is F_LOCK and a deadlock is detected.\n"
+							"\tThe function argument is F_LOCK, F_TLOCK, or F_ULOCK, and the request would cause the number of locks to exceed a system-imposed limit.");
+				case EOVERFLOW:
+					readErrorMex("LockfOverflowError", "The offset of the first, or if size is not 0 then the last, "
+							"byte in the requested section cannot be represented correctly in an object of type off_t.");
+				case EAGAIN:
+					readErrorMex("LockfAgainError", "The function argument is F_TLOCK or F_TEST and the section is already locked by another process.");
+				case ENOLCK:
+					readErrorMex("LockfNoLockError", "The function argument is F_LOCK, F_TLOCK, or F_ULOCK, and the request would cause the number of locks to exceed a system-imposed limit.");
+				case EOPNOTSUPP:
+				case EINVAL:
+					readErrorMex("LockfOperationNotSupportedError", "The implementation does not support the locking of files of the type indicated by the fildes argument.");
 				default:
-					readErrorMex("SemWaitUnknownError", "An unknown error occurred (Error number: %i)", errno);
+					readErrorMex("LockfUnknownError", "An unknown error occurred (Error number: %i)", errno);
 			}
 		}
+		
+//		if(sem_wait(g_info->proc_lock) != 0)
+//		{
+//			switch(errno)
+//			{
+//				case EINVAL:
+//					readErrorMex("SemWaitInvalid", "The sem argument does not refer to a valid semaphore.");
+//				case ENOSYS:
+//					readErrorMex("SemWaitNotSupportedError", "The functions sem_wait() and sem_trywait() are not supported by this implementation.");
+//				case EDEADLK:
+//					readErrorMex("SemWaitDeadlockError", "A deadlock condition was detected.");
+//				case EINTR:
+//					readErrorMex("SemWaitInterruptError", "A signal interrupted this function.");
+//				default:
+//					readErrorMex("SemWaitUnknownError", "An unknown error occurred (Error number: %i)", errno);
+//			}
+//		}
 #endif
 		g_info->flags.is_proc_locked = TRUE;
 	}
@@ -385,18 +420,36 @@ void releaseProcLock(void)
 			readErrorMex("ReleaseMutexError", "The process lock release failed (Error number: %u).", GetLastError());
 		}
 #else
-		if(sem_post(g_info->proc_lock) != 0)
+		
+		if(lockf(g_info->proc_lock, F_ULOCK, 0) != 0)
 		{
 			switch(errno)
 			{
-				case EINVAL:
-					readErrorMex("SemPostInvalid", "The sem argument does not refer to a valid semaphore.");
-				case ENOSYS:
-					readErrorMex("SemPostError", "The function sem_post() is not supported by this implementation.");
+				case EBADF:
+					readErrorMex("ULockfBadFileError", "The fildes argument is not a valid open file descriptor.");
+				case EINTR:
+					readErrorMex("ULockfInterruptError", "A signal was caught during execution of the function.");
+				case EOVERFLOW:
+					readErrorMex("ULockfOverflowError", "The offset of the first, or if size is not 0 then the last, "
+							"byte in the requested section cannot be represented correctly in an object of type off_t.");
 				default:
-					readErrorMex("SemPostUnknownError", "An unknown error occurred (Error number: %i)", errno);
+					readErrorMex("ULockfUnknownError", "An unknown error occurred (Error number: %i)", errno);
 			}
 		}
+		
+		
+//		if(sem_post(g_info->proc_lock) != 0)
+//		{
+//			switch(errno)
+//			{
+//				case EINVAL:
+//					readErrorMex("SemPostInvalid", "The sem argument does not refer to a valid semaphore.");
+//				case ENOSYS:
+//					readErrorMex("SemPostError", "The function sem_post() is not supported by this implementation.");
+//				default:
+//					readErrorMex("SemPostUnknownError", "An unknown error occurred (Error number: %i)", errno);
+//			}
+//		}
 #endif
 		g_info->flags.is_proc_locked = FALSE;
 	}
