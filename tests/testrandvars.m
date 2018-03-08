@@ -1,6 +1,6 @@
 rng('shuffle')
 numtests = 1;
-numsamples = 100000;
+numsamples = 10000;
 lents = 0;
 
 maxDepth = 1;
@@ -16,7 +16,7 @@ data = zeros(numtests,2);
 
 doplot = false;
 donames = true;
-doCompare = true;
+doCompare = false;
 numelems = 0;
 avgmultiplier = 0;
 

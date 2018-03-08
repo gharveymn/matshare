@@ -23,7 +23,7 @@ size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par
 
 /* Descend through header and data structure and copy relevent data to       */
 /* shared memory.                                                            */
-void shmCopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray* ret_var);
+void shmCopy(header_t* hdr, data_t* dat, byte_t* shm_anchor, header_t* par_hdr, mxArray* ret_var);
 
 mxLogical shmCompareContent(byte_t* shm, const mxArray* comp_var, size_t* offset);
 

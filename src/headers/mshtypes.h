@@ -90,20 +90,35 @@ typedef enum
 /* captures fundamentals of the mxArray */
 /* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
 typedef struct header_tag header_t;
+
+
 struct header_tag
 {
-	bool_t is_sparse;
-	bool_t is_numeric;
-	bool_t is_empty;
-	mxComplexity complexity;
-	mxClassID classid;       /* matlab class id */
+	struct
+	{
+		mwSize* dims;
+		void* pr;
+		union
+		{
+			void* pi;
+			char_t* field_str;
+		};
+		mwIndex* ir;
+		mwIndex* jc;
+		header_t* child_hdr;
+	} data;
 	size_t num_dims;         /* dimensionality of the matrix.  The size array immediately follows the header */
 	size_t elem_size;       /* size of each element in pr and pi */
 	size_t num_elems;         /* length of pr,pi */
-	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
-	int par_hdr_off;   /* offset to the parent's header, add this to help backwards searches (double linked... sort of)*/
 	size_t shm_sz;            /* size of serialized object (header + size array + field names string) */
 	size_t str_sz;
+	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
+	int par_hdr_off;   /* offset to the parent's header, add this to help backwards searches (double linked... sort of)*/
+	mxComplexity complexity;
+	mxClassID classid;       /* matlab class id */
+	bool_t is_sparse;
+	bool_t is_numeric;
+	bool_t is_empty;
 };
 
 /* structure used to record all of the data addresses */
@@ -126,13 +141,12 @@ struct data_tag
 typedef struct ShmSegmentInfo_tag ShmSegmentInfo_t;
 struct ShmSegmentInfo_tag
 {
-//	bool_t error_flag;
-	uint16_t num_procs;
-	uint64_t lead_seg_num;          /* 64 bit width is temporary ugly fix for theoretical issue of name collision */
-	uint64_t lead_rev_num;
-	uint64_t seg_num;
-	uint64_t rev_num;
+	/* these are also all size_t to guarantee alignment for atomic operations */
+	size_t lead_seg_num;          /* 64 bit width is temporary ugly fix for theoretical issue of name collision */
+	size_t seg_num;
+	size_t rev_num;
 	size_t seg_sz;
+	size_t num_procs;
 #ifdef MSH_WIN
 	DWORD upd_pid;
 #else

@@ -29,9 +29,11 @@ void init()
 		mapUpdateSegment();
 	}
 	
+	/* includes writing to shared memory, but the memory has been aligned so all writes are atomic */
+	globStartup(&hdr);
+	
 	/* only actually locks if this is memory safe */
 	acquireProcLock();
-	globStartup(&hdr);
 	
 	if(!g_info->shm_data_reg.is_init)
 	{
@@ -59,7 +61,6 @@ void init()
 		if(is_glob_init)
 		{
 			g_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
-			/* TODO MATLAB is crashing because not pointing to shm here, and then trying to free, fix this */
 		}
 		else
 		{
@@ -254,13 +255,12 @@ void globStartup(header_t* hdr)
 		hdr->str_sz = 0;
 		hdr->par_hdr_off = 0;
 		
-//		shm_update_info->error_flag = FALSE;
 		shm_update_info->num_procs = 1;
+		shm_update_info->lead_seg_num = 0;
 		shm_update_info->seg_num = 0;
 		shm_update_info->rev_num = 0;
-		shm_update_info->lead_seg_num = 0;
-		shm_update_info->upd_pid = g_info->this_pid;
 		shm_update_info->seg_sz = hdr->shm_sz;
+		shm_update_info->upd_pid = g_info->this_pid;
 	}
 	else
 	{
