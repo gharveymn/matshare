@@ -1,5 +1,4 @@
 #include "headers/init.h"
-#include "headers/mshtypes.h"
 
 
 static bool_t is_glob_init;
@@ -7,7 +6,7 @@ static bool_t is_glob_init;
 void init()
 {
 	
-	header_t hdr;
+	Header_t hdr;
 	
 	//assume not
 	is_glob_init = FALSE;
@@ -52,7 +51,7 @@ void init()
 	
 	if(is_glob_init)
 	{
-		memcpy(shm_data_ptr, &hdr, hdr.shm_sz);
+		memcpy(shm_data_ptr, &hdr, hdr.obj_sz);
 	}
 	
 	
@@ -112,7 +111,7 @@ void procStartup(void)
 	*/
 	
 	g_info->num_lcl_objs = 0;
-	g_info->flags.is_mem_safe = TRUE; /** default value **/
+	g_info->flags.is_thread_safe = TRUE; /** default value **/
 	
 	mexAtExit(onExit);
 	
@@ -178,7 +177,7 @@ void initUpdateSegment(void)
 	
 	/* Try to open an already created segment so we can get the global init signal */
 	strncpy(g_info->shm_update_seg.name, MSH_UPDATE_SEGMENT_NAME, MSH_MAX_NAME_LEN*sizeof(char));
-	g_info->shm_update_seg.handle = shm_open(g_info->shm_update_seg.name, O_RDWR | O_CREAT | O_EXCL, S_IRWXU);
+	g_info->shm_update_seg.handle = shm_open(g_info->shm_update_seg.name, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
 	if(g_info->shm_update_seg.handle == -1)
 	{
 		/* then the segment has already been initialized */
@@ -186,7 +185,7 @@ void initUpdateSegment(void)
 		
 		if(errno == EEXIST)
 		{
-			g_info->shm_update_seg.handle = shm_open(g_info->shm_update_seg.name, O_RDWR, S_IRWXU);
+			g_info->shm_update_seg.handle = shm_open(g_info->shm_update_seg.name, O_RDWR, S_IRUSR | S_IWUSR);
 			if(g_info->shm_update_seg.handle == -1)
 			{
 				readShmOpenError(errno);
@@ -241,7 +240,7 @@ void mapUpdateSegment(void)
 }
 
 
-void globStartup(header_t* hdr)
+void globStartup(Header_t* hdr)
 {
 	if(is_glob_init)
 	{
@@ -254,7 +253,8 @@ void globStartup(header_t* hdr)
 		hdr->data_offsets.ir = SIZE_MAX;
 		hdr->data_offsets.jc = SIZE_MAX;
 		hdr->data_offsets.dims = SIZE_MAX;
-		hdr->data_offsets.child_hdr = SIZE_MAX;
+		hdr->data_offsets.field_str = SIZE_MAX;
+		hdr->data_offsets.child_hdrs = SIZE_MAX;
 		
 		hdr->is_numeric = 1;
 		hdr->is_sparse = 0;
@@ -265,17 +265,16 @@ void globStartup(header_t* hdr)
 		hdr->elem_size = sizeof(mxDouble);
 		hdr->num_elems = 0;      /* update this later on sparse*/
 		hdr->num_fields = 0;                                 /* update this later */
-		hdr->shm_sz = padToAlign(sizeof(header_t));     /* update this later */
-		hdr->str_sz = 0;
+		hdr->obj_sz = padToAlign(sizeof(Header_t));     /* update this later */
 		
 		shm_update_info->num_procs = 1;
 		shm_update_info->lead_seg_num = 0;
 		shm_update_info->seg_num = 0;
 		shm_update_info->rev_num = 0;
-		shm_update_info->seg_sz = hdr->shm_sz;
+		shm_update_info->seg_sz = hdr->obj_sz;
 		shm_update_info->upd_pid = g_info->this_pid;
 #ifdef MSH_UNIX
-		shm_update_info->security = S_IRWXU;
+		shm_update_info->security = S_IRUSR | S_IWUSR;
 #endif
 	}
 	else

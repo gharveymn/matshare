@@ -11,7 +11,7 @@ void procStartup(void);
 void initProcLock(void);
 void initUpdateSegment(void);
 void mapUpdateSegment(void);
-void globStartup(header_t* hdr);
+void globStartup(Header_t* hdr);
 void initDataSegment(void);
 void mapDataSegment(void);
 

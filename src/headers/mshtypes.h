@@ -75,6 +75,9 @@ extern int shm_unlink(const char* name);
 typedef char char_t;
 typedef char_t byte_t;
 typedef bool bool_t;
+#ifdef MSH_UNIX
+typedef int handle_t;
+#endif
 
 typedef enum
 {
@@ -86,62 +89,54 @@ typedef enum
 	msh_DEBUG,
 	msh_OBJ_REGISTER,
 	msh_OBJ_DEREGISTER
-} msh_directive_t;
+} mshdirective_t;
 
 
 /* captures fundamentals of the mxArray */
 /* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
-typedef struct header_tag header_t;
-struct header_tag
+typedef struct Header_tag Header_t;
+struct Header_tag
 {
 	struct
 	{
 		size_t dims;
 		size_t pr;
 		size_t pi;
-		size_t field_str;
 		size_t ir;
 		size_t jc;
-		size_t child_hdr;
-	} data_offsets; 			/* these are actually the relative offsets of data */
-	size_t num_dims;         /* dimensionality of the matrix.  The size array immediately follows the header */
-	size_t elem_size;       /* size of each element in pr and pi */
-	size_t num_elems;         /* length of pr,pi */
-	size_t shm_sz;            /* size of serialized object (header + size array + field names string) */
-	size_t str_sz;
+		size_t field_str;
+		size_t child_hdrs;		/* offset of array of the offsets of the children*/
+	} data_offsets; 			/* these are actually the relative offsets of data in shared memory (needed because memory maps are to virtual pointers) */
+	size_t num_dims;         	/* dimensionality of the matrix */
+	size_t elem_size;       		/* size of each element in pr and pi */
+	size_t num_elems;         	/* length of pr,pi */
+	size_t obj_sz;            	/* size of serialized object */
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
-	mxComplexity complexity;
 	mxClassID classid;       /* matlab class id */
+	mxComplexity complexity;
 	bool_t is_sparse;
 	bool_t is_numeric;
 	bool_t is_empty;
 };
 
-/* structure used to record all of the data addresses */
-typedef struct local_data_tag local_data_t;
-struct local_data_tag
+typedef struct InputData_tag InputData_t;
+struct InputData_tag
 {
-	mwSize* dims;               		/* pointer to the size array */
-	void* pr;                    		/* real data portion */
-	void* pi;               		/* imaginary data portion */
-	char_t* field_str;   		/* list of a structures fields, each field name will be seperated by a null character and terminated with a ";" */
-	mwIndex* ir;                    	/* row indexes, for sparse */
-	mwIndex* jc;                  	/* cumulative column counts, for sparse */
-	size_t num_children;
-	local_data_t** child_dat;         		/* array of children data structures, for cell */
-	header_t** child_hdr;          	/* array of corresponding children header structures, for cell */
+	size_t* child_hdr_offs;
+	Header_t** child_hdrs;          	/* array of corresponding children header structures, for cell */
+	InputData_t** child_dat;
 };
 
-typedef struct shm_data_tag shm_data_t;
-struct shm_data_tag
+typedef struct ShmData_tag ShmData_t;
+struct ShmData_tag
 {
 	mwSize* dims;               		/* pointer to the size array */
 	void* pr;                    		/* real data portion */
 	void* pi;               			/* imaginary data portion */
-	char_t* field_str;   			/* list of a structures fields, each field name will be seperated by a null character and terminated with a ";" */
 	mwIndex* ir;                    	/* row indexes, for sparse */
 	mwIndex* jc;                  	/* cumulative column counts, for sparse */
-	header_t* child_hdr;          	/* array of corresponding children header structures, for cell */
+	char_t* field_str;   			/* list of a structures fields, each field name will be seperated by a null character */
+	size_t* child_hdrs;          		/* array of corresponding children headers */
 };
 
 typedef struct ShmSegmentInfo_tag ShmSegmentInfo_t;
@@ -177,7 +172,7 @@ struct MemorySegment_tag
 #ifdef MSH_WIN
 	HANDLE handle;
 #else
-	int handle;
+	handle_t handle;
 #endif
 	size_t seg_sz;
 	void* ptr;
@@ -191,20 +186,21 @@ struct MexInfo_tag
 	MemorySegment_t lcl_init_seg;
 
 #ifdef MSH_WIN
-	HANDLE proc_lock;
 	SECURITY_ATTRIBUTES lock_sec;
+	HANDLE proc_lock;
 #else
-	int proc_lock;
+	handle_t proc_lock;
 #endif
 	
 	LocalSegmentInfo_t cur_seg_info;
+	
 	struct
 	{
 		bool_t is_proc_lock_init;
 		bool_t is_glob_shm_var_init;
 		
 		bool_t is_proc_locked;
-		bool_t is_mem_safe;
+		bool_t is_thread_safe;
 	} flags;
 
 #ifdef MSH_WIN

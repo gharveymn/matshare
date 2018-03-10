@@ -1,5 +1,4 @@
 #include "headers/mshutils.h"
-#include "headers/mshtypes.h"
 
 
 /*
@@ -29,183 +28,46 @@ void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 }
 
 
-void locatePointers(shm_data_t* data_ptrs, header_t* hdr, byte_t* shm_anchor)
+void locateDataPointers(ShmData_t* data_ptrs, Header_t* hdr, byte_t* shm_anchor)
 {
 	data_ptrs->dims = (mwSize*)(shm_anchor + hdr->data_offsets.dims);
 	data_ptrs->pr = shm_anchor + hdr->data_offsets.pr;
 	data_ptrs->pi = shm_anchor + hdr->data_offsets.pi;
-	data_ptrs->field_str = shm_anchor + hdr->data_offsets.field_str;
 	data_ptrs->ir = (mwIndex*)(shm_anchor + hdr->data_offsets.ir);
 	data_ptrs->jc = (mwIndex*)(shm_anchor + hdr->data_offsets.jc);
-	data_ptrs->child_hdr = (header_t*)(shm_anchor + hdr->data_offsets.child_hdr);
-}
-
-
-
-/* ------------------------------------------------------------------------- */
-void freeTmp(local_data_t* dat)
-{
-	
-	size_t i;
-	
-	/* recurse to the bottom */
-	if(dat->child_dat != NULL)
-	{
-		for(i = 0; i < dat->num_children; i++)
-		{
-			freeTmp(dat->child_dat[i]);
-			mxFree(dat->child_dat[i]);
-		}
-		mxFree(dat->child_dat);
-	}
-	
-	if(dat->child_hdr != NULL)
-	{
-		for(i = 0; i < dat->num_children; i++)
-		{
-			mxFree(dat->child_hdr[i]);
-		}
-		mxFree(dat->child_hdr);
-	}
-	
-	if(dat->field_str != NULL)
-	{
-		mxFree(dat->field_str);
-	}
-	
-	dat->child_hdr = NULL;
-	dat->child_dat = NULL;
-	dat->field_str = NULL;
-	
+	data_ptrs->field_str = shm_anchor + hdr->data_offsets.field_str;
+	data_ptrs->child_hdrs = (size_t*)(shm_anchor + hdr->data_offsets.child_hdrs);
 }
 
 
 /* field names of a structure									     */
-size_t fieldNamesSize(const mxArray* mxStruct)
+size_t getFieldNamesSize(const mxArray* mxStruct)
 {
-	const char_t* field_name_ptr;
-	int num_fields;
-	int i, j;               /* counters */
-	size_t offset = 0;
-	
-	/* How many fields? */
-	num_fields = mxGetNumberOfFields(mxStruct);
+	const char_t* field_name;
+	int i, num_fields;
+	size_t cml_sz = 0;
 	
 	/* Go through them */
+	num_fields = mxGetNumberOfFields(mxStruct);
 	for(i = 0; i < num_fields; i++)
 	{
 		/* This field */
-		field_name_ptr = mxGetFieldNameByNumber(mxStruct, i);
-		j = 0;
-		while(field_name_ptr[j] != 0)
-		{
-			j++;
-		}
-		j++;          /* for the null termination */
-		
-		
-		if(i == (num_fields - 1))
-		{
-			j++;
-		}     /* add this at the end for an end of string sequence since we use 0 elsewhere (TERM_CHAR). */
-		
-		
-		/* Pad it out to 8 bytes */
-		j = (int) padToAlign((size_t) j);
-		
-		/* keep the running tally */
-		offset += j;
-		
+		field_name = mxGetFieldNameByNumber(mxStruct, i);
+		cml_sz += strlen(field_name) + 1; /* remember to add the null termination */
 	}
 	
-	/* Add an extra alignment size to store the length of the string (in Bytes) */
-	offset += ALIGN_SIZE;
-	
-	return offset;
+	return cml_sz;
 	
 }
 
 
-/* returns the number of bytes used in pList					   */
-size_t copyFieldNames(const mxArray* mxStruct, char_t* field_str, const char_t** field_names)
+void retrieveFieldNames(const char_t** field_names, const char_t* field_str, int num_fields)
 {
-	const char_t* field_name_ptr;    /* name of the field to add to the list */
-	int num_fields;                    /* the number of fields */
-	int i, j;                         /* counters */
-	size_t offset = 0;                    /* number of bytes copied */
-	
-	/* How many fields? */
-	num_fields = mxGetNumberOfFields(mxStruct);
-	
-	/* Go through them */
-	for(i = 0; i < num_fields; i++)
+	int field_num = 0;
+	for(field_num = 0; field_num < num_fields; field_num++, field_str += strlen(field_str))
 	{
-		/* This field */
-		field_name_ptr = mxGetFieldNameByNumber(mxStruct, i);
-		field_names[i] = field_name_ptr;
-		j = 0;
-		while(field_name_ptr[j])
-		{
-			field_str[offset++] = field_name_ptr[j++];
-		}
-		field_str[offset++] = 0; /* add the null termination */
-		
-		/* if this is last entry indicate the end of the string */
-		if(i == (num_fields - 1))
-		{
-			field_str[offset++] = TERM_CHAR;
-			field_str[offset++] = 0;  /* another null termination just to be safe */
-		}
-		
-		/* Pad it out to 8 bytes */
-		while(offset%ALIGN_SIZE)
-		{
-			field_str[offset++] = 0;
-		}
+		field_names[field_num] = field_str;
 	}
-	
-	/* Add an extra alignment size to store the length of the string (in Bytes) */
-	*(unsigned int*)&field_str[offset] = (unsigned int)(offset + ALIGN_SIZE);
-	offset += ALIGN_SIZE;
-	
-	return offset;
-	
-}
-
-
-/*returns 0 if successful */
-int pointCharArrayAtString(char_t** pCharArray, char_t* pString, int nFields)
-{
-	int i = 0;                             /* the index in pString we are up to */
-	int field_num = 0;                   /* the field we are up to */
-	
-	/* and recover them */
-	while(field_num < nFields)
-	{
-		/* scan past null termination chars */
-		while(!pString[i])
-		{
-			i++;
-		}
-		
-		/* Check the address is aligned (assume every forth bytes is aligned) */
-		if(i%ALIGN_SIZE)
-		{
-			return -1;
-		}
-		
-		/* grab the address */
-		pCharArray[field_num] = &pString[i];
-		field_num++;
-		
-		/* continue until a null termination char_t */
-		while(pString[i])
-		{
-			i++;
-		}
-		
-	}
-	return 0;
 }
 
 
@@ -223,6 +85,23 @@ void onExit(void)
 	}
 
 #ifdef MSH_WIN
+	
+	if(g_info->flags.is_proc_lock_init)
+	{
+		acquireProcLock();
+		if(g_info->shm_update_seg.is_mapped)
+		{
+			shm_update_info->num_procs -= 1;
+		}
+		releaseProcLock();
+		
+		if(CloseHandle(g_info->proc_lock) == 0)
+		{
+			readErrorMex("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
+		}
+		g_info->flags.is_proc_lock_init = FALSE;
+		
+	}
 	
 	if(g_info->shm_data_seg.is_mapped)
 	{
@@ -244,15 +123,10 @@ void onExit(void)
 	
 	if(g_info->shm_update_seg.is_mapped)
 	{
-		
-		acquireProcLock();
-		shm_update_info->num_procs -= 1;
 		if(UnmapViewOfFile(shm_update_info) == 0)
 		{
 			readErrorMex("UnmapFileError", "Error unmapping the update file (Error Number %u)", GetLastError());
 		}
-		releaseProcLock();
-		
 		g_info->shm_update_seg.is_mapped = FALSE;
 	}
 	
@@ -263,19 +137,6 @@ void onExit(void)
 			readErrorMex("CloseHandleError", "Error closing the update file handle (Error Number %u)", GetLastError());
 		}
 		g_info->shm_update_seg.is_init = FALSE;
-	}
-	
-	if(g_info->flags.is_proc_lock_init)
-	{
-		if(g_info->flags.is_proc_locked)
-		{
-			releaseProcLock();
-		}
-		if(CloseHandle(g_info->proc_lock) == 0)
-		{
-			readErrorMex("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
-		}
-		g_info->flags.is_proc_lock_init = FALSE;
 	}
 	
 	if(g_info->lcl_init_seg.is_init)
@@ -289,6 +150,27 @@ void onExit(void)
 	
 #else
 	
+	bool_t will_remove = FALSE;
+	if(g_info->flags.is_proc_lock_init)
+	{
+		acquireProcLock();
+		if(g_info->shm_update_seg.is_mapped)
+		{
+			shm_update_info->num_procs -= 1;
+			will_remove = (bool_t)(shm_update_info->num_procs == 0);
+		}
+		releaseProcLock();
+		
+		if(will_remove)
+		{
+			if(shm_unlink(MSH_LOCK_NAME) != 0)
+			{
+				readShmUnlinkError(errno);
+			}
+		}
+		
+	}
+	
 	if(g_info->shm_data_seg.is_mapped)
 	{
 		if(munmap(shm_data_ptr, g_info->shm_data_seg.seg_sz) != 0)
@@ -300,16 +182,18 @@ void onExit(void)
 	
 	if(g_info->shm_data_seg.is_init)
 	{
-		if(shm_unlink(g_info->shm_data_seg.name) != 0)
+		if(will_remove)
 		{
-			readShmUnlinkError(errno);
+			if(shm_unlink(g_info->shm_data_seg.name) != 0)
+			{
+				readShmUnlinkError(errno);
+			}
 		}
 		g_info->shm_data_seg.is_init = FALSE;
 	}
 	
 	if(g_info->shm_update_seg.is_mapped)
 	{
-		shm_update_info->num_procs -= 1;
 		if(munmap(shm_update_info, g_info->shm_update_seg.seg_sz) != 0)
 		{
 			readMunmapError(errno);
@@ -319,32 +203,16 @@ void onExit(void)
 	
 	if(g_info->shm_update_seg.is_init)
 	{
-		if(shm_unlink(g_info->shm_update_seg.name) != 0)
+		if(will_remove)
 		{
-			readShmUnlinkError(errno);
+			if(shm_unlink(g_info->shm_update_seg.name) != 0)
+			{
+				readShmUnlinkError(errno);
+			}
 		}
 		g_info->shm_update_seg.is_init = FALSE;
 	}
 	
-	if(g_info->flags.is_proc_lock_init)
-	{
-		if(g_info->flags.is_proc_locked)
-		{
-			releaseProcLock();
-		}
-		
-		
-		if(shm_unlink(MSH_LOCK_NAME) != 0)
-		{
-			readShmUnlinkError(errno);
-		}
-		
-//		if(sem_close(g_info->proc_lock) != 0)
-//		{
-//			readErrorMex("SemCloseInvalidError", "The sem argument is not a valid semaphore descriptor.");
-//		}
-		g_info->flags.is_proc_lock_init = FALSE;
-	}
 	if(g_info->lcl_init_seg.is_init)
 	{
 		if(shm_unlink(g_info->lcl_init_seg.name) != 0)
@@ -409,7 +277,7 @@ void makeMxMallocSignature(uint8_t* sig, size_t seg_size)
 void acquireProcLock(void)
 {
 	/* only request a lock if there is more than one process */
-	if(shm_update_info->num_procs > 1 && g_info->flags.is_mem_safe)
+	if(shm_update_info->num_procs > 1 && g_info->flags.is_thread_safe && !g_info->flags.is_proc_locked)
 	{
 #ifdef MSH_WIN
 		uint32_t ret = WaitForSingleObject(g_info->proc_lock, INFINITE);
@@ -520,12 +388,12 @@ void releaseProcLock(void)
 }
 
 
-msh_directive_t parseDirective(const mxArray* in)
+mshdirective_t parseDirective(const mxArray* in)
 {
 	
 	if(mxIsNumeric(in))
 	{
-		return (msh_directive_t)*((uint8_t*)(mxGetData(in)));
+		return (mshdirective_t)*((uint8_t*)(mxGetData(in)));
 	}
 	else if(mxIsChar(in))
 	{
@@ -578,9 +446,9 @@ msh_directive_t parseDirective(const mxArray* in)
 
 void parseParams(int num_params, const mxArray* in[])
 {
-	int i, ps_len, vs_len;
+	size_t i, ps_len, vs_len;
 	char* param_str,* val_str;
-	char param_str_l[MSH_MAX_NAME_LEN], val_str_l[MSH_MAX_NAME_LEN];
+	char param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
 	const mxArray* param,* val;
 	for(i = 0; i < num_params/2; i++)
 	{
@@ -596,8 +464,8 @@ void parseParams(int num_params, const mxArray* in[])
 		param_str = mxArrayToString(param);
 		val_str = mxArrayToString(val);
 		
-		ps_len = (int)mxGetNumberOfElements(param);
-		vs_len =  (int)mxGetNumberOfElements(val);
+		ps_len = mxGetNumberOfElements(param);
+		vs_len =  mxGetNumberOfElements(val);
 		
 		if(ps_len >= MSH_MAX_NAME_LEN)
 		{
@@ -618,19 +486,19 @@ void parseParams(int num_params, const mxArray* in[])
 			val_str_l[j] = (char)tolower(val_str[j]);
 		}
 		
-		if(strcmp(param_str_l, MSH_PARAM_MEMSAFE_L) == 0)
+		if(strcmp(param_str_l, MSH_PARAM_THRSAFE_L) == 0)
 		{
 			if(strcmp(val_str_l, "true") == 0)
 			{
-				g_info->flags.is_mem_safe = TRUE;
+				g_info->flags.is_thread_safe = TRUE;
 			}
 			else if(strcmp(val_str_l, "false") == 0)
 			{
-				g_info->flags.is_mem_safe = FALSE;
+				g_info->flags.is_thread_safe = FALSE;
 			}
 			else
 			{
-				readErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_MEMSAFE_U);
+				readErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THRSAFE_U);
 			}
 		}
 		else if(strcmp(param_str, MSH_PARAM_SECURITY_L) == 0)
@@ -638,17 +506,31 @@ void parseParams(int num_params, const mxArray* in[])
 #ifdef MSH_UNIX
 			if(vs_len < 3 || vs_len > 4)
 			{
-				readErrorMex("InvalidParamValueError", "Too many or too few digits in \"%s\" for parameter \"%s\". Must have either 3 or 4 digits.", val_str, MSH_PARAM_MEMSAFE_U);
+				readErrorMex("InvalidParamValueError", "Too many or too few digits in \"%s\" for parameter \"%s\". Must have either 3 or 4 digits.", val_str, MSH_PARAM_SECURITY_U);
 			}
 			else
 			{
-				sscanf("%o", val_str_l, &shm_update_info->security);
+				acquireProcLock();
+				shm_update_info->security = (mode_t)strtol(val_str_l, NULL, 8);
+				if(fchmod(g_info->shm_update_seg.handle, shm_update_info->security) != 0)
+				{
+					readFchmodError(errno);
+				}
+				if(fchmod(g_info->shm_data_seg.handle, shm_update_info->security) != 0)
+				{
+					readFchmodError(errno);
+				}
+				if(fchmod(g_info->proc_lock, shm_update_info->security) != 0)
+				{
+					readFchmodError(errno);
+				}
+				releaseProcLock();
 			}
 #endif
 		}
 		else
 		{
-			readErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_MEMSAFE_U);
+			readErrorMex("InvalidParamValueError", "Unrecognised parameter \"%s\".", param_str);
 		}
 		
 		mxFree(param_str);
