@@ -31,13 +31,13 @@ void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 
 void locatePointers(shm_data_t* data_ptrs, header_t* hdr, byte_t* shm_anchor)
 {
-	data_ptrs->dims = (mwSize*)(shm_anchor + hdr->data_off.dims);
-	data_ptrs->pr = shm_anchor + hdr->data_off.pr;
-	data_ptrs->pi = shm_anchor + hdr->data_off.pi;
-	data_ptrs->field_str = shm_anchor + hdr->data_off.field_str;
-	data_ptrs->ir = (mwIndex*)(shm_anchor + hdr->data_off.ir);
-	data_ptrs->jc = (mwIndex*)(shm_anchor + hdr->data_off.jc);
-	data_ptrs->child_hdr = (header_t*)(shm_anchor + hdr->data_off.child_hdr);
+	data_ptrs->dims = (mwSize*)(shm_anchor + hdr->data_offsets.dims);
+	data_ptrs->pr = shm_anchor + hdr->data_offsets.pr;
+	data_ptrs->pi = shm_anchor + hdr->data_offsets.pi;
+	data_ptrs->field_str = shm_anchor + hdr->data_offsets.field_str;
+	data_ptrs->ir = (mwIndex*)(shm_anchor + hdr->data_offsets.ir);
+	data_ptrs->jc = (mwIndex*)(shm_anchor + hdr->data_offsets.jc);
+	data_ptrs->child_hdr = (header_t*)(shm_anchor + hdr->data_offsets.child_hdr);
 }
 
 
@@ -278,13 +278,13 @@ void onExit(void)
 		g_info->flags.is_proc_lock_init = FALSE;
 	}
 	
-	if(g_info->init_seg.is_init)
+	if(g_info->lcl_init_seg.is_init)
 	{
-		if(CloseHandle(g_info->init_seg.handle) == 0)
+		if(CloseHandle(g_info->lcl_init_seg.handle) == 0)
 		{
 			readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
 		}
-		g_info->init_seg.is_init = FALSE;
+		g_info->lcl_init_seg.is_init = FALSE;
 	}
 	
 #else
@@ -345,13 +345,13 @@ void onExit(void)
 //		}
 		g_info->flags.is_proc_lock_init = FALSE;
 	}
-	if(g_info->init_seg.is_init)
+	if(g_info->lcl_init_seg.is_init)
 	{
-		if(shm_unlink(g_info->init_seg.name) != 0)
+		if(shm_unlink(g_info->lcl_init_seg.name) != 0)
 		{
 			readShmUnlinkError(errno);
 		}
-		g_info->init_seg.is_init = FALSE;
+		g_info->lcl_init_seg.is_init = FALSE;
 	}
 	
 #endif

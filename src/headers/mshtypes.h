@@ -103,7 +103,7 @@ struct header_tag
 		size_t ir;
 		size_t jc;
 		size_t child_hdr;
-	} data_off; 			/* these are actually the relative offsets of data */
+	} data_offsets; 			/* these are actually the relative offsets of data */
 	size_t num_dims;         /* dimensionality of the matrix.  The size array immediately follows the header */
 	size_t elem_size;       /* size of each element in pr and pi */
 	size_t num_elems;         /* length of pr,pi */
@@ -164,8 +164,8 @@ struct ShmSegmentInfo_tag
 typedef struct LocalSegmentInfo_tag LocalSegmentInfo_t;
 struct LocalSegmentInfo_tag
 {
-	uint64_t seg_num;                              // segment number (iterated when a new file is needed)
-	uint64_t rev_num;                              // total number of revisions (used for comparison, not indexing, so it's circular)
+	size_t seg_num;                              // segment number (iterated when a new file is needed)
+	size_t rev_num;                              // total number of revisions (used for comparison, not indexing, so it's circular)
 };
 
 typedef struct MemorySegment_tag MemorySegment_t;
@@ -188,7 +188,7 @@ struct MexInfo_tag
 {
 	MemorySegment_t shm_data_seg;
 	MemorySegment_t shm_update_seg;
-	MemorySegment_t init_seg;
+	MemorySegment_t lcl_init_seg;
 
 #ifdef MSH_WIN
 	HANDLE proc_lock;

@@ -249,12 +249,12 @@ void globStartup(header_t* hdr)
 		/* this is the first region created */
 		/* this info shouldn't ever actually be used */
 		/* but make sure the memory segment is consistent */
-		hdr->data_off.pr = SIZE_MAX;
-		hdr->data_off.pi = SIZE_MAX;
-		hdr->data_off.ir = SIZE_MAX;
-		hdr->data_off.jc = SIZE_MAX;
-		hdr->data_off.dims = SIZE_MAX;
-		hdr->data_off.child_hdr = SIZE_MAX;
+		hdr->data_offsets.pr = SIZE_MAX;
+		hdr->data_offsets.pi = SIZE_MAX;
+		hdr->data_offsets.ir = SIZE_MAX;
+		hdr->data_offsets.jc = SIZE_MAX;
+		hdr->data_offsets.dims = SIZE_MAX;
+		hdr->data_offsets.child_hdr = SIZE_MAX;
 		
 		hdr->is_numeric = 1;
 		hdr->is_sparse = 0;

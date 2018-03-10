@@ -67,9 +67,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
 		mexLock();
 		init();
-		g_info->init_seg.handle = temp_handle;
-		memcpy(g_info->init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
-		g_info->init_seg.is_init = TRUE;
+		g_info->lcl_init_seg.handle = temp_handle;
+		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
+		g_info->lcl_init_seg.is_init = TRUE;
 	}
 	else
 	{
@@ -103,9 +103,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
 		mexLock();
 		init();
-		g_info->init_seg.handle = temp_handle;
-		memcpy(g_info->init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
-		g_info->init_seg.is_init = TRUE;
+		g_info->lcl_init_seg.handle = temp_handle;
+		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
+		g_info->lcl_init_seg.is_init = TRUE;
 	}
 #endif
 	
@@ -924,7 +924,7 @@ size_t shmRewrite(byte_t* shm_anchor, const mxArray* in_var)
 size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray** ret_var)
 {
 	/* counter */
-	size_t i, count, cum_sz = 0;
+	size_t i, count, cumul_sz = 0;
 	mxArray* ret_child;
 	
 	/* for structures */
@@ -950,13 +950,13 @@ size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray*
 	/* initialize header info */
 	
 	/* these are updated when the data is copied over */
-	hdr->data_off.dims = SIZE_MAX;
-	hdr->data_off.pr = SIZE_MAX;
-	hdr->data_off.pi = SIZE_MAX;
-	hdr->data_off.ir = SIZE_MAX;
-	hdr->data_off.jc = SIZE_MAX;
-	hdr->data_off.field_str = SIZE_MAX;
-	hdr->data_off.child_hdr = SIZE_MAX;
+	hdr->data_offsets.dims = SIZE_MAX;
+	hdr->data_offsets.pr = SIZE_MAX;
+	hdr->data_offsets.pi = SIZE_MAX;
+	hdr->data_offsets.ir = SIZE_MAX;
+	hdr->data_offsets.jc = SIZE_MAX;
+	hdr->data_offsets.field_str = SIZE_MAX;
+	hdr->data_offsets.child_hdr = SIZE_MAX;
 	
 	hdr->is_numeric = mxIsNumeric(in_var);
 	hdr->is_sparse = mxIsSparse(in_var);
@@ -975,11 +975,11 @@ size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray*
 	
 	
 	/* Add space for the header */
-	cum_sz += padToAlign(sizeof(header_t));
+	cumul_sz += padToAlign(sizeof(header_t));
 	
 	/* Add space for the dimensions */
-	hdr->data_off.dims = cum_sz;
-	cum_sz += padToAlign(hdr->num_dims * sizeof(mwSize));
+	hdr->data_offsets.dims = cumul_sz;
+	cumul_sz += padToAlign(hdr->num_dims * sizeof(mwSize));
 	
 	/* Structure case */
 	if(hdr->classid == mxSTRUCT_CLASS)
@@ -1004,8 +1004,8 @@ size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray*
 			hdr->str_sz = (size_t) fieldNamesSize(in_var);     /* always a multiple of alignment size */
 			
 			/* locate the field string */
-			hdr->data_off.field_str = cum_sz;
-			cum_sz += padToAlign(hdr->str_sz);                   /* Add space for the field string */
+			hdr->data_offsets.field_str = cumul_sz;
+			cumul_sz += padToAlign(hdr->str_sz);                   /* Add space for the field string */
 			
 			/* use mxMalloc so mem is freed on error via garbage collection */
 			dat->num_children = hdr->num_elems*hdr->num_fields;
@@ -1023,7 +1023,7 @@ size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray*
 			mxFree((void*)field_names);
 			
 			/* go through each recursively */
-			hdr->data_off.child_hdr = cum_sz;
+			hdr->data_offsets.child_hdr = cumul_sz;
 			count = 0;
 			for(i = 0; i < hdr->num_elems; i++)                         /* each element */
 			{
@@ -1033,7 +1033,7 @@ size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray*
 					dat->child_dat[count] = mxMalloc(sizeof(local_data_t));
 					
 					/* call recursivley */
-					cum_sz += shmScan(dat->child_hdr[count], dat->child_dat[count],
+					cumul_sz += shmScan(dat->child_hdr[count], dat->child_dat[count],
 									   mxGetFieldByNumber(in_var, i, field_num), &ret_child);
 					mxSetFieldByNumber(*ret_var, i, field_num, ret_child);
 					
@@ -1061,12 +1061,12 @@ size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray*
 			*ret_var = mxCreateCellArray(hdr->num_dims, dat->dims);
 			
 			/* go through each recursively */
-			hdr->data_off.child_hdr = cum_sz;
+			hdr->data_offsets.child_hdr = cumul_sz;
 			for(i = 0; i < hdr->num_elems; i++)
 			{
 				dat->child_hdr[i] = mxMalloc(sizeof(header_t));
 				dat->child_dat[i] = mxMalloc(sizeof(local_data_t));
-				cum_sz += shmScan(dat->child_hdr[i], dat->child_dat[i], mxGetCell(in_var, i), &ret_child);
+				cumul_sz += shmScan(dat->child_hdr[i], dat->child_dat[i], mxGetCell(in_var, i), &ret_child);
 				mxSetCell(*ret_var, i, ret_child);
 			}
 		}
@@ -1076,15 +1076,15 @@ size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray*
 		
 		/* ensure both pointers are aligned individually */
 		dat->pr = mxGetData(in_var);
-		cum_sz += padToAlign(MXMALLOC_SIG_LEN);
-		hdr->data_off.pr = cum_sz;
-		cum_sz += padToAlign(hdr->elem_size * hdr->num_elems);
+		cumul_sz += padToAlign(MXMALLOC_SIG_LEN);
+		hdr->data_offsets.pr = cumul_sz;
+		cumul_sz += padToAlign(hdr->elem_size * hdr->num_elems);
 		if(hdr->complexity == mxCOMPLEX)
 		{
 			dat->pi = mxGetImagData(in_var);
-			cum_sz += padToAlign(MXMALLOC_SIG_LEN);
-			hdr->data_off.pi = cum_sz;
-			cum_sz += padToAlign(hdr->elem_size * hdr->num_elems);
+			cumul_sz += padToAlign(MXMALLOC_SIG_LEN);
+			hdr->data_offsets.pi = cumul_sz;
+			cumul_sz += padToAlign(hdr->elem_size * hdr->num_elems);
 		}
 		
 		if(hdr->is_sparse)
@@ -1093,14 +1093,14 @@ size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray*
 			hdr->num_elems = (size_t)mxGetNzmax(in_var);
 			
 			dat->ir = mxGetIr(in_var);
-			cum_sz += padToAlign(MXMALLOC_SIG_LEN);
-			hdr->data_off.ir = cum_sz;
-			cum_sz += padToAlign(sizeof(mwIndex) * (hdr->num_elems));      /* ensure both pointers are aligned individually */
+			cumul_sz += padToAlign(MXMALLOC_SIG_LEN);
+			hdr->data_offsets.ir = cumul_sz;
+			cumul_sz += padToAlign(sizeof(mwIndex) * (hdr->num_elems));      /* ensure both pointers are aligned individually */
 			
 			dat->jc = mxGetJc(in_var);
-			cum_sz += padToAlign(MXMALLOC_SIG_LEN);
-			hdr->data_off.jc = cum_sz;
-			cum_sz += padToAlign(sizeof(mwIndex) * (dat->dims[1] + 1));
+			cumul_sz += padToAlign(MXMALLOC_SIG_LEN);
+			hdr->data_offsets.jc = cumul_sz;
+			cumul_sz += padToAlign(sizeof(mwIndex) * (dat->dims[1] + 1));
 			
 			if(hdr->is_numeric)
 			{
@@ -1158,8 +1158,8 @@ size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray*
 		readErrorMex("Internal:UnexpectedError", "Tried to clone an unsupported type.");
 	}
 	
-	hdr->shm_sz = cum_sz;
-	return cum_sz;
+	hdr->shm_sz = cumul_sz;
+	return cumul_sz;
 }
 
 
@@ -1258,7 +1258,7 @@ void shmCopy(header_t* hdr, local_data_t* dat, byte_t* shm_anchor, header_t* par
 			cpy_sz = hdr->num_elems*sizeof(mwIndex);
 			memCpyMex((void*)data_ptrs.ir, (void*)dat->ir, cpy_sz);
 			
-			cpy_sz = (((mwSize*)(shm_anchor + hdr->data_off.dims))[1] + 1)*sizeof(mwIndex);
+			cpy_sz = (data_ptrs.dims[1] + 1)*sizeof(mwIndex);
 			memCpyMex((void*)data_ptrs.jc, (void*)dat->jc, cpy_sz);
 			
 			/* set the pointers relating to sparse (set the real and imaginary data later)*/
