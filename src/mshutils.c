@@ -18,23 +18,32 @@
 const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
 
 
-size_t memCpyMex(byte_t* dest, byte_t* orig, size_t* data_off, size_t dest_off, size_t cpy_sz)
+void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 {
-	size_t offset = padToAlign(MXMALLOC_SIG_LEN);
-	
 	uint8_t mxmalloc_sig[MXMALLOC_SIG_LEN];
 	makeMxMallocSignature(mxmalloc_sig, cpy_sz);
 	
-	*data_off = dest_off + offset;
-	memcpy(dest + offset - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
-	memcpy(dest + offset, orig, cpy_sz);
-	return offset + padToAlign(cpy_sz);
-	
+	memcpy(dest - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
+	memcpy(dest, orig, cpy_sz);
+	return dest;
 }
 
 
+void locatePointers(shm_data_t* data_ptrs, header_t* hdr, byte_t* shm_anchor)
+{
+	data_ptrs->dims = (mwSize*)(shm_anchor + hdr->data_off.dims);
+	data_ptrs->pr = shm_anchor + hdr->data_off.pr;
+	data_ptrs->pi = shm_anchor + hdr->data_off.pi;
+	data_ptrs->field_str = shm_anchor + hdr->data_off.field_str;
+	data_ptrs->ir = (mwIndex*)(shm_anchor + hdr->data_off.ir);
+	data_ptrs->jc = (mwIndex*)(shm_anchor + hdr->data_off.jc);
+	data_ptrs->child_hdr = (header_t*)(shm_anchor + hdr->data_off.child_hdr);
+}
+
+
+
 /* ------------------------------------------------------------------------- */
-void freeTmp(data_t* dat)
+void freeTmp(local_data_t* dat)
 {
 	
 	size_t i;
@@ -88,11 +97,12 @@ size_t fieldNamesSize(const mxArray* mxStruct)
 		/* This field */
 		field_name_ptr = mxGetFieldNameByNumber(mxStruct, i);
 		j = 0;
-		while(field_name_ptr[j])
+		while(field_name_ptr[j] != 0)
 		{
 			j++;
 		}
 		j++;          /* for the null termination */
+		
 		
 		if(i == (num_fields - 1))
 		{

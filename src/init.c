@@ -255,7 +255,6 @@ void globStartup(header_t* hdr)
 		hdr->data_off.jc = SIZE_MAX;
 		hdr->data_off.dims = SIZE_MAX;
 		hdr->data_off.child_hdr = SIZE_MAX;
-		hdr->data_off.parent_hdr = INT_MAX;
 		
 		hdr->is_numeric = 1;
 		hdr->is_sparse = 0;

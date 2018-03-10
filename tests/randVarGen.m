@@ -1,9 +1,9 @@
-function [ret, numelems, teststrs] = randVarGen(maxDepth, maxElements, ignoreUnusables, donames, varname)
-	[ret, numelems, teststrs] = randVarGen_(maxDepth, 1, maxElements, ignoreUnusables, donames, {varname});
+function [ret, numelems] = randVarGen(maxDepth, maxElements, ignoreUnusables)
+	[ret, numelems] = randVarGen_(maxDepth, 1, maxElements, ignoreUnusables);
 end
 
 
-function [ret, numvarsz, teststrs] = randVarGen_(maxDepth, currDepth, maxElements, ignoreUnusables, donames, teststrs)
+function [ret, numvarsz] = randVarGen_(maxDepth, currDepth, maxElements, ignoreUnusables)
 
 	%  Variable Type Key
 	% 	1	mxLOGICAL_CLASS,
@@ -27,8 +27,8 @@ function [ret, numvarsz, teststrs] = randVarGen_(maxDepth, currDepth, maxElement
 
 	if(maxDepth <= currDepth)
 		%dont make another layer
-		%vartypegen = randi(16) + 2;
-		vartypegen = 17;
+		vartypegen = randi(16) + 2;
+		%vartypegen = 17;
 	else
 		vartypegen = randi(2);
 		%vartypegen = 2;
@@ -64,38 +64,15 @@ function [ret, numvarsz, teststrs] = randVarGen_(maxDepth, currDepth, maxElement
 		case(1)
 			% 	1	mxCELL_CLASS,
 			ret = cell(dims{:});
-			subscpsnums = cell(1,numel(dims));
-			retsubiter = 1;
 			for k = 1:numel(ret)
 
-				if(donames)
-				[subscpsnums{:}] = ind2sub([dims{:}], k);
-				subscps = ['{' num2str(subscpsnums{1})];
-				for l = 2:numel(dims)
-					subscps = [subscps ',' num2str(subscpsnums{l})];
-				end
-				subscps = [subscps '}'];
-				else
-					subscps = '';
-				end
+				
 
-				[ret{k},~,substrs] = randVarGen_(maxDepth, ...
+				[ret{k},~] = randVarGen_(maxDepth, ...
 					currDepth + 1, ...
 					maxElements, ...
-					ignoreUnusables, ...
-					donames, ...
-					{['{' num2str(k) '}'], subscps});
-				if(donames)
-					for l = 1:numel(substrs)
-						for p = 1:numel(teststrs)
-							retsubstrs{retsubiter} = [teststrs{p} substrs{l}];
-							retsubiter = retsubiter + 1;
-						end
-					end
-				end
-			end
-			if(donames)
-				teststrs = [teststrs retsubstrs];
+					ignoreUnusables);
+				
 			end
 		case(2)
 			% 	2	mxSTRUCT_CLASS
@@ -103,46 +80,16 @@ function [ret, numvarsz, teststrs] = randVarGen_(maxDepth, currDepth, maxElement
 			possibleFields = {'cat',[],'dog',[],'fish',[],'cow',[],'twentyonesavage',[]};
 			ret(dims{:}) = struct(possibleFields{1:2*randi(numPossibleFields)});
 			retFields = fieldnames(ret);
-			subscpsnums = cell(1,numel(dims));
-			retsubiter = 1;
 			for k = 1:numel(ret)
 
-				if(donames)
-					[subscpsnums{:}] = ind2sub([dims{:}], k);
-					subscps = ['(' num2str(subscpsnums{1})];
-					for l = 2:ndims(ret)
-						subscps = [subscps ',' num2str(subscpsnums{l})];
-					end
-					subscps = [subscps ')'];
-				else
-					subscps = '';
-				end
-
 				for j = 1:numel(retFields)
-					if(numel(ret) > 1)
-						presubstrs = {['(' num2str(k) ').' retFields{j}], [subscps '.' retFields{j}]};
-					else
-						presubstrs = {['.' retFields{j}], ['(1).' retFields{j}], ['(1,1).' retFields{j}]};
-					end
-					eval(['[ret(k).' retFields{j} ',~,substrs] = randVarGen_(maxDepth, currDepth + 1,' ...
-						'maxElements, ignoreUnusables, donames, presubstrs);']);
-
-					if(donames)
-						for l = 1:numel(substrs)
-							for p = 1:numel(teststrs)
-								retsubstrs{retsubiter} = [teststrs{p} substrs{l}];
-								retsubiter = retsubiter + 1;
-							end
-						end
-					end
+					[ret(k).(retFields{j}),~] = randVarGen_(maxDepth, currDepth + 1, ...
+						maxElements, ignoreUnusables);
 
 				end
 
 			end
 
-			if(donames)
-				teststrs = [teststrs retsubstrs];
-			end
 		case(3)
 			% 	3	mxLOGICAL_CLASS,
 			ret = logical(rand(dims{:}) > 0.5);
@@ -210,6 +157,9 @@ function [ret, numvarsz, teststrs] = randVarGen_(maxDepth, currDepth, maxElement
 			if(numel(dims) == 2)
 				if(rand > 0.5)
 					ret = sparse(logical(rand(dims{:}) > 0.5).*rand(dims{:},'double'));
+					if(rand > 0.5)
+						ret = ret + 1i*sparse(logical(rand(dims{:}) > 0.5).*rand(dims{:},'double'));
+					end
 				else
 					ret = sparse(logical(rand(dims{:}) > 0.5));
 				end

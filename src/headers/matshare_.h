@@ -19,11 +19,11 @@ size_t shmRewrite(byte_t* shm_anchor, const mxArray* in_var);
 
 /* Recursively descend through Matlab matrix to assess how much space its    */
 /* serialization will require.                                               */
-size_t shmScan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray** ret_var);
+size_t shmScan(header_t* hdr, local_data_t* dat, const mxArray* in_var, mxArray** ret_var);
 
 /* Descend through header and data structure and copy relevent data to       */
 /* shared memory.                                                            */
-void shmCopy(header_t* hdr, data_t* dat, byte_t* shm_anchor, header_t* par_hdr, mxArray* ret_var);
+void shmCopy(header_t* hdr, local_data_t* dat, byte_t* shm_anchor, header_t* par_hdr, mxArray* ret_var);
 
 mxLogical shmCompareContent(byte_t* shm, const mxArray* comp_var, size_t* offset);
 

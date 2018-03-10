@@ -54,6 +54,8 @@ typedef struct {
 	/*  size_t reserved;           Don't believe this! It is not really there!   */
 } mxArrayStruct;
 
+mxArray* sps;
+
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
 	
@@ -64,14 +66,31 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 // 	mxArray* in2 = prhs[1];
 // 	mxArrayStruct* in_tag2 = (mxArrayStruct*)in2;
 // 	mxArrayStruct* shared_tag = (mxArrayStruct*)shared;
-//
-//
-	mxArray* sps = mxCreateSparse(2,3,7,mxREAL);
-	mxArrayStruct* in_tag = (mxArrayStruct*)sps;
-	mexPrintf("addr in %p\n", in_tag);
-	mexPrintf("addr in crosslink %p\n", in_tag->CrossLink);
-	mexPrintf("addr in dat %p\n\n", in_tag->pr);
-	mxDestroyArray(sps);
+	
+	mxArray* x = mxCreateSparse(0,0,1, mxREAL);
+	
+	if(nrhs > 0)
+	{
+		if(*((double*)mxGetData(prhs[0])) == 0.0)
+		{
+			sps = mxCreateSparse(2, 3, 7, mxREAL);
+			mxArrayStruct* in_tag = (mxArrayStruct*)sps;
+			mexPrintf("addr in %p\n", in_tag);
+			mexPrintf("addr in crosslink %p\n", in_tag->CrossLink);
+			mexPrintf("addr in dat %p\n\n", in_tag->pr);
+
+			mwSize dims[] = {2,2};
+			mwSize nzmax = 5;
+			mxSetDimensions(sps, dims, 2);
+			mxSetNzmax(sps, nzmax);
+			mexMakeArrayPersistent(sps);
+			plhs[0] = mxCreateSharedDataCopy(sps);
+		}
+		else if(*((double*)mxGetData(prhs[0])) == 1.0)
+		{
+			mxDestroyArray(sps);
+		}
+	}
 //
 // 	mexPrintf("addr shared %p\n", shared_tag);
 // 	mexPrintf("addr shared crosslink %p\n", shared_tag->CrossLink);

@@ -13,7 +13,7 @@
 #define MSH_PARAM_SECURITY_L "security"
 
 /* Descend through header and data structure and free the memory.            */
-void freeTmp(data_t* dat);
+void freeTmp(local_data_t* dat);
 
 /*field names of a structure */
 size_t fieldNamesSize(const mxArray* mxStruct);
@@ -27,7 +27,8 @@ int pointCharArrayAtString(char_t** pCharArray, char_t* pString, int nFields);
 void onExit(void);
 
 /* Pads the size to something that guarantees pointer alignment.			*/
-size_t memCpyMex(byte_t* dest, byte_t* orig, size_t* data_off, size_t dest_off, size_t cpy_sz);
+void locatePointers(shm_data_t* data_ptrs, header_t* hdr, byte_t* shm_anchor);
+void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz);
 size_t padToAlign(size_t size);
 void makeMxMallocSignature(uint8_t* sig, size_t seg_size);
 void acquireProcLock(void);

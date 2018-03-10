@@ -88,6 +88,7 @@ typedef enum
 	msh_OBJ_DEREGISTER
 } msh_directive_t;
 
+
 /* captures fundamentals of the mxArray */
 /* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
 typedef struct header_tag header_t;
@@ -97,15 +98,11 @@ struct header_tag
 	{
 		size_t dims;
 		size_t pr;
-		union
-		{
-			size_t pi;
-			size_t field_str;
-		};
+		size_t pi;
+		size_t field_str;
 		size_t ir;
 		size_t jc;
 		size_t child_hdr;
-		int parent_hdr;
 	} data_off; 			/* these are actually the relative offsets of data */
 	size_t num_dims;         /* dimensionality of the matrix.  The size array immediately follows the header */
 	size_t elem_size;       /* size of each element in pr and pi */
@@ -121,21 +118,30 @@ struct header_tag
 };
 
 /* structure used to record all of the data addresses */
-typedef struct data_tag data_t;
-struct data_tag
+typedef struct local_data_tag local_data_t;
+struct local_data_tag
 {
 	mwSize* dims;               		/* pointer to the size array */
 	void* pr;                    		/* real data portion */
-	union
-	{
-		void* pi;               		/* imaginary data portion */
-		char_t* field_str;   		/* list of a structures fields, each field name will be seperated by a null character and terminated with a ";" */
-	};
+	void* pi;               		/* imaginary data portion */
+	char_t* field_str;   		/* list of a structures fields, each field name will be seperated by a null character and terminated with a ";" */
 	mwIndex* ir;                    	/* row indexes, for sparse */
 	mwIndex* jc;                  	/* cumulative column counts, for sparse */
 	size_t num_children;
-	data_t** child_dat;         		/* array of children data structures, for cell */
+	local_data_t** child_dat;         		/* array of children data structures, for cell */
 	header_t** child_hdr;          	/* array of corresponding children header structures, for cell */
+};
+
+typedef struct shm_data_tag shm_data_t;
+struct shm_data_tag
+{
+	mwSize* dims;               		/* pointer to the size array */
+	void* pr;                    		/* real data portion */
+	void* pi;               			/* imaginary data portion */
+	char_t* field_str;   			/* list of a structures fields, each field name will be seperated by a null character and terminated with a ";" */
+	mwIndex* ir;                    	/* row indexes, for sparse */
+	mwIndex* jc;                  	/* cumulative column counts, for sparse */
+	header_t* child_hdr;          	/* array of corresponding children header structures, for cell */
 };
 
 typedef struct ShmSegmentInfo_tag ShmSegmentInfo_t;
