@@ -75,6 +75,7 @@ extern int shm_unlink(const char* name);
 typedef char char_t;
 typedef char_t byte_t;
 typedef bool bool_t;
+typedef int handle_t;
 
 typedef enum
 {
@@ -177,7 +178,7 @@ struct MemorySegment_tag
 #ifdef MSH_WIN
 	HANDLE handle;
 #else
-	int handle;
+	handle_t handle;
 #endif
 	size_t seg_sz;
 	void* ptr;
@@ -194,7 +195,7 @@ struct MexInfo_tag
 	HANDLE proc_lock;
 	SECURITY_ATTRIBUTES lock_sec;
 #else
-	int proc_lock;
+	handle_t proc_lock;
 #endif
 	
 	LocalSegmentInfo_t cur_seg_info;

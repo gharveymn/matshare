@@ -1,5 +1,4 @@
 #include "headers/init.h"
-#include "headers/mshtypes.h"
 
 
 static bool_t is_glob_init;
@@ -178,7 +177,7 @@ void initUpdateSegment(void)
 	
 	/* Try to open an already created segment so we can get the global init signal */
 	strncpy(g_info->shm_update_seg.name, MSH_UPDATE_SEGMENT_NAME, MSH_MAX_NAME_LEN*sizeof(char));
-	g_info->shm_update_seg.handle = shm_open(g_info->shm_update_seg.name, O_RDWR | O_CREAT | O_EXCL, S_IRWXU);
+	g_info->shm_update_seg.handle = shm_open(g_info->shm_update_seg.name, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
 	if(g_info->shm_update_seg.handle == -1)
 	{
 		/* then the segment has already been initialized */
@@ -186,7 +185,7 @@ void initUpdateSegment(void)
 		
 		if(errno == EEXIST)
 		{
-			g_info->shm_update_seg.handle = shm_open(g_info->shm_update_seg.name, O_RDWR, S_IRWXU);
+			g_info->shm_update_seg.handle = shm_open(g_info->shm_update_seg.name, O_RDWR, S_IRUSR | S_IWUSR);
 			if(g_info->shm_update_seg.handle == -1)
 			{
 				readShmOpenError(errno);
@@ -275,7 +274,7 @@ void globStartup(header_t* hdr)
 		shm_update_info->seg_sz = hdr->shm_sz;
 		shm_update_info->upd_pid = g_info->this_pid;
 #ifdef MSH_UNIX
-		shm_update_info->security = S_IRWXU;
+		shm_update_info->security = S_IRUSR | S_IWUSR;
 #endif
 	}
 	else

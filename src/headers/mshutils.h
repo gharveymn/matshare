@@ -2,6 +2,7 @@
 #define MATSHARE_MATSHAREUTILS_H
 
 #include <ctype.h>
+#include <sys/stat.h>
 #include "mshtypes.h"
 #include "matshare_.h"
 #include "matlabutils.h"

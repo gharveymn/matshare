@@ -1,5 +1,4 @@
 #include "headers/mshutils.h"
-#include "headers/mshtypes.h"
 
 
 /*
@@ -224,6 +223,23 @@ void onExit(void)
 
 #ifdef MSH_WIN
 	
+	if(g_info->flags.is_proc_lock_init)
+	{
+		acquireProcLock();
+		if(g_info->shm_update_seg.is_mapped)
+		{
+			shm_update_info->num_procs -= 1;
+		}
+		releaseProcLock();
+		
+		if(CloseHandle(g_info->proc_lock) == 0)
+		{
+			readErrorMex("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
+		}
+		g_info->flags.is_proc_lock_init = FALSE;
+		
+	}
+	
 	if(g_info->shm_data_seg.is_mapped)
 	{
 		if(UnmapViewOfFile(shm_data_ptr) == 0)
@@ -244,15 +260,10 @@ void onExit(void)
 	
 	if(g_info->shm_update_seg.is_mapped)
 	{
-		
-		acquireProcLock();
-		shm_update_info->num_procs -= 1;
 		if(UnmapViewOfFile(shm_update_info) == 0)
 		{
 			readErrorMex("UnmapFileError", "Error unmapping the update file (Error Number %u)", GetLastError());
 		}
-		releaseProcLock();
-		
 		g_info->shm_update_seg.is_mapped = FALSE;
 	}
 	
@@ -263,19 +274,6 @@ void onExit(void)
 			readErrorMex("CloseHandleError", "Error closing the update file handle (Error Number %u)", GetLastError());
 		}
 		g_info->shm_update_seg.is_init = FALSE;
-	}
-	
-	if(g_info->flags.is_proc_lock_init)
-	{
-		if(g_info->flags.is_proc_locked)
-		{
-			releaseProcLock();
-		}
-		if(CloseHandle(g_info->proc_lock) == 0)
-		{
-			readErrorMex("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
-		}
-		g_info->flags.is_proc_lock_init = FALSE;
 	}
 	
 	if(g_info->init_seg.is_init)
@@ -289,6 +287,27 @@ void onExit(void)
 	
 #else
 	
+	bool_t will_remove = FALSE;
+	if(g_info->flags.is_proc_lock_init)
+	{
+		acquireProcLock();
+		if(g_info->shm_update_seg.is_mapped)
+		{
+			shm_update_info->num_procs -= 1;
+			will_remove = (bool_t)(shm_update_info->num_procs == 0);
+		}
+		releaseProcLock();
+		
+		if(will_remove)
+		{
+			if(shm_unlink(MSH_LOCK_NAME) != 0)
+			{
+				readShmUnlinkError(errno);
+			}
+		}
+		
+	}
+	
 	if(g_info->shm_data_seg.is_mapped)
 	{
 		if(munmap(shm_data_ptr, g_info->shm_data_seg.seg_sz) != 0)
@@ -300,16 +319,18 @@ void onExit(void)
 	
 	if(g_info->shm_data_seg.is_init)
 	{
-		if(shm_unlink(g_info->shm_data_seg.name) != 0)
+		if(will_remove)
 		{
-			readShmUnlinkError(errno);
+			if(shm_unlink(g_info->shm_data_seg.name) != 0)
+			{
+				readShmUnlinkError(errno);
+			}
 		}
 		g_info->shm_data_seg.is_init = FALSE;
 	}
 	
 	if(g_info->shm_update_seg.is_mapped)
 	{
-		shm_update_info->num_procs -= 1;
 		if(munmap(shm_update_info, g_info->shm_update_seg.seg_sz) != 0)
 		{
 			readMunmapError(errno);
@@ -319,32 +340,16 @@ void onExit(void)
 	
 	if(g_info->shm_update_seg.is_init)
 	{
-		if(shm_unlink(g_info->shm_update_seg.name) != 0)
+		if(will_remove)
 		{
-			readShmUnlinkError(errno);
+			if(shm_unlink(g_info->shm_update_seg.name) != 0)
+			{
+				readShmUnlinkError(errno);
+			}
 		}
 		g_info->shm_update_seg.is_init = FALSE;
 	}
 	
-	if(g_info->flags.is_proc_lock_init)
-	{
-		if(g_info->flags.is_proc_locked)
-		{
-			releaseProcLock();
-		}
-		
-		
-		if(shm_unlink(MSH_LOCK_NAME) != 0)
-		{
-			readShmUnlinkError(errno);
-		}
-		
-//		if(sem_close(g_info->proc_lock) != 0)
-//		{
-//			readErrorMex("SemCloseInvalidError", "The sem argument is not a valid semaphore descriptor.");
-//		}
-		g_info->flags.is_proc_lock_init = FALSE;
-	}
 	if(g_info->init_seg.is_init)
 	{
 		if(shm_unlink(g_info->init_seg.name) != 0)
@@ -409,7 +414,7 @@ void makeMxMallocSignature(uint8_t* sig, size_t seg_size)
 void acquireProcLock(void)
 {
 	/* only request a lock if there is more than one process */
-	if(shm_update_info->num_procs > 1 && g_info->flags.is_mem_safe)
+	if(shm_update_info->num_procs > 1 && g_info->flags.is_mem_safe && !g_info->flags.is_proc_locked)
 	{
 #ifdef MSH_WIN
 		uint32_t ret = WaitForSingleObject(g_info->proc_lock, INFINITE);
@@ -580,7 +585,7 @@ void parseParams(int num_params, const mxArray* in[])
 {
 	int i, ps_len, vs_len;
 	char* param_str,* val_str;
-	char param_str_l[MSH_MAX_NAME_LEN], val_str_l[MSH_MAX_NAME_LEN];
+	char param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
 	const mxArray* param,* val;
 	for(i = 0; i < num_params/2; i++)
 	{
@@ -642,7 +647,21 @@ void parseParams(int num_params, const mxArray* in[])
 			}
 			else
 			{
-				sscanf("%o", val_str_l, &shm_update_info->security);
+				acquireProcLock();
+				shm_update_info->security = (mode_t)strtol(val_str_l, NULL, 8);
+				if(fchmod(g_info->shm_update_seg.handle, shm_update_info->security) != 0)
+				{
+					readFchmodError(errno);
+				}
+				if(fchmod(g_info->shm_data_seg.handle, shm_update_info->security) != 0)
+				{
+					readFchmodError(errno);
+				}
+				if(fchmod(g_info->proc_lock, shm_update_info->security) != 0)
+				{
+					readFchmodError(errno);
+				}
+				releaseProcLock();
 			}
 #endif
 		}

@@ -1,7 +1,28 @@
 #include "headers/matlabutils.h"
 
-
 #ifdef MSH_UNIX
+
+
+void readFchmodError_(const char* file_name, int line, int err)
+{
+	switch(err)
+	{
+		case EBADF:
+			readErrorMex_(file_name, line, "FchmodBadFileError", "The fildes argument is not an open file descriptor.");
+		case EPERM:
+			readErrorMex_(file_name, line, "FchmodPermissionError", "The effective user ID does not match the owner of the file and the process does not have appropriate privilege.");
+		case EROFS:
+			readErrorMex_(file_name, line, "FchmodReadOnlyError", "The file referred to by fildes resides on a read-only file system.");
+		case EINTR:
+			readErrorMex_(file_name, line, "FchmodInterruptError", "The fchmod() function was interrupted by a signal.");
+		case EINVAL:
+			readErrorMex_(file_name, line, "FchmodInvalidError", "Fchmod failed because of one of the following:\n"
+					"\tThe value of the mode argument is invalid.\n"
+					"\tThe fildes argument refers to a pipe and the implementation disallows execution of fchmod() on a pipe.");
+		default:
+			readErrorMex_(file_name, line, "FchmodUnknownError", "An unknown error occurred.");
+	}
+}
 
 
 void readMunmapError_(const char* file_name, int line, int err)
