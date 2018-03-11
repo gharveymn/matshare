@@ -1,7 +1,4 @@
-load('C:\workspace\c\matshare\res\states\statetwofe8928.mat')
-
-mshshare(ts1)
-x1 = mshfetch;
+load('C:\workspace\c\matshare\res\states\stateonefe5360.mat')
 
 mshshare(ts2)
 x2 = mshfetch;

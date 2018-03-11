@@ -23,7 +23,10 @@ void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 	makeMxMallocSignature(mxmalloc_sig, cpy_sz);
 	
 	memcpy(dest - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
-	memcpy(dest, orig, cpy_sz);
+	if(orig != NULL)
+	{
+		memcpy(dest, orig, cpy_sz);
+	}
 	return dest;
 }
 
@@ -262,15 +265,17 @@ void makeMxMallocSignature(uint8_t* sig, size_t seg_size)
 	size_t multi = 1 << 4;
 	
 	/* note: (x % 2^n) == (x & (2^n - 1)) */
-	sig[0] = (uint8_t)((((seg_size + 0x0F)/multi) & (multi - 1))*multi);
-	
-	/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
-	for(int i = 1; i < 4; i++)
+	if(seg_size > 0)
 	{
-		multi = (size_t)1 << (1 << (2 + i));
-		sig[i] = (uint8_t)(((seg_size + 0x0F)/multi) & (multi - 1));
+		sig[0] = (uint8_t)((((seg_size + 0x0F)/multi) & (multi - 1))*multi);
+		
+		/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
+		for(int i = 1; i < 4; i++)
+		{
+			multi = (size_t)1 << (1 << (2 + i));
+			sig[i] = (uint8_t)(((seg_size + 0x0F)/multi) & (multi - 1));
+		}
 	}
-	
 }
 
 

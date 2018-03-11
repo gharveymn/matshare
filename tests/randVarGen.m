@@ -27,8 +27,8 @@ function [ret, numvarsz] = randVarGen_(maxDepth, currDepth, maxElements, ignoreU
 
 	if(maxDepth <= currDepth)
 		%dont make another layer
-		vartypegen = randi(16) + 2;
-		%vartypegen = 17;
+		%vartypegen = randi(16) + 2;
+		vartypegen = 17;
 	else
 		vartypegen = randi(2);
 		%vartypegen = 2;
@@ -41,19 +41,25 @@ function [ret, numvarsz] = randVarGen_(maxDepth, currDepth, maxElements, ignoreU
 		thisMaxElements = 16;
 	end
 
-	numvarsz = randi(thisMaxElements);
+	numvarsz = randi(thisMaxElements + 1) - 1;
 	nums = 1:numvarsz;
 	divs = nums(mod(numvarsz, nums) == 0);
 	temp = numvarsz;
 	dims = {};
-	while(true)
-		randdiv = divs(randi(numel(divs)));
-		dims = [dims {randdiv}];
-		temp = temp / randdiv;
-		divs = divs(mod(temp,divs) == 0);
-		if(temp == 1)
-			break;
+	if(numvarsz ~= 0)
+		while(true)
+			randdiv = divs(randi(numel(divs)));
+			dims = [dims {randdiv}];
+			temp = temp / randdiv;
+			divs = divs(mod(temp,divs) == 0);
+			if(temp == 1)
+				break;
+			end
 		end
+	else
+		ndims = randi(32);
+		adims = zeros(1,ndims);
+		dims = num2cell(adims);
 	end
 
 	if(numel(dims) == 1)
@@ -66,8 +72,6 @@ function [ret, numvarsz] = randVarGen_(maxDepth, currDepth, maxElements, ignoreU
 			ret = cell(dims{:});
 			for k = 1:numel(ret)
 
-				
-
 				[ret{k},~] = randVarGen_(maxDepth, ...
 					currDepth + 1, ...
 					maxElements, ...
@@ -77,17 +81,22 @@ function [ret, numvarsz] = randVarGen_(maxDepth, currDepth, maxElements, ignoreU
 		case(2)
 			% 	2	mxSTRUCT_CLASS
 			numPossibleFields = 5;
-			possibleFields = {'cat',[],'dog',[],'fish',[],'cow',[],'twentyonesavage',[]};
-			ret(dims{:}) = struct(possibleFields{1:2*randi(numPossibleFields)});
-			retFields = fieldnames(ret);
-			for k = 1:numel(ret)
+			if(numvarsz ~= 0)
+				possibleFields = {'cat',[],'dog',[],'fish',[],'cow',[],'twentyonesavage',[]};
+				ret(dims{:}) = struct(possibleFields{1:2*randi(numPossibleFields)});
+				retFields = fieldnames(ret);
+				for k = 1:numel(ret)
 
-				for j = 1:numel(retFields)
-					[ret(k).(retFields{j}),~] = randVarGen_(maxDepth, currDepth + 1, ...
-						maxElements, ignoreUnusables);
+					for j = 1:numel(retFields)
+						[ret(k).(retFields{j}),~] = randVarGen_(maxDepth, currDepth + 1, ...
+							maxElements, ignoreUnusables);
+
+					end
 
 				end
-
+			else
+				possibleFields = {'cat',dims,'dog',dims,'fish',dims,'cow',dims,'twentyonesavage',dims};
+				ret = struct(possibleFields{1:2*randi(numPossibleFields)});
 			end
 
 		case(3)

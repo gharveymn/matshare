@@ -18,7 +18,7 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 #define MSH_UPDATE_SEGMENT_NAME "/MATSHARE_UPDATE_SEGMENT"
 #define MSH_LOCK_NAME "/MATSHARE_LOCK"
 #define MSH_SEGMENT_NAME "/MATSHARE_SEGMENT%0llx"
-#define MSH_INIT_CHECK_NAME "/MATSHARE_INIT%lu"
+#define MSH_INIT_CHECK_NAME "MATSHARE_INIT%lu"
 #define MSH_MAX_NAME_LEN 64
 
 #if defined(MATLAB_UNIX)

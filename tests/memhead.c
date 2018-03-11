@@ -66,8 +66,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 // 	mxArray* in2 = prhs[1];
 // 	mxArrayStruct* in_tag2 = (mxArrayStruct*)in2;
 // 	mxArrayStruct* shared_tag = (mxArrayStruct*)shared;
-	
-	mxArray* x = mxCreateSparse(0,0,1, mxREAL);
+	plhs[0] = mxCreateStructArray(0,NULL,0,NULL);
 	
 	if(nrhs > 0)
 	{

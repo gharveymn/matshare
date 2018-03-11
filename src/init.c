@@ -256,16 +256,16 @@ void globStartup(Header_t* hdr)
 		hdr->data_offsets.field_str = SIZE_MAX;
 		hdr->data_offsets.child_hdrs = SIZE_MAX;
 		
-		hdr->is_numeric = 1;
-		hdr->is_sparse = 0;
-		hdr->is_empty = 1;
+		hdr->is_numeric = TRUE;
+		hdr->is_sparse = FALSE;
+		hdr->is_empty = TRUE;
 		hdr->complexity = mxREAL;
 		hdr->classid = mxDOUBLE_CLASS;
 		hdr->num_dims = 0;
 		hdr->elem_size = sizeof(mxDouble);
-		hdr->num_elems = 0;      /* update this later on sparse*/
-		hdr->num_fields = 0;                                 /* update this later */
-		hdr->obj_sz = padToAlign(sizeof(Header_t));     /* update this later */
+		hdr->num_elems = 0;      					/* update this later on sparse*/
+		hdr->num_fields = 0;						/* update this later */
+		hdr->obj_sz = padToAlign(sizeof(Header_t));     	/* update this later */
 		
 		shm_update_info->num_procs = 1;
 		shm_update_info->lead_seg_num = 0;
