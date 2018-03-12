@@ -7,12 +7,12 @@ To compile `matshare` simply run INSTALL.m. Run ‘./tests/testmulti.m’ to ver
 
  The easiest way to use `matshare` is with objects. The class MatShare.m allows one to treat shared variables as if they were normal variables. To use this, create an object and use the ‘data’ property to read and write to shared memory. For example,
 
-### Process 1
+#### Process 1
 ```matlab
 >> shared1 = MatShare;
 >> shared1.data = rand(3);
 ```
-### Process 2
+#### Process 2
 ```matlab
 >> shared2 = MatShare;
 >> shared2.data
@@ -27,11 +27,11 @@ If you assign a new value to the `data` property `MatShare` will update the shar
 
 A faster method of using `matshare` is with the entry functions prefixed with ‘`msh`’. The syntax in this case is also very simple, 
 
-### Process 1
+#### Process 1
 ```matlab
 >> mshshare(rand(3));
 ```
-### Process 2
+#### Process 2
 ```matlab
 >> mshfetch
 ans =
@@ -45,12 +45,12 @@ ans =
 
 If you wish for even better performance you may disable the automatic initialization feature. The syntax in this case is, 
 
-### Process 1
+#### Process 1
 ```matlab
 >> mshinit
 >> mshshare(rand(3));
 ```
-### Process 2
+#### Process 2
 ```matlab
 >> mshinit
 >> mshfetch
