@@ -867,7 +867,7 @@ size_t shmCopy(byte_t* shm_anchor, const mxArray* in_var, mxArray* ret_var)
 	
 	memcpy(shm_anchor, &hdr, sizeof(Header_t));
 	
-	return hdr.obj_sz;
+	return cml_off;
 	
 }
 

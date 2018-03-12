@@ -3,7 +3,7 @@ numtests = 1;
 numsamples = 10000;
 lents = 0;
 
-maxDepth = 2;
+maxDepth = 3;
 minelem = 0;
 maxelem = 10;
 maxElementsv = round(linspace(minelem,maxelem,numtests));

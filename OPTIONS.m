@@ -2,10 +2,10 @@
 %	Set these to true or false according to your preferences.
 
 %% Enables or disables the automatic initialization feature
-AutomaticInitialization = false;
+AutomaticInitialization = true;
 
 %% Controls whether or not to use locks when sharing memory
 ThreadSafety = true;
 
 %% Enables or disables debug mode
-DebugMode = false;
+DebugMode = true;
