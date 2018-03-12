@@ -59,85 +59,18 @@ mxArray* sps;
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
 	
-// 	mxArray* in = mxCreateDoubleMatrix(3,3,mxREAL);
-// 	mxArray* shared = mxCreateSharedDataCopy(in);
-// 	mxArray* in = prhs[0];
-// 	mxArrayStruct* in_tag = (mxArrayStruct*)in;
-// 	mxArray* in2 = prhs[1];
-// 	mxArrayStruct* in_tag2 = (mxArrayStruct*)in2;
-// 	mxArrayStruct* shared_tag = (mxArrayStruct*)shared;
-	plhs[0] = mxCreateStructArray(0,NULL,0,NULL);
-	
-	if(nrhs > 0)
+	int bytes = (int)*(double*)mxGetData(prhs[0]);
+	mexPrintf("%i",bytes);
+	uint8_T* mem = mxMalloc(bytes);
+	int i;
+	for(i=16;i>0;i--)
 	{
-		if(*((double*)mxGetData(prhs[0])) == 0.0)
-		{
-			sps = mxCreateSparse(2, 3, 7, mxREAL);
-			mxArrayStruct* in_tag = (mxArrayStruct*)sps;
-			mexPrintf("addr in %p\n", in_tag);
-			mexPrintf("addr in crosslink %p\n", in_tag->CrossLink);
-			mexPrintf("addr in dat %p\n\n", in_tag->pr);
-
-			mwSize dims[] = {2,2};
-			mwSize nzmax = 5;
-			mxSetDimensions(sps, dims, 2);
-			mxSetNzmax(sps, nzmax);
-			mexMakeArrayPersistent(sps);
-			plhs[0] = mxCreateSharedDataCopy(sps);
-		}
-		else if(*((double*)mxGetData(prhs[0])) == 1.0)
-		{
-			mxDestroyArray(sps);
-		}
+		mexPrintf("%X\n",*(mem-i));
 	}
-//
-// 	mexPrintf("addr shared %p\n", shared_tag);
-// 	mexPrintf("addr shared crosslink %p\n", shared_tag->CrossLink);
-// 	mexPrintf("addr shared dat %p\n\n\n", shared_tag->pr);
-	
-// 		mxFree(mxGetData(in));
-// 		mxSetData(in, mxMalloc(9));
-//
-// 		mexPrintf("addr in %p\n", in_tag);
-// 		mexPrintf("addr in crosslink %p\n", in_tag->CrossLink);
-// 		mexPrintf("addr in dat %p\n\n", in_tag->pr);
-//
-// 		mexPrintf("addr shared %p\n", shared_tag);
-// 		mexPrintf("addr shared crosslink %p\n", shared_tag->CrossLink);
-// 		mexPrintf("addr shared dat %p\n\n\n", shared_tag->pr);
-//
-// 		mxDestroyArray(in);
-//
-// 		mexPrintf("addr shared %p\n", shared_tag);
-// 		mexPrintf("addr shared crosslink %p\n", shared_tag->CrossLink);
-// 		mexPrintf("addr shared dat %p\n", shared_tag->pr);
-//
-// 		mxDestroyArray(shared);
-// 	int bytes = (int)*(double*)mxGetData(prhs[0]);
-// 	mexPrintf("%i",bytes);
-// 	uint8_T* mem = mxMalloc(bytes);
-// 	int i;
-// 	for(i=16;i>0;i--)
-// 	{
-// 		mexPrintf("%X\n",*(mem-i));
-// 	}
-// 	plhs[0] = mxCreateNumericMatrix(1, 8, mxUINT8_CLASS, mxREAL);
-// 	memcpy(mxGetData(plhs[0]), mem - 16, 8);
-// 	plhs[1] = mxCreateDoubleScalar((double)((size_t)mem));
-// 	plhs[2] = mxCreateDoubleScalar((double)((size_t)(mem+bytes)));
-// 	mxFree(mem);
-	
-// 	mexPrintf("\n");
-	
-// 	mem = malloc(1);
-// 	*mem = 7;
-// 	for(i=16;i>0;i--)
-// 	{
-// 		mexPrintf("%X\n",*(mem-i));
-// 	}
-//  	plhs[3] = mxCreateDoubleScalar(17);
-// 	mxSetData(plhs[3],mem);
-	//mxArrayStruct* arr = (mxArrayStruct*)plhs[0];
-	//arr->pr = mem;
-	//memcpy(mxGetData(plhs[0]), mem-16,16);
+	plhs[0] = mxCreateNumericMatrix(1, 8, mxUINT8_CLASS, mxREAL);
+	memcpy(mxGetData(plhs[0]), mem - 16, 8);
+	plhs[1] = mxCreateDoubleScalar((double)((size_t)mem));
+	plhs[2] = mxCreateDoubleScalar((double)((size_t)(mem+bytes)));
+	mxFree(mem);
+
 }

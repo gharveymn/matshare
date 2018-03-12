@@ -27,6 +27,10 @@ void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 	{
 		memcpy(dest, orig, cpy_sz);
 	}
+	else
+	{
+		memset(dest, 0, cpy_sz);
+	}
 	return dest;
 }
 
@@ -282,7 +286,7 @@ void makeMxMallocSignature(uint8_t* sig, size_t seg_size)
 void acquireProcLock(void)
 {
 	/* only request a lock if there is more than one process */
-	if(shm_update_info->num_procs > 1 && g_info->flags.is_thread_safe && !g_info->flags.is_proc_locked)
+	if(shm_update_info->num_procs > 1 && shm_update_info->is_thread_safe && !g_info->flags.is_proc_locked)
 	{
 #ifdef MSH_WIN
 		uint32_t ret = WaitForSingleObject(g_info->proc_lock, INFINITE);
@@ -324,22 +328,6 @@ void acquireProcLock(void)
 			}
 		}
 		
-//		if(sem_wait(g_info->proc_lock) != 0)
-//		{
-//			switch(errno)
-//			{
-//				case EINVAL:
-//					readErrorMex("SemWaitInvalid", "The sem argument does not refer to a valid semaphore.");
-//				case ENOSYS:
-//					readErrorMex("SemWaitNotSupportedError", "The functions sem_wait() and sem_trywait() are not supported by this implementation.");
-//				case EDEADLK:
-//					readErrorMex("SemWaitDeadlockError", "A deadlock condition was detected.");
-//				case EINTR:
-//					readErrorMex("SemWaitInterruptError", "A signal interrupted this function.");
-//				default:
-//					readErrorMex("SemWaitUnknownError", "An unknown error occurred (Error number: %i)", errno);
-//			}
-//		}
 #endif
 		g_info->flags.is_proc_locked = TRUE;
 	}
@@ -357,7 +345,6 @@ void releaseProcLock(void)
 			readErrorMex("ReleaseMutexError", "The process lock release failed (Error number: %u).", GetLastError());
 		}
 #else
-		
 		if(lockf(g_info->proc_lock, F_ULOCK, 0) != 0)
 		{
 			switch(errno)
@@ -373,20 +360,6 @@ void releaseProcLock(void)
 					readErrorMex("ULockfUnknownError", "An unknown error occurred (Error number: %i)", errno);
 			}
 		}
-		
-		
-//		if(sem_post(g_info->proc_lock) != 0)
-//		{
-//			switch(errno)
-//			{
-//				case EINVAL:
-//					readErrorMex("SemPostInvalid", "The sem argument does not refer to a valid semaphore.");
-//				case ENOSYS:
-//					readErrorMex("SemPostError", "The function sem_post() is not supported by this implementation.");
-//				default:
-//					readErrorMex("SemPostUnknownError", "An unknown error occurred (Error number: %i)", errno);
-//			}
-//		}
 #endif
 		g_info->flags.is_proc_locked = FALSE;
 	}
@@ -493,18 +466,26 @@ void parseParams(int num_params, const mxArray* in[])
 		
 		if(strcmp(param_str_l, MSH_PARAM_THRSAFE_L) == 0)
 		{
-			if(strcmp(val_str_l, "true") == 0)
+			acquireProcLock();
+			if(strcmp(val_str_l, "true") == 0
+					|| strcmp(val_str_l, "on") == 0
+					|| strcmp(val_str_l, "enable") == 0)
 			{
-				g_info->flags.is_thread_safe = TRUE;
+				shm_update_info->is_thread_safe = TRUE;
 			}
-			else if(strcmp(val_str_l, "false") == 0)
+			if(strcmp(val_str_l, "false") == 0
+			   || strcmp(val_str_l, "off") == 0
+			   || strcmp(val_str_l, "disable") == 0)
 			{
-				g_info->flags.is_thread_safe = FALSE;
+				shm_update_info->is_thread_safe = FALSE;
 			}
 			else
 			{
+				releaseProcLock();
 				readErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THRSAFE_U);
 			}
+			updateAll();
+			releaseProcLock();
 		}
 		else if(strcmp(param_str, MSH_PARAM_SECURITY_L) == 0)
 		{
@@ -529,13 +510,16 @@ void parseParams(int num_params, const mxArray* in[])
 				{
 					readFchmodError(errno);
 				}
+				updateAll();
 				releaseProcLock();
 			}
+#else
+			readErrorMex("InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
 #endif
 		}
 		else
 		{
-			readErrorMex("InvalidParamValueError", "Unrecognised parameter \"%s\".", param_str);
+			readErrorMex("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
 		
 		mxFree(param_str);

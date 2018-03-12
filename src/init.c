@@ -51,6 +51,11 @@ void init()
 	
 	if(is_glob_init)
 	{
+		/* initialize shared memory */
+		memset(shm_data_ptr, 0, g_info->shm_data_seg.seg_sz);
+		memset(shm_update_info, 0, g_info->shm_update_seg.seg_sz);
+		
+		/* set the data to mirror the dummy variable at the end */
 		memcpy(shm_data_ptr, &hdr, hdr.obj_sz);
 	}
 	
@@ -75,6 +80,7 @@ void init()
 		readErrorMex("ShmVarInitError", "The globally shared variable was unexpectedly already initialized before startup.");
 	}
 	
+	updateAll();
 	releaseProcLock();
 	
 }
@@ -110,8 +116,7 @@ void procStartup(void)
 	g_info->flags.is_proc_locked = FALSE;
 	*/
 	
-	g_info->num_lcl_objs = 0;
-	g_info->flags.is_thread_safe = TRUE; /** default value **/
+	g_info->num_lcl_objs = 0; /* make sure this is zero */
 	
 	mexAtExit(onExit);
 	
@@ -274,8 +279,9 @@ void globStartup(Header_t* hdr)
 		shm_update_info->seg_sz = hdr->obj_sz;
 		shm_update_info->upd_pid = g_info->this_pid;
 #ifdef MSH_UNIX
-		shm_update_info->security = S_IRUSR | S_IWUSR;
+		shm_update_info->security = S_IRUSR | S_IWUSR; /** default value **/
 #endif
+		shm_update_info->is_thread_safe = TRUE; 		/** default value **/
 	}
 	else
 	{

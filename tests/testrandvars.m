@@ -1,9 +1,9 @@
 rng('shuffle')
 numtests = 1;
-numsamples = 100;
+numsamples = 10000;
 lents = 0;
 
-maxDepth = 2;
+maxDepth = 1;
 minelem = 0;
 maxelem = 10;
 maxElementsv = round(linspace(minelem,maxelem,numtests));
@@ -17,22 +17,35 @@ pidstr = num2str(feature('getpid'));
 
 doplot = false;
 docompare = false;
-dosavestate = true;
+dokeepall = false;
+dosavestate = false;
 numelems = 0;
 avgmultiplier = 0;
+
+if(dosavestate)
+   mkdirifnotexist(fullfile(fileparts(mfilename('fullpath')), '..', 'res','states'))
+end
 
 for j = 1:numtests
 	maxElements = maxElementsv(j);
 	for i = 1:numsamples
 		if(mod(i,2) == 1)
-			[ts1, avgnumelems(mod(i-1,stride)+1)] = randVarGen(maxDepth, maxElements, ignoreUnusables);
-			if(dosavestate)
+            if(dokeepall)
+                eval(['[ts' num2str(i) '1, avgnumelems(mod(i-1,stride)+1)] = randVarGen(maxDepth, maxElements, ignoreUnusables);']);
+            else
+                [ts1, avgnumelems(mod(i-1,stride)+1)] = randVarGen(maxDepth, maxElements, ignoreUnusables);
+            end
+            if(dosavestate)
 				if(i ~= 1)
 					delete(['res/states/statetwofe' pidstr '.mat']);
 				end
 				save(['res/states/stateonesh' pidstr '.mat']);
-			end
-			mshshare(ts1);
+            end
+            if(dokeepall)
+				eval(['mshshare(ts' num2str(i) '1);']);
+            else
+                mshshare(ts1);
+            end
 			if(dosavestate)
 				delete(['res/states/stateonesh' pidstr '.mat']);
 				save(['res/states/stateonefe' pidstr '.mat']);
@@ -53,12 +66,20 @@ for j = 1:numtests
 			fprintf([repmat('\b',1,lents) timestr]);
 			lents = numel(timestr);
 		else
-			[ts2, avgnumelems(mod(i-1,stride)+1)]  = randVarGen(maxDepth, maxElements, ignoreUnusables);
+			if(dokeepall)
+                eval(['[ts' num2str(i) '2, avgnumelems(mod(i-1,stride)+1)] = randVarGen(maxDepth, maxElements, ignoreUnusables);']);
+            else
+                [ts2, avgnumelems(mod(i-1,stride)+1)] = randVarGen(maxDepth, maxElements, ignoreUnusables);
+            end
 			if(dosavestate)
 				delete(['res/states/stateonefe' pidstr '.mat']);
 				save(['res/states/statetwosh' pidstr '.mat']);
 			end
-			mshshare(ts2);
+			if(dokeepall)
+				eval(['mshshare(ts' num2str(i) '2);']);
+            else
+                mshshare(ts2);
+            end
 			if(dosavestate)
 				delete(['res/states/statetwosh' pidstr '.mat']);
 				save(['res/states/statetwofe' pidstr '.mat']);

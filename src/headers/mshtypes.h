@@ -110,6 +110,7 @@ struct Header_tag
 	size_t num_dims;         	/* dimensionality of the matrix */
 	size_t elem_size;       		/* size of each element in pr and pi */
 	size_t num_elems;         	/* length of pr,pi */
+	size_t nzmax;
 	size_t obj_sz;            	/* size of serialized object */
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
 	mxClassID classid;       /* matlab class id */
@@ -154,6 +155,7 @@ struct ShmSegmentInfo_tag
 	pid_t upd_pid;
 	mode_t security;
 #endif
+	bool_t is_thread_safe;
 };
 
 typedef struct LocalSegmentInfo_tag LocalSegmentInfo_t;
@@ -200,7 +202,6 @@ struct MexInfo_tag
 		bool_t is_glob_shm_var_init;
 		
 		bool_t is_proc_locked;
-		bool_t is_thread_safe;
 	} flags;
 
 #ifdef MSH_WIN
