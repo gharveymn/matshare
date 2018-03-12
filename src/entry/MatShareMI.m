@@ -18,6 +18,7 @@ classdef MatShare < handle
 
 	methods
 		function obj = MatShare
+			matshare_(MatShare.INIT);
 			matshare_(MatShare.REGISTER);
 		end
 
@@ -61,3 +62,4 @@ classdef MatShare < handle
 
 	end
 end
+

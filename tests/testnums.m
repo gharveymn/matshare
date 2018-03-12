@@ -1,13 +1,12 @@
+clear a
 a = MatShare;
-nums = 100000;
+nums = 50000;
 lents = 0;
 disp(getmem);
 tic
 for i = 1:nums
 	a.data = i;
-	x = a.data;
-% 	disp(a.shared.data);
-% 	timestr = sprintf('%d/%d', i, nums);
+% 	timestr = sprintf('%d/%d\n', a.data, nums);
 % 	fprintf([repmat('\b',1,lents) timestr]);
 % 	lents = numel(timestr);
 end

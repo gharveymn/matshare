@@ -44,5 +44,10 @@ classdef tc
 			addpath('tests');
 			testnumsnorm;
 		end
+		
+		function testrandvars
+			addpath('tests');
+			testrandvars;
+		end
 	end
 end

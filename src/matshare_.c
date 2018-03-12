@@ -6,430 +6,599 @@
 /* ------------------------------------------------------------------------- */
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
+
+//	mexPrintf("%s\n", mexIsLocked()? "MEX is locked": "MEX is unlocked" );
+	
+	int num_params;
 	
 	/* For inputs */
-	const mxArray* mxDirective;               /*  Directive {clone, attach, detach, free}   */
-	const mxArray* mxInput;                /*  Input array (for clone)					  */
+	const mxArray* in_directive;               /* Directive {clone, attach, detach, free} */
+	const mxArray* in_var;                    /* Input array (for clone) */
 	
 	/* For storing inputs */
-	msh_directive_t directive;
+	mshdirective_t directive;
 	
-	size_t sm_size;                              /* size required by the shared memory */
-	
-	/* for storing the mxArrays ... */
-	header_t hdr;
-	data_t dat;
+	size_t shm_size;                         /* size required by the shared memory */
+
+
+#ifdef MSH_WIN
+	DWORD hi_sz, lo_sz, err;
+#endif
 	
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		mexErrMsgIdAndTxt("MATLAB:MatShare", "Minimum input arguments missing; must supply directive and key.");
+		readErrorMex("NotEnoughInputsError", "Minimum input arguments missing; must supply a directive.");
 	}
 	
 	/* assign inputs */
-	mxDirective = prhs[0];
+	in_directive = prhs[0];
 	
-	/* get directive */
-	directive = parseDirective(mxDirective);
-	DWORD hi_sz, lo_sz, err;
-	mxArrayStruct* arr;
+	/* get the directive */
+	directive = parseDirective(in_directive);
+
+#ifdef MSH_AUTO_INIT
+	char init_check_name[MSH_MAX_NAME_LEN] = {0};
+#ifdef MSH_WIN
+	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, GetProcessId(GetCurrentProcess()));
+	HANDLE temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 1, init_check_name);
+	err = GetLastError();
+	if(temp_handle == NULL)
+	{
+		readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
+	}
+	else if(err != ERROR_ALREADY_EXISTS)
+	{
+		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
+		{
+			if(CloseHandle(temp_handle) == 0)
+			{
+				readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
+			}
+			return;
+		}
+		
+		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
+		init();
+		g_info->lcl_init_seg.handle = temp_handle;
+		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
+		g_info->lcl_init_seg.is_init = TRUE;
+	}
+	else
+	{
+		if(CloseHandle(temp_handle) == 0)
+		{
+			readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
+		}
+	}
+#else
+	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, (unsigned long)(getpid()));
+	int temp_handle;
+	if((temp_handle = shm_open(init_check_name, O_RDONLY|O_CREAT|O_EXCL, 0))  == -1)
+	{
+		/* we want this to error if it does exist */
+		if(errno != EEXIST)
+		{
+			readShmOpenError(errno);
+		}
+	}
+	else
+	{
+		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
+		{
+			if(shm_unlink(init_check_name) != 0)
+			{
+				readShmUnlinkError(errno);
+			}
+			return;
+		}
+		
+		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
+		init();
+		g_info->lcl_init_seg.handle = temp_handle;
+		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
+		g_info->lcl_init_seg.is_init = TRUE;
+	}
+#endif
+#endif
 	
-	HANDLE temp_handle;
+	if(directive != msh_DETACH && directive != msh_INIT && precheck() != TRUE)
+	{
+		readErrorMex("NotInitializedError", "At least one of the needed shared memory segments has not been initialized. Cannot continue.");
+	}
 	
 	/* Switch yard {clone, attach, detach, free} */
 	switch(directive)
 	{
-		case msh_INIT:
-			init();
-			glob_info->is_mem_safe = (bool_t)(nrhs <= 1);
-			makeDummyVar(&plhs[0]);
-			break;
-		
-		case msh_CLONE:
+		case msh_SHARE:
 			/********************/
-			/*	Clone case		*/
+			/*	Share case	*/
 			/********************/
-			
-			//TODO if every all dimensions are the same size, just copy over the data and don't reattach etc.
 			
 			/* check the inputs */
 			if(nrhs < 2)
 			{
-				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Required second argument is missing.");
+				readErrorMex("NoVariableError", "No variable supplied to clone.");
 			}
 			
 			/* Assign */
-			mxInput = prhs[1];
+			in_var = prhs[1];
 			
-			if(!(mxIsNumeric(mxInput) || mxIsLogical(mxInput) || mxIsChar(mxInput) || mxIsStruct(mxInput) || mxIsCell(mxInput)))
+			if(!(mxIsNumeric(in_var) || mxIsLogical(in_var) || mxIsChar(in_var) || mxIsStruct(in_var) || mxIsCell(in_var)))
 			{
-				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+				readErrorMex("InvalidTypeError", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 			}
 			
 			acquireProcLock();
 			
-			/* clear the previous variable */
-			if(!mxIsEmpty(glob_shm_var))
+			/* clear the previous variable if needed */
+			if(!mxIsEmpty(g_shm_var))
 			{
 				/* if the current shared variable shares all the same dimensions, etc. then just copy over the memory */
-				/* copy over the data at the same time since otherwise it will be gone */
-				if(shallowcompare(glob_info->cur_seg_ptr, mxInput, &sm_size) == TRUE)
+				if(shmCompareSize(shm_data_ptr, in_var) == TRUE)
 				{
-					/* update the revision number and indicate our info is current */
-					glob_info->shm_seg_info->rev_num += 1;
-					glob_info->cur_seg_info.rev_num = glob_info->shm_seg_info->rev_num;
+					/* DON'T INCREMENT THE REVISION NUMBER */
+					/* this is an in-place change, so everyone is still fine */
 					
-					/* tell everyone to come back to this segment */
-					glob_info->shm_seg_info->seg_num = glob_info->cur_seg_info.seg_num;
-					glob_info->shm_seg_info->seg_sz = glob_info->cur_seg_info.seg_sz;
+					/* do the rewrite after checking because the comparison is cheap */
+					shmRewrite(shm_data_ptr, in_var);
 					
-					shallowrewrite(glob_info->cur_seg_ptr, mxInput);
-					
+					updateAll();
 					releaseProcLock();
+					
+					/* BREAK DON'T DO ANYTHING ELSE */
 					break;
 				}
 				else
 				{
-					deepdetach(glob_shm_var);
+					/* otherwise we'll detach and start over */
+					shmDetach(g_shm_var);
 				}
 			}
-			mxDestroyArray(glob_shm_var);
+			mxDestroyArray(g_shm_var);
+			g_info->flags.is_glob_shm_var_init = FALSE;
 			
 			/* scan input data */
-			sm_size = deepscan(&hdr, &dat, mxInput, NULL, &glob_shm_var);
+			shm_size = shmScan(in_var, &g_shm_var);
 			
 			/* update the revision number and indicate our info is current */
-			glob_info->shm_seg_info->rev_num += 1;
-			glob_info->cur_seg_info.rev_num = glob_info->shm_seg_info->rev_num;
-			if(sm_size <= glob_info->cur_seg_info.seg_sz)
-			{
-				/* reuse the current segment, which we should still be mapped to */
-				
-				/* tell everyone to come back to this segment */
-				glob_info->shm_seg_info->seg_num = glob_info->cur_seg_info.seg_num;
-				glob_info->shm_seg_info->seg_sz = glob_info->cur_seg_info.seg_sz;
-				
-				/* don't close the current file handle (obviously) */
-				
-			}
-			else
+			g_info->cur_seg_info.rev_num = shm_update_info->rev_num + 1;
+			if(shm_size > g_info->shm_data_seg.seg_sz)
 			{
 				
-				// get current map number
+				/* update the current map number if we can't reuse the current segment */
+				/* else we reuse the current segment */
 				
-				/* warning: this may cause a collision in the rare case where one process is still at seg_num = 0 and lead_num = UINT32_MAX; very unlikely, so the overhead isn't worth it */
-				glob_info->shm_seg_info->lead_num += 1;
-				
-				glob_info->cur_seg_info.seg_num = glob_info->shm_seg_info->lead_num;
-				glob_info->shm_seg_info->seg_num = glob_info->cur_seg_info.seg_num;
-				glob_info->shm_seg_info->seg_sz = sm_size;
-				glob_info->cur_seg_info.seg_sz = sm_size;
-				
-				sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->shm_seg_info->seg_num);
+				/* create a unique new segment */
+				g_info->cur_seg_info.seg_num = shm_update_info->lead_seg_num + 1;
+
+#ifdef MSH_WIN
 				
 				/* decrement the kernel handle count and tell onExit not to do this twice */
-				UnmapViewOfFile(glob_info->cur_seg_ptr);
-				CloseHandle(glob_info->shm_handle);
-				glob_info->shm_is_used = FALSE;
-				
-				// create the new mapping
-				lo_sz = (DWORD)(sm_size & 0xFFFFFFFFL);
-				hi_sz = (DWORD)((sm_size >> 32) & 0xFFFFFFFFL);
-				temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->cur_seg_info.seg_name);
-				err = GetLastError();
-				if(temp_handle == NULL)
+				if(UnmapViewOfFile(shm_data_ptr) == 0)
 				{
-					// throw error if it already exists because that shouldn't happen
-					makeDummyVar(&plhs[0]);
+					err = GetLastError();
 					releaseProcLock();
-					mexPrintf("Error number: %d\n", err);
-					mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not create the memory segment");
+					readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u).", err);
 				}
-				else if(err == ERROR_ALREADY_EXISTS)
+				g_info->shm_data_seg.is_mapped = FALSE;
+				
+				if(CloseHandle(g_info->shm_data_seg.handle) == 0)
 				{
-					DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+					err = GetLastError();
+					releaseProcLock();
+					readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u).", err);
 				}
-				else
+				g_info->shm_data_seg.is_init = FALSE;
+				
+				/* change the map size */
+				g_info->shm_data_seg.seg_sz = shm_size;
+				
+				/* change the file name */
+				snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
+				
+				/* create the new mapping */
+				lo_sz = (DWORD)(g_info->shm_data_seg.seg_sz & 0xFFFFFFFFL);
+				hi_sz = (DWORD)((g_info->shm_data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
+				g_info->shm_data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->shm_data_seg.name);
+				if(g_info->shm_data_seg.handle == NULL)
 				{
-					glob_info->shm_handle = temp_handle;
+					/* throw error if it already exists because that shouldn't happen */
+					err = GetLastError();
+					releaseProcLock();
+					readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
 				}
-				glob_info->cur_seg_ptr = (byte_t*)MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, sm_size);
-				glob_info->shm_is_used = TRUE;
+				g_info->shm_data_seg.is_init = TRUE;
+				
+				g_info->shm_data_seg.ptr = MapViewOfFile(g_info->shm_data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_data_seg.seg_sz);
+				if(g_info->shm_data_seg.ptr == NULL)
+				{
+					err = GetLastError();
+					releaseProcLock();
+					readErrorMex("MapDataSegError", "Could not map the data memory segment (Error number %u)", err);
+				}
+				g_info->shm_data_seg.is_mapped = TRUE;
+
+#else
+				
+				/* unmap in preparation for size change */
+				if(munmap(shm_data_ptr, g_info->shm_data_seg.seg_sz) != 0)
+				{
+					releaseProcLock();
+					readMunmapError(errno);
+				}
+				g_info->shm_data_seg.is_mapped = FALSE;
+				
+				g_info->shm_data_seg.seg_sz = shm_size;
+				
+				/* change the map size */
+				if(ftruncate(g_info->shm_data_seg.handle, g_info->shm_data_seg.seg_sz) != 0)
+				{
+					releaseProcLock();
+					readFtruncateError(errno);
+				}
+				
+				/* remap the shared memory */
+				g_info->shm_data_seg.ptr = mmap(NULL, g_info->shm_data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_seg.handle, 0);
+				if(shm_data_ptr == MAP_FAILED)
+				{
+					releaseProcLock();
+					readMmapError(errno);
+				}
+				g_info->shm_data_seg.is_mapped = TRUE;
+
+#endif
+				
+				/* warning: this may cause a collision in the rare case where one process is still at seg_num == 0
+				 * and lead_seg_num == UINT64_MAX; very unlikely, so the overhead isn't worth it */
+				shm_update_info->lead_seg_num = g_info->cur_seg_info.seg_num;
 				
 			}
+			
+			/* wipe the memory before copying over new data */
+			memset(shm_data_ptr, 0, g_info->shm_data_seg.seg_sz);
 			
 			/* copy data to the shared memory */
-			deepcopy(&hdr, &dat, glob_info->cur_seg_ptr, NULL, glob_shm_var);
+			shmCopy(shm_data_ptr, in_var, g_shm_var);
 			
-			/* free temporary allocation */
-			deepfree(&dat);
+			mexMakeArrayPersistent(g_shm_var);
+			g_info->flags.is_glob_shm_var_init = TRUE;
 			
-			mexMakeArrayPersistent(glob_shm_var);
-			
+			updateAll();
 			releaseProcLock();
 			
-			break;
-		
-		case msh_ATTACH:
-			/********************/
-			/*	Attach case	*/
-			/********************/
-			
-			
-			/* Restore the segment if this an initialized region */
-			shallowrestore(glob_info->cur_seg_ptr, glob_shm_var);
-			
-			/* proc_lock was acquired either in CLONE or FETCH */
-//			releaseProcLock();
+			/* lazy return---doesn't return to ans, but returns if assigned */
+			if(nlhs == 1)
+			{
+				plhs[0] = mxCreateSharedDataCopy(g_shm_var);
+			}
 			
 			break;
 		
-		case msh_DETACH:
-			/********************/
-			/*	Dettach case	*/
-			/********************/
-			
-			if(!mxIsEmpty(glob_shm_var))
-			{
-				/* NULL all of the Matlab pointers */
-				deepdetach(glob_shm_var);
-			}
-			mxDestroyArray(glob_shm_var);
-			
-			makeDummyVar(&plhs[0]);
-			
-			break;
-		
-		case msh_FREE:
-			/********************/
-			/*	free case		*/
-			/********************/
-			
-			/* this is the same as DETACH, but unlocks the mex file, and closes the segment */
-			
-			if(!mxIsEmpty(glob_shm_var))
-			{
-				/* NULL all of the Matlab pointers */
-				deepdetach(glob_shm_var);
-			}
-			mxDestroyArray(glob_shm_var);
-			
-			if(!glob_info->is_freed)
-			{
-				
-				/* decrement the kernel handle count and tell onExit not to do this twice */
-				if(glob_info->shm_is_used)
-				{
-					UnmapViewOfFile(glob_info->cur_seg_ptr);
-					CloseHandle(glob_info->shm_handle);
-					glob_info->shm_is_used = FALSE;
-				}
-				
-				glob_info->shm_seg_info->num_procs -= 1;
-				
-				/* if the function is process locked be sure to release it (if not needed, but for clarity)*/
-				if(glob_info->is_proc_locked)
-				{
-					releaseProcLock();
-				}
-				
-				glob_info->is_freed = TRUE;
-				
-			}
-			
-			mexUnlock();
-			makeDummyVar(&plhs[0]);
-			
-			break;
 		case msh_FETCH:
 			
 			acquireProcLock();
 			
 			/* check if the current revision number is the same as the shm revision number */
-			if(glob_info->cur_seg_info.rev_num == glob_info->shm_seg_info->rev_num)
-			{
-				//return a shallow copy of the variable
-				plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
-			}
-			else
+			if(g_info->cur_seg_info.rev_num != shm_update_info->rev_num && g_info->this_pid != shm_update_info->upd_pid)
 			{
 				//do a detach operation
-				if(!mxIsEmpty(glob_shm_var))
+				if(!mxIsEmpty(g_shm_var))
 				{
 					/* NULL all of the Matlab pointers */
-					deepdetach(glob_shm_var);
+					shmDetach(g_shm_var);
 				}
-				mxDestroyArray(glob_shm_var);
+				mxDestroyArray(g_shm_var);
 				
-				glob_info->cur_seg_info.rev_num = glob_info->shm_seg_info->rev_num;
-				glob_info->cur_seg_info.seg_num = glob_info->shm_seg_info->seg_num;
-				glob_info->cur_seg_info.seg_sz = glob_info->shm_seg_info->seg_sz;
+				g_info->cur_seg_info.rev_num = shm_update_info->rev_num;
 				
-				sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->cur_seg_info.seg_num);
-				
-				UnmapViewOfFile(glob_info->cur_seg_ptr);
-				CloseHandle(glob_info->shm_handle);
-				
-				temp_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, glob_info->cur_seg_info.seg_name);
-				err = GetLastError();
-				if(temp_handle == NULL)
+				/* Update the mapping if this is on a new segment */
+				if(g_info->cur_seg_info.seg_num != shm_update_info->seg_num)
 				{
-					makeDummyVar(&plhs[0]);
-					releaseProcLock();
-					mexPrintf("Error number: %d\n", err);
-					mexErrMsgIdAndTxt("MATLAB:MatShare:fetch", "MatShare::Could not open the memory segment");
+					g_info->cur_seg_info.seg_num = shm_update_info->seg_num;
+
+#ifdef MSH_WIN
+					
+					if(UnmapViewOfFile(shm_data_ptr) == 0)
+					{
+						err = GetLastError();
+						makeDummyVar(&plhs[0]);
+						releaseProcLock();
+						readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u)", err);
+					}
+					g_info->shm_data_seg.is_mapped = FALSE;
+					
+					if(CloseHandle(g_info->shm_data_seg.handle) == 0)
+					{
+						err = GetLastError();
+						makeDummyVar(&plhs[0]);
+						releaseProcLock();
+						readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u)", err);
+					}
+					g_info->shm_data_seg.is_init = FALSE;
+					
+					/* update the size */
+					g_info->shm_data_seg.seg_sz = shm_update_info->seg_sz;
+					
+					/* update the region name */
+					snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
+					
+					g_info->shm_data_seg.handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, g_info->shm_data_seg.name);
+					err = GetLastError();
+					if(g_info->shm_data_seg.handle == NULL)
+					{
+						makeDummyVar(&plhs[0]);
+						releaseProcLock();
+						readErrorMex("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
+					}
+					g_info->shm_data_seg.is_init = TRUE;
+					
+					g_info->shm_data_seg.ptr = MapViewOfFile(g_info->shm_data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_data_seg.seg_sz);
+					err = GetLastError();
+					if(shm_data_ptr == NULL)
+					{
+						makeDummyVar(&plhs[0]);
+						releaseProcLock();
+						readErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
+					}
+					g_info->shm_data_seg.is_mapped = TRUE;
+
+#else
+					
+					/* unmap the current mapping */
+					if(munmap(shm_data_ptr, g_info->shm_data_seg.seg_sz) != 0)
+					{
+						releaseProcLock();
+						readMunmapError(errno);
+					}
+					g_info->shm_data_seg.is_mapped = FALSE;
+					
+					/* update the size */
+					g_info->shm_data_seg.seg_sz = shm_update_info->seg_sz;
+					
+					/* remap with the updated size */
+					g_info->shm_data_seg.ptr = mmap(NULL, g_info->shm_data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_seg.handle, 0);
+					if(shm_data_ptr == MAP_FAILED)
+					{
+						releaseProcLock();
+						readMmapError(errno);
+					}
+					g_info->shm_data_seg.is_mapped = TRUE;
+#endif
+				
 				}
 				
-				DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+				shmFetch(shm_data_ptr, &g_shm_var);
 				
-				glob_info->cur_seg_ptr = (byte_t*)MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->cur_seg_info.seg_sz);
-				err = GetLastError();
-				if(glob_info->cur_seg_ptr == NULL)
-				{
-					makeDummyVar(&plhs[0]);
-					releaseProcLock();
-					mexPrintf("Error number: %d\n", err);
-					mexErrMsgIdAndTxt("MATLAB:MatShare:fetch", "MatShare::Could not fetch the memory segment");
-				}
-				shallowfetch(glob_info->cur_seg_ptr, &glob_shm_var);
-				
-				mexMakeArrayPersistent(glob_shm_var);
-				plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
+				mexMakeArrayPersistent(g_shm_var);
 				
 			}
+			
+			plhs[0] = mxCreateSharedDataCopy(g_shm_var);
 			
 			releaseProcLock();
 			
 			break;
 		
-		case msh_COMPARE:
-			acquireProcLock();
-			plhs[0] = mxCreateLogicalScalar((mxLogical)(glob_info->cur_seg_info.seg_num != glob_info->shm_seg_info->seg_num));
-			releaseProcLock();
+		case msh_OBJ_DEREGISTER:
+			/* deregister an object tracking this function */
+			g_info->num_lcl_objs -= 1;
+			/* fall through to check if we should clear everything */
+		case msh_DETACH:
+			/********************/
+			/*	Dettach case	*/
+			/********************/
+			
+			/* this only actually frees if it is the last object using the function in the current process */
+			if(g_info->num_lcl_objs == 0)
+			{
+				onExit();
+				mexUnlock();
+			}
+			
 			break;
-		case msh_COPY:
-			plhs[0] = mxCreateSharedDataCopy(glob_shm_var);
+		
+		case msh_PARAM:
+			/* set parameters for matshare to use */
+			
+			num_params = nrhs - 1;
+			
+			if(num_params%2 != 0)
+			{
+				readErrorMex("InvalNumArgsError", "The number of parameters input must be a multiple of two.");
+			}
+			
+			parseParams(num_params, prhs + 1);
+			
 			break;
+		
 		case msh_DEEPCOPY:
-			plhs[0] = mxDuplicateArray(glob_shm_var);
+			plhs[0] = mxDuplicateArray(g_shm_var);
 			break;
 		case msh_DEBUG:
-			arr = (mxArrayStruct*)glob_shm_var;
-			mexPrintf("%d\n", arr->RefCount);
+			/* maybe print debug information at some point */
 			break;
+		case msh_OBJ_REGISTER:
+			/* tell matshare to register a new object */
+			
+			g_info->num_lcl_objs += 1;
+			break;
+#ifndef MSH_AUTO_INIT
+		case msh_INIT:
+			init();
+			break;
+#endif
 		default:
-			mexErrMsgIdAndTxt("MATLAB:MatShare", "Unrecognized directive.");
-			/* unrecognised directive */
+			readErrorMex("UnknownDirectiveError", "Unrecognized directive.");
 			break;
 	}
-
-//	mexPrintf("%s\n", mexIsLocked()? "TRUE": "FALSE" );
-
-
+	
 }
 
 
 /* ------------------------------------------------------------------------- */
-/* deepdetach                                                                */
+/* shmScan                                                                  */
 /*                                                                           */
-/* Remove shared memory references to input matrix (in-situ), recursively    */
-/* if needed.                                                                */
+/* Recursively descend through Matlab matrix to assess how much space its    */
+/* serialization will require.                                               */
 /*                                                                           */
 /* Arguments:                                                                */
-/*    Input matrix to remove references.                                     */
+/*    header to populate.                                                    */
+/*    data container to populate.                                            */
+/*    mxArray to analyze.                                                    */
 /* Returns:                                                                  */
-/*    Pointer to start of shared memory segment.                             */
+/*    size that shared memory segment will need to be.                       */
 /* ------------------------------------------------------------------------- */
-void deepdetach(mxArray* ret_var)
+size_t shmScan(const mxArray* in_var, mxArray** ret_var)
 {
 	
-	/* uses side-effects! */
-	mwSize dims[] = {0, 0};
-	mwSize nzmax = 0;
-	size_t i, n;
-	
-	/*for structure */
-	int nFields, j;
-	
-	/* restore matlab  memory */
-	if(ret_var == (mxArray*)NULL || mxIsEmpty(ret_var))
+	if(in_var == NULL)
 	{
-		return;
+		releaseProcLock();
+		readErrorMex("UnexpectedError", "Input variable was unexpectedly NULL.");
 	}
-	else if(mxIsStruct(ret_var))
+	
+	/* counters */
+	Header_t hdr;
+	size_t idx, count, cml_sz = 0;
+	int field_num;
+	mxArray* ret_child;
+	
+	const size_t padded_mxmalloc_sig_len = padToAlign(MXMALLOC_SIG_LEN);
+	
+	hdr.num_dims = mxGetNumberOfDimensions(in_var);
+	hdr.elem_size = mxGetElementSize(in_var);
+	hdr.num_elems = mxGetNumberOfElements(in_var);
+	hdr.nzmax = mxGetNzmax(in_var);
+	hdr.obj_sz = 0;     /* update this later */
+	hdr.num_fields = mxGetNumberOfFields(in_var);
+	hdr.classid = mxGetClassID(in_var);
+	hdr.complexity = mxIsComplex(in_var)? mxCOMPLEX : mxREAL;
+	hdr.is_sparse = mxIsSparse(in_var);
+	hdr.is_numeric = mxIsNumeric(in_var);
+	hdr.is_empty = (bool_t)(hdr.num_elems == 0);
+	
+	/* Add space for the header */
+	cml_sz += padToAlign(sizeof(Header_t));
+	
+	/* Add space for the dimensions */
+	cml_sz += padToAlign(mxGetNumberOfDimensions(in_var)*sizeof(mwSize));
+	
+	/* Structure case */
+	if(hdr.classid == mxSTRUCT_CLASS)
 	{
-		/* detach each field for each element */
-		n = mxGetNumberOfElements(ret_var);
-		nFields = mxGetNumberOfFields(ret_var);
-		for(i = 0; i < n; i++)                         /* element */
+		/* Add space for the field string */
+		cml_sz += padToAlign(getFieldNamesSize(in_var));
+		
+		*ret_var = mxCreateStructArray(hdr.num_dims, mxGetDimensions(in_var), 0, NULL);
+		for(field_num = 0; field_num < hdr.num_fields; field_num++)
 		{
-			for(j = 0; j < nFields; j++)               /* field */
-			{
-				deepdetach(mxGetFieldByNumber(ret_var, i, j));
-			}/* detach this one */
+			mxAddField(*ret_var, mxGetFieldNameByNumber(in_var, field_num));
 		}
-	}
-	else if(mxIsCell(ret_var))
-	{
-		/* detach each cell */
-		n = mxGetNumberOfElements(ret_var);
-		for(i = 0; i < n; i++)
+		
+		/* add size of storing the offsets */
+		cml_sz += padToAlign((hdr.num_fields*hdr.num_elems)*sizeof(size_t));
+		
+		/* go through each recursively */
+		for(field_num = 0, count = 0; field_num < hdr.num_fields; field_num++)          /* each field */
 		{
-			deepdetach(mxGetCell(ret_var, i));
-		}/* detach this one */
-		
-	}
-	else if(mxIsNumeric(ret_var) || mxIsLogical(ret_var) || mxIsChar(ret_var))  /* a matrix containing data */
-	{
-		
-		/* In safe mode these entries were allocated so remove them properly */
-		size_t num_dims = 2;
-		void* pr, * pi = NULL;
-		
-		/* handle sparse objects */
-		if(mxIsSparse(ret_var))
-		{
-			/* I don't seem to be able to give sparse arrays zero size so (nzmax must be 1) */
-			dims[0] = dims[1] = 1;
-			nzmax = 1;
-			if(mxSetDimensions(ret_var, dims, num_dims))
+			for(idx = 0; idx < hdr.num_elems; idx++, count++)                         /* each element */
 			{
-				releaseProcLock();
-				mexErrMsgIdAndTxt("MATLAB:MatShare:Unknown", "detach: unable to resize the array.");
+				/* call recursivley */
+				cml_sz += shmScan(mxGetFieldByNumber(in_var, idx, field_num), &ret_child);
+				mxSetFieldByNumber(*ret_var, idx, field_num, ret_child);
+				
 			}
 			
-			/* allocate 1 element */
-			pr = mxMalloc(1);
-			mxSetData(ret_var, pr);
-			if(mxIsComplex(ret_var))
+		}
+	}
+	else if(hdr.classid == mxCELL_CLASS) /* Cell case */
+	{
+		
+		*ret_var = mxCreateCellArray(hdr.num_dims, mxGetDimensions(in_var));
+		
+		/* add size of storing the offsets */
+		cml_sz += padToAlign(hdr.num_elems*sizeof(size_t));
+		
+		/* go through each recursively */
+		for(count = 0; count < hdr.num_elems; count++)
+		{
+			cml_sz += shmScan(mxGetCell(in_var, count), &ret_child);
+			mxSetCell(*ret_var, count, ret_child);
+			
+			
+		}
+	}
+	else if(hdr.is_numeric || hdr.classid == mxLOGICAL_CLASS || hdr.classid == mxCHAR_CLASS)  /* a matrix containing data *//* base case */
+	{
+		
+		if(hdr.is_sparse)
+		{
+			/* len(pr)==nzmax, len(pi)==nzmax, len(ir)=nzmax, len(jc)==N+1 */
+			
+			/* ensure both pointers are aligned individually */
+			cml_sz += padded_mxmalloc_sig_len + padToAlign(hdr.elem_size*hdr.nzmax);
+			if(hdr.complexity == mxCOMPLEX)
 			{
-				pi = mxMalloc(1);
-				mxSetImagData(ret_var, pi);
+				cml_sz += padded_mxmalloc_sig_len + padToAlign(hdr.elem_size*hdr.nzmax);
 			}
-			mxSetNzmax(ret_var, nzmax);
+			cml_sz += padded_mxmalloc_sig_len + padToAlign(sizeof(mwIndex)*(hdr.nzmax));              /* ir */
+			cml_sz += padded_mxmalloc_sig_len + padToAlign(sizeof(mwIndex)*(mxGetN(in_var) + 1));     /* jc */
+			
+			if(hdr.classid == mxDOUBLE_CLASS)
+			{
+				*ret_var = mxCreateSparse(0, 0, 1, hdr.complexity);
+			}
+			else if(hdr.classid == mxLOGICAL_CLASS)
+			{
+				*ret_var = mxCreateSparseLogicalMatrix(0, 0, 1);
+			}
+			else
+			{
+				releaseProcLock();
+				readErrorMex("UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'numeric' or 'logical'");
+			}
+			
 		}
 		else
 		{
-			mxSetDimensions(ret_var, dims, num_dims);
-			pr = mxMalloc(0);
-			mxSetData(ret_var, pr);
-			if(mxIsComplex(ret_var))
+			
+			/* ensure both pointers are aligned individually */
+			cml_sz += padded_mxmalloc_sig_len + padToAlign(hdr.elem_size*hdr.num_elems);
+			if(hdr.complexity == mxCOMPLEX)
 			{
-				pi = mxMalloc(0);
-				mxSetImagData(ret_var, pi);
+				cml_sz += padded_mxmalloc_sig_len + padToAlign(hdr.elem_size*hdr.num_elems);
 			}
-		}
-		
-		/** HACK **/
-		/* reset all the crosslinks so nothing in MATLAB is pointing to shared data (which will be gone soon) */
-		mxArray* link;
-		for(link = ((mxArrayStruct*)ret_var)->CrossLink; link != NULL && link != ret_var; link = ((mxArrayStruct*)link)->CrossLink)
-		{
-			mxSetDimensions(link, dims, num_dims);
-			mxSetData(link, pr);
-			if(mxIsComplex(ret_var))
+			
+			if(hdr.is_empty)
 			{
-				mxSetImagData(link, pi);
+				if(hdr.is_numeric)
+				{
+					*ret_var = mxCreateNumericArray(hdr.num_dims, mxGetDimensions(in_var), hdr.classid, hdr.complexity);
+				}
+				else if(hdr.classid == mxLOGICAL_CLASS)
+				{
+					*ret_var = mxCreateLogicalArray(hdr.num_dims, mxGetDimensions(in_var));
+				}
+				else
+				{
+					*ret_var = mxCreateCharArray(hdr.num_dims, mxGetDimensions(in_var));
+				}
+			}
+			else
+			{
+				if(hdr.is_numeric)
+				{
+					*ret_var = mxCreateNumericArray(0, NULL, hdr.classid, hdr.complexity);
+				}
+				else if(hdr.classid == mxLOGICAL_CLASS)
+				{
+					*ret_var = mxCreateLogicalArray(0, NULL);
+				}
+				else
+				{
+					*ret_var = mxCreateCharArray(0, NULL);
+				}
 			}
 		}
 		
@@ -437,269 +606,390 @@ void deepdetach(mxArray* ret_var)
 	else
 	{
 		releaseProcLock();
-		mexErrMsgIdAndTxt("MATLAB:MatShare:InvalidInput", "Detach: Unsupported type. The segment may have been corrupted.");
+		readErrorMex("Internal:UnexpectedError", "Tried to clone an unsupported type.");
 	}
+	
+	return cml_sz;
 }
 
 
 /* ------------------------------------------------------------------------- */
-/* shallowrestore                                                            */
+/* shmCopy                                                                  */
 /*                                                                           */
-/* Shallow copy matrix from shared memory into Matlab form.                  */
+/* Descend through header and data structure and copy relevent data to       */
+/* shared memory.                                                            */
 /*                                                                           */
 /* Arguments:                                                                */
-/*    shared memory segment.                                                 */
-/*    pointer to an mxArray pointer.                                         */
+/*    header to serialize.                                                   */
+/*    data container of pointers to data to serialize.                       */
+/*    pointer to shared memory segment.                                      */
 /* Returns:                                                                  */
-/*    size of shared memory segment.                                         */
+/*    void                                                                   */
 /* ------------------------------------------------------------------------- */
-size_t shallowrestore(byte_t* shm, mxArray* ret_var)
+size_t shmCopy(byte_t* shm_anchor, const mxArray* in_var, mxArray* ret_var)
 {
 	
-	/* for working with shared memory ... */
-	size_t i;
+	const size_t padded_mxmalloc_sig_len = padToAlign(MXMALLOC_SIG_LEN);
 	
-	/* for working with payload ... */
-	header_t* hdr;
-	mwSize* pSize;             /* pointer to the array dimensions */
-	void* pr = NULL, * pi = NULL;  /* real and imaginary data pointers */
-	mwIndex* ir = NULL, * jc = NULL;  /* sparse matrix data indices */
+	Header_t hdr;
+	ShmData_t data_ptrs;
+	byte_t* shm_ptr = shm_anchor;
 	
+	size_t cml_off = 0, shift, idx, cpy_sz, count, field_str_len;
 	
-	/* for structures */
-	int field_num;                /* current field */
+	int field_num;
+	const char_t* field_name;
+	char_t* field_str_iter;
 	
-	/* retrieve the data */
-	hdr = (header_t*)shm;
-	shm += pad_to_align(sizeof(header_t));
+	/* initialize header info */
 	
-	/* don't do anything if this is an empty matrix */
-	if(hdr->isEmpty)
-	{
-		return hdr->shmsiz;
-	}
+	/* these are updated when the data is copied over */
+	hdr.data_offsets.dims = SIZE_MAX;
+	hdr.data_offsets.pr = SIZE_MAX;
+	hdr.data_offsets.pi = SIZE_MAX;
+	hdr.data_offsets.ir = SIZE_MAX;
+	hdr.data_offsets.jc = SIZE_MAX;
+	hdr.data_offsets.field_str = SIZE_MAX;
+	hdr.data_offsets.child_hdrs = SIZE_MAX;
 	
-	/* the size pointer */
-	pSize = (mwSize*)shm;
+	hdr.num_dims = mxGetNumberOfDimensions(in_var);
+	hdr.elem_size = mxGetElementSize(in_var);
+	hdr.num_elems = mxGetNumberOfElements(in_var);
+	hdr.nzmax = mxGetNzmax(in_var);
+	hdr.num_fields = mxGetNumberOfFields(in_var);
+	hdr.classid = mxGetClassID(in_var);
+	hdr.complexity = mxIsComplex(in_var)? mxCOMPLEX : mxREAL;
+	hdr.is_sparse = mxIsSparse(in_var);
+	hdr.is_numeric = mxIsNumeric(in_var);
+	hdr.is_empty = (bool_t)(hdr.num_elems == 0);
 	
-	/* skip over the stored sizes */
-	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
+	shift = padToAlign(sizeof(Header_t));
+	cml_off += shift, shm_ptr += shift;
 	
+	/* copy the dimensions */
+	hdr.data_offsets.dims = cml_off;
+	data_ptrs.dims = (mwSize*)shm_ptr;
+	memcpy(data_ptrs.dims, mxGetDimensions(in_var), hdr.num_dims*sizeof(mwSize));
+	
+	shift = padToAlign(hdr.num_dims*sizeof(mwSize));
+	cml_off += shift, shm_ptr += shift;
 	
 	/* Structure case */
-	if(hdr->classid == mxSTRUCT_CLASS)
+	if(hdr.classid == mxSTRUCT_CLASS)
 	{
+		/* place the field names next in shared memory */
 		
-		/* skip over the stored field string */
-		shm += pad_to_align(hdr->strBytes);
+		/* Find the size required to store the field names */
+		field_str_len = getFieldNamesSize(in_var);
 		
-		/* Go through each element */
-		for(i = 0; i < hdr->nzmax; i++)
+		/* locate the field string */
+		hdr.data_offsets.field_str = cml_off;
+		data_ptrs.field_str = shm_ptr;
+		
+		/*shift past the field string */
+		shift = padToAlign(field_str_len);
+		cml_off += shift, shm_ptr += shift;
+		
+		
+		hdr.data_offsets.child_hdrs = cml_off;
+		data_ptrs.child_hdrs = (size_t*)shm_ptr;
+		cml_off += padToAlign((hdr.num_fields*hdr.num_elems)*sizeof(size_t));
+		
+		hdr.obj_sz = cml_off;
+		
+		/* copy the children recursively */
+		field_str_iter = data_ptrs.field_str;
+		for(field_num = 0, count = 0; field_num < hdr.num_fields; field_num++)                /* the fields */
 		{
-			for(field_num = 0; field_num < hdr->nFields; field_num++)     /* each field */
+			
+			field_name = mxGetFieldNameByNumber(in_var, field_num);
+			cpy_sz = strlen(field_name) + 1;
+			memcpy(field_str_iter, field_name, cpy_sz);
+			field_str_iter += cpy_sz;
+			
+			for(idx = 0; idx < hdr.num_elems; idx++, count++)                                   /* the struct array indices */
 			{
+				/* place relative offset into shared memory */
+				data_ptrs.child_hdrs[count] = cml_off;
+				
 				/* And fill it */
-				shm += shallowrestore(shm, mxGetFieldByNumber(ret_var, i, field_num));
+				cml_off += shmCopy(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(in_var, idx, field_num), mxGetFieldByNumber(ret_var, idx, field_num));
+				
 			}
-		}
-	}
-	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
-	{
-		for(i = 0; i < hdr->nzmax; i++)
-		{
-			/* And fill it */
-			shm += shallowrestore(shm, mxGetCell(ret_var, i));
-		}
-	}
-	else     /*base case*/
-	{
-		/* this is the address of the first data */
-		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		pr = (void*)shm;
-		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
-		
-		/* if complex get a pointer to the complex data */
-		if(hdr->complexity == mxCOMPLEX)
-		{
-			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			pi = (void*)shm;
-			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
-		}
-		
-		/* set the real and imaginary data */
-		mxFree(mxGetData(ret_var));
-		mxSetData(ret_var, pr);
-		if(hdr->complexity)
-		{
-			mxFree(mxGetImagData(ret_var));
-			mxSetImagData(ret_var, pi);
-		}
-		
-		/* if sparse get a list of the elements */
-		if(hdr->isSparse)
-		{
-			
-			ir = (mwIndex*)shm;
-			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
-			
-			jc = (mwIndex*)shm;
-			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
-			
-			/* set the pointers relating to sparse (set the real and imaginary data later)*/
-			mxFree(mxGetIr(ret_var));
-			mwIndex* ret_ir = (mwIndex*)mxMalloc(hdr->nzmax*sizeof(mwIndex));
-			memcpy(ret_ir, ir, hdr->nzmax*sizeof(mwIndex));
-			mxSetIr(ret_var, ret_ir);
-			
-			mxSetNzmax(ret_var, hdr->nzmax);
 			
 		}
-		else
-		{
-			
-			/*  rebuild constitute the array  */
-			mxSetDimensions(ret_var, pSize, hdr->nDims);
-			
-		}
-		
 		
 	}
-	return hdr->shmsiz;
-}
-
-
-size_t shallowfetch(byte_t* shm, mxArray** ret_var)
-{
-	/* for working with shared memory ... */
-	size_t i;
-	mxArray* ret_child;
-	
-	/* for working with payload ... */
-	header_t* hdr;
-	mwSize* pSize;             /* pointer to the array dimensions */
-	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
-	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
-	
-	
-	/* for structures */
-	int field_num;                /* current field */
-	
-	/* retrieve the data */
-	hdr = (header_t*)shm;
-	shm += pad_to_align(sizeof(header_t));
-	
-	
-	/* the size pointer */
-	pSize = (mwSize*)shm;
-	
-	/* skip over the stored sizes */
-	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
-	
-	
-	/* Structure case */
-	if(hdr->classid == mxSTRUCT_CLASS)
+	else if(hdr.classid == mxCELL_CLASS) /* Cell case */
 	{
-		if(hdr->isEmpty)
+		
+		
+		hdr.data_offsets.child_hdrs = cml_off;
+		data_ptrs.child_hdrs = (size_t*)shm_ptr;
+		cml_off += padToAlign(hdr.num_elems*sizeof(size_t));
+		
+		hdr.obj_sz = cml_off;
+		
+		
+		/* recurse for each cell element */
+		for(count = 0; count < hdr.num_elems; count++)
 		{
-			/* make this a separate case since there are no field names */
-			*ret_var = mxCreateStructArray(hdr->nDims, pSize, hdr->nFields, NULL);
+			/* place relative offset into shared memory */
+			data_ptrs.child_hdrs[count] = cml_off;
+			
+			cml_off += shmCopy(shm_anchor + data_ptrs.child_hdrs[count], mxGetCell(in_var, count), mxGetCell(ret_var, count));
+			
+			
 		}
-		else
+		
+	}
+	else /* base case */
+	{
+		
+		/* and the indices of the sparse data as well */
+		if(hdr.is_sparse)
 		{
-			char** field_names = (char**)mxCalloc((size_t)hdr->nFields, sizeof(char*));
-			PointCharArrayAtString(field_names, shm, hdr->nFields);
 			
-			/* skip over the stored field string */
-			shm += pad_to_align(hdr->strBytes);
+			/* note: in this case hdr->is_empty means the sparse is 0x0
+			 *  also note that nzmax is still 1 */
 			
-			*ret_var = mxCreateStructArray(hdr->nDims, pSize, hdr->nFields, (const char**)field_names);
 			
-			/* Go through each element */
-			for(i = 0; i < hdr->nzmax; i++)
+			/* copy pr */
+			cpy_sz = (hdr.nzmax)*(hdr.elem_size);
+			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+			hdr.data_offsets.pr = cml_off, data_ptrs.pr = shm_ptr;
+			
+			memCpyMex(data_ptrs.pr, mxGetData(in_var), cpy_sz);
+			
+			shift = padToAlign(cpy_sz);
+			cml_off += shift, shm_ptr += shift;
+			
+			if(!hdr.is_empty)
 			{
-				for(field_num = 0; field_num < hdr->nFields; field_num++)     /* each field */
+				mxFree(mxGetData(ret_var));
+				mxSetData(ret_var, data_ptrs.pr);
+			}
+			
+			/* copy pi */
+			if(hdr.complexity == mxCOMPLEX)
+			{
+				cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+				hdr.data_offsets.pi = cml_off, data_ptrs.pi = shm_ptr;
+				
+				memCpyMex(data_ptrs.pi, mxGetImagData(in_var), cpy_sz);
+				
+				shift = padToAlign(cpy_sz);
+				cml_off += shift, shm_ptr += shift;
+				
+				if(!hdr.is_empty)
 				{
-					shm += shallowfetch(shm, &ret_child);
-					mxSetFieldByNumber(*ret_var, i, field_num, ret_child);
+					mxFree(mxGetImagData(ret_var));
+					mxSetImagData(ret_var, data_ptrs.pi);
+				}
+			}
+			
+			/* copy ir */
+			cpy_sz = hdr.nzmax*sizeof(mwIndex);
+			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+			hdr.data_offsets.ir = cml_off, data_ptrs.ir = (mwIndex*)shm_ptr;
+			
+			memCpyMex((void*)data_ptrs.ir, (void*)mxGetIr(in_var), cpy_sz);
+			
+			shift = padToAlign(cpy_sz);
+			cml_off += shift, shm_ptr += shift;
+			
+			if(!hdr.is_empty)
+			{
+				mxFree(mxGetIr(ret_var));
+				mxSetIr(ret_var, data_ptrs.ir);
+			}
+			
+			/* copy jc */
+			cpy_sz = (data_ptrs.dims[1] + 1)*sizeof(mwIndex);
+			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+			hdr.data_offsets.jc = cml_off, data_ptrs.jc = (mwIndex*)shm_ptr;
+			
+			memCpyMex((void*)data_ptrs.jc, (void*)mxGetJc(in_var), cpy_sz);
+			
+			shift = padToAlign(cpy_sz);
+			cml_off += shift, shm_ptr += shift;
+			
+			if(!hdr.is_empty)
+			{
+				mxFree(mxGetJc(ret_var));
+				mxSetJc(ret_var, data_ptrs.jc);
+			}
+			
+			mxSetNzmax(ret_var, hdr.nzmax);
+			
+		}
+		else
+		{
+			/* copy pr */
+			cpy_sz = (hdr.num_elems)*(hdr.elem_size);
+			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+			hdr.data_offsets.pr = cml_off, data_ptrs.pr = shm_ptr;
+			
+			memCpyMex(data_ptrs.pr, mxGetData(in_var), cpy_sz);
+			
+			shift = padToAlign(cpy_sz);
+			cml_off += shift, shm_ptr += shift;
+			
+			if(!hdr.is_empty || hdr.is_sparse)
+			{
+				mxFree(mxGetData(ret_var));
+				mxSetData(ret_var, data_ptrs.pr);
+			}
+			
+			/* copy complex data as well */
+			if(hdr.complexity == mxCOMPLEX)
+			{
+				cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+				hdr.data_offsets.pi = cml_off, data_ptrs.pi = shm_ptr;
+				
+				memCpyMex(data_ptrs.pi, mxGetImagData(in_var), cpy_sz);
+				
+				shift = padToAlign(cpy_sz);
+				cml_off += shift, shm_ptr += shift;
+				if(!hdr.is_empty || hdr.is_sparse)
+				{
+					mxFree(mxGetImagData(ret_var));
+					mxSetImagData(ret_var, data_ptrs.pi);
 				}
 			}
 		}
+		
+		mxSetDimensions(ret_var, data_ptrs.dims, hdr.num_dims);
+		
+		hdr.obj_sz = cml_off;
+		
+	}
+	
+	memcpy(shm_anchor, &hdr, sizeof(Header_t));
+	
+	return cml_off;
+	
+}
+
+
+size_t shmFetch(byte_t* shm_anchor, mxArray** ret_var)
+{
+	
+	/* for working with shared memory ... */
+	size_t idx, count;
+	mxArray* ret_child;
+	
+	/* for working with payload ... */
+	Header_t* hdr;
+	ShmData_t data_ptrs;
+	
+	/* for structures */
+	int field_num;                /* current field */
+	
+	/* retrieve the data */
+	hdr = (Header_t*)shm_anchor;
+	locateDataPointers(&data_ptrs, hdr, shm_anchor);
+	
+	const char_t* field_name;
+	
+	/* Structure case */
+	if(hdr->classid == mxSTRUCT_CLASS)
+	{
+		
+		field_name = data_ptrs.field_str;
+		*ret_var = mxCreateStructArray(hdr->num_dims, data_ptrs.dims, 0, NULL);
+		for(field_num = 0; field_num < hdr->num_fields; field_num++)
+		{
+			mxAddField(*ret_var, field_name);
+			getNextFieldName(&field_name);
+		}
+		
+		/* Go through each element */
+		for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)     /* each field */
+		{
+			for(idx = 0; idx < hdr->num_elems; idx++, count++)
+			{
+				shmFetch(shm_anchor + data_ptrs.child_hdrs[count], &ret_child);
+				mxSetFieldByNumber(*ret_var, idx, field_num, ret_child);
+			}
+		}
 	}
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
-		*ret_var = mxCreateCellArray(hdr->nDims, pSize);
-		for(i = 0; i < hdr->nzmax; i++)
+		
+		*ret_var = mxCreateCellArray(hdr->num_dims, data_ptrs.dims);
+		
+		for(count = 0; count < hdr->num_elems; count++)
 		{
-			shm += shallowfetch(shm, &ret_child);
-			mxSetCell(*ret_var, i, ret_child);
+			shmFetch(shm_anchor + data_ptrs.child_hdrs[count], &ret_child);
+			mxSetCell(*ret_var, count, ret_child);
 		}
+		
 	}
 	else     /*base case*/
 	{
-		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		shm_pr = (void*)shm;
-		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
 		
-		/* if complex get a pointer to the complex data */
-		if(hdr->complexity == mxCOMPLEX)
-		{
-			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			shm_pi = (void*)shm;
-			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
-		}
-		
-		if(hdr->isSparse)
+		if(hdr->is_sparse)
 		{
 			
-			shm_ir = (mwIndex*)shm;
-			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
-			
-			shm_jc = (mwIndex*)shm;
-			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
-			
-			if(hdr->isNumeric)
+			if(hdr->classid == mxDOUBLE_CLASS)
 			{
-				*ret_var = mxCreateSparse(pSize[0], pSize[1], 1, hdr->complexity);
+				*ret_var = mxCreateSparse(0, 0, 1, hdr->complexity);
+			}
+			else if(hdr->classid == mxLOGICAL_CLASS)
+			{
+				*ret_var = mxCreateSparseLogicalMatrix(0, 0, 1);
 			}
 			else
 			{
-				*ret_var = mxCreateSparseLogicalMatrix(pSize[0], pSize[1], 1);
+				releaseProcLock();
+				readErrorMex("UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'double' or 'logical'");
 			}
 			
-			mwIndex* ret_jc = mxGetJc(*ret_var);
-			memcpy(ret_jc, shm_jc, hdr->nzmax*sizeof(mwIndex));
-			ret_jc[pSize[1]] = 0;
+			if(!hdr->is_empty)
+			{
+				/* set the real and imaginary data */
+				mxFree(mxGetData(*ret_var));
+				mxSetData(*ret_var, data_ptrs.pr);
+				if(hdr->complexity)
+				{
+					mxFree(mxGetImagData(*ret_var));
+					mxSetImagData(*ret_var, data_ptrs.pi);
+				}
+				
+				/* set the pointers relating to sparse */
+				mxFree(mxGetIr(*ret_var));
+				mxSetIr(*ret_var, data_ptrs.ir);
+				
+				mxFree(mxGetJc(*ret_var));
+				mxSetJc(*ret_var, data_ptrs.jc);
+			}
 			
-			/* set the pointers relating to sparse (set the real and imaginary data later)*/
-			mxFree(mxGetIr(*ret_var));
-			mwIndex* ret_ir = (mwIndex*)mxMalloc(hdr->nzmax*sizeof(mwIndex));
-			memcpy(ret_ir, shm_ir, hdr->nzmax*sizeof(mwIndex));
-			mxSetIr(*ret_var, ret_ir);
-			
+			mxSetDimensions(*ret_var, data_ptrs.dims, hdr->num_dims);
 			mxSetNzmax(*ret_var, hdr->nzmax);
 			
 		}
 		else
 		{
 			
-			if(hdr->isEmpty)
+			if(hdr->is_empty)
 			{
-				if(hdr->isNumeric)
+				if(hdr->is_numeric)
 				{
-					*ret_var = mxCreateNumericArray(hdr->nDims, pSize, hdr->classid, hdr->complexity);
+					*ret_var = mxCreateNumericArray(hdr->num_dims, data_ptrs.dims, hdr->classid, hdr->complexity);
 				}
 				else if(hdr->classid == mxLOGICAL_CLASS)
 				{
-					*ret_var = mxCreateLogicalArray(hdr->nDims, pSize);
+					*ret_var = mxCreateLogicalArray(hdr->num_dims, data_ptrs.dims);
 				}
 				else
 				{
-					*ret_var = mxCreateCharArray(hdr->nDims, pSize);
+					*ret_var = mxCreateCharArray(hdr->num_dims, data_ptrs.dims);
 				}
 			}
 			else
 			{
-				if(hdr->isNumeric)
+				if(hdr->is_numeric)
 				{
 					*ret_var = mxCreateNumericArray(0, NULL, hdr->classid, hdr->complexity);
 				}
@@ -713,666 +1003,239 @@ size_t shallowfetch(byte_t* shm, mxArray** ret_var)
 				}
 				
 				/* set the real and imaginary data */
-				mxFree(mxGetData(*ret_var));
-				mxSetData(*ret_var, shm_pr);
+				mxSetData(*ret_var, data_ptrs.pr);
 				if(hdr->complexity)
 				{
-					mxFree(mxGetImagData(*ret_var));
-					mxSetImagData(*ret_var, shm_pi);
+					mxSetImagData(*ret_var, data_ptrs.pi);
 				}
 				
-				mxSetDimensions(*ret_var, pSize, hdr->nDims);
+				mxSetDimensions(*ret_var, data_ptrs.dims, hdr->num_dims);
 				
 			}
 			
 		}
 		
 	}
-	return hdr->shmsiz;
-}
-
-
-bool_t shallowcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
-{
-	/* for working with shared memory ... */
-	size_t i, shmshift;
-	
-	/* for working with payload ... */
-	header_t* hdr;
-	mwSize* pSize;             /* pointer to the array dimensions */
-	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
-	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
-	
-	
-	/* for structures */
-	int field_num;                /* current field */
-	
-	/* retrieve the data */
-	hdr = (header_t*)shm;
-	shm += pad_to_align(sizeof(header_t));
-	
-	if(mxGetClassID(comp_var) != hdr->classid)
-	{
-		return FALSE;
-	}
-	
-	/* the size pointer */
-	pSize = (mwSize*)shm;
-	if(hdr->nDims != mxGetNumberOfDimensions(comp_var) || memcmp(pSize, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->nDims) != 0)
-	{
-		return FALSE;
-	}
-	
-	/* skip over the stored sizes */
-	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
-	
-	/* Structure case */
-	if(hdr->classid == mxSTRUCT_CLASS)
-	{
-		
-		char** field_names = (char**)mxCalloc((size_t)hdr->nFields, sizeof(char*));
-		PointCharArrayAtString(field_names, shm, hdr->nFields);
-		
-		/* skip over the stored field string */
-		shm += pad_to_align(hdr->strBytes);
-		
-		/* Go through each element */
-		for(i = 0; i < hdr->nzmax; i++)
-		{
-			for(field_num = 0, shmshift = 0; field_num < hdr->nFields; field_num++, shmshift = 0)     /* each field */
-			{
-				if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_names[field_num]) != 0)
-				{
-					return FALSE;
-				}
-				
-				
-				if(!shallowcompare(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
-				{
-					return FALSE;
-				}
-				else
-				{
-					shm += shmshift;
-				}
-			}
-		}
-	}
-	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
-	{
-		for(i = 0, shmshift = 0; i < hdr->nzmax; i++, shmshift = 0)
-		{
-			if(!shallowcompare(shm, mxGetCell(comp_var, i), &shmshift))
-			{
-				return FALSE;
-			}
-			else
-			{
-				shm += shmshift;
-			}
-		}
-	}
-	else     /*base case*/
-	{
-		
-		/* this is the address of the first data */
-		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		shm_pr = (void*)shm;
-		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
-		
-		/* if complex get a pointer to the complex data */
-		if(hdr->complexity == mxCOMPLEX)
-		{
-			
-			if(mxIsComplex(comp_var) != TRUE)
-			{
-				return FALSE;
-			}
-			
-			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			shm_pi = (void*)shm;
-			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
-			
-		}
-		
-		if(hdr->isSparse)
-		{
-			if(!mxIsSparse(comp_var))
-			{
-				return FALSE;
-			}
-			
-			shm_ir = (mwIndex*)shm;
-			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
-			
-			shm_jc = (mwIndex*)shm;
-			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
-			
-			if(hdr->nzmax != mxGetNzmax(comp_var))
-			{
-				return FALSE;
-			}
-			
-		}
-		else
-		{
-			if(hdr->nzmax != mxGetNumberOfElements(comp_var))
-			{
-				return FALSE;
-			}
-		}
-		
-	}
-	
-	*offset = hdr->shmsiz;
-	return TRUE;
-}
-
-
-size_t shallowrewrite(byte_t* shm, const mxArray* input_var)
-{
-	
-	/* for working with shared memory ... */
-	size_t i;
-	
-	/* for working with payload ... */
-	header_t* hdr;
-	mwSize* pSize;             /* pointer to the array dimensions */
-	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
-	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
-	
-	
-	/* for structures */
-	int field_num;                /* current field */
-	
-	/* retrieve the data */
-	hdr = (header_t*)shm;
-	shm += pad_to_align(sizeof(header_t));
-	
-	/* the size pointer */
-	pSize = (mwSize*)shm;
-	
-	/* skip over the stored sizes */
-	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
-	
-	
-	/* Structure case */
-	if(hdr->classid == mxSTRUCT_CLASS)
-	{
-		
-		/* skip over the stored field string */
-		shm += pad_to_align(hdr->strBytes);
-		
-		/* Go through each element */
-		for(i = 0; i < hdr->nzmax; i++)
-		{
-			for(field_num = 0; field_num < hdr->nFields; field_num++)     /* each field */
-			{
-				/* And fill it */
-				shm += shallowrewrite(shm, mxGetFieldByNumber(input_var, i, field_num));
-			}
-		}
-	}
-	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
-	{
-		for(i = 0; i < hdr->nzmax; i++)
-		{
-			/* And fill it */
-			shm += shallowrewrite(shm, mxGetCell(input_var, i));
-		}
-	}
-	else     /*base case*/
-	{
-		/* this is the address of the first data */
-		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		shm_pr = (void*)shm;
-		memcpy(shm_pr, mxGetData(input_var), (hdr->nzmax)*(hdr->elemsiz));
-		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
-		
-		/* if complex get a pointer to the complex data */
-		if(hdr->complexity == mxCOMPLEX)
-		{
-			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			shm_pi = (void*)shm;
-			memcpy(shm_pi, mxGetImagData(input_var), (hdr->nzmax)*(hdr->elemsiz));
-			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
-		}
-		
-		/* if sparse get a list of the elements */
-		if(hdr->isSparse)
-		{
-			
-			shm_ir = (mwIndex*)shm;
-			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
-			
-			shm_jc = (mwIndex*)shm;
-			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
-			
-			memcpy(shm_ir, mxGetIr(input_var), (hdr->nzmax)*sizeof(mwIndex));
-			memcpy(shm_jc, mxGetJc(input_var), (pSize[1] + 1)*sizeof(mwIndex));
-			
-		}
-		
-		
-	}
-	return hdr->shmsiz;
+	return hdr->obj_sz;
 }
 
 
 /* ------------------------------------------------------------------------- */
-/* deepscan                                                                  */
+/* shmDetach                                                                */
 /*                                                                           */
-/* Recursively descend through Matlab matrix to assess how much space its    */
-/* serialization will require.                                               */
+/* Remove shared memory references to input matrix (in-situ), recursively    */
+/* if needed.                                                                */
 /*                                                                           */
 /* Arguments:                                                                */
-/*    header to populate.                                                    */
-/*    data container to populate.                                            */
-/*    mxArray to analyze.                                                    */
+/*    Input matrix to remove references.                                     */
 /* Returns:                                                                  */
-/*    size that shared memory segment will need to be.                       */
+/*    Pointer to start of shared memory segment.                             */
 /* ------------------------------------------------------------------------- */
-size_t deepscan(header_t* hdr, data_t* dat, const mxArray* mxInput, header_t* par_hdr, mxArray** ret_var)
+void shmDetach(mxArray* ret_var)
 {
-	/* counter */
-	size_t i, count;
-	mxArray* ret_child;
+	size_t num_dims = 0, idx, num_elems;
+	int field_num, num_fields;
+	mwSize null_dims[] = {0, 0};
+	void* new_pr = NULL, * new_pi = NULL;
+	void* new_ir = NULL, * new_jc = NULL;
+	mwSize nzmax = 0;
 	
-	/* for structures */
-	int field_num;
-	
-	/* initialize data info; _possibly_ update these later */
-	dat->pSize = (mwSize*)NULL;
-	dat->pr = (void*)NULL;
-	dat->pi = (void*)NULL;
-	dat->ir = (mwIndex*)NULL;
-	dat->jc = (mwIndex*)NULL;
-	dat->child_dat = (data_t*)NULL;
-	dat->child_hdr = (header_t*)NULL;
-	dat->field_str = (char*)NULL;
-	hdr->par_hdr_off = 0;               /*don't record it here */
-	
-	if(mxInput == NULL)
+	/* restore matlab  memory */
+	if(ret_var == (mxArray*)NULL || mxIsEmpty(ret_var))
 	{
-		releaseProcLock();
-		mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Input variable was unexpectedly NULL");
+		return;
 	}
-	
-	/* initialize header info */
-	hdr->isNumeric = mxIsNumeric(mxInput);
-	hdr->isSparse = mxIsSparse(mxInput);
-	hdr->isEmpty = mxIsEmpty(mxInput);
-	hdr->complexity = mxIsComplex(mxInput)? mxCOMPLEX : mxREAL;
-	hdr->classid = mxGetClassID(mxInput);
-	hdr->nDims = mxGetNumberOfDimensions(mxInput);
-	hdr->elemsiz = mxGetElementSize(mxInput);
-	hdr->nzmax = mxGetNumberOfElements(mxInput);      /* update this later on sparse*/
-	hdr->nFields = 0;                                 /* update this later */
-	hdr->shmsiz = pad_to_align(sizeof(header_t));     /* update this later */
-	hdr->strBytes = 0;                                   /* update this later */
-	
-	/* copy the size */
-	dat->pSize = (mwSize*)mxGetDimensions(mxInput);     /* some abuse of const for now, fix on deep copy*/
-	
-	/* Add space for the dimensions */
-	hdr->shmsiz += pad_to_align(hdr->nDims*sizeof(mwSize));
-	
-	
-	/* Structure case */
-	if(hdr->classid == mxSTRUCT_CLASS)
+	else if(mxIsStruct(ret_var))
+	{
+		/* detach each field for each element */
+		num_elems = mxGetNumberOfElements(ret_var);
+		num_fields = mxGetNumberOfFields(ret_var);
+		for(field_num = 0; field_num < num_fields; field_num++)     /* each field */
+		{
+			for(idx = 0; idx < num_elems; idx++)
+			{
+				shmDetach(mxGetFieldByNumber(ret_var, idx, field_num));
+			}/* detach this one */
+		}
+	}
+	else if(mxIsCell(ret_var))
+	{
+		/* detach each cell */
+		num_elems = mxGetNumberOfElements(ret_var);
+		for(idx = 0; idx < num_elems; idx++)
+		{
+			shmDetach(mxGetCell(ret_var, idx));
+		}/* detach this one */
+		
+	}
+	else if(mxIsNumeric(ret_var) || mxIsLogical(ret_var) || mxIsChar(ret_var))  /* a matrix containing data */
 	{
 		
-		if(hdr->isEmpty)
+		/* handle sparse objects */
+		if(mxIsSparse(ret_var))
 		{
-			if(hdr->nFields)
+			/* I don't seem to be able to give sparse arrays zero size so (nzmax must be 1) */
+			num_dims = 2;
+			nzmax = 1;
+			
+			if(mxIsEmpty(ret_var))
 			{
 				releaseProcLock();
-				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "An empty struct array unexpectedly had more than one field");
+				readErrorMex("InvalidSparseError", "Detached sparse was unexpectedly empty.");
 			}
-			*ret_var = mxCreateStructArray(hdr->nDims, dat->pSize, hdr->nFields, NULL);
-		}
-		else
-		{
 			
-			/* How many fields to work with? */
-			hdr->nFields = mxGetNumberOfFields(mxInput);
-			
-			/* Find the size required to store the field names */
-			hdr->strBytes = (size_t)FieldNamesSize(mxInput);     /* always a multiple of alignment size */
-			hdr->shmsiz += pad_to_align(hdr->strBytes);                   /* Add space for the field string */
-			
-			/* use mxCalloc so mem is freed on error via garbage collection */
-			dat->child_hdr = (header_t*)mxCalloc(hdr->nzmax*hdr->nFields*(sizeof(header_t) + sizeof(data_t)) + hdr->strBytes, 1); /* extra space for the field string */
-			dat->child_dat = (data_t*)&dat->child_hdr[hdr->nFields*hdr->nzmax];
-			dat->field_str = (char*)&dat->child_dat[hdr->nFields*hdr->nzmax];
-			
-			const char** field_names = (const char**)mxMalloc(hdr->nFields*sizeof(char*));
-			
-			/* make a record of the field names */
-			CopyFieldNames(mxInput, dat->field_str, field_names);
-			
-			*ret_var = mxCreateStructArray(hdr->nDims, dat->pSize, hdr->nFields, field_names);
-			
-			/* go through each recursively */
-			count = 0;
-			for(i = 0; i < hdr->nzmax; i++)                         /* each element */
+			/* allocate 1 element */
+			new_pr = mxCalloc(nzmax, mxGetElementSize(ret_var));
+			mxSetData(ret_var, new_pr);
+			if(mxIsComplex(ret_var))
 			{
-				for(field_num = 0; field_num < hdr->nFields; field_num++)     /* each field */
-				{
-					/* call recursivley */
-					hdr->shmsiz += deepscan(&(dat->child_hdr[count]), &(dat->child_dat[count]), mxGetFieldByNumber(mxInput, i, field_num), hdr, &ret_child);
-					mxSetFieldByNumber(*ret_var, i, field_num, ret_child);
-					
-					count++; /* progress */
-				}
+				new_pi = mxCalloc(nzmax, mxGetElementSize(ret_var));
+				mxSetImagData(ret_var, new_pi);
 			}
-		}
-	}
-	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
-	{
-		
-		
-		if(hdr->isEmpty)
-		{
-			*ret_var = mxCreateCellArray(hdr->nDims, dat->pSize);
-		}
-		else
-		{
+
+			new_ir = mxCalloc(nzmax, sizeof(mwIndex));
+			mxSetIr(ret_var, new_ir);
 			
-			/* use mxCalloc so mem is freed on error via garbage collection */
-			dat->child_hdr = (header_t*)mxCalloc(hdr->nzmax, sizeof(header_t) + sizeof(data_t));
-			dat->child_dat = (data_t*)&dat->child_hdr[hdr->nzmax];
+			new_jc = mxCalloc(null_dims[1] + 1, sizeof(mwIndex));
+			mxSetJc(ret_var, new_jc);
 			
-			*ret_var = mxCreateCellArray(hdr->nDims, dat->pSize);
-			
-			/* go through each recursively */
-			for(i = 0; i < hdr->nzmax; i++)
-			{
-				hdr->shmsiz += deepscan(&(dat->child_hdr[i]), &(dat->child_dat[i]), mxGetCell(mxInput, i), hdr, &ret_child);
-				mxSetCell(*ret_var, i, ret_child);
-			}
-			
-			/* if its a cell it has to have at least one mom-empty element */
-			if(hdr->shmsiz == (1 + hdr->nzmax)*pad_to_align(sizeof(header_t)))
-			{
-				releaseProcLock();
-				mexErrMsgIdAndTxt("MATLAB:MatShare:clone", "Required (variable) must contain at "
-						"least one non-empty item (at all levels).");
-			}
-		}
-	}
-	else if(hdr->isNumeric || hdr->classid == mxLOGICAL_CLASS || hdr->classid == mxCHAR_CLASS)  /* a matrix containing data *//* base case */
-	{
-		dat->pr = mxGetData(mxInput);
-		dat->pi = mxGetImagData(mxInput);
-		
-		if(hdr->isSparse)
-		{
-			/* len(pr)=nzmax, len(ir)=nzmax, len(jc)=colc+1 */
-			hdr->nzmax = (size_t)mxGetNzmax(mxInput);
-			dat->ir = mxGetIr(mxInput);
-			dat->jc = mxGetJc(mxInput);
-			hdr->shmsiz += pad_to_align(sizeof(mwIndex)*(hdr->nzmax));      /* ensure both pointers are aligned individually */
-			hdr->shmsiz += pad_to_align(sizeof(mwIndex)*(dat->pSize[1] + 1));
-			
-			if(hdr->isNumeric)
-			{
-				*ret_var = mxCreateSparse(mxGetM(mxInput), mxGetN(mxInput), 1, hdr->complexity);
-			}
-			else
-			{
-				*ret_var = mxCreateSparseLogicalMatrix(mxGetM(mxInput), mxGetN(mxInput), 1);
-			}
-			
-			mwIndex* ret_jc = mxGetJc(*ret_var);
-			memcpy(ret_jc, dat->jc, hdr->nzmax*sizeof(mwIndex));
-			ret_jc[mxGetN(mxInput)] = 0;
+			mxSetDimensions(ret_var, null_dims, num_dims);
+			mxSetNzmax(ret_var, nzmax);
 			
 		}
 		else
 		{
-			if(hdr->isNumeric)
+			mxSetData(ret_var, new_pr);
+			if(mxIsComplex(ret_var))
 			{
-				if(hdr->isEmpty)
-				{
-					*ret_var = mxCreateNumericArray(hdr->nDims, dat->pSize, hdr->classid, hdr->complexity);
-				}
-				else
-				{
-					*ret_var = mxCreateNumericArray(0, NULL, hdr->classid, hdr->complexity);
-				}
+				mxSetImagData(ret_var, new_pi);
 			}
-			else if(hdr->classid == mxLOGICAL_CLASS)
-			{
-				if(hdr->isEmpty)
-				{
-					*ret_var = mxCreateLogicalArray(hdr->nDims, dat->pSize);
-				}
-				else
-				{
-					*ret_var = mxCreateLogicalArray(0, NULL);
-				}
-			}
-			else
-			{
-				if(hdr->isEmpty)
-				{
-					*ret_var = mxCreateCharArray(hdr->nDims, dat->pSize);
-				}
-				else
-				{
-					*ret_var = mxCreateCharArray(0, NULL);
-				}
-			}
+			
+			mxSetDimensions(ret_var, null_dims, num_dims);
+			
 		}
 		
-		/* ensure both pointers are aligned individually */
-		hdr->shmsiz += pad_to_align(MXMALLOC_SIG_LEN);               //this is 32 bytes
-		hdr->shmsiz += pad_to_align(hdr->elemsiz*hdr->nzmax);
-		if(hdr->complexity == mxCOMPLEX)
+		/** HACK **/
+		/* reset all the crosslinks so nothing in MATLAB is pointing to shared data (which will be gone soon) */
+		mxArray* link;
+		for(link = ((mxArrayStruct*)ret_var)->CrossLink; link != NULL && link != ret_var; link = ((mxArrayStruct*)link)->CrossLink)
 		{
-			hdr->shmsiz += pad_to_align(MXMALLOC_SIG_LEN);               //this is 32 bytes
-			hdr->shmsiz += pad_to_align(hdr->elemsiz*hdr->nzmax);
+			mxSetDimensions(link, null_dims, num_dims);
+			mxSetData(link, new_pr);
+			if(mxIsComplex(link))
+			{
+				mxSetImagData(link, new_pi);
+			}
+			
+			if(mxIsSparse(link))
+			{
+				mxSetNzmax(ret_var, nzmax);
+				mxSetIr(link, new_ir);
+				mxSetJc(link, new_jc);
+			}
+			
 		}
+		
 	}
 	else
 	{
 		releaseProcLock();
-		mexPrintf("Unknown class found: %s\n", mxGetClassName(mxInput));
-		mexErrMsgIdAndTxt("MATLAB:MatShare:InvalidInput", "clone: unsupported type.");
-	}
-	
-	
-	return hdr->shmsiz;
-}
-
-
-/* ------------------------------------------------------------------------- */
-/* deepcopy                                                                  */
-/*                                                                           */
-/* Descend through header and data structure and copy relevent data to       */
-/* shared memory.                                                            */
-/*                                                                           */
-/* Arguments:                                                                */
-/*    header to serialize.                                                   */
-/*    data container of pointers to data to serialize.                       */
-/*    pointer to shared memory segment.                                      */
-/* Returns:                                                                  */
-/*    void                                                                   */
-/* ------------------------------------------------------------------------- */
-void deepcopy(header_t* hdr, data_t* dat, byte_t* shm, header_t* par_hdr, mxArray* ret_var)
-{
-	
-	header_t* cpy_hdr;          /* the header in its copied location */
-	size_t i, n, offset = 0;
-	mwSize* pSize;               /* points to the size data */
-	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
-	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
-	
-	/* load up the shared memory */
-	
-	/* copy the header */
-	n = sizeof(header_t);
-	memcpy(shm, hdr, n);
-	offset = pad_to_align(n);
-	
-	/* for structures */
-	int field_num;                /* current field */
-	
-	/* copy the dimensions */
-	cpy_hdr = (header_t*)shm;
-	pSize = (mwSize*)&shm[offset];
-	for(i = 0; i < cpy_hdr->nDims; i++)
-	{
-		pSize[i] = dat->pSize[i];
-	}
-	offset += pad_to_align(cpy_hdr->nDims*sizeof(mwSize));
-	
-	/* assign the parent header  */
-	cpy_hdr->par_hdr_off = (NULL == par_hdr)? 0 : (int)(par_hdr - cpy_hdr);
-	shm += offset;
-	
-	/* Structure case */
-	if(hdr->classid == mxSTRUCT_CLASS)
-	{
-		
-		/* place the field names next in shared memory */
-		
-		/* copy the field string */
-		for(i = 0; i < hdr->strBytes; i++)
-		{
-			shm[i] = dat->field_str[i];
-		}
-		shm += pad_to_align(hdr->strBytes);
-		
-		/* copy the children recursively */
-		for(i = 0; i < hdr->nzmax; i++)
-		{
-			for(field_num = 0; field_num < hdr->nFields; field_num++)     /* each field */
-			{
-				/* And fill it */
-				size_t idx = i*hdr->nzmax + field_num;
-				deepcopy(&(dat->child_hdr[idx]), &(dat->child_dat[idx]), shm, cpy_hdr, mxGetFieldByNumber(ret_var, i, field_num));
-				shm += (dat->child_hdr[idx]).shmsiz;
-			}
-		}
-	}
-	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
-	{
-		/* recurse for each cell element */
-		
-		/* recurse through each cell */
-		for(i = 0; i < hdr->nzmax; i++)
-		{
-			deepcopy(&(dat->child_hdr[i]), &(dat->child_dat[i]), shm, cpy_hdr, mxGetCell(ret_var, i));
-			shm += (dat->child_hdr[i]).shmsiz;
-		}
-	}
-	else /* base case */
-	{
-		/* copy real data */
-		memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
-		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		shm_pr = (void*)shm;
-		n = (hdr->nzmax)*(hdr->elemsiz);
-		memcpy(shm_pr, dat->pr, n);
-		shm += pad_to_align(n);
-		
-		mxFree(mxGetData(ret_var));
-		mxSetData(ret_var, shm_pr);
-		
-		/* copy complex data as well */
-		if(hdr->complexity == mxCOMPLEX)
-		{
-			memcpy(shm + (pad_to_align(MXMALLOC_SIG_LEN) - MXMALLOC_SIG_LEN), MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
-			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			shm_pi = (void*)shm;
-			n = (hdr->nzmax)*(hdr->elemsiz);
-			memcpy(shm_pi, dat->pi, n);
-			shm += pad_to_align(n);
-			
-			mxFree(mxGetImagData(ret_var));
-			mxSetImagData(ret_var, shm_pi);
-			
-		}
-		
-		/* and the indices of the sparse data as well */
-		if(hdr->isSparse)
-		{
-			shm_ir = (void*)shm;
-			n = hdr->nzmax*sizeof(mwIndex);
-			memcpy(shm_ir, dat->ir, n);
-			shm += pad_to_align(n);
-			
-			shm_jc = (void*)shm;
-			n = (pSize[1] + 1)*sizeof(mwIndex);
-			memcpy(shm_jc, dat->jc, n);
-			shm += pad_to_align(n);
-			
-			/* set the pointers relating to sparse (set the real and imaginary data later)*/
-			mxFree(mxGetIr(ret_var));
-			mwIndex* ret_ir = (mwIndex*)mxMalloc(hdr->nzmax*sizeof(mwIndex));
-			memcpy(ret_ir, shm_ir, hdr->nzmax*sizeof(mwIndex));
-			mxSetIr(ret_var, ret_ir);
-			
-			mxSetNzmax(ret_var, hdr->nzmax);
-			
-		}
-		else
-		{
-			
-			mxSetDimensions(ret_var, pSize, hdr->nDims);
-			
-		}
+		readErrorMex("InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
 	}
 }
 
 
-/* ------------------------------------------------------------------------- */
-/* deepfree                                                                  */
-/*                                                                           */
-/* Descend through header and data structure and free the memory.            */
-/*                                                                           */
-/* Arguments:                                                                */
-/*    data container                                                         */
-/* Returns:                                                                  */
-/*    void                                                                   */
-/* ------------------------------------------------------------------------- */
-void deepfree(data_t* dat)
+size_t shmRewrite(byte_t* shm_anchor, const mxArray* in_var)
 {
+	size_t idx, count;
 	
-	/* recurse to the bottom */
-	if(dat->child_dat)
-	{
-		deepfree(dat->child_dat);
-	}
-	
-	/* free on the way back up */
-	mxFree(dat->child_hdr);
-	dat->child_hdr = (header_t*)NULL;
-	dat->child_dat = (data_t*)NULL;
-	dat->field_str = (char*)NULL;
-}
-
-
-mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
-{
-	/* for working with shared memory ... */
-	size_t i, shmshift;
-	
-	/* for working with payload ... */
-	header_t* hdr;
-	mwSize* pSize;             /* pointer to the array dimensions */
-	void* shm_pr = NULL, * shm_pi = NULL;  /* real and imaginary data pointers */
-	mwIndex* shm_ir = NULL, * shm_jc = NULL;  /* sparse matrix data indices */
-	
+	/* for working with payload */
+	Header_t* hdr;
+	ShmData_t data_ptrs;
 	
 	/* for structures */
 	int field_num;                /* current field */
 	
 	/* retrieve the data */
-	hdr = (header_t*)shm;
-	shm += pad_to_align(sizeof(header_t));
+	hdr = (Header_t*)shm_anchor;
+	locateDataPointers(&data_ptrs, hdr, shm_anchor);
+	
+	/* Structure case */
+	if(hdr->classid == mxSTRUCT_CLASS)
+	{
+		/* Go through each element */
+		for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)     /* each field */
+		{
+			for(idx = 0; idx < hdr->num_elems; idx++, count++)
+			{
+				/* And fill it */
+				shmRewrite(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(in_var, idx, field_num));
+			}
+		}
+	}
+	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
+	{
+		for(count = 0; count < hdr->num_elems; count++)
+		{
+			/* And fill it */
+			shmRewrite(shm_anchor + data_ptrs.child_hdrs[count], mxGetCell(in_var, count));
+		}
+	}
+	else     /*base case*/
+	{
+		
+		/* if sparse get a list of the elements */
+		if(hdr->is_sparse)
+		{
+			/* rewrite real data */
+			memcpy(data_ptrs.pr, mxGetData(in_var), (hdr->nzmax)*(hdr->elem_size));
+			
+			/* if complex get a pointer to the complex data */
+			if(hdr->complexity == mxCOMPLEX)
+			{
+				memcpy(data_ptrs.pi, mxGetImagData(in_var), (hdr->nzmax)*(hdr->elem_size));
+			}
+			
+			memcpy(data_ptrs.ir, mxGetIr(in_var), (hdr->nzmax)*sizeof(mwIndex));
+			memcpy(data_ptrs.jc, mxGetJc(in_var), ((data_ptrs.dims)[1] + 1)*sizeof(mwIndex));
+		}
+		else
+		{
+			/* rewrite real data */
+			memcpy(data_ptrs.pr, mxGetData(in_var), (hdr->num_elems)*(hdr->elem_size));
+			
+			/* if complex get a pointer to the complex data */
+			if(hdr->complexity == mxCOMPLEX)
+			{
+				memcpy(data_ptrs.pi, mxGetImagData(in_var), (hdr->num_elems)*(hdr->elem_size));
+			}
+		}
+		
+	}
+	
+	return hdr->obj_sz;
+	
+}
+
+
+bool_t shmCompareSize(byte_t* shm_anchor, const mxArray* comp_var)
+{
+	
+	/* for working with shared memory ... */
+	size_t idx, count;
+	
+	/* for working with payload ... */
+	Header_t* hdr;
+	ShmData_t data_ptrs;
+	
+	/* for structures */
+	int field_num;                /* current field */
+	
+	/* retrieve the data */
+	hdr = (Header_t*)shm_anchor;
+	locateDataPointers(&data_ptrs, hdr, shm_anchor);
+	
+	const char_t* field_name;
 	
 	if(mxGetClassID(comp_var) != hdr->classid)
 	{
@@ -1380,71 +1243,175 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 	}
 	
 	/* the size pointer */
-	pSize = (mwSize*)shm;
-	if(hdr->nDims != mxGetNumberOfDimensions(comp_var) || memcmp(pSize, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->nDims) != 0 || hdr->nzmax != mxGetNumberOfElements(comp_var))
+	/* eventually eliminate this check for sparses */
+	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var) || memcmp(data_ptrs.dims, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0)
 	{
 		return FALSE;
 	}
 	
-	/* skip over the stored sizes */
-	shm += pad_to_align(sizeof(mwSize)*hdr->nDims);
+	/* Structure case */
+	if(hdr->classid == mxSTRUCT_CLASS)
+	{
+		
+		if(hdr->num_fields != mxGetNumberOfFields(comp_var))
+		{
+			return FALSE;
+		}
+		
+		/* Go through each element */
+		field_name = data_ptrs.field_str;
+		for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)     /* each field */
+		{
+			
+			if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_name) != 0)
+			{
+				return FALSE;
+			}
+			
+			for(idx = 0; idx < hdr->num_elems; idx++, count++)
+			{
+				if(!shmCompareSize(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(comp_var, idx, field_num)))
+				{
+					return FALSE;
+				}
+			}
+			
+			getNextFieldName(&field_name);
+			
+		}
+		
+	}
+	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
+	{
+		
+		for(count = 0; count < hdr->num_elems; count++)
+		{
+			if(!shmCompareSize(shm_anchor + data_ptrs.child_hdrs[count], mxGetCell(comp_var, count)))
+			{
+				return FALSE;
+			}
+		}
+	}
+	else     /*base case*/
+	{
+		
+		/* this is the address of the first data */
+		
+		/* if complex get a pointer to the complex data */
+		if(hdr->complexity != mxIsComplex(comp_var))
+		{
+			return FALSE;
+		}
+		
+		if(hdr->is_sparse != mxIsSparse(comp_var))
+		{
+			return FALSE;
+		}
+		
+		if(hdr->is_sparse)
+		{
+			if(hdr->nzmax != mxGetNzmax(comp_var) || (data_ptrs.dims)[1] != mxGetN(comp_var))
+			{
+				return FALSE;
+			}
+		}
+		else
+		{
+			if(hdr->num_elems != mxGetNumberOfElements(comp_var))
+			{
+				return FALSE;
+			}
+		}
+		
+	}
+	
+	return TRUE;
+	
+}
+
+
+mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var)
+{
+	
+	/* for working with shared memory ... */
+	size_t idx, count;
+	
+	/* for working with payload ... */
+	Header_t* hdr;
+	ShmData_t data_ptrs;
+	
+	/* for structures */
+	int field_num;                /* current field */
+	
+	/* retrieve the data */
+	hdr = (Header_t*)shm_anchor;
+	locateDataPointers(&data_ptrs, hdr, shm_anchor);
+	
+	const char_t* field_name;
+	
+	if(mxGetClassID(comp_var) != hdr->classid)
+	{
+		return FALSE;
+	}
+	
+	/* the size pointer */
+	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var) || memcmp((data_ptrs.dims), mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0
+	   || hdr->num_elems != mxGetNumberOfElements(comp_var))
+	{
+		return FALSE;
+	}
 	
 	
 	/* Structure case */
 	if(hdr->classid == mxSTRUCT_CLASS)
 	{
 		
-		char** field_names = (char**)mxCalloc((size_t)hdr->nFields, sizeof(char*));
-		PointCharArrayAtString(field_names, shm, hdr->nFields);
-		
-		/* skip over the stored field string */
-		shm += pad_to_align(hdr->strBytes);
+		if(hdr->num_fields != mxGetNumberOfFields(comp_var))
+		{
+			return FALSE;
+		}
 		
 		/* Go through each element */
-		for(i = 0; i < hdr->nzmax; i++)
+		field_name = data_ptrs.field_str;
+		for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 		{
-			for(field_num = 0, shmshift = 0; field_num < hdr->nFields; field_num++, shmshift = 0)     /* each field */
-			{
-				if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_names[field_num]) != 0)
-				{
-					return FALSE;
-				}
-				
-				
-				if(!deepcompare(shm, mxGetFieldByNumber(comp_var, i, field_num), &shmshift))
-				{
-					return FALSE;
-				}
-				else
-				{
-					shm += shmshift;
-				}
-			}
-		}
-	}
-	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
-	{
-		for(i = 0, shmshift = 0; i < hdr->nzmax; i++, shmshift = 0)
-		{
-			if(!deepcompare(shm, mxGetCell(comp_var, i), &shmshift))
+			
+			if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_name) != 0)
 			{
 				return FALSE;
 			}
-			else
+			
+			for(idx = 0; idx < hdr->num_elems; idx++, count++)
 			{
-				shm += shmshift;
+				
+				if(!shmCompareContent(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(comp_var, idx, field_num)))
+				{
+					return FALSE;
+				}
+			}
+			
+			getNextFieldName(&field_name);
+			
+		}
+		
+	}
+	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
+	{
+		
+		for(count = 0; count < hdr->num_elems; count++)
+		{
+			if(!shmCompareContent(shm_anchor + data_ptrs.child_hdrs[count], mxGetCell(comp_var, count)))
+			{
+				return FALSE;
 			}
 		}
 	}
 	else     /*base case*/
 	{
 		/* this is the address of the first data */
-		shm += pad_to_align(MXMALLOC_SIG_LEN);
-		shm_pr = (void*)shm;
-		shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));          /* takes us to the end of the real data */
 		
 		//these should point to the same location
-		if(shm_pr != mxGetData(comp_var))
+		if(data_ptrs.pr != mxGetData(comp_var))
 		{
 			return FALSE;
 		}
@@ -1457,32 +1424,24 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 				return FALSE;
 			}
 			
-			shm += pad_to_align(MXMALLOC_SIG_LEN);
-			shm_pi = (void*)shm;
-			shm += pad_to_align((hdr->nzmax)*(hdr->elemsiz));     /* takes us to the end of the complex data */
 			
 			//these should point to the same location
-			if(shm_pi != mxGetImagData(comp_var))
+			if(data_ptrs.pi != mxGetImagData(comp_var))
 			{
 				return FALSE;
 			}
 			
 		}
 		
-		if(hdr->isSparse)
+		if(hdr->is_sparse)
 		{
+			
 			if(!mxIsSparse(comp_var))
 			{
 				return FALSE;
 			}
 			
-			shm_ir = (mwIndex*)shm;
-			shm += pad_to_align((hdr->nzmax)*sizeof(mwIndex));
-			
-			shm_jc = (mwIndex*)shm;
-			shm += pad_to_align((pSize[1] + 1)*sizeof(mwIndex));
-			
-			if(memcmp(shm_ir, mxGetIr(comp_var), (hdr->nzmax)*sizeof(mwIndex)) != 0 || memcmp(shm_jc, mxGetJc(comp_var), (pSize[1] + 1)*sizeof(mwIndex)) != 0)
+			if(data_ptrs.ir != mxGetIr(comp_var) || data_ptrs.jc != mxGetJc(comp_var))
 			{
 				return FALSE;
 			}
@@ -1490,548 +1449,11 @@ mxLogical deepcompare(byte_t* shm, const mxArray* comp_var, size_t* offset)
 		}
 		
 	}
-	*offset = hdr->shmsiz;
+	
 	return TRUE;
-}
-
-
-/* Function to find the number of bytes required to store all of the */
-/* field names of a structure									     */
-size_t FieldNamesSize(const mxArray* mxStruct)
-{
-	const char* pFieldName;
-	int nFields;
-	int i, j;               /* counters */
-	size_t Bytes = 0;
-	
-	/* How many fields? */
-	nFields = mxGetNumberOfFields(mxStruct);
-	
-	/* Go through them */
-	for(i = 0; i < nFields; i++)
-	{
-		/* This field */
-		pFieldName = mxGetFieldNameByNumber(mxStruct, i);
-		j = 0;
-		while(pFieldName[j])
-		{
-			j++;
-		}
-		j++;          /* for the null termination */
-		
-		if(i == (nFields - 1))
-		{
-			j++;
-		}     /* add this at the end for an end of string sequence since we use 0 elsewhere (term_char). */
-		
-		
-		/* Pad it out to 8 bytes */
-		j = (int)pad_to_align((size_t)j);
-		
-		/* keep the running tally */
-		Bytes += j;
-		
-	}
-	
-	/* Add an extra alignment size to store the length of the string (in Bytes) */
-	Bytes += align_size;
-	
-	return Bytes;
 	
 }
 
 
-/* Function to copy all of the field names to a character array    */
-/* Use FieldNamesSize() to allocate the required size of the array */
-/* returns the number of bytes used in pList					   */
-size_t CopyFieldNames(const mxArray* mxStruct, char* pList, const char** field_names)
-{
-	const char* pFieldName;    /* name of the field to add to the list */
-	int nFields;                    /* the number of fields */
-	int i, j;                         /* counters */
-	size_t Bytes = 0;                    /* number of bytes copied */
-	
-	/* How many fields? */
-	nFields = mxGetNumberOfFields(mxStruct);
-	
-	/* Go through them */
-	for(i = 0; i < nFields; i++)
-	{
-		/* This field */
-		pFieldName = mxGetFieldNameByNumber(mxStruct, i);
-		field_names[i] = pFieldName;
-		j = 0;
-		while(pFieldName[j])
-		{
-			pList[Bytes++] = pFieldName[j++];
-		}
-		pList[Bytes++] = 0; /* add the null termination */
-		
-		/* if this is last entry indicate the end of the string */
-		if(i == (nFields - 1))
-		{
-			pList[Bytes++] = term_char;
-			pList[Bytes++] = 0;  /* another null termination just to be safe */
-		}
-		
-		/* Pad it out to 8 bytes */
-		while(Bytes%align_size)
-		{
-			pList[Bytes++] = 0;
-		}
-	}
-	
-	/* Add an extra alignment size to store the length of the string (in Bytes) */
-	*(unsigned int*)&pList[Bytes] = (unsigned int)(Bytes + align_size);
-	Bytes += align_size;
-	
-	return Bytes;
-	
-}
-
-/*Function to take point a each element of the char** array at a list of names contained in string */
-/*ppCharArray must be allocated to length num_names */
-/*names are seperated by null termination characters */
-/*each name must start on an aligned address (see CopyFieldNames()) */
-/*e.g. pCharArray[0] = &name_1, pCharArray[1] = &name_2 ...         */
-/*returns 0 if successful */
-int PointCharArrayAtString(char** pCharArray, char* pString, int nFields)
-{
-	int i = 0;                             /* the index in pString we are up to */
-	int field_num = 0;                   /* the field we are up to */
-	
-	/* and recover them */
-	while(field_num < nFields)
-	{
-		/* scan past null termination chars */
-		while(!pString[i])
-		{
-			i++;
-		}
-		
-		/* Check the address is aligned (assume every forth bytes is aligned) */
-		if(i%align_size)
-		{
-			return -1;
-		}
-		
-		/* grab the address */
-		pCharArray[field_num] = &pString[i];
-		field_num++;
-		
-		/* continue until a null termination char */
-		while(pString[i])
-		{
-			i++;
-		}
-		
-	}
-	return 0;
-}
-
-/* This function finds the number of fields contained within in a string */
-/* the string is terminated by term_char, a character that can't be in a field name */
-/* returns the number of field names found */
-/* returns -1 if unaligned field names are found */
-int NumFieldsFromString(const char* pString, size_t* pFields, size_t* pBytes)
-{
-	unsigned int stored_length;          /* the recorded length of the string */
-	bool_t term_found = FALSE;          /* has the termination character been found? */
-	size_t i = 0;                              /* counter */
-	
-	pFields[0] = 0;                         /* the number of fields in the string */
-	pBytes[0] = 0;
-	
-	
-	/* and recover them */
-	while(!term_found)
-	{
-		/* scan past null termination chars */
-		while(!pString[i])
-		{
-			i++;
-		}
-		
-		/* is this the special termination character? */
-		term_found = (bool_t)(pString[i] == term_char);
-		
-		if(!term_found)
-		{
-			/* Check the address is aligned (assume every forth bytes is aligned) */
-			if(i%align_size)
-			{
-				return -1;
-			}
-			
-			/* a new field */
-			pFields[0]++;
-			
-			/* continue until a null termination char */
-			while(pString[i] && (pString[i] != term_char))
-			{
-				i++;
-			}
-			
-			/* check there wasn't the terminal character immediately after the field */
-			if(pString[i] == term_char)
-			{
-				return -2;
-			}
-			
-		}
-	}
-	pBytes[0] = i;
-	
-	/* return the aligned size */
-	pBytes[0] = pad_to_align(pBytes[0]);
-	
-	/* Check what's recovered matches the stored length */
-	stored_length = *(unsigned int*)&pString[pBytes[0]];       /* the recorded length of the string */
-	pBytes[0] += align_size;                                          /* add the extra space for the record */
-	
-	/* Check on it */
-	if(stored_length != pBytes[0])
-	{
-		return -3;
-	}
-	
-	return 0;
-	
-}
-
-/* Function to find the bytes in the string starting from the end of the string (i.e. the last element is pString[-1])*/
-/* returns < 0 on error */
-int BytesFromStringEnd(const char* pString, size_t* pBytes)
-{
-	
-	int offset = (int)align_size;            /* start from the end of the string */
-	pBytes[0] = 0;                           /* default */
-	
-	/* Grab it directly from the string */
-	pBytes[0] = (*(size_t*)&pString[-offset]);
-	
-	/* scan for the termination character */
-	while((offset < 2*align_size) && (pString[-offset] != term_char))
-	{
-		offset++;
-	}
-	
-	if(offset == align_size)
-	{
-		return -1;
-	}/* failure to find the control character */
-	else
-	{
-		return 0;
-	}/* happy */
-	
-}
 
 
-void init()
-{
-	
-	mexLock();
-	
-	DWORD err;
-	HANDLE temp_handle;
-	
-	bool_t is_global_init;
-	
-	glob_info = (mex_info*)mxMalloc(sizeof(mex_info));
-	mexMakeMemoryPersistent(glob_info);
-	
-	glob_info->lock_sec.nLength = sizeof(SECURITY_ATTRIBUTES);
-	glob_info->lock_sec.lpSecurityDescriptor = NULL;
-	glob_info->lock_sec.bInheritHandle = TRUE;
-	
-	temp_handle = CreateMutex(&glob_info->lock_sec, FALSE, MSH_LOCK_NAME);
-	err = GetLastError();
-	if(temp_handle == NULL)
-	{
-		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not create the memory segment");
-	}
-	else if(err == ERROR_ALREADY_EXISTS)
-	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->proc_lock, 0, TRUE, DUPLICATE_SAME_ACCESS);
-	}
-	else
-	{
-		glob_info->proc_lock = temp_handle;
-	}
-	
-	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(segment_info), MSH_NAME_SEGMENT_NAME);
-	err = GetLastError();
-	if(temp_handle == NULL)
-	{
-		releaseProcLock();
-		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not create the memory segment");
-	}
-	
-	if(err == ERROR_ALREADY_EXISTS)
-	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_name_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
-		is_global_init = FALSE;
-	}
-	else
-	{
-		/* will initialize */
-		glob_info->shm_name_handle = temp_handle;
-		is_global_init = TRUE;
-	}
-	
-	header_t hdr;
-	glob_info->shm_seg_info = (shm_segment_info*)MapViewOfFile(glob_info->shm_name_handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(shm_segment_info));
-	if(glob_info->shm_seg_info == NULL)
-	{
-		releaseProcLock();
-		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not map the name memory segment");
-		exit(1);
-	}
-	
-	if(is_global_init)
-	{
-		/* this is the first region created */
-		/* this info shouldn't ever actually be used */
-		/* but make sure the memory segment is consistent */
-		hdr.isNumeric = 1;
-		hdr.isSparse = 0;
-		hdr.isEmpty = 1;
-		hdr.complexity = mxREAL;
-		hdr.classid = mxDOUBLE_CLASS;
-		hdr.nDims = 2;
-		hdr.elemsiz = sizeof(mxDouble);
-		hdr.nzmax = 0;      /* update this later on sparse*/
-		hdr.nFields = 0;                                 /* update this later */
-		hdr.shmsiz = pad_to_align(sizeof(header_t));     /* update this later */
-		hdr.strBytes = 0;
-		hdr.par_hdr_off = 0;
-		
-		glob_info->shm_seg_info->num_procs = 1;
-		glob_info->shm_seg_info->seg_num = 0;
-		glob_info->shm_seg_info->rev_num = 0;
-		glob_info->shm_seg_info->lead_num = 0;
-		glob_info->shm_seg_info->seg_sz = hdr.shmsiz;
-	}
-	else
-	{
-		glob_info->shm_seg_info->num_procs += 1;
-	}
-	
-	/* make sure to init local proc_lock flag as FALSE */
-	glob_info->is_proc_locked = FALSE;
-	glob_info->is_mem_safe = TRUE;
-	acquireProcLock();
-	
-	/* in any case we want to make sure that the current segment is either
-	 * the null case, or differs from the current shared segment number */
-	glob_info->cur_seg_info.rev_num = 0;
-	glob_info->cur_seg_info.seg_num = 0;
-	glob_info->cur_seg_info.seg_sz = 0;
-	
-	sprintf(glob_info->cur_seg_info.seg_name, MSH_SEGMENT_NAME, glob_info->shm_seg_info->seg_num);
-	
-	DWORD lo_sz = (DWORD)(glob_info->shm_seg_info->seg_sz & 0xFFFFFFFFL);
-	DWORD hi_sz = (DWORD)((glob_info->shm_seg_info->seg_sz >> 32) & 0xFFFFFFFFL);
-	temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, glob_info->cur_seg_info.seg_name);
-	err = GetLastError();
-	if(temp_handle == NULL)
-	{
-		releaseProcLock();
-		mexPrintf("Error number: %d\n", err);
-		mexErrMsgIdAndTxt("MATLAB:MatShare:init", "MatShare::Could not create the memory segment");
-	}
-	else if(err == ERROR_ALREADY_EXISTS)
-	{
-		DuplicateHandle(GetCurrentProcess(), temp_handle, GetCurrentProcess(), &glob_info->shm_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
-	}
-	else
-	{
-		glob_info->shm_handle = temp_handle;
-	}
-	glob_info->cur_seg_ptr = (byte_t*)MapViewOfFile(glob_info->shm_handle, FILE_MAP_ALL_ACCESS, 0, 0, glob_info->shm_seg_info->seg_sz);
-	glob_info->shm_is_used = TRUE;
-	glob_info->is_freed = FALSE;
-	
-	if(is_global_init)
-	{
-		memcpy(glob_info->cur_seg_ptr, &hdr, hdr.shmsiz);
-	}
-	
-	mexAtExit(onExit);
-	
-	releaseProcLock();
-	
-}
-
-
-void onExit(void)
-{
-	
-	if(!mxIsEmpty(glob_shm_var))
-	{
-		/* NULL all of the Matlab pointers */
-		deepdetach(glob_shm_var);
-	}
-	mxDestroyArray(glob_shm_var);
-	
-	if(!glob_info->is_freed)
-	{
-		glob_info->shm_seg_info->num_procs -= 1;
-	}
-	
-	if(glob_info->shm_is_used)
-	{
-		UnmapViewOfFile(glob_info->cur_seg_ptr);
-		CloseHandle(glob_info->shm_handle);
-		glob_info->shm_is_used = FALSE;
-	}
-	
-	UnmapViewOfFile(glob_info->shm_seg_info);
-	CloseHandle(glob_info->shm_name_handle);
-	
-	if(glob_info->is_proc_locked)
-	{
-		releaseProcLock();
-	}
-	CloseHandle(glob_info->proc_lock);
-	
-	mxFree(glob_info);
-	
-}
-
-
-size_t pad_to_align(size_t size)
-{
-	/* bitwise expression is equiv to (size % align_size) since align_size is a power of 2 */
-	return size + align_size - (size | ~align_size);
-}
-
-
-void acquireProcLock(void)
-{
-	/* only request a lock if there is more than one process */
-	if(glob_info->shm_seg_info->num_procs > 1 && glob_info->is_mem_safe)
-	{
-		DWORD ret = WaitForSingleObject(glob_info->proc_lock, INFINITE);
-		if(ret == WAIT_ABANDONED)
-		{
-			mexErrMsgIdAndTxt("MATLAB:MatShare:acquireProcLock", "The wait for process lock was abandoned.");
-		}
-		else if(ret == WAIT_FAILED)
-		{
-			mexPrintf("Error number: %d\n", GetLastError());
-			mexErrMsgIdAndTxt("MATLAB:MatShare:acquireProcLock", "The wait for process lock failed.");
-		}
-		glob_info->is_proc_locked = TRUE;
-	}
-}
-
-
-void releaseProcLock(void)
-{
-	if(glob_info->is_proc_locked)
-	{
-		if(ReleaseMutex(glob_info->proc_lock) == 0)
-		{
-			mexPrintf("Error number: %d\n", GetLastError());
-			mexErrMsgIdAndTxt("MATLAB:MatShare:releaseProcLock", "The process lock release failed.");
-		}
-		glob_info->is_proc_locked = FALSE;
-	}
-}
-
-
-void makeDummyVar(mxArray** out)
-{
-	glob_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
-	mexMakeArrayPersistent(glob_shm_var);
-	*out = mxCreateSharedDataCopy(glob_shm_var);
-}
-
-msh_directive_t parseDirective(const mxArray* in)
-{
-	
-	if(mxIsNumeric(in))
-	{
-		return (msh_directive_t)*((uint8_t*)(mxGetData(in)));
-	}
-	else if(mxIsChar(in))
-	{
-		char dir_str[9];
-		mxGetString(in, dir_str, 9);
-		for(int i = 0; dir_str[i]; i++)
-		{
-			dir_str[i] = (char)tolower(dir_str[i]);
-		}
-		
-		if(strcmp(dir_str, "init") == 0)
-		{
-			return msh_INIT;
-		}
-		else if(strcmp(dir_str, "clone") == 0)
-		{
-			return msh_CLONE;
-		}
-		else if(strcmp(dir_str, "attach") == 0)
-		{
-			return msh_ATTACH;
-		}
-		else if(strcmp(dir_str, "detach") == 0)
-		{
-			return msh_DETACH;
-		}
-		else if(strcmp(dir_str, "free") == 0)
-		{
-			return msh_FREE;
-		}
-		else if(strcmp(dir_str, "fetch") == 0)
-		{
-			return msh_FETCH;
-		}
-		else if(strcmp(dir_str, "compare") == 0)
-		{
-			return msh_COMPARE;
-		}
-		else if(strcmp(dir_str, "copy") == 0)
-		{
-			return msh_COPY;
-		}
-		else if(strcmp(dir_str, "deepcopy") == 0)
-		{
-			return msh_DEEPCOPY;
-		}
-		else if(strcmp(dir_str, "debug") == 0)
-		{
-			return msh_DEBUG;
-		}
-		else if(strcmp(dir_str, "share") == 0)
-		{
-			return msh_CLONE;
-		}
-		else
-		{
-			mexErrMsgIdAndTxt("MATLAB:MatShare:parseDirective", "Directive not recognized.");
-		}
-		
-	}
-	else
-	{
-		mexErrMsgIdAndTxt("MATLAB:MatShare:parseDirective", "Directive must either be 'uint8' or 'char'.");
-	}
-}
-
-
-/*
- * Possibly useful information/related work:
- *
- * http://www.mathworks.com/matlabcentral/fileexchange/24576
- * http://www.mathworks.in/matlabcentral/newsreader/view_thread/254813
- * http://www.mathworks.com/matlabcentral/newsreader/view_thread/247881#639280
- *
- * http://groups.google.com/group/comp.soft-sys.matlab/browse_thread/thread/c241d8821fb90275/47189d498d1f45b8?lnk=st&q=&rnum=1&hl=en#47189d498d1f45b8
- * http://www.mk.tu-berlin.de/Members/Benjamin/mex_sharedArrays
- */

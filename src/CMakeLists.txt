@@ -1,14 +1,22 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.7)
 PROJECT(matshare)
 
-SET(MEX_FILE_NAME matshare_)
+SET(MEX_FILE_NAME "matshare_${DEBUG_SWITCH}")
 
 INCLUDE_DIRECTORIES(${MATLAB_INCLUDE_DIR})
 
 SET(SOURCE_FILES
 		${MATLAB_INCLUDE_DIR}/mex.h
 		matshare_.c headers/matshare_.h
-		)
+	   matlabutils.c headers/matlabutils.h init.c headers/init.h headers/mshtypes.h mshutils.c headers/mshutils.h headers/externtypes.h)
+
+IF(UXWIN)
+	SET(SOURCE_FILES
+			${MATLAB_INCLUDE_DIR}/mex.h
+			matshare_.c headers/matshare_.h
+		   matlabutils.c headers/matlabutils.h init.c headers/init.h headers/mshtypes.h
+			extlib/mman-win32/sys/mman.h headers/externtypes.h mshutils.c headers/mshutils.h)
+ENDIF(UXWIN)
 
 ADD_LIBRARY(${MEX_FILE_NAME} SHARED ${SOURCE_FILES} ${CMAKE_SOURCE_DIR}/Matlabdef.def)
 
