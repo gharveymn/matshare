@@ -16,5 +16,5 @@
 % Thanks for downloading!
 %
 
-doINSTALL = true;
+OPTIONS;
 mexmake;

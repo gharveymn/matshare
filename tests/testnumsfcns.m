@@ -1,8 +1,9 @@
 clear x
 
-nums = 5000000;
+nums = 50000;
 lents = 0;
 disp(getmem);
+mshinit;
 tic
 for i = 1:nums
 	
@@ -15,4 +16,5 @@ for i = 1:nums
 % 	lents = numel(timestr);
 end
 toc
+mshdetach
 disp(getmem);

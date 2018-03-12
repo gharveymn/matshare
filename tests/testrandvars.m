@@ -3,7 +3,7 @@ numtests = 1;
 numsamples = 10000;
 lents = 0;
 
-maxDepth = 1;
+maxDepth = 2;
 minelem = 0;
 maxelem = 10;
 maxElementsv = round(linspace(minelem,maxelem,numtests));
@@ -11,7 +11,6 @@ ignoreUnusables = true;
 stride = numsamples;
 mvgavgtime = zeros(stride,1);
 mvgavgtimeload = zeros(stride,1);
-avgnumelems = zeros(stride,1);
 data = zeros(numtests,2);
 pidstr = num2str(feature('getpid'));
 
@@ -22,6 +21,7 @@ dosavestate = false;
 numelems = 0;
 avgmultiplier = 0;
 
+
 if(dosavestate)
    mkdirifnotexist(fullfile(fileparts(mfilename('fullpath')), '..', 'res','states'))
 end
@@ -31,9 +31,9 @@ for j = 1:numtests
 	for i = 1:numsamples
 		if(mod(i,2) == 1)
             if(dokeepall)
-                eval(['[ts' num2str(i) '1, avgnumelems(mod(i-1,stride)+1)] = randVarGen(maxDepth, maxElements, ignoreUnusables);']);
+                eval(['[ts' num2str(i) '1] = randVarGen(maxDepth, maxElements, ignoreUnusables);']);
             else
-                [ts1, avgnumelems(mod(i-1,stride)+1)] = randVarGen(maxDepth, maxElements, ignoreUnusables);
+                [ts1] = randVarGen(maxDepth, maxElements, ignoreUnusables);
             end
             if(dosavestate)
 				if(i ~= 1)
@@ -62,14 +62,11 @@ for j = 1:numtests
 				end
 			end
 			
-			timestr = sprintf('Test %d of %d | Sample %d of %d',j,numtests,i,numsamples);
-			fprintf([repmat('\b',1,lents) timestr]);
-			lents = numel(timestr);
 		else
 			if(dokeepall)
-                eval(['[ts' num2str(i) '2, avgnumelems(mod(i-1,stride)+1)] = randVarGen(maxDepth, maxElements, ignoreUnusables);']);
+                eval(['[ts' num2str(i) '2] = randVarGen(maxDepth, maxElements, ignoreUnusables);']);
             else
-                [ts2, avgnumelems(mod(i-1,stride)+1)] = randVarGen(maxDepth, maxElements, ignoreUnusables);
+                [ts2] = randVarGen(maxDepth, maxElements, ignoreUnusables);
             end
 			if(dosavestate)
 				delete(['res/states/stateonefe' pidstr '.mat']);
@@ -95,7 +92,9 @@ for j = 1:numtests
 					error('matshare failed 2');
 				end
 			end
-			
+		end
+		
+		if(mod(i,10)==0)
 			timestr = sprintf('Test %d of %d | Sample %d of %d',j,numtests,i,numsamples);
 			fprintf([repmat('\b',1,lents) timestr]);
 			lents = numel(timestr);
@@ -103,5 +102,6 @@ for j = 1:numtests
 		
 	end
 end
+
 
 fprintf('\n');

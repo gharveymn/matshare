@@ -1,9 +1,9 @@
-function [ret, numelems] = randVarGen(maxDepth, maxElements, ignoreUnusables)
-	[ret, numelems] = randVarGen_(maxDepth, 1, maxElements, ignoreUnusables);
+function [ret] = randVarGen(maxDepth, maxElements, ignoreUnusables)
+	[ret] = randVarGen_(maxDepth, 1, maxElements, ignoreUnusables);
 end
 
 
-function [ret, numvarsz] = randVarGen_(maxDepth, currDepth, maxElements, ignoreUnusables)
+function [ret] = randVarGen_(maxDepth, currDepth, maxElements, ignoreUnusables)
 
 	%  Variable Type Key
 	% 	1	mxLOGICAL_CLASS,
@@ -27,8 +27,8 @@ function [ret, numvarsz] = randVarGen_(maxDepth, currDepth, maxElements, ignoreU
 
 	if(maxDepth <= currDepth)
 		%dont make another layer
-		%vartypegen = randi(16) + 2;
-		vartypegen = 17;
+		vartypegen = randi(16) + 2;
+		%vartypegen = 17;
 	else
 		vartypegen = randi(2);
 		%vartypegen = 2;
@@ -72,7 +72,7 @@ function [ret, numvarsz] = randVarGen_(maxDepth, currDepth, maxElements, ignoreU
 			ret = cell(dims{:});
 			for k = 1:numel(ret)
 
-				[ret{k},~] = randVarGen_(maxDepth, ...
+				ret{k} = randVarGen_(maxDepth, ...
 					currDepth + 1, ...
 					maxElements, ...
 					ignoreUnusables);
@@ -88,7 +88,7 @@ function [ret, numvarsz] = randVarGen_(maxDepth, currDepth, maxElements, ignoreU
 				for k = 1:numel(ret)
 
 					for j = 1:numel(retFields)
-						[ret(k).(retFields{j}),~] = randVarGen_(maxDepth, currDepth + 1, ...
+						ret(k).(retFields{j}) = randVarGen_(maxDepth, currDepth + 1, ...
 							maxElements, ignoreUnusables);
 
 					end

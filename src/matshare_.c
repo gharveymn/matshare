@@ -19,10 +19,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	mshdirective_t directive;
 	
 	size_t shm_size;                         /* size required by the shared memory */
-	
-	/* for storing the mxArrays */
-	Header_t hdr;
-	InputData_t dat;
+
 
 #ifdef MSH_WIN
 	DWORD hi_sz, lo_sz, err;
@@ -39,7 +36,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	/* get the directive */
 	directive = parseDirective(in_directive);
-	
+
+#ifdef MSH_AUTO_INIT
 	char init_check_name[MSH_MAX_NAME_LEN] = {0};
 #ifdef MSH_WIN
 	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, GetProcessId(GetCurrentProcess()));
@@ -61,7 +59,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		}
 		
 		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
-		mexLock();
 		init();
 		g_info->lcl_init_seg.handle = temp_handle;
 		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
@@ -97,15 +94,15 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		}
 		
 		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
-		mexLock();
 		init();
 		g_info->lcl_init_seg.handle = temp_handle;
 		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
 		g_info->lcl_init_seg.is_init = TRUE;
 	}
 #endif
+#endif
 	
-	if(directive != msh_DETACH && precheck() != TRUE)
+	if(directive != msh_DETACH && directive != msh_INIT && precheck() != TRUE)
 	{
 		readErrorMex("NotInitializedError", "At least one of the needed shared memory segments has not been initialized. Cannot continue.");
 	}
@@ -162,7 +159,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			g_info->flags.is_glob_shm_var_init = FALSE;
 			
 			/* scan input data */
-			shm_size = shmScan(&hdr, &dat, in_var, &g_shm_var);
+			shm_size = shmScan(in_var, &g_shm_var);
 			
 			/* update the revision number and indicate our info is current */
 			g_info->cur_seg_info.rev_num = shm_update_info->rev_num + 1;
@@ -249,7 +246,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					readMmapError(errno);
 				}
 				g_info->shm_data_seg.is_mapped = TRUE;
-				
+
 #endif
 				
 				/* warning: this may cause a collision in the rare case where one process is still at seg_num == 0
@@ -262,7 +259,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			memset(shm_data_ptr, 0, g_info->shm_data_seg.seg_sz);
 			
 			/* copy data to the shared memory */
-			shmCopy(&hdr, &dat, shm_data_ptr, in_var, g_shm_var);
+			shmCopy(shm_data_ptr, in_var, g_shm_var);
 			
 			mexMakeArrayPersistent(g_shm_var);
 			g_info->flags.is_glob_shm_var_init = TRUE;
@@ -304,6 +301,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					
 					if(UnmapViewOfFile(shm_data_ptr) == 0)
 					{
+						err = GetLastError();
 						makeDummyVar(&plhs[0]);
 						releaseProcLock();
 						readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u)", err);
@@ -312,6 +310,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					
 					if(CloseHandle(g_info->shm_data_seg.handle) == 0)
 					{
+						err = GetLastError();
 						makeDummyVar(&plhs[0]);
 						releaseProcLock();
 						readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u)", err);
@@ -424,6 +423,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			g_info->num_lcl_objs += 1;
 			break;
+#ifndef MSH_AUTO_INIT
+		case msh_INIT:
+			init();
+			break;
+#endif
 		default:
 			readErrorMex("UnknownDirectiveError", "Unrecognized directive.");
 			break;
@@ -445,13 +449,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 /* Returns:                                                                  */
 /*    size that shared memory segment will need to be.                       */
 /* ------------------------------------------------------------------------- */
-size_t shmScan(Header_t* hdr, InputData_t* dat, const mxArray* in_var, mxArray** ret_var)
+size_t shmScan(const mxArray* in_var, mxArray** ret_var)
 {
-	/* counters */
-	size_t idx, count, field_str_len, cml_sz = 0;
-	int field_num;
-	
-	mxArray* ret_child;
 	
 	if(in_var == NULL)
 	{
@@ -459,171 +458,98 @@ size_t shmScan(Header_t* hdr, InputData_t* dat, const mxArray* in_var, mxArray**
 		readErrorMex("UnexpectedError", "Input variable was unexpectedly NULL.");
 	}
 	
-	/* initialize header info */
+	/* counters */
+	Header_t hdr;
+	size_t idx, count, cml_sz = 0;
+	int field_num;
+	mxArray* ret_child;
 	
-	/* these are updated when the data is copied over */
-	hdr->data_offsets.dims = SIZE_MAX;
-	hdr->data_offsets.pr = SIZE_MAX;
-	hdr->data_offsets.pi = SIZE_MAX;
-	hdr->data_offsets.ir = SIZE_MAX;
-	hdr->data_offsets.jc = SIZE_MAX;
-	hdr->data_offsets.field_str = SIZE_MAX;
-	hdr->data_offsets.child_hdrs = SIZE_MAX;
+	const size_t padded_mxmalloc_sig_len = padToAlign(MXMALLOC_SIG_LEN);
 	
-	hdr->num_dims = mxGetNumberOfDimensions(in_var);
-	hdr->elem_size = mxGetElementSize(in_var);
-	hdr->num_elems = mxGetNumberOfElements(in_var);      /* update this later on sparse*/
-	hdr->nzmax = 0;
-	hdr->obj_sz = 0;     /* update this later */
-	hdr->num_fields = 0;                                 /* update this later */
-	hdr->classid = mxGetClassID(in_var);
-	hdr->complexity = mxIsComplex(in_var)? mxCOMPLEX : mxREAL;
-	hdr->is_sparse = mxIsSparse(in_var);
-	hdr->is_numeric = mxIsNumeric(in_var);
-	hdr->is_empty = (bool_t)(hdr->num_elems == 0);
-	
-	dat->child_hdr_offs = NULL;
-	dat->child_hdrs = NULL;
-	dat->child_dat = NULL;
+	hdr.num_dims = mxGetNumberOfDimensions(in_var);
+	hdr.elem_size = mxGetElementSize(in_var);
+	hdr.num_elems = mxGetNumberOfElements(in_var);
+	hdr.nzmax = mxGetNzmax(in_var);
+	hdr.obj_sz = 0;     /* update this later */
+	hdr.num_fields = mxGetNumberOfFields(in_var);
+	hdr.classid = mxGetClassID(in_var);
+	hdr.complexity = mxIsComplex(in_var)? mxCOMPLEX : mxREAL;
+	hdr.is_sparse = mxIsSparse(in_var);
+	hdr.is_numeric = mxIsNumeric(in_var);
+	hdr.is_empty = (bool_t)(hdr.num_elems == 0);
 	
 	/* Add space for the header */
 	cml_sz += padToAlign(sizeof(Header_t));
 	
 	/* Add space for the dimensions */
-	hdr->data_offsets.dims = cml_sz;
-	cml_sz += padToAlign(hdr->num_dims*sizeof(mwSize));
+	cml_sz += padToAlign(mxGetNumberOfDimensions(in_var)*sizeof(mwSize));
 	
 	/* Structure case */
-	if(hdr->classid == mxSTRUCT_CLASS)
+	if(hdr.classid == mxSTRUCT_CLASS)
 	{
+		/* Add space for the field string */
+		cml_sz += padToAlign(getFieldNamesSize(in_var));
 		
-		/* How many fields to work with? */
-		hdr->num_fields = mxGetNumberOfFields(in_var);
-		
-		/* Find the size required to store the field names */
-		field_str_len = getFieldNamesSize(in_var);
-		
-		/* locate the field string */
-		hdr->data_offsets.field_str = cml_sz;
-		cml_sz += padToAlign(field_str_len);                   /* Add space for the field string */
-		
-		const char_t** field_names = mxMalloc(hdr->num_fields*sizeof(char_t*));
-		for(field_num = 0; field_num < hdr->num_fields; field_num++)
+		*ret_var = mxCreateStructArray(hdr.num_dims, mxGetDimensions(in_var), 0, NULL);
+		for(field_num = 0; field_num < hdr.num_fields; field_num++)
 		{
-			field_names[field_num] = mxGetFieldNameByNumber(in_var, field_num);
+			mxAddField(*ret_var, mxGetFieldNameByNumber(in_var, field_num));
 		}
 		
-		*ret_var = mxCreateStructArray(hdr->num_dims, mxGetDimensions(in_var), hdr->num_fields, field_names);
-		mxFree((void*)field_names);
+		/* add size of storing the offsets */
+		cml_sz += padToAlign((hdr.num_fields*hdr.num_elems)*sizeof(size_t));
 		
-		if(hdr->is_empty)
+		/* go through each recursively */
+		for(field_num = 0, count = 0; field_num < hdr.num_fields; field_num++)          /* each field */
 		{
-			hdr->obj_sz = cml_sz;
-		}
-		else
-		{
-			
-			/* add size of storing the offsets */
-			hdr->data_offsets.child_hdrs = cml_sz;
-			cml_sz += padToAlign((hdr->num_fields*hdr->num_elems)*sizeof(size_t));
-			dat->child_hdr_offs = mxMalloc((hdr->num_elems*hdr->num_fields)*sizeof(size_t));
-			
-			dat->child_hdrs = mxMalloc((hdr->num_elems*hdr->num_fields)*sizeof(Header_t*));
-			dat->child_dat = mxMalloc((hdr->num_elems*hdr->num_fields)*sizeof(InputData_t*));
-			
-			/* set the object size here---don't include subobjects */
-			hdr->obj_sz = cml_sz;
-			
-			/* go through each recursively */
-			for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)     	/* each field */
+			for(idx = 0; idx < hdr.num_elems; idx++, count++)                         /* each element */
 			{
-				for(idx = 0; idx < hdr->num_elems; idx++, count++)                         /* each element */
-				{
-					
-					dat->child_hdrs[count] = mxMalloc(sizeof(Header_t)); /* these will be replaced by offsets in the shmCopy */
-					dat->child_dat[count] = mxMalloc(sizeof(InputData_t));
-					
-					dat->child_hdr_offs[count] = cml_sz;
-					
-					/* call recursivley */
-					cml_sz += shmScan(dat->child_hdrs[count], dat->child_dat[count], mxGetFieldByNumber(in_var, idx, field_num), &ret_child);
-					mxSetFieldByNumber(*ret_var, idx, field_num, ret_child);
-					
-				}
-			}
-		}
-	}
-	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
-	{
-		
-		
-		if(hdr->is_empty)
-		{
-			*ret_var = mxCreateCellArray(hdr->num_dims, mxGetDimensions(in_var));
-			hdr->obj_sz = cml_sz;
-		}
-		else
-		{
-			
-			*ret_var = mxCreateCellArray(hdr->num_dims, mxGetDimensions(in_var));
-			
-			/* add size of storing the offsets */
-			hdr->data_offsets.child_hdrs = cml_sz;
-			cml_sz += padToAlign(hdr->num_elems*sizeof(size_t));
-			dat->child_hdr_offs = mxMalloc(hdr->num_elems*sizeof(size_t));
-			
-			dat->child_hdrs = mxMalloc(hdr->num_elems*sizeof(Header_t*));
-			dat->child_dat = mxMalloc(hdr->num_elems*sizeof(InputData_t*));
-			
-			/* set the object size here---don't include subobjects */
-			hdr->obj_sz = cml_sz;
-			
-			/* go through each recursively */
-			for(count = 0; count < hdr->num_elems; count++)
-			{
-				dat->child_hdrs[count] = mxMalloc(sizeof(Header_t)); /* these will be replaced by offsets in the shmCopy */
-				dat->child_dat[count] = mxMalloc(sizeof(InputData_t));
-				
-				dat->child_hdr_offs[count] = cml_sz;
-				
-				cml_sz += shmScan(dat->child_hdrs[count], dat->child_dat[count], mxGetCell(in_var, count), &ret_child);
-				mxSetCell(*ret_var, count, ret_child);
+				/* call recursivley */
+				cml_sz += shmScan(mxGetFieldByNumber(in_var, idx, field_num), &ret_child);
+				mxSetFieldByNumber(*ret_var, idx, field_num, ret_child);
 				
 			}
+			
 		}
 	}
-	else if(hdr->is_numeric || hdr->classid == mxLOGICAL_CLASS || hdr->classid == mxCHAR_CLASS)  /* a matrix containing data *//* base case */
+	else if(hdr.classid == mxCELL_CLASS) /* Cell case */
 	{
 		
-		if(hdr->is_sparse)
+		*ret_var = mxCreateCellArray(hdr.num_dims, mxGetDimensions(in_var));
+		
+		/* add size of storing the offsets */
+		cml_sz += padToAlign(hdr.num_elems*sizeof(size_t));
+		
+		/* go through each recursively */
+		for(count = 0; count < hdr.num_elems; count++)
+		{
+			cml_sz += shmScan(mxGetCell(in_var, count), &ret_child);
+			mxSetCell(*ret_var, count, ret_child);
+			
+			
+		}
+	}
+	else if(hdr.is_numeric || hdr.classid == mxLOGICAL_CLASS || hdr.classid == mxCHAR_CLASS)  /* a matrix containing data *//* base case */
+	{
+		
+		if(hdr.is_sparse)
 		{
 			/* len(pr)==nzmax, len(pi)==nzmax, len(ir)=nzmax, len(jc)==N+1 */
-			hdr->nzmax = (size_t)mxGetNzmax(in_var);
 			
 			/* ensure both pointers are aligned individually */
-			cml_sz += padToAlign(MXMALLOC_SIG_LEN);
-			hdr->data_offsets.pr = cml_sz;
-			cml_sz += padToAlign(hdr->elem_size*hdr->nzmax);
-			if(hdr->complexity == mxCOMPLEX)
+			cml_sz += padded_mxmalloc_sig_len + padToAlign(hdr.elem_size*hdr.nzmax);
+			if(hdr.complexity == mxCOMPLEX)
 			{
-				cml_sz += padToAlign(MXMALLOC_SIG_LEN);
-				hdr->data_offsets.pi = cml_sz;
-				cml_sz += padToAlign(hdr->elem_size*hdr->nzmax);
+				cml_sz += padded_mxmalloc_sig_len + padToAlign(hdr.elem_size*hdr.nzmax);
 			}
+			cml_sz += padded_mxmalloc_sig_len + padToAlign(sizeof(mwIndex)*(hdr.nzmax));              /* ir */
+			cml_sz += padded_mxmalloc_sig_len + padToAlign(sizeof(mwIndex)*(mxGetN(in_var) + 1));     /* jc */
 			
-			cml_sz += padToAlign(MXMALLOC_SIG_LEN);
-			hdr->data_offsets.ir = cml_sz;
-			cml_sz += padToAlign(sizeof(mwIndex)*(hdr->nzmax));      /* ensure both pointers are aligned individually */
-			
-			cml_sz += padToAlign(MXMALLOC_SIG_LEN);
-			hdr->data_offsets.jc = cml_sz;
-			cml_sz += padToAlign(sizeof(mwIndex)*(mxGetN(in_var) + 1));
-			
-			if(hdr->classid == mxDOUBLE_CLASS)
+			if(hdr.classid == mxDOUBLE_CLASS)
 			{
-				*ret_var = mxCreateSparse(0, 0, 1, hdr->complexity);
+				*ret_var = mxCreateSparse(0, 0, 1, hdr.complexity);
 			}
-			else if(hdr->classid == mxLOGICAL_CLASS)
+			else if(hdr.classid == mxLOGICAL_CLASS)
 			{
 				*ret_var = mxCreateSparseLogicalMatrix(0, 0, 1);
 			}
@@ -638,38 +564,34 @@ size_t shmScan(Header_t* hdr, InputData_t* dat, const mxArray* in_var, mxArray**
 		{
 			
 			/* ensure both pointers are aligned individually */
-			cml_sz += padToAlign(MXMALLOC_SIG_LEN);
-			hdr->data_offsets.pr = cml_sz;
-			cml_sz += padToAlign(hdr->elem_size*hdr->num_elems);
-			if(hdr->complexity == mxCOMPLEX)
+			cml_sz += padded_mxmalloc_sig_len + padToAlign(hdr.elem_size*hdr.num_elems);
+			if(hdr.complexity == mxCOMPLEX)
 			{
-				cml_sz += padToAlign(MXMALLOC_SIG_LEN);
-				hdr->data_offsets.pi = cml_sz;
-				cml_sz += padToAlign(hdr->elem_size*hdr->num_elems);
+				cml_sz += padded_mxmalloc_sig_len + padToAlign(hdr.elem_size*hdr.num_elems);
 			}
 			
-			if(hdr->is_empty)
+			if(hdr.is_empty)
 			{
-				if(hdr->is_numeric)
+				if(hdr.is_numeric)
 				{
-					*ret_var = mxCreateNumericArray(hdr->num_dims, mxGetDimensions(in_var), hdr->classid, hdr->complexity);
+					*ret_var = mxCreateNumericArray(hdr.num_dims, mxGetDimensions(in_var), hdr.classid, hdr.complexity);
 				}
-				else if(hdr->classid == mxLOGICAL_CLASS)
+				else if(hdr.classid == mxLOGICAL_CLASS)
 				{
-					*ret_var = mxCreateLogicalArray(hdr->num_dims, mxGetDimensions(in_var));
+					*ret_var = mxCreateLogicalArray(hdr.num_dims, mxGetDimensions(in_var));
 				}
 				else
 				{
-					*ret_var = mxCreateCharArray(hdr->num_dims, mxGetDimensions(in_var));
+					*ret_var = mxCreateCharArray(hdr.num_dims, mxGetDimensions(in_var));
 				}
 			}
 			else
 			{
-				if(hdr->is_numeric)
+				if(hdr.is_numeric)
 				{
-					*ret_var = mxCreateNumericArray(0, NULL, hdr->classid, hdr->complexity);
+					*ret_var = mxCreateNumericArray(0, NULL, hdr.classid, hdr.complexity);
 				}
-				else if(hdr->classid == mxLOGICAL_CLASS)
+				else if(hdr.classid == mxLOGICAL_CLASS)
 				{
 					*ret_var = mxCreateLogicalArray(0, NULL);
 				}
@@ -679,8 +601,6 @@ size_t shmScan(Header_t* hdr, InputData_t* dat, const mxArray* in_var, mxArray**
 				}
 			}
 		}
-		
-		hdr->obj_sz = cml_sz;
 		
 	}
 	else
@@ -706,29 +626,80 @@ size_t shmScan(Header_t* hdr, InputData_t* dat, const mxArray* in_var, mxArray**
 /* Returns:                                                                  */
 /*    void                                                                   */
 /* ------------------------------------------------------------------------- */
-void shmCopy(Header_t* hdr, InputData_t* dat, byte_t* shm_anchor, const mxArray* in_var, mxArray* ret_var)
+size_t shmCopy(byte_t* shm_anchor, const mxArray* in_var, mxArray* ret_var)
 {
-	size_t idx, cpy_sz, count;
+	
+	const size_t padded_mxmalloc_sig_len = padToAlign(MXMALLOC_SIG_LEN);
+	
+	Header_t hdr;
+	ShmData_t data_ptrs;
+	byte_t* shm_ptr = shm_anchor;
+	
+	size_t cml_off = 0, shift, idx, cpy_sz, count, field_str_len;
 	
 	int field_num;
 	const char_t* field_name;
 	char_t* field_str_iter;
 	
-	/* load up the shared memory */
-	ShmData_t data_ptrs;
-	locateDataPointers(&data_ptrs, hdr, shm_anchor);
+	/* initialize header info */
+	
+	/* these are updated when the data is copied over */
+	hdr.data_offsets.dims = SIZE_MAX;
+	hdr.data_offsets.pr = SIZE_MAX;
+	hdr.data_offsets.pi = SIZE_MAX;
+	hdr.data_offsets.ir = SIZE_MAX;
+	hdr.data_offsets.jc = SIZE_MAX;
+	hdr.data_offsets.field_str = SIZE_MAX;
+	hdr.data_offsets.child_hdrs = SIZE_MAX;
+	
+	hdr.num_dims = mxGetNumberOfDimensions(in_var);
+	hdr.elem_size = mxGetElementSize(in_var);
+	hdr.num_elems = mxGetNumberOfElements(in_var);
+	hdr.nzmax = mxGetNzmax(in_var);
+	hdr.num_fields = mxGetNumberOfFields(in_var);
+	hdr.classid = mxGetClassID(in_var);
+	hdr.complexity = mxIsComplex(in_var)? mxCOMPLEX : mxREAL;
+	hdr.is_sparse = mxIsSparse(in_var);
+	hdr.is_numeric = mxIsNumeric(in_var);
+	hdr.is_empty = (bool_t)(hdr.num_elems == 0);
+	
+	shift = padToAlign(sizeof(Header_t));
+	cml_off += shift, shm_ptr += shift;
 	
 	/* copy the dimensions */
-	memcpy(data_ptrs.dims, mxGetDimensions(in_var), hdr->num_dims*sizeof(mwSize));
+	hdr.data_offsets.dims = cml_off;
+	data_ptrs.dims = (mwSize*)shm_ptr;
+	memcpy(data_ptrs.dims, mxGetDimensions(in_var), hdr.num_dims*sizeof(mwSize));
+	
+	shift = padToAlign(hdr.num_dims*sizeof(mwSize));
+	cml_off += shift, shm_ptr += shift;
 	
 	/* Structure case */
-	if(hdr->classid == mxSTRUCT_CLASS)
+	if(hdr.classid == mxSTRUCT_CLASS)
 	{
 		/* place the field names next in shared memory */
 		
+		/* Find the size required to store the field names */
+		field_str_len = getFieldNamesSize(in_var);
+		
+		/* locate the field string */
+		hdr.data_offsets.field_str = cml_off;
+		data_ptrs.field_str = shm_ptr;
+		
+		/*shift past the field string */
+		shift = padToAlign(field_str_len);
+		cml_off += shift, shm_ptr += shift;
+		
+		
+		hdr.data_offsets.child_hdrs = cml_off;
+		data_ptrs.child_hdrs = (size_t*)shm_ptr;
+		cml_off += padToAlign((hdr.num_fields*hdr.num_elems)*sizeof(size_t));
+		
+		hdr.obj_sz = cml_off;
+		
 		/* copy the children recursively */
 		field_str_iter = data_ptrs.field_str;
-		for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)         		 /* the fields */
+		for(field_num = 0, count = 0; field_num < hdr.num_fields; field_num++)                /* the fields */
 		{
 			
 			field_name = mxGetFieldNameByNumber(in_var, field_num);
@@ -736,118 +707,151 @@ void shmCopy(Header_t* hdr, InputData_t* dat, byte_t* shm_anchor, const mxArray*
 			memcpy(field_str_iter, field_name, cpy_sz);
 			field_str_iter += cpy_sz;
 			
-			for(idx = 0; idx < hdr->num_elems; idx++, count++)                                   /* the struct array indices */
+			for(idx = 0; idx < hdr.num_elems; idx++, count++)                                   /* the struct array indices */
 			{
 				/* place relative offset into shared memory */
-				data_ptrs.child_hdrs[count] = dat->child_hdr_offs[count];
+				data_ptrs.child_hdrs[count] = cml_off;
 				
 				/* And fill it */
-				shmCopy(dat->child_hdrs[count], dat->child_dat[count], shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(in_var, idx, field_num),
-					   mxGetFieldByNumber(ret_var, idx, field_num));
+				cml_off += shmCopy(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(in_var, idx, field_num), mxGetFieldByNumber(ret_var, idx, field_num));
 				
-				mxFree(dat->child_hdrs[count]);
-				mxFree(dat->child_dat[count]);
 			}
-		}
-		
-		if(!hdr->is_empty)
-		{
-			mxFree(dat->child_hdrs);
-			mxFree(dat->child_dat);
-			mxFree(dat->child_hdr_offs);
+			
 		}
 		
 	}
-	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
+	else if(hdr.classid == mxCELL_CLASS) /* Cell case */
 	{
 		
+		
+		hdr.data_offsets.child_hdrs = cml_off;
+		data_ptrs.child_hdrs = (size_t*)shm_ptr;
+		cml_off += padToAlign(hdr.num_elems*sizeof(size_t));
+		
+		hdr.obj_sz = cml_off;
+		
+		
 		/* recurse for each cell element */
-		for(count = 0; count < hdr->num_elems; count++)
+		for(count = 0; count < hdr.num_elems; count++)
 		{
 			/* place relative offset into shared memory */
-			data_ptrs.child_hdrs[count] = dat->child_hdr_offs[count];
+			data_ptrs.child_hdrs[count] = cml_off;
 			
-			shmCopy(dat->child_hdrs[count], dat->child_dat[count], shm_anchor + data_ptrs.child_hdrs[count], mxGetCell(in_var, count), mxGetCell(ret_var, count));
+			cml_off += shmCopy(shm_anchor + data_ptrs.child_hdrs[count], mxGetCell(in_var, count), mxGetCell(ret_var, count));
 			
-			mxFree(dat->child_hdrs[count]);
-			mxFree(dat->child_dat[count]);
-		}
-		
-		if(!hdr->is_empty)
-		{
-			mxFree(dat->child_hdrs);
-			mxFree(dat->child_dat);
-			mxFree(dat->child_hdr_offs);
+			
 		}
 		
 	}
 	else /* base case */
 	{
-
+		
 		/* and the indices of the sparse data as well */
-		if(hdr->is_sparse)
+		if(hdr.is_sparse)
 		{
 			
 			/* note: in this case hdr->is_empty means the sparse is 0x0
 			 *  also note that nzmax is still 1 */
 			
-			/* copy real data */
-			cpy_sz = (hdr->nzmax)*(hdr->elem_size);
+			
+			/* copy pr */
+			cpy_sz = (hdr.nzmax)*(hdr.elem_size);
+			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+			hdr.data_offsets.pr = cml_off, data_ptrs.pr = shm_ptr;
+			
 			memCpyMex(data_ptrs.pr, mxGetData(in_var), cpy_sz);
-			if(!hdr->is_empty)
+			
+			shift = padToAlign(cpy_sz);
+			cml_off += shift, shm_ptr += shift;
+			
+			if(!hdr.is_empty)
 			{
 				mxFree(mxGetData(ret_var));
 				mxSetData(ret_var, data_ptrs.pr);
 			}
 			
-			/* copy complex data as well */
-			if(hdr->complexity == mxCOMPLEX)
+			/* copy pi */
+			if(hdr.complexity == mxCOMPLEX)
 			{
+				cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+				hdr.data_offsets.pi = cml_off, data_ptrs.pi = shm_ptr;
+				
 				memCpyMex(data_ptrs.pi, mxGetImagData(in_var), cpy_sz);
-				if(!hdr->is_empty)
+				
+				shift = padToAlign(cpy_sz);
+				cml_off += shift, shm_ptr += shift;
+				
+				if(!hdr.is_empty)
 				{
 					mxFree(mxGetImagData(ret_var));
 					mxSetImagData(ret_var, data_ptrs.pi);
 				}
 			}
 			
-			cpy_sz = hdr->nzmax*sizeof(mwIndex);
+			/* copy ir */
+			cpy_sz = hdr.nzmax*sizeof(mwIndex);
+			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+			hdr.data_offsets.ir = cml_off, data_ptrs.ir = (mwIndex*)shm_ptr;
+			
 			memCpyMex((void*)data_ptrs.ir, (void*)mxGetIr(in_var), cpy_sz);
 			
-			if(!hdr->is_empty)
+			shift = padToAlign(cpy_sz);
+			cml_off += shift, shm_ptr += shift;
+			
+			if(!hdr.is_empty)
 			{
 				mxFree(mxGetIr(ret_var));
 				mxSetIr(ret_var, data_ptrs.ir);
 			}
 			
+			/* copy jc */
 			cpy_sz = (data_ptrs.dims[1] + 1)*sizeof(mwIndex);
+			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+			hdr.data_offsets.jc = cml_off, data_ptrs.jc = (mwIndex*)shm_ptr;
+			
 			memCpyMex((void*)data_ptrs.jc, (void*)mxGetJc(in_var), cpy_sz);
 			
-			if(!hdr->is_empty)
+			shift = padToAlign(cpy_sz);
+			cml_off += shift, shm_ptr += shift;
+			
+			if(!hdr.is_empty)
 			{
 				mxFree(mxGetJc(ret_var));
 				mxSetJc(ret_var, data_ptrs.jc);
 			}
 			
-			mxSetNzmax(ret_var, hdr->nzmax);
+			mxSetNzmax(ret_var, hdr.nzmax);
 			
 		}
 		else
 		{
-			/* copy real data */
-			cpy_sz = (hdr->num_elems)*(hdr->elem_size);
+			/* copy pr */
+			cpy_sz = (hdr.num_elems)*(hdr.elem_size);
+			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+			hdr.data_offsets.pr = cml_off, data_ptrs.pr = shm_ptr;
+			
 			memCpyMex(data_ptrs.pr, mxGetData(in_var), cpy_sz);
-			if(!hdr->is_empty || hdr->is_sparse)
+			
+			shift = padToAlign(cpy_sz);
+			cml_off += shift, shm_ptr += shift;
+			
+			if(!hdr.is_empty || hdr.is_sparse)
 			{
 				mxFree(mxGetData(ret_var));
 				mxSetData(ret_var, data_ptrs.pr);
 			}
 			
 			/* copy complex data as well */
-			if(hdr->complexity == mxCOMPLEX)
+			if(hdr.complexity == mxCOMPLEX)
 			{
+				cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+				hdr.data_offsets.pi = cml_off, data_ptrs.pi = shm_ptr;
+				
 				memCpyMex(data_ptrs.pi, mxGetImagData(in_var), cpy_sz);
-				if(!hdr->is_empty || hdr->is_sparse)
+				
+				shift = padToAlign(cpy_sz);
+				cml_off += shift, shm_ptr += shift;
+				if(!hdr.is_empty || hdr.is_sparse)
 				{
 					mxFree(mxGetImagData(ret_var));
 					mxSetImagData(ret_var, data_ptrs.pi);
@@ -855,11 +859,15 @@ void shmCopy(Header_t* hdr, InputData_t* dat, byte_t* shm_anchor, const mxArray*
 			}
 		}
 		
-		mxSetDimensions(ret_var, data_ptrs.dims, hdr->num_dims);
-	
+		mxSetDimensions(ret_var, data_ptrs.dims, hdr.num_dims);
+		
+		hdr.obj_sz = cml_off;
+		
 	}
 	
-	memcpy(shm_anchor, hdr, sizeof(Header_t));
+	memcpy(shm_anchor, &hdr, sizeof(Header_t));
+	
+	return hdr.obj_sz;
 	
 }
 
@@ -875,7 +883,6 @@ size_t shmFetch(byte_t* shm_anchor, mxArray** ret_var)
 	Header_t* hdr;
 	ShmData_t data_ptrs;
 	
-	
 	/* for structures */
 	int field_num;                /* current field */
 	
@@ -883,14 +890,19 @@ size_t shmFetch(byte_t* shm_anchor, mxArray** ret_var)
 	hdr = (Header_t*)shm_anchor;
 	locateDataPointers(&data_ptrs, hdr, shm_anchor);
 	
+	const char_t* field_name;
+	
 	/* Structure case */
 	if(hdr->classid == mxSTRUCT_CLASS)
 	{
-		const char_t** field_names = mxMalloc(hdr->num_fields*sizeof(char_t*));
-		retrieveFieldNames(field_names, data_ptrs.field_str, hdr->num_fields);
 		
-		*ret_var = mxCreateStructArray(hdr->num_dims, data_ptrs.dims, hdr->num_fields, field_names);
-		mxFree((void*)field_names);
+		field_name = data_ptrs.field_str;
+		*ret_var = mxCreateStructArray(hdr->num_dims, data_ptrs.dims, 0, NULL);
+		for(field_num = 0; field_num < hdr->num_fields; field_num++)
+		{
+			mxAddField(*ret_var, field_name);
+			getNextFieldName(&field_name);
+		}
 		
 		/* Go through each element */
 		for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)     /* each field */
@@ -1038,7 +1050,7 @@ void shmDetach(mxArray* ret_var)
 		/* detach each field for each element */
 		num_elems = mxGetNumberOfElements(ret_var);
 		num_fields = mxGetNumberOfFields(ret_var);
-		for(field_num = 0 ; field_num < num_fields; field_num++)     /* each field */
+		for(field_num = 0; field_num < num_fields; field_num++)     /* each field */
 		{
 			for(idx = 0; idx < num_elems; idx++)
 			{
@@ -1081,7 +1093,6 @@ void shmDetach(mxArray* ret_var)
 				mxSetImagData(ret_var, new_pi);
 			}
 
-//			mxFree(mxGetIr(ret_var));
 			new_ir = mxCalloc(nzmax, sizeof(mwIndex));
 			mxSetIr(ret_var, new_ir);
 			
@@ -1122,6 +1133,7 @@ void shmDetach(mxArray* ret_var)
 				mxSetIr(link, new_ir);
 				mxSetJc(link, new_jc);
 			}
+			
 		}
 		
 	}
@@ -1223,6 +1235,8 @@ bool_t shmCompareSize(byte_t* shm_anchor, const mxArray* comp_var)
 	hdr = (Header_t*)shm_anchor;
 	locateDataPointers(&data_ptrs, hdr, shm_anchor);
 	
+	const char_t* field_name;
+	
 	if(mxGetClassID(comp_var) != hdr->classid)
 	{
 		return FALSE;
@@ -1230,8 +1244,7 @@ bool_t shmCompareSize(byte_t* shm_anchor, const mxArray* comp_var)
 	
 	/* the size pointer */
 	/* eventually eliminate this check for sparses */
-	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var)
-	   || memcmp(data_ptrs.dims, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0)
+	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var) || memcmp(data_ptrs.dims, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0)
 	{
 		return FALSE;
 	}
@@ -1239,33 +1252,33 @@ bool_t shmCompareSize(byte_t* shm_anchor, const mxArray* comp_var)
 	/* Structure case */
 	if(hdr->classid == mxSTRUCT_CLASS)
 	{
-
+		
 		if(hdr->num_fields != mxGetNumberOfFields(comp_var))
 		{
 			return FALSE;
 		}
 		
-		const char_t** field_names = mxMalloc(hdr->num_fields*sizeof(char_t*));
-		retrieveFieldNames(field_names, data_ptrs.field_str, hdr->num_fields);
-		
 		/* Go through each element */
+		field_name = data_ptrs.field_str;
 		for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 		{
+			
+			if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_name) != 0)
+			{
+				return FALSE;
+			}
+			
 			for(idx = 0; idx < hdr->num_elems; idx++, count++)
 			{
-				if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_names[field_num]) != 0)
-				{
-					return FALSE;
-				}
-				
 				if(!shmCompareSize(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(comp_var, idx, field_num)))
 				{
 					return FALSE;
 				}
 			}
+			
+			getNextFieldName(&field_name);
+			
 		}
-		
-		mxFree((void*)field_names);
 		
 	}
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
@@ -1334,14 +1347,15 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var)
 	hdr = (Header_t*)shm_anchor;
 	locateDataPointers(&data_ptrs, hdr, shm_anchor);
 	
+	const char_t* field_name;
+	
 	if(mxGetClassID(comp_var) != hdr->classid)
 	{
 		return FALSE;
 	}
 	
 	/* the size pointer */
-	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var)
-	   || memcmp((data_ptrs.dims), mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0
+	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var) || memcmp((data_ptrs.dims), mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0
 	   || hdr->num_elems != mxGetNumberOfElements(comp_var))
 	{
 		return FALSE;
@@ -1357,27 +1371,28 @@ mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var)
 			return FALSE;
 		}
 		
-		const char_t** field_names = mxMalloc(hdr->num_fields*sizeof(char_t*));
-		retrieveFieldNames(field_names, data_ptrs.field_str, hdr->num_fields);
-		
 		/* Go through each element */
+		field_name = data_ptrs.field_str;
 		for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 		{
+			
+			if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_name) != 0)
+			{
+				return FALSE;
+			}
+			
 			for(idx = 0; idx < hdr->num_elems; idx++, count++)
 			{
-				if(strcmp(mxGetFieldNameByNumber(comp_var, field_num), field_names[field_num]) != 0)
-				{
-					return FALSE;
-				}
 				
 				if(!shmCompareContent(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(comp_var, idx, field_num)))
 				{
 					return FALSE;
 				}
 			}
+			
+			getNextFieldName(&field_name);
+			
 		}
-		
-		mxFree((void*)field_names);
 		
 	}
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */

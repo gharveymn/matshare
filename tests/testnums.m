@@ -1,6 +1,6 @@
 clear a
 a = MatShare;
-nums = 5000000;
+nums = 50000;
 lents = 0;
 disp(getmem);
 tic

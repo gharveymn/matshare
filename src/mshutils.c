@@ -1,6 +1,5 @@
 #include "headers/mshutils.h"
 
-
 /*
  * NEW MXMALLOC SIGNATURE INFO:
  * HEADER:
@@ -14,8 +13,7 @@
  * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
  * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
  */
-const uint8_t MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
-
+static const uint8_t c_MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
 
 void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 {
@@ -68,13 +66,9 @@ size_t getFieldNamesSize(const mxArray* mxStruct)
 }
 
 
-void retrieveFieldNames(const char_t** field_names, const char_t* field_str, int num_fields)
+void getNextFieldName(const char_t** field_str)
 {
-	int field_num = 0;
-	for(field_num = 0; field_num < num_fields; field_num++, field_str += strlen(field_str))
-	{
-		field_names[field_num] = field_str;
-	}
+	*field_str = *field_str + strlen(*field_str) + 1;
 }
 
 
@@ -92,7 +86,8 @@ void onExit(void)
 	}
 
 #ifdef MSH_WIN
-	
+
+#ifdef MSH_THREAD_SAFE
 	if(g_info->flags.is_proc_lock_init)
 	{
 		acquireProcLock();
@@ -109,6 +104,12 @@ void onExit(void)
 		g_info->flags.is_proc_lock_init = FALSE;
 		
 	}
+#else
+	if(g_info->shm_update_seg.is_mapped)
+	{
+		shm_update_info->num_procs -= 1;
+	}
+#endif
 	
 	if(g_info->shm_data_seg.is_mapped)
 	{
@@ -146,6 +147,7 @@ void onExit(void)
 		g_info->shm_update_seg.is_init = FALSE;
 	}
 	
+#ifdef MSH_AUTO_INIT
 	if(g_info->lcl_init_seg.is_init)
 	{
 		if(CloseHandle(g_info->lcl_init_seg.handle) == 0)
@@ -154,10 +156,13 @@ void onExit(void)
 		}
 		g_info->lcl_init_seg.is_init = FALSE;
 	}
-	
+#endif
+
 #else
 	
 	bool_t will_remove = FALSE;
+	
+#ifdef MSH_THREAD_SAFE
 	if(g_info->flags.is_proc_lock_init)
 	{
 		acquireProcLock();
@@ -177,6 +182,14 @@ void onExit(void)
 		}
 		
 	}
+#else
+	if(g_info->shm_update_seg.is_mapped)
+	{
+		shm_update_info->num_procs -= 1;
+		will_remove = (bool_t)(shm_update_info->num_procs == 0);
+	}
+#endif
+	
 	
 	if(g_info->shm_data_seg.is_mapped)
 	{
@@ -220,6 +233,7 @@ void onExit(void)
 		g_info->shm_update_seg.is_init = FALSE;
 	}
 	
+#ifdef MSH_AUTO_INIT
 	if(g_info->lcl_init_seg.is_init)
 	{
 		if(shm_unlink(g_info->lcl_init_seg.name) != 0)
@@ -228,12 +242,12 @@ void onExit(void)
 		}
 		g_info->lcl_init_seg.is_init = FALSE;
 	}
-	
+#endif
+
 #endif
 	
 	mxFree(g_info);
 	g_info = NULL;
-	
 	mexAtExit(nullfcn);
 	
 }
@@ -265,7 +279,7 @@ void makeMxMallocSignature(uint8_t* sig, size_t seg_size)
 	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
 	 */
 	
-	memcpy(sig, MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
+	memcpy(sig, c_MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
 	size_t multi = 1 << 4;
 	
 	/* note: (x % 2^n) == (x & (2^n - 1)) */
@@ -285,6 +299,7 @@ void makeMxMallocSignature(uint8_t* sig, size_t seg_size)
 
 void acquireProcLock(void)
 {
+#ifdef MSH_THREAD_SAFE
 	/* only request a lock if there is more than one process */
 	if(shm_update_info->num_procs > 1 && shm_update_info->is_thread_safe && !g_info->flags.is_proc_locked)
 	{
@@ -331,11 +346,13 @@ void acquireProcLock(void)
 #endif
 		g_info->flags.is_proc_locked = TRUE;
 	}
+#endif
 }
 
 
 void releaseProcLock(void)
 {
+#ifdef MSH_THREAD_SAFE
 	if(g_info->flags.is_proc_locked)
 	{
 
@@ -363,6 +380,7 @@ void releaseProcLock(void)
 #endif
 		g_info->flags.is_proc_locked = FALSE;
 	}
+#endif
 }
 
 
@@ -466,6 +484,7 @@ void parseParams(int num_params, const mxArray* in[])
 		
 		if(strcmp(param_str_l, MSH_PARAM_THRSAFE_L) == 0)
 		{
+#ifdef MSH_THREAD_SAFE
 			acquireProcLock();
 			if(strcmp(val_str_l, "true") == 0
 					|| strcmp(val_str_l, "on") == 0
@@ -486,6 +505,10 @@ void parseParams(int num_params, const mxArray* in[])
 			}
 			updateAll();
 			releaseProcLock();
+#else
+			readErrorMex("InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
+#endif
+		
 		}
 		else if(strcmp(param_str, MSH_PARAM_SECURITY_L) == 0)
 		{
@@ -506,10 +529,12 @@ void parseParams(int num_params, const mxArray* in[])
 				{
 					readFchmodError(errno);
 				}
+#ifdef MSH_THREAD_SAFE
 				if(fchmod(g_info->proc_lock, shm_update_info->security) != 0)
 				{
 					readFchmodError(errno);
 				}
+#endif
 				updateAll();
 				releaseProcLock();
 			}
@@ -565,12 +590,16 @@ void updateAll(void)
 /* checks if everything is in working order before doing the operation */
 bool_t precheck(void)
 {
-	return g_info->flags.is_proc_lock_init
-			& g_info->shm_update_seg.is_init
-			& g_info->shm_update_seg.is_mapped
-			& g_info->shm_data_seg.is_init
-			& g_info->shm_data_seg.is_mapped
-			& g_info->flags.is_glob_shm_var_init;
+	bool_t ret = g_info->shm_update_seg.is_init
+			   & g_info->shm_update_seg.is_mapped
+			   & g_info->shm_data_seg.is_init
+			   & g_info->shm_data_seg.is_mapped
+			   & g_info->flags.is_glob_shm_var_init;
+#ifdef MSH_THREAD_SAFE
+	return ret & g_info->flags.is_proc_lock_init;
+#else
+	return ret;
+#endif
 }
 
 

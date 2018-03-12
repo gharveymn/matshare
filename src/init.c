@@ -8,6 +8,9 @@ void init()
 	
 	Header_t hdr;
 	
+	/* lock the file */
+	mexLock();
+	
 	//assume not
 	is_glob_init = FALSE;
 	
@@ -26,11 +29,13 @@ void init()
 	
 	/* includes writing to shared memory, but the memory has been aligned so all writes are atomic */
 	globStartup(&hdr);
-	
+
+#ifdef MSH_THREAD_SAFE
 	if(!g_info->flags.is_proc_lock_init)
 	{
 		initProcLock();
 	}
+#endif
 	
 	/* only actually locks if this is memory safe */
 	acquireProcLock();
@@ -53,7 +58,6 @@ void init()
 	{
 		/* initialize shared memory */
 		memset(shm_data_ptr, 0, g_info->shm_data_seg.seg_sz);
-		memset(shm_update_info, 0, g_info->shm_update_seg.seg_sz);
 		
 		/* set the data to mirror the dummy variable at the end */
 		memcpy(shm_data_ptr, &hdr, hdr.obj_sz);
@@ -126,6 +130,7 @@ void procStartup(void)
 
 void initProcLock(void)
 {
+#ifdef MSH_THREAD_SAFE
 
 #ifdef MSH_WIN
 	
@@ -156,6 +161,8 @@ void initProcLock(void)
 #endif
 	
 	g_info->flags.is_proc_lock_init = TRUE;
+
+#endif
 
 }
 
@@ -249,7 +256,6 @@ void globStartup(Header_t* hdr)
 {
 	if(is_glob_init)
 	{
-		
 		/* this is the first region created */
 		/* this info shouldn't ever actually be used */
 		/* but make sure the memory segment is consistent */
@@ -281,7 +287,11 @@ void globStartup(Header_t* hdr)
 #ifdef MSH_UNIX
 		shm_update_info->security = S_IRUSR | S_IWUSR; /** default value **/
 #endif
+
+#ifdef MSH_THREAD_SAFE
 		shm_update_info->is_thread_safe = TRUE; 		/** default value **/
+#endif
+	
 	}
 	else
 	{

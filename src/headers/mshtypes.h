@@ -15,11 +15,14 @@ extern mxArray* mxCreateSharedDataCopy(mxArray *);
 #  define TRUE 1
 #endif
 
+#define MSH_MAX_NAME_LEN 64
 #define MSH_UPDATE_SEGMENT_NAME "/MATSHARE_UPDATE_SEGMENT"
 #define MSH_LOCK_NAME "/MATSHARE_LOCK"
 #define MSH_SEGMENT_NAME "/MATSHARE_SEGMENT%0llx"
+
+#ifdef MSH_AUTO_INIT
 #define MSH_INIT_CHECK_NAME "MATSHARE_INIT%lu"
-#define MSH_MAX_NAME_LEN 64
+#endif
 
 #if defined(MATLAB_UNIX)
 #  include <sys/mman.h>
@@ -88,7 +91,8 @@ typedef enum
 	msh_DEEPCOPY,
 	msh_DEBUG,
 	msh_OBJ_REGISTER,
-	msh_OBJ_DEREGISTER
+	msh_OBJ_DEREGISTER,
+	msh_INIT
 } mshdirective_t;
 
 
@@ -120,14 +124,6 @@ struct Header_tag
 	bool_t is_empty;
 };
 
-typedef struct InputData_tag InputData_t;
-struct InputData_tag
-{
-	size_t* child_hdr_offs;
-	Header_t** child_hdrs;          	/* array of corresponding children header structures, for cell */
-	InputData_t** child_dat;
-};
-
 typedef struct ShmData_tag ShmData_t;
 struct ShmData_tag
 {
@@ -155,7 +151,9 @@ struct ShmSegmentInfo_tag
 	pid_t upd_pid;
 	mode_t security;
 #endif
+#ifdef MSH_THREAD_SAFE
 	bool_t is_thread_safe;
+#endif
 };
 
 typedef struct LocalSegmentInfo_tag LocalSegmentInfo_t;
@@ -185,23 +183,29 @@ struct MexInfo_tag
 {
 	MemorySegment_t shm_data_seg;
 	MemorySegment_t shm_update_seg;
-	MemorySegment_t lcl_init_seg;
 
+#ifdef MSH_AUTO_INIT
+	MemorySegment_t lcl_init_seg;
+#endif
+
+#ifdef MSH_THREAD_SAFE
 #ifdef MSH_WIN
 	SECURITY_ATTRIBUTES lock_sec;
 	HANDLE proc_lock;
 #else
 	handle_t proc_lock;
 #endif
+#endif
 	
 	LocalSegmentInfo_t cur_seg_info;
 	
 	struct
 	{
+#ifdef MSH_THREAD_SAFE
 		bool_t is_proc_lock_init;
-		bool_t is_glob_shm_var_init;
-		
 		bool_t is_proc_locked;
+#endif
+		bool_t is_glob_shm_var_init;
 	} flags;
 
 #ifdef MSH_WIN
@@ -211,6 +215,7 @@ struct MexInfo_tag
 #endif
 	
 	uint32_t num_lcl_objs;
+	
 };
 
 mxArray* g_shm_var;
