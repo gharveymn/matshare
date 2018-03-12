@@ -8,4 +8,4 @@ AutomaticInitialization = true;
 ThreadSafety = true;
 
 %% Enables or disables debug mode
-DebugMode = true;
+DebugMode = false;
