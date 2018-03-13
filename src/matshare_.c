@@ -402,7 +402,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* set parameters for matshare to use */
 			
 			num_params = nrhs - 1;
-			
 			if(num_params%2 != 0)
 			{
 				readErrorMex("InvalNumArgsError", "The number of parameters input must be a multiple of two.");
@@ -420,14 +419,15 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		case msh_OBJ_REGISTER:
 			/* tell matshare to register a new object */
-			
 			g_info->num_lcl_objs += 1;
 			break;
-#ifndef MSH_AUTO_INIT
 		case msh_INIT:
+#ifndef MSH_AUTO_INIT
 			init();
-			break;
+#else
+			readWarnMex("AutoInitWarn", "matshare has been compiled with automatic initialization turned on. There is not need to call mshinit.");
 #endif
+			break;
 		default:
 			readErrorMex("UnknownDirectiveError", "Unrecognized directive.");
 			break;

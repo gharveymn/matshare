@@ -224,7 +224,7 @@ void readWarnMex(const char* warn_id, const char* warn_message, ...)
 	va_end(va);
 	
 	sprintf(warn_id_buffer, MATLAB_ERROR_ID, warn_id);
-	sprintf(full_message, MATLAB_WARN_MESSAGE_FMT, warn_id, message_buffer, MATLAB_WARN_MESSAGE);
+	sprintf(full_message, MATLAB_WARN_MESSAGE_FMT, message_buffer, MATLAB_WARN_MESSAGE);
 
 #ifdef NO_MEX
 #pragma GCC diagnostic push

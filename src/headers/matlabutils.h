@@ -35,7 +35,7 @@ extern int shm_unlink(const char *name);
 #define WARNING_MESSAGE_SIZE 0xFF
 #define MATLAB_ERROR_ID "MATLAB:matshare_:%s"
 #define MATLAB_ERROR_MESSAGE_FMT "%s in %s, line %d.\n\n%s%s"
-#define MATLAB_WARN_MESSAGE_FMT "%s: %s%s"
+#define MATLAB_WARN_MESSAGE_FMT "%s%s"
 #define MATLAB_HELP_MESSAGE ""
 #define MATLAB_WARN_MESSAGE ""
 
