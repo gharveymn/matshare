@@ -1,11 +1,11 @@
 rng('shuffle')
 numtests = 1;
-numsamples = 10000;
+numsamples = 1000;
 lents = 0;
 
 maxDepth = 3;
 minelem = 0;
-maxelem = 1000;
+maxelem = 10;
 maxElementsv = round(linspace(minelem,maxelem,numtests));
 ignoreUnusables = true;
 stride = numsamples;

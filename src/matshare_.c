@@ -255,9 +255,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				
 			}
 			
-			/* wipe the memory before copying over new data */
-			memset(shm_data_ptr, 0, g_info->shm_data_seg.seg_sz);
-			
 			/* copy data to the shared memory */
 			shmCopy(shm_data_ptr, in_var, g_shm_var);
 			

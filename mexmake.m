@@ -5,7 +5,7 @@ try
 	
 	if(DebugMode)
 		fprintf('-Compiling in debug mode.\n')
-		mexflags = {'-g', '-v', '-outdir', output_path};
+		mexflags = {'-g', '-O', '-v', '-outdir', output_path};
 	else
 		mexflags = {'-O', '-silent', '-outdir', output_path};
 	end
