@@ -22,7 +22,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
 
 #ifdef MSH_WIN
-	DWORD hi_sz, lo_sz, err;
+	DWORD err;
 #endif
 	
 	/* check min number of arguments */
@@ -38,68 +38,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	directive = parseDirective(in_directive);
 
 #ifdef MSH_AUTO_INIT
-	char init_check_name[MSH_MAX_NAME_LEN] = {0};
-#ifdef MSH_WIN
-	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, GetProcessId(GetCurrentProcess()));
-	HANDLE temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 1, init_check_name);
-	err = GetLastError();
-	if(temp_handle == NULL)
-	{
-		readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
-	}
-	else if(err != ERROR_ALREADY_EXISTS)
-	{
-		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
-		{
-			if(CloseHandle(temp_handle) == 0)
-			{
-				readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
-			}
-			return;
-		}
-		
-		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
-		init();
-		g_info->lcl_init_seg.handle = temp_handle;
-		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
-		g_info->lcl_init_seg.is_init = TRUE;
-	}
-	else
-	{
-		if(CloseHandle(temp_handle) == 0)
-		{
-			readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
-		}
-	}
-#else
-	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, (unsigned long)(getpid()));
-	int temp_handle;
-	if((temp_handle = shm_open(init_check_name, O_RDONLY|O_CREAT|O_EXCL, 0))  == -1)
-	{
-		/* we want this to error if it does exist */
-		if(errno != EEXIST)
-		{
-			readShmOpenError(errno);
-		}
-	}
-	else
-	{
-		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
-		{
-			if(shm_unlink(init_check_name) != 0)
-			{
-				readShmUnlinkError(errno);
-			}
-			return;
-		}
-		
-		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
-		init();
-		g_info->lcl_init_seg.handle = temp_handle;
-		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
-		g_info->lcl_init_seg.is_init = TRUE;
-	}
-#endif
+	autoInit(directive);
 #endif
 	
 	if(directive != msh_DETACH && directive != msh_INIT && precheck() != TRUE)
@@ -129,251 +68,20 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				readErrorMex("InvalidTypeError", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 			}
 			
-			acquireProcLock();
-			
-			/* clear the previous variable if needed */
-			if(!mxIsEmpty(g_shm_var))
-			{
-				/* if the current shared variable shares all the same dimensions, etc. then just copy over the memory */
-				if(shmCompareSize(shm_data_ptr, in_var) == TRUE)
-				{
-					/* DON'T INCREMENT THE REVISION NUMBER */
-					/* this is an in-place change, so everyone is still fine */
-					
-					/* do the rewrite after checking because the comparison is cheap */
-					shmRewrite(shm_data_ptr, in_var);
-					
-					updateAll();
-					releaseProcLock();
-					
-					/* BREAK DON'T DO ANYTHING ELSE */
-					break;
-				}
-				else
-				{
-					/* otherwise we'll detach and start over */
-					shmDetach(g_shm_var);
-				}
-			}
-			mxDestroyArray(g_shm_var);
-			g_info->flags.is_glob_shm_var_init = FALSE;
-			
-			/* scan input data */
-			shm_size = shmScan(in_var, &g_shm_var);
-			
-			/* update the revision number and indicate our info is current */
-			g_info->cur_seg_info.rev_num = shm_update_info->rev_num + 1;
-			if(shm_size > g_info->shm_data_seg.seg_sz)
-			{
-				
-				/* update the current map number if we can't reuse the current segment */
-				/* else we reuse the current segment */
-				
-				/* create a unique new segment */
-				g_info->cur_seg_info.seg_num = shm_update_info->lead_seg_num + 1;
-
-#ifdef MSH_WIN
-				
-				/* decrement the kernel handle count and tell onExit not to do this twice */
-				if(UnmapViewOfFile(shm_data_ptr) == 0)
-				{
-					err = GetLastError();
-					releaseProcLock();
-					readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u).", err);
-				}
-				g_info->shm_data_seg.is_mapped = FALSE;
-				
-				if(CloseHandle(g_info->shm_data_seg.handle) == 0)
-				{
-					err = GetLastError();
-					releaseProcLock();
-					readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u).", err);
-				}
-				g_info->shm_data_seg.is_init = FALSE;
-				
-				/* change the map size */
-				g_info->shm_data_seg.seg_sz = shm_size;
-				
-				/* change the file name */
-				snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
-				
-				/* create the new mapping */
-				lo_sz = (DWORD)(g_info->shm_data_seg.seg_sz & 0xFFFFFFFFL);
-				hi_sz = (DWORD)((g_info->shm_data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
-				g_info->shm_data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->shm_data_seg.name);
-				if(g_info->shm_data_seg.handle == NULL)
-				{
-					/* throw error if it already exists because that shouldn't happen */
-					err = GetLastError();
-					releaseProcLock();
-					readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
-				}
-				g_info->shm_data_seg.is_init = TRUE;
-				
-				g_info->shm_data_seg.ptr = MapViewOfFile(g_info->shm_data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_data_seg.seg_sz);
-				if(g_info->shm_data_seg.ptr == NULL)
-				{
-					err = GetLastError();
-					releaseProcLock();
-					readErrorMex("MapDataSegError", "Could not map the data memory segment (Error number %u)", err);
-				}
-				g_info->shm_data_seg.is_mapped = TRUE;
-
-#else
-				
-				/* unmap in preparation for size change */
-				if(munmap(shm_data_ptr, g_info->shm_data_seg.seg_sz) != 0)
-				{
-					releaseProcLock();
-					readMunmapError(errno);
-				}
-				g_info->shm_data_seg.is_mapped = FALSE;
-				
-				g_info->shm_data_seg.seg_sz = shm_size;
-				
-				/* change the map size */
-				if(ftruncate(g_info->shm_data_seg.handle, g_info->shm_data_seg.seg_sz) != 0)
-				{
-					releaseProcLock();
-					readFtruncateError(errno);
-				}
-				
-				/* remap the shared memory */
-				g_info->shm_data_seg.ptr = mmap(NULL, g_info->shm_data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_seg.handle, 0);
-				if(shm_data_ptr == MAP_FAILED)
-				{
-					releaseProcLock();
-					readMmapError(errno);
-				}
-				g_info->shm_data_seg.is_mapped = TRUE;
-
-#endif
-				
-				/* warning: this may cause a collision in the rare case where one process is still at seg_num == 0
-				 * and lead_seg_num == UINT64_MAX; very unlikely, so the overhead isn't worth it */
-				shm_update_info->lead_seg_num = g_info->cur_seg_info.seg_num;
-				
-			}
-			
-			/* copy data to the shared memory */
-			shmCopy(shm_data_ptr, in_var, g_shm_var);
-			
-			mexMakeArrayPersistent(g_shm_var);
-			g_info->flags.is_glob_shm_var_init = TRUE;
-			
-			updateAll();
-			releaseProcLock();
+			mshShare(in_var);
 			
 			/* lazy return---doesn't return to ans, but returns if assigned */
 			if(nlhs == 1)
 			{
-				plhs[0] = mxCreateSharedDataCopy(g_shm_var);
+				plhs[0] = mxCreateSharedDataCopy(g_info->var_q_front->var);
 			}
 			
 			break;
 		
 		case msh_FETCH:
 			
-			acquireProcLock();
-			
-			/* check if the current revision number is the same as the shm revision number */
-			if(g_info->cur_seg_info.rev_num != shm_update_info->rev_num && g_info->this_pid != shm_update_info->upd_pid)
-			{
-				//do a detach operation
-				if(!mxIsEmpty(g_shm_var))
-				{
-					/* NULL all of the Matlab pointers */
-					shmDetach(g_shm_var);
-				}
-				mxDestroyArray(g_shm_var);
-				
-				g_info->cur_seg_info.rev_num = shm_update_info->rev_num;
-				
-				/* Update the mapping if this is on a new segment */
-				if(g_info->cur_seg_info.seg_num != shm_update_info->seg_num)
-				{
-					g_info->cur_seg_info.seg_num = shm_update_info->seg_num;
-
-#ifdef MSH_WIN
-					
-					if(UnmapViewOfFile(shm_data_ptr) == 0)
-					{
-						err = GetLastError();
-						makeDummyVar(&plhs[0]);
-						releaseProcLock();
-						readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u)", err);
-					}
-					g_info->shm_data_seg.is_mapped = FALSE;
-					
-					if(CloseHandle(g_info->shm_data_seg.handle) == 0)
-					{
-						err = GetLastError();
-						makeDummyVar(&plhs[0]);
-						releaseProcLock();
-						readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u)", err);
-					}
-					g_info->shm_data_seg.is_init = FALSE;
-					
-					/* update the size */
-					g_info->shm_data_seg.seg_sz = shm_update_info->seg_sz;
-					
-					/* update the region name */
-					snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
-					
-					g_info->shm_data_seg.handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, g_info->shm_data_seg.name);
-					err = GetLastError();
-					if(g_info->shm_data_seg.handle == NULL)
-					{
-						makeDummyVar(&plhs[0]);
-						releaseProcLock();
-						readErrorMex("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
-					}
-					g_info->shm_data_seg.is_init = TRUE;
-					
-					g_info->shm_data_seg.ptr = MapViewOfFile(g_info->shm_data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_data_seg.seg_sz);
-					err = GetLastError();
-					if(shm_data_ptr == NULL)
-					{
-						makeDummyVar(&plhs[0]);
-						releaseProcLock();
-						readErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
-					}
-					g_info->shm_data_seg.is_mapped = TRUE;
-
-#else
-					
-					/* unmap the current mapping */
-					if(munmap(shm_data_ptr, g_info->shm_data_seg.seg_sz) != 0)
-					{
-						releaseProcLock();
-						readMunmapError(errno);
-					}
-					g_info->shm_data_seg.is_mapped = FALSE;
-					
-					/* update the size */
-					g_info->shm_data_seg.seg_sz = shm_update_info->seg_sz;
-					
-					/* remap with the updated size */
-					g_info->shm_data_seg.ptr = mmap(NULL, g_info->shm_data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_seg.handle, 0);
-					if(shm_data_ptr == MAP_FAILED)
-					{
-						releaseProcLock();
-						readMmapError(errno);
-					}
-					g_info->shm_data_seg.is_mapped = TRUE;
-#endif
-				
-				}
-				
-				shmFetch(shm_data_ptr, &g_shm_var);
-				
-				mexMakeArrayPersistent(g_shm_var);
-				
-			}
-			
-			plhs[0] = mxCreateSharedDataCopy(g_shm_var);
-			
-			releaseProcLock();
+			mshFetch();
+			plhs[0] = mxCreateSharedDataCopy(g_info->var_q_front->var);
 			
 			break;
 		
@@ -409,7 +117,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		
 		case msh_DEEPCOPY:
-			plhs[0] = mxDuplicateArray(g_shm_var);
+			plhs[0] = mxDuplicateArray(g_info->var_q_front->var);
 			break;
 		case msh_DEBUG:
 			/* maybe print debug information at some point */
@@ -430,6 +138,256 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 	}
 	
+}
+
+
+void mshShare(const mxArray* in_var)
+{
+
+#ifdef MSH_WIN
+	DWORD hi_sz, lo_sz, err;
+#endif
+	
+	size_t shm_size;
+	
+	acquireProcLock();
+	
+	/* clear the previous variable if needed */
+	if(!mxIsEmpty(g_info->var_q_front->var))
+	{
+		/* if the current shared variable shares all the same dimensions, etc. then just copy over the memory */
+		if(shmCompareSize(shm_data_ptr, in_var) == TRUE)
+		{
+			/* DON'T INCREMENT THE REVISION NUMBER */
+			/* this is an in-place change, so everyone is still fine */
+			
+			/* do the rewrite after checking because the comparison is cheap */
+			shmRewrite(shm_data_ptr, in_var);
+			
+			updateAll();
+			releaseProcLock();
+			
+			/* DON'T DO ANYTHING ELSE */
+			return;
+		}
+		else
+		{
+			/* otherwise we'll detach and start over */
+			shmDetach(g_info->var_q_front->var);
+		}
+	}
+	mxDestroyArray(g_info->var_q_front->var);
+	g_info->flags.is_glob_shm_var_init = FALSE;
+	
+	/* scan input data */
+	shm_size = shmScan(in_var, &g_info->var_q_front->var);
+	
+	/* update the revision number and indicate our info is current */
+	g_info->var_q_front->rev_num = shm_update_info->rev_num + 1;
+	if(shm_size > g_info->var_q_front->data_seg.seg_sz)
+	{
+		
+		/* update the current map number if we can't reuse the current segment */
+		/* else we reuse the current segment */
+		
+		/* create a unique new segment */
+		g_info->var_q_front->seg_num = shm_update_info->lead_seg_num + 1;
+
+#ifdef MSH_WIN
+		
+		/* decrement the kernel handle count and tell onExit not to do this twice */
+		if(UnmapViewOfFile(shm_data_ptr) == 0)
+		{
+			err = GetLastError();
+			releaseProcLock();
+			readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u).", err);
+		}
+		g_info->var_q_front->data_seg.is_mapped = FALSE;
+		
+		if(CloseHandle(g_info->var_q_front->data_seg.handle) == 0)
+		{
+			err = GetLastError();
+			releaseProcLock();
+			readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u).", err);
+		}
+		g_info->var_q_front->data_seg.is_init = FALSE;
+		
+		/* change the map size */
+		g_info->var_q_front->data_seg.seg_sz = shm_size;
+		
+		/* change the file name */
+		snprintf(g_info->var_q_front->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->var_q_front->seg_num);
+		
+		/* create the new mapping */
+		lo_sz = (DWORD)(g_info->var_q_front->data_seg.seg_sz & 0xFFFFFFFFL);
+		hi_sz = (DWORD)((g_info->var_q_front->data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
+		g_info->var_q_front->data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->var_q_front->data_seg.name);
+		if(g_info->var_q_front->data_seg.handle == NULL)
+		{
+			/* throw error if it already exists because that shouldn't happen */
+			err = GetLastError();
+			releaseProcLock();
+			readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
+		}
+		g_info->var_q_front->data_seg.is_init = TRUE;
+		
+		g_info->var_q_front->data_seg.ptr = MapViewOfFile(g_info->var_q_front->data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->var_q_front->data_seg.seg_sz);
+		if(g_info->var_q_front->data_seg.ptr == NULL)
+		{
+			err = GetLastError();
+			releaseProcLock();
+			readErrorMex("MapDataSegError", "Could not map the data memory segment (Error number %u)", err);
+		}
+		g_info->var_q_front->data_seg.is_mapped = TRUE;
+
+#else
+		
+		/* unmap in preparation for size change */
+				if(munmap(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
+				{
+					releaseProcLock();
+					readMunmapError(errno);
+				}
+				g_info->var_q_front->data_seg.is_mapped = FALSE;
+				
+				g_info->var_q_front->data_seg.seg_sz = shm_size;
+				
+				/* change the map size */
+				if(ftruncate(g_info->var_q_front->data_seg.handle, g_info->var_q_front->data_seg.seg_sz) != 0)
+				{
+					releaseProcLock();
+					readFtruncateError(errno);
+				}
+				
+				/* remap the shared memory */
+				g_info->var_q_front->data_seg.ptr = mmap(NULL, g_info->var_q_front->data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->var_q_front->data_seg.handle, 0);
+				if(shm_data_ptr == MAP_FAILED)
+				{
+					releaseProcLock();
+					readMmapError(errno);
+				}
+				g_info->var_q_front->data_seg.is_mapped = TRUE;
+
+#endif
+		
+		/* warning: this may cause a collision in the rare case where one process is still at seg_num == 0
+		 * and lead_seg_num == UINT64_MAX; very unlikely, so the overhead isn't worth it */
+		shm_update_info->lead_seg_num = g_info->var_q_front->seg_num;
+		
+	}
+	
+	/* copy data to the shared memory */
+	shmCopy(shm_data_ptr, in_var, g_info->var_q_front->var);
+	
+	mexMakeArrayPersistent(g_info->var_q_front->var);
+	g_info->flags.is_glob_shm_var_init = TRUE;
+	
+	updateAll();
+	releaseProcLock();
+}
+
+
+void mshFetch(void)
+{
+
+#ifdef MSH_WIN
+	DWORD err;
+#endif
+	
+	acquireProcLock();
+	
+	/* check if the current revision number is the same as the shm revision number */
+	if(g_info->var_q_front->rev_num != shm_update_info->rev_num && g_info->this_pid != shm_update_info->upd_pid)
+	{
+		//do a detach operation
+		if(!mxIsEmpty(g_info->var_q_front->var))
+		{
+			/* NULL all of the Matlab pointers */
+			shmDetach(g_info->var_q_front->var);
+		}
+		mxDestroyArray(g_info->var_q_front->var);
+		
+		g_info->var_q_front->rev_num = shm_update_info->rev_num;
+		
+		/* Update the mapping if this is on a new segment */
+		if(g_info->var_q_front->seg_num != shm_update_info->seg_num)
+		{
+			g_info->var_q_front->seg_num = shm_update_info->seg_num;
+
+#ifdef MSH_WIN
+			
+			if(UnmapViewOfFile(shm_data_ptr) == 0)
+			{
+				err = GetLastError();
+				releaseProcLock();
+				readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u)", err);
+			}
+			g_info->var_q_front->data_seg.is_mapped = FALSE;
+			
+			if(CloseHandle(g_info->var_q_front->data_seg.handle) == 0)
+			{
+				err = GetLastError();
+				releaseProcLock();
+				readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u)", err);
+			}
+			g_info->var_q_front->data_seg.is_init = FALSE;
+			
+			/* update the size */
+			g_info->var_q_front->data_seg.seg_sz = shm_update_info->seg_sz;
+			
+			/* update the region name */
+			snprintf(g_info->var_q_front->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->var_q_front->seg_num);
+			
+			g_info->var_q_front->data_seg.handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, g_info->var_q_front->data_seg.name);
+			err = GetLastError();
+			if(g_info->var_q_front->data_seg.handle == NULL)
+			{
+				releaseProcLock();
+				readErrorMex("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
+			}
+			g_info->var_q_front->data_seg.is_init = TRUE;
+			
+			g_info->var_q_front->data_seg.ptr = MapViewOfFile(g_info->var_q_front->data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->var_q_front->data_seg.seg_sz);
+			err = GetLastError();
+			if(shm_data_ptr == NULL)
+			{
+				releaseProcLock();
+				readErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
+			}
+			g_info->var_q_front->data_seg.is_mapped = TRUE;
+
+#else
+			
+			/* unmap the current mapping */
+					if(munmap(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
+					{
+						releaseProcLock();
+						readMunmapError(errno);
+					}
+					g_info->var_q_front->data_seg.is_mapped = FALSE;
+					
+					/* update the size */
+					g_info->var_q_front->data_seg.seg_sz = shm_update_info->seg_sz;
+					
+					/* remap with the updated size */
+					g_info->var_q_front->data_seg.ptr = mmap(NULL, g_info->var_q_front->data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->var_q_front->data_seg.handle, 0);
+					if(shm_data_ptr == MAP_FAILED)
+					{
+						releaseProcLock();
+						readMmapError(errno);
+					}
+					g_info->var_q_front->data_seg.is_mapped = TRUE;
+#endif
+		
+		}
+		
+		shmFetch(shm_data_ptr, &g_info->var_q_front->var);
+		
+		mexMakeArrayPersistent(g_info->var_q_front->var);
+		
+	}
+	
+	releaseProcLock();
 }
 
 

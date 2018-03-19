@@ -14,6 +14,7 @@ void mapUpdateSegment(void);
 void globStartup(Header_t* hdr);
 void initDataSegment(void);
 void mapDataSegment(void);
+void autoInit(mshdirective_t directive);
 
 extern size_t shmFetch(byte_t* shm, mxArray** ret_var);
 

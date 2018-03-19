@@ -77,12 +77,13 @@ void onExit(void)
 	
 	if(g_info->flags.is_glob_shm_var_init)
 	{
-		if(!mxIsEmpty(g_shm_var))
+		if(!mxIsEmpty(g_info->var_q_front->var))
 		{
 			/* NULL all of the Matlab pointers */
-			shmDetach(g_shm_var);
+			shmDetach(g_info->var_q_front->var);
 		}
-		mxDestroyArray(g_shm_var);
+		mxDestroyArray(g_info->var_q_front->var);
+		g_info->flags.is_glob_shm_var_init = FALSE;
 	}
 
 #ifdef MSH_WIN
@@ -111,22 +112,22 @@ void onExit(void)
 	}
 #endif
 	
-	if(g_info->shm_data_seg.is_mapped)
+	if(g_info->var_q_front->data_seg.is_mapped)
 	{
 		if(UnmapViewOfFile(shm_data_ptr) == 0)
 		{
 			readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 		}
-		g_info->shm_data_seg.is_mapped = FALSE;
+		g_info->var_q_front->data_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->shm_data_seg.is_init)
+	if(g_info->var_q_front->data_seg.is_init)
 	{
-		if(CloseHandle(g_info->shm_data_seg.handle) == 0)
+		if(CloseHandle(g_info->var_q_front->data_seg.handle) == 0)
 		{
 			readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
 		}
-		g_info->shm_data_seg.is_init = FALSE;
+		g_info->var_q_front->data_seg.is_init = FALSE;
 	}
 	
 	if(g_info->shm_update_seg.is_mapped)
@@ -191,25 +192,25 @@ void onExit(void)
 #endif
 	
 	
-	if(g_info->shm_data_seg.is_mapped)
+	if(g_info->var_q_front->data_seg.is_mapped)
 	{
-		if(munmap(shm_data_ptr, g_info->shm_data_seg.seg_sz) != 0)
+		if(munmap(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
 		{
 			readMunmapError(errno);
 		}
-		g_info->shm_data_seg.is_mapped = FALSE;
+		g_info->var_q_front->data_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->shm_data_seg.is_init)
+	if(g_info->var_q_front->data_seg.is_init)
 	{
 		if(will_remove)
 		{
-			if(shm_unlink(g_info->shm_data_seg.name) != 0)
+			if(shm_unlink(g_info->var_q_front->data_seg.name) != 0)
 			{
 				readShmUnlinkError(errno);
 			}
 		}
-		g_info->shm_data_seg.is_init = FALSE;
+		g_info->var_q_front->data_seg.is_init = FALSE;
 	}
 	
 	if(g_info->shm_update_seg.is_mapped)
@@ -245,6 +246,12 @@ void onExit(void)
 #endif
 
 #endif
+	
+	if(g_info->flags.is_var_q_init)
+	{
+		mxFree(g_info->var_q_front);
+		g_info->flags.is_var_q_init = FALSE;
+	}
 	
 	mxFree(g_info);
 	g_info = NULL;
@@ -525,7 +532,7 @@ void parseParams(int num_params, const mxArray* in[])
 				{
 					readFchmodError(errno);
 				}
-				if(fchmod(g_info->shm_data_seg.handle, shm_update_info->security) != 0)
+				if(fchmod(g_info->var_q_front->data_seg.handle, shm_update_info->security) != 0)
 				{
 					readFchmodError(errno);
 				}
@@ -557,16 +564,16 @@ void parseParams(int num_params, const mxArray* in[])
 void updateAll(void)
 {
 	shm_update_info->upd_pid = g_info->this_pid;
-	shm_update_info->rev_num = g_info->cur_seg_info.rev_num;
-	shm_update_info->seg_num = g_info->cur_seg_info.seg_num;
-	shm_update_info->seg_sz = g_info->shm_data_seg.seg_sz;
+	shm_update_info->rev_num = g_info->var_q_front->rev_num;
+	shm_update_info->seg_num = g_info->var_q_front->seg_num;
+	shm_update_info->seg_sz = g_info->var_q_front->data_seg.seg_sz;
 #ifdef MSH_WIN
 	/* not sure if this is required on windows, but it doesn't hurt */
 	if(FlushViewOfFile(shm_update_info, g_info->shm_update_seg.seg_sz) == 0)
 	{
 		readErrorMex("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
 	}
-	if(FlushViewOfFile(shm_data_ptr, g_info->shm_data_seg.seg_sz) == 0)
+	if(FlushViewOfFile(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz) == 0)
 	{
 		readErrorMex("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
 	}
@@ -578,7 +585,7 @@ void updateAll(void)
 		releaseProcLock();
 		readMsyncError(errno);
 	}
-	if(msync(shm_data_ptr, g_info->shm_data_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
+	if(msync(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
 	{
 		releaseProcLock();
 		readMsyncError(errno);
@@ -592,8 +599,8 @@ bool_t precheck(void)
 {
 	bool_t ret = g_info->shm_update_seg.is_init
 			   & g_info->shm_update_seg.is_mapped
-			   & g_info->shm_data_seg.is_init
-			   & g_info->shm_data_seg.is_mapped
+			   & g_info->var_q_front->data_seg.is_init
+			   & g_info->var_q_front->data_seg.is_mapped
 			   & g_info->flags.is_glob_shm_var_init;
 #ifdef MSH_THREAD_SAFE
 	return ret & g_info->flags.is_proc_lock_init;
@@ -603,12 +610,65 @@ bool_t precheck(void)
 }
 
 
-void makeDummyVar(mxArray** out)
+void searchUnusedQueue(void)
 {
-	g_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
-	mexMakeArrayPersistent(g_shm_var);
-	*out = mxCreateSharedDataCopy(g_shm_var);
-	g_info->flags.is_glob_shm_var_init = TRUE;
+	VariableNode_t* curr_node = g_info->var_q_front;
+	while(curr_node != NULL)
+	{
+		if(*curr_node->crosslink == NULL)
+		{
+			/* if there are no references to this variable do a destroy operation */
+			if(!mxIsEmpty(curr_node->var))
+			{
+				/* NULL all of the Matlab pointers */
+				shmDetach(curr_node->var);
+			}
+			mxDestroyArray(curr_node->var);
+
+#ifdef MSH_WIN
+			if(curr_node->data_seg.is_mapped)
+			{
+				if(UnmapViewOfFile(shm_data_ptr) == 0)
+				{
+					readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
+				}
+				curr_node->data_seg.is_mapped = FALSE;
+			}
+			
+			if(curr_node->data_seg.is_init)
+			{
+				if(CloseHandle(curr_node->data_seg.handle) == 0)
+				{
+					readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
+				}
+				curr_node->data_seg.is_init = FALSE;
+			}
+#else
+			if(g_info->var_q_front->data_seg.is_mapped)
+			{
+				if(munmap(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
+				{
+					readMunmapError(errno);
+				}
+				g_info->var_q_front->data_seg.is_mapped = FALSE;
+			}
+			
+			if(g_info->var_q_front->data_seg.is_init)
+			{
+				if(will_remove)
+				{
+					if(shm_unlink(g_info->var_q_front->data_seg.name) != 0)
+					{
+						readShmUnlinkError(errno);
+					}
+				}
+				g_info->var_q_front->data_seg.is_init = FALSE;
+			}
+#endif
+		}
+		
+		curr_node = curr_node->next;
+	}
 }
 
 

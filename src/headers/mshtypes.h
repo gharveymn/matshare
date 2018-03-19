@@ -96,6 +96,14 @@ typedef enum
 } mshdirective_t;
 
 
+typedef enum
+{
+	msh_SHARETYPE_COPY,			/* always create a new segment */
+	msh_SHARETYPE_REWRITE,		/* if the new variable has the same data size and attributes, rewrite, otherwise create new segment */
+	msh_SHARETYPE_OVERWRITE		/* reuse the same segment if the new variable is smaller than or the same size as the old one */
+} mshsharetype_t;
+
+
 /* captures fundamentals of the mxArray */
 /* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
 typedef struct Header_tag Header_t;
@@ -132,7 +140,7 @@ struct ShmData_tag
 	void* pi;               			/* imaginary data portion */
 	mwIndex* ir;                    	/* row indexes, for sparse */
 	mwIndex* jc;                  	/* cumulative column counts, for sparse */
-	char_t* field_str;   			/* list of a structures fields, each field name will be seperated by a null character */
+	char_t* field_str;   			/* list of a structures fields, each field name will be separated by a null character */
 	size_t* child_hdrs;          		/* array of corresponding children headers */
 };
 
@@ -151,16 +159,10 @@ struct ShmSegmentInfo_tag
 	pid_t upd_pid;
 	mode_t security;
 #endif
+	mshsharetype_t sharetype;
 #ifdef MSH_THREAD_SAFE
 	bool_t is_thread_safe;
 #endif
-};
-
-typedef struct LocalSegmentInfo_tag LocalSegmentInfo_t;
-struct LocalSegmentInfo_tag
-{
-	size_t seg_num;                              // segment number (iterated when a new file is needed)
-	size_t rev_num;                              // total number of revisions (used for comparison, not indexing, so it's circular)
 };
 
 typedef struct MemorySegment_tag MemorySegment_t;
@@ -178,10 +180,22 @@ struct MemorySegment_tag
 	void* ptr;
 };
 
+typedef struct VariableNode_tag VariableNode_t;
+struct VariableNode_tag
+{
+	VariableNode_t* next;
+	VariableNode_t* prev;
+	mxArray* var;
+	mxArray** crosslink;
+	size_t seg_num;
+	size_t rev_num;
+	MemorySegment_t data_seg;
+};
+
 typedef struct MexInfo_tag MexInfo_t;
 struct MexInfo_tag
 {
-	MemorySegment_t shm_data_seg;
+	VariableNode_t* var_q_front;
 	MemorySegment_t shm_update_seg;
 
 #ifdef MSH_AUTO_INIT
@@ -197,8 +211,6 @@ struct MexInfo_tag
 #endif
 #endif
 	
-	LocalSegmentInfo_t cur_seg_info;
-	
 	struct
 	{
 #ifdef MSH_THREAD_SAFE
@@ -206,6 +218,7 @@ struct MexInfo_tag
 		bool_t is_proc_locked;
 #endif
 		bool_t is_glob_shm_var_init;
+		bool_t is_var_q_init;
 	} flags;
 
 #ifdef MSH_WIN
@@ -218,10 +231,9 @@ struct MexInfo_tag
 	
 };
 
-mxArray* g_shm_var;
 MexInfo_t* g_info;
 
-#define shm_data_ptr ((byte_t*)g_info->shm_data_seg.ptr)
+#define shm_data_ptr ((byte_t*)g_info->var_q_front->data_seg.ptr)
 #define shm_update_info ((ShmSegmentInfo_t*)g_info->shm_update_seg.ptr)
 
 #endif //MATSHARE_MSH_TYPES_H

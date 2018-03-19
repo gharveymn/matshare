@@ -6,6 +6,10 @@
 #include "mshutils.h"
 #include "init.h"
 
+void mshFetch(void);
+
+void mshShare(const mxArray* in_var);
+
 /* Remove shared memory references to input matrix (in-situ), recursively    */
 /* if needed.                                                                */
 void shmDetach(mxArray* ret_var);

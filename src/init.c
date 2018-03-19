@@ -40,16 +40,23 @@ void init()
 	/* only actually locks if this is memory safe */
 	acquireProcLock();
 	
-	g_info->cur_seg_info.rev_num = shm_update_info->rev_num;
-	g_info->cur_seg_info.seg_num = shm_update_info->seg_num;
-	g_info->shm_data_seg.seg_sz = shm_update_info->seg_sz;
+	if(!g_info->flags.is_var_q_init)
+	{
+		g_info->var_q_front = mxCalloc(1, sizeof(VariableNode_t));
+		mexMakeMemoryPersistent(g_info->var_q_front);
+		g_info->flags.is_var_q_init = TRUE;
+	}
 	
-	if(!g_info->shm_data_seg.is_init)
+	g_info->var_q_front->rev_num = shm_update_info->rev_num;
+	g_info->var_q_front->seg_num = shm_update_info->seg_num;
+	g_info->var_q_front->data_seg.seg_sz = shm_update_info->seg_sz;
+	
+	if(!g_info->var_q_front->data_seg.is_init)
 	{
 		initDataSegment();
 	}
 	
-	if(!g_info->shm_data_seg.is_mapped)
+	if(!g_info->var_q_front->data_seg.is_mapped)
 	{
 		mapDataSegment();
 	}
@@ -57,7 +64,7 @@ void init()
 	if(is_glob_init)
 	{
 		/* initialize shared memory */
-		memset(shm_data_ptr, 0, g_info->shm_data_seg.seg_sz);
+		memset(shm_data_ptr, 0, g_info->var_q_front->data_seg.seg_sz);
 		
 		/* set the data to mirror the dummy variable at the end */
 		memcpy(shm_data_ptr, &hdr, hdr.obj_sz);
@@ -69,14 +76,14 @@ void init()
 		
 		if(is_glob_init)
 		{
-			g_shm_var = mxCreateDoubleMatrix(0, 0, mxREAL);
+			g_info->var_q_front->var = mxCreateDoubleMatrix(0, 0, mxREAL);
 		}
 		else
 		{
 			/* fetch the data rather than create a dummy variable */
-			shmFetch(shm_data_ptr, &g_shm_var);
+			shmFetch(shm_data_ptr, &g_info->var_q_front->var);
 		}
-		mexMakeArrayPersistent(g_shm_var);
+		mexMakeArrayPersistent(g_info->var_q_front->var);
 		g_info->flags.is_glob_shm_var_init = TRUE;
 	}
 	else
@@ -105,12 +112,12 @@ void procStartup(void)
 	/* mxCalloc guarantees that these are zeroed
 	g_info->flags.is_proc_lock_init = FALSE;
 	
-	g_info->shm_data_seg = {0};
+	g_info->var_q_front->data_seg = {0};
 	g_info->shm_update_seg.is_init = FALSE;
 	g_info->shm_update_seg.is_mapped = FALSE;
 	
-	g_info->shm_data_seg.is_init = FALSE;
-	g_info->shm_data_seg.is_mapped = FALSE;
+	g_info->var_q_front->data_seg.is_init = FALSE;
+	g_info->var_q_front->data_seg.is_mapped = FALSE;
 	
 	temp_info->startup_flag.is_mapped = FALSE;
 	
@@ -287,6 +294,7 @@ void globStartup(Header_t* hdr)
 #ifdef MSH_UNIX
 		shm_update_info->security = S_IRUSR | S_IWUSR; /** default value **/
 #endif
+		shm_update_info->sharetype = msh_SHARETYPE_OVERWRITE;
 
 #ifdef MSH_THREAD_SAFE
 		shm_update_info->is_thread_safe = TRUE; 		/** default value **/
@@ -305,30 +313,30 @@ void initDataSegment(void)
 
 #ifdef MSH_WIN
 	
-	snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->cur_seg_info.seg_num);
-	uint32_t lo_sz = (uint32_t)(g_info->shm_data_seg.seg_sz & 0xFFFFFFFFL);
-	uint32_t hi_sz = (uint32_t)((g_info->shm_data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
-	g_info->shm_data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->shm_data_seg.name);
+	snprintf(g_info->var_q_front->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->var_q_front->seg_num);
+	uint32_t lo_sz = (uint32_t)(g_info->var_q_front->data_seg.seg_sz & 0xFFFFFFFFL);
+	uint32_t hi_sz = (uint32_t)((g_info->var_q_front->data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
+	g_info->var_q_front->data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->var_q_front->data_seg.name);
 	DWORD err = GetLastError();
-	if(g_info->shm_data_seg.handle == NULL)
+	if(g_info->var_q_front->data_seg.handle == NULL)
 	{
 		releaseProcLock();
 		readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u)", err);
 	}
-	g_info->shm_data_seg.is_init = TRUE;
+	g_info->var_q_front->data_seg.is_init = TRUE;
 	
 #else
 	
-	snprintf(g_info->shm_data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)0);
+	snprintf(g_info->var_q_front->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)0);
 	
-	g_info->shm_data_seg.handle = shm_open(g_info->shm_data_seg.name, O_RDWR | O_CREAT, shm_update_info->security);
-	if(g_info->shm_data_seg.handle == -1)
+	g_info->var_q_front->data_seg.handle = shm_open(g_info->var_q_front->data_seg.name, O_RDWR | O_CREAT, shm_update_info->security);
+	if(g_info->var_q_front->data_seg.handle == -1)
 	{
 		readShmOpenError(errno);
 	}
-	g_info->shm_data_seg.is_init = TRUE;
+	g_info->var_q_front->data_seg.is_init = TRUE;
 	
-	if(ftruncate(g_info->shm_data_seg.handle, g_info->shm_data_seg.seg_sz) != 0)
+	if(ftruncate(g_info->var_q_front->data_seg.handle, g_info->var_q_front->data_seg.seg_sz) != 0)
 	{
 		readFtruncateError(errno);
 	}
@@ -342,7 +350,7 @@ void mapDataSegment(void)
 {
 #ifdef MSH_WIN
 	
-	g_info->shm_data_seg.ptr = MapViewOfFile(g_info->shm_data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_data_seg.seg_sz);
+	g_info->var_q_front->data_seg.ptr = MapViewOfFile(g_info->var_q_front->data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->var_q_front->data_seg.seg_sz);
 	if(shm_data_ptr == NULL)
 	{
 		releaseProcLock();
@@ -351,14 +359,81 @@ void mapDataSegment(void)
 	
 #else
 	
-	g_info->shm_data_seg.ptr = mmap(NULL, g_info->shm_data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_data_seg.handle, 0);
-	if(g_info->shm_data_seg.ptr == MAP_FAILED)
+	g_info->var_q_front->data_seg.ptr = mmap(NULL, g_info->var_q_front->data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->var_q_front->data_seg.handle, 0);
+	if(g_info->var_q_front->data_seg.ptr == MAP_FAILED)
 	{
 		readMmapError(errno);
 	}
 	
 #endif
 	
-	g_info->shm_data_seg.is_mapped = TRUE;
+	g_info->var_q_front->data_seg.is_mapped = TRUE;
 	
+}
+
+
+void autoInit(mshdirective_t directive)
+{
+	char init_check_name[MSH_MAX_NAME_LEN] = {0};
+#ifdef MSH_WIN
+	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, GetProcessId(GetCurrentProcess()));
+	HANDLE temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 1, init_check_name);
+	DWORD err = GetLastError();
+	if(temp_handle == NULL)
+	{
+		readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
+	}
+	else if(err != ERROR_ALREADY_EXISTS)
+	{
+		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
+		{
+			if(CloseHandle(temp_handle) == 0)
+			{
+				readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
+			}
+			return;
+		}
+		
+		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
+		init();
+		g_info->lcl_init_seg.handle = temp_handle;
+		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
+		g_info->lcl_init_seg.is_init = TRUE;
+	}
+	else
+	{
+		if(CloseHandle(temp_handle) == 0)
+		{
+			readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
+		}
+	}
+#else
+	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, (unsigned long)(getpid()));
+	int temp_handle;
+	if((temp_handle = shm_open(init_check_name, O_RDONLY|O_CREAT|O_EXCL, 0))  == -1)
+	{
+		/* we want this to error if it does exist */
+		if(errno != EEXIST)
+		{
+			readShmOpenError(errno);
+		}
+	}
+	else
+	{
+		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
+		{
+			if(shm_unlink(init_check_name) != 0)
+			{
+				readShmUnlinkError(errno);
+			}
+			return;
+		}
+		
+		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
+		init();
+		g_info->lcl_init_seg.handle = temp_handle;
+		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
+		g_info->lcl_init_seg.is_init = TRUE;
+	}
+#endif
 }
