@@ -16,6 +16,6 @@ void initDataSegment(void);
 void mapDataSegment(void);
 void autoInit(mshdirective_t directive);
 
-extern size_t shmFetch(byte_t* shm, mxArray** ret_var);
+extern size_t shmFetch_(byte_t* shm, mxArray** ret_var);
 
 #endif //MATSHARE_INIT_H

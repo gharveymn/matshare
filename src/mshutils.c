@@ -419,7 +419,7 @@ mshdirective_t parseDirective(const mxArray* in)
 		{
 			return msh_FETCH;
 		}
-		else if(strcmp(dir_str, "shmCopy") == 0)
+		else if(strcmp(dir_str, "shmCopy_") == 0)
 		{
 			return msh_DEEPCOPY;
 		}
