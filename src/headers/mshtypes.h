@@ -182,6 +182,7 @@ typedef struct MexInfo_tag MexInfo_t;
 struct MexInfo_tag
 {
 	MemorySegment_t shm_data_seg;
+	MemorySegment_t prev_shm_data_seg;
 	MemorySegment_t shm_update_seg;
 
 #ifdef MSH_AUTO_INIT
