@@ -244,7 +244,6 @@ uint32_t num_lcl_objs;
 
 MexInfo_t* g_info;
 
-#define shm_data_ptr ((byte_t*)g_info->var_q_front->data_seg.ptr)
 #define shm_update_info ((ShmSegmentInfo_t*)g_info->shm_update_seg.ptr)
 
 #endif //MATSHARE_MSH_TYPES_H
