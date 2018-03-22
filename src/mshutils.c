@@ -129,22 +129,22 @@ void onExit(void)
 		g_info->shm_data_seg.is_init = FALSE;
 	}
 	
-	if(g_info->prev_shm_data_seg.is_mapped)
+	if(g_info->swap_shm_data_seg.is_mapped)
 	{
-		if(UnmapViewOfFile(g_info->prev_shm_data_seg.ptr) == 0)
+		if(UnmapViewOfFile(g_info->swap_shm_data_seg.ptr) == 0)
 		{
 			readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 		}
-		g_info->prev_shm_data_seg.is_mapped = FALSE;
+		g_info->swap_shm_data_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->prev_shm_data_seg.is_init)
+	if(g_info->swap_shm_data_seg.is_init)
 	{
-		if(CloseHandle(g_info->prev_shm_data_seg.handle) == 0)
+		if(CloseHandle(g_info->swap_shm_data_seg.handle) == 0)
 		{
 			readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
 		}
-		g_info->prev_shm_data_seg.is_init = FALSE;
+		g_info->swap_shm_data_seg.is_init = FALSE;
 	}
 	
 	if(g_info->shm_update_seg.is_mapped)
