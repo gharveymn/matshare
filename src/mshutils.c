@@ -114,7 +114,7 @@ void onExit(void)
 	
 	if(g_info->var_q_front->data_seg.is_mapped)
 	{
-		if(UnmapViewOfFile(shm_data_ptr) == 0)
+		if(UnmapViewOfFile(g_info->var_q_front->data_seg.ptr) == 0)
 		{
 			readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 		}
@@ -194,7 +194,7 @@ void onExit(void)
 	
 	if(g_info->var_q_front->data_seg.is_mapped)
 	{
-		if(munmap(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
+		if(munmap(g_info->var_q_front->data_seg.ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
 		{
 			readMunmapError(errno);
 		}
@@ -573,7 +573,7 @@ void updateAll(void)
 	{
 		readErrorMex("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
 	}
-	if(FlushViewOfFile(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz) == 0)
+	if(FlushViewOfFile(g_info->var_q_front->data_seg.ptr, g_info->var_q_front->data_seg.seg_sz) == 0)
 	{
 		readErrorMex("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
 	}
@@ -585,7 +585,7 @@ void updateAll(void)
 		releaseProcLock();
 		readMsyncError(errno);
 	}
-	if(msync(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
+	if(msync(g_info->var_q_front->data_seg.ptr, g_info->var_q_front->data_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
 	{
 		releaseProcLock();
 		readMsyncError(errno);
@@ -628,7 +628,7 @@ void searchUnusedQueue(void)
 #ifdef MSH_WIN
 			if(curr_node->data_seg.is_mapped)
 			{
-				if(UnmapViewOfFile(shm_data_ptr) == 0)
+				if(UnmapViewOfFile(g_info->var_q_front->data_seg.ptr) == 0)
 				{
 					readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 				}
@@ -646,7 +646,7 @@ void searchUnusedQueue(void)
 #else
 			if(g_info->var_q_front->data_seg.is_mapped)
 			{
-				if(munmap(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
+				if(munmap(g_info->var_q_front->data_seg.ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
 				{
 					readMunmapError(errno);
 				}

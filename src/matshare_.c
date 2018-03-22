@@ -167,37 +167,30 @@ void mshShare(const mxArray* in_var)
 		 *
 		 * disregard all linked lists and treat the shared data as a single variable
 		 * overwriting as we go
-		/*
+		*/
+
+		mxArray* temp_arr;
 		
 		/* detach the previous variable if needed */
-		if(!mxIsEmpty(g_info->var_q_front->var))
+		
+		/* if the current shared variable shares all the same dimensions, etc. then just copy over the memory */
+		if(!mxIsEmpty(g_info->var_q_front->var) && (shmCompareSize(g_info->var_q_front->data_seg.ptr, in_var) == TRUE))
 		{
-			/* if the current shared variable shares all the same dimensions, etc. then just copy over the memory */
-			if(shmCompareSize(shm_data_ptr, in_var) == TRUE)
-			{
-				/* DON'T INCREMENT THE REVISION NUMBER */
-				/* this is an in-place change, so everyone is still fine */
-				
-				/* do the rewrite after checking because the comparison is cheap */
-				shmRewrite(shm_data_ptr, in_var);
-				
-				updateAll();
-				releaseProcLock();
-				
-				/* DON'T DO ANYTHING ELSE */
-				return;
-			}
-			else
-			{
-				/* otherwise we'll detach and start over */
-				shmDetach(g_info->var_q_front->var);
-			}
+			/* DON'T INCREMENT THE REVISION NUMBER */
+			/* this is an in-place change, so everyone is still fine */
+			
+			/* do the rewrite after checking because the comparison is cheap */
+			shmRewrite(g_info->var_q_front->data_seg.ptr, in_var);
+			
+			updateAll();
+			releaseProcLock();
+			
+			/* DON'T DO ANYTHING ELSE */
+			return;
 		}
-		mxDestroyArray(g_info->var_q_front->var);
-		g_info->flags.is_glob_shm_var_init = FALSE;
 		
 		/* scan input data */
-		shm_size = shmScan(in_var, &g_info->var_q_front->var);
+		shm_size = shmScan(in_var, &temp_arr);
 		
 		/* update the revision number and indicate our info is current */
 		g_info->var_q_front->rev_num = shm_update_info->rev_num + 1;
@@ -212,21 +205,13 @@ void mshShare(const mxArray* in_var)
 
 #ifdef MSH_WIN
 			
-			/* decrement the kernel handle count and tell onExit not to do this twice */
-			if(UnmapViewOfFile(shm_data_ptr) == 0)
-			{
-				err = GetLastError();
-				releaseProcLock();
-				readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u).", err);
-			}
-			g_info->var_q_front->data_seg.is_mapped = FALSE;
+			/* hold these to unmap later in case we need to copy over info stored in the segment */
+			memcpy(&g_info->swap_shm_data_seg, &g_info->var_q_front->data_seg, sizeof(MemorySegment_t));
+			g_info->swap_shm_data_seg.is_mapped = TRUE;
+			g_info->swap_shm_data_seg.is_init = TRUE;
 			
-			if(CloseHandle(g_info->var_q_front->data_seg.handle) == 0)
-			{
-				err = GetLastError();
-				releaseProcLock();
-				readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u).", err);
-			}
+			/* reroute the freeing method in case we fail before reaching the normal free */
+			g_info->var_q_front->data_seg.is_mapped = FALSE;
 			g_info->var_q_front->data_seg.is_init = FALSE;
 			
 			/* change the map size */
@@ -278,7 +263,7 @@ void mshShare(const mxArray* in_var)
 #else
 			
 			/* unmap in preparation for size change */
-					if(munmap(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
+					if(munmap(g_info->var_q_front->data_seg.ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
 					{
 						releaseProcLock();
 						readMunmapError(errno);
@@ -296,7 +281,7 @@ void mshShare(const mxArray* in_var)
 					
 					/* remap the shared memory */
 					g_info->var_q_front->data_seg.ptr = mmap(NULL, g_info->var_q_front->data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->var_q_front->data_seg.handle, 0);
-					if(shm_data_ptr == MAP_FAILED)
+					if(g_info->var_q_front->data_seg.ptr == MAP_FAILED)
 					{
 						releaseProcLock();
 						readMmapError(errno);
@@ -312,10 +297,47 @@ void mshShare(const mxArray* in_var)
 		}
 		
 		/* copy data to the shared memory */
-		shmCopy(shm_data_ptr, in_var, g_info->var_q_front->var);
+		shmCopy(g_info->var_q_front->data_seg.ptr, in_var, temp_arr);
 		
 		mexMakeArrayPersistent(g_info->var_q_front->var);
 		g_info->flags.is_glob_shm_var_init = TRUE;
+
+		/* destroy the old variable */
+		if(!mxIsEmpty(g_info->var_q_front->var))
+		{
+			shmDetach(g_info->var_q_front->var);
+		}
+		mxDestroyArray(g_info->var_q_front->var);
+		
+		/* associate g_shm_var with the new variable */
+		g_info->var_q_front->var = temp_arr;
+		
+		updateAll();
+		releaseProcLock();
+
+#ifdef MSH_WIN
+			/* these only fire if we used a new map */
+			
+			/* decrement the kernel handle count */
+			if(g_info->swap_shm_data_seg.is_mapped)
+			{
+				if(UnmapViewOfFile(g_info->swap_shm_data_seg.ptr) == 0)
+				{
+					readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
+				}
+				g_info->swap_shm_data_seg.is_mapped = FALSE;
+			}
+			
+			if(g_info->swap_shm_data_seg.is_init)
+			{
+				if(CloseHandle(g_info->swap_shm_data_seg.handle) == 0)
+				{
+					readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
+				}
+				g_info->swap_shm_data_seg.is_init = FALSE;
+			}
+#endif
+
 	}
 	
 	updateAll();
@@ -352,7 +374,7 @@ void mshFetch(void)
 
 #ifdef MSH_WIN
 			
-			if(UnmapViewOfFile(shm_data_ptr) == 0)
+			if(UnmapViewOfFile(g_info->var_q_front->data_seg.ptr) == 0)
 			{
 				err = GetLastError();
 				releaseProcLock();
@@ -385,7 +407,7 @@ void mshFetch(void)
 			
 			g_info->var_q_front->data_seg.ptr = MapViewOfFile(g_info->var_q_front->data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->var_q_front->data_seg.seg_sz);
 			err = GetLastError();
-			if(shm_data_ptr == NULL)
+			if(g_info->var_q_front->data_seg.ptr == NULL)
 			{
 				releaseProcLock();
 				readErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
@@ -395,7 +417,7 @@ void mshFetch(void)
 #else
 			
 			/* unmap the current mapping */
-					if(munmap(shm_data_ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
+					if(munmap(g_info->var_q_front->data_seg.ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
 					{
 						releaseProcLock();
 						readMunmapError(errno);
@@ -407,7 +429,7 @@ void mshFetch(void)
 					
 					/* remap with the updated size */
 					g_info->var_q_front->data_seg.ptr = mmap(NULL, g_info->var_q_front->data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->var_q_front->data_seg.handle, 0);
-					if(shm_data_ptr == MAP_FAILED)
+					if(g_info->var_q_front->data_seg.ptr == MAP_FAILED)
 					{
 						releaseProcLock();
 						readMmapError(errno);
@@ -417,7 +439,7 @@ void mshFetch(void)
 		
 		}
 		
-		shmFetch(shm_data_ptr, &g_info->var_q_front->var);
+		shmFetch(g_info->var_q_front->data_seg.ptr, &g_info->var_q_front->var);
 		
 		mexMakeArrayPersistent(g_info->var_q_front->var);
 		

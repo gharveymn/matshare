@@ -5,7 +5,8 @@
 #include <stdint.h>
 #include "externtypes.h"
 
-extern mxArray* mxCreateSharedDataCopy(mxArray *);
+
+extern mxArray* mxCreateSharedDataCopy(mxArray*);
 
 #ifndef FALSE
 #  define FALSE 0
@@ -84,23 +85,15 @@ typedef int handle_t;
 
 typedef enum
 {
-	msh_SHARE,
-	msh_FETCH,
-	msh_DETACH,
-	msh_PARAM,
-	msh_DEEPCOPY,
-	msh_DEBUG,
-	msh_OBJ_REGISTER,
-	msh_OBJ_DEREGISTER,
-	msh_INIT
+	msh_SHARE, msh_FETCH, msh_DETACH, msh_PARAM, msh_DEEPCOPY, msh_DEBUG, msh_OBJ_REGISTER, msh_OBJ_DEREGISTER, msh_INIT
 } mshdirective_t;
 
 
 typedef enum
 {
-	msh_SHARETYPE_COPY,			/* always create a new segment */
-	msh_SHARETYPE_REWRITE,		/* if the new variable has the same data size and attributes, rewrite, otherwise create new segment */
-	msh_SHARETYPE_OVERWRITE		/* reuse the same segment if the new variable is smaller than or the same size as the old one */
+	msh_SHARETYPE_COPY,               /* always create a new segment */
+	msh_SHARETYPE_REWRITE,          /* if the new variable has the same data size and attributes, rewrite, otherwise create new segment */
+	msh_SHARETYPE_OVERWRITE          /* reuse the same segment if the new variable is smaller than or the same size as the old one */
 } mshsharetype_t;
 
 
@@ -117,13 +110,13 @@ struct Header_tag
 		size_t ir;
 		size_t jc;
 		size_t field_str;
-		size_t child_hdrs;		/* offset of array of the offsets of the children*/
-	} data_offsets; 			/* these are actually the relative offsets of data in shared memory (needed because memory maps are to virtual pointers) */
-	size_t num_dims;         	/* dimensionality of the matrix */
-	size_t elem_size;       		/* size of each element in pr and pi */
-	size_t num_elems;         	/* length of pr,pi */
+		size_t child_hdrs;          /* offset of array of the offsets of the children*/
+	} data_offsets;               /* these are actually the relative offsets of data in shared memory (needed because memory maps are to virtual pointers) */
+	size_t num_dims;          /* dimensionality of the matrix */
+	size_t elem_size;               /* size of each element in pr and pi */
+	size_t num_elems;          /* length of pr,pi */
 	size_t nzmax;
-	size_t obj_sz;            	/* size of serialized object */
+	size_t obj_sz;               /* size of serialized object */
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
 	mxClassID classid;       /* matlab class id */
 	mxComplexity complexity;
@@ -135,13 +128,13 @@ struct Header_tag
 typedef struct ShmData_tag ShmData_t;
 struct ShmData_tag
 {
-	mwSize* dims;               		/* pointer to the size array */
-	void* pr;                    		/* real data portion */
-	void* pi;               			/* imaginary data portion */
-	mwIndex* ir;                    	/* row indexes, for sparse */
-	mwIndex* jc;                  	/* cumulative column counts, for sparse */
-	char_t* field_str;   			/* list of a structures fields, each field name will be separated by a null character */
-	size_t* child_hdrs;          		/* array of corresponding children headers */
+	mwSize* dims;                         /* pointer to the size array */
+	void* pr;                              /* real data portion */
+	void* pi;                              /* imaginary data portion */
+	mwIndex* ir;                         /* row indexes, for sparse */
+	mwIndex* jc;                    /* cumulative column counts, for sparse */
+	char_t* field_str;               /* list of a structures fields, each field name will be separated by a null character */
+	size_t* child_hdrs;                    /* array of corresponding children headers */
 };
 
 typedef struct ShmSegmentInfo_tag ShmSegmentInfo_t;
@@ -185,7 +178,7 @@ struct MemoryMetaHeader_tag
 {
 	size_t procs_using;
 	size_t rev_num;
-
+	
 	/* use these to link together the memory segments */
 	size_t prev_seg_num;
 	size_t next_seg_num;
@@ -194,52 +187,53 @@ struct MemoryMetaHeader_tag
 typedef struct VariableNode_tag VariableNode_t;
 struct VariableNode_tag
 {
-VariableNode_t* next;
-VariableNode_t* prev;
-mxArray* var;
-mxArray** crosslink;
-size_t seg_num;
-size_t rev_num;
-MemorySegment_t data_seg;
+	VariableNode_t* next;
+	VariableNode_t* prev;
+	mxArray* var;
+	mxArray** crosslink;
+	size_t seg_num;
+	size_t rev_num;
+	MemorySegment_t data_seg;
 };
 
 typedef struct MexInfo_tag MexInfo_t;
 struct MexInfo_tag
 {
-VariableNode_t* var_q_front;
-MemorySegment_t shm_update_seg;
+	VariableNode_t* var_q_front;
+	MemorySegment_t shm_update_seg;
+	MemorySegment_t swap_shm_data_seg;
 
 #ifdef MSH_AUTO_INIT
-MemorySegment_t lcl_init_seg;
+	MemorySegment_t lcl_init_seg;
 #endif
 
 #ifdef MSH_THREAD_SAFE
 #ifdef MSH_WIN
-SECURITY_ATTRIBUTES lock_sec;
-HANDLE proc_lock;
+	SECURITY_ATTRIBUTES lock_sec;
+	HANDLE proc_lock;
 #else
-handle_t proc_lock;
+	handle_t proc_lock;
 #endif
 #endif
-
-struct
-{
+	
+	struct
+	{
 #ifdef MSH_THREAD_SAFE
-	bool_t is_proc_lock_init;
-	bool_t is_proc_locked;
+		bool_t is_proc_lock_init;
+		bool_t is_proc_locked;
 #endif
-	bool_t is_glob_shm_var_init;
-	bool_t is_var_q_init;
-} flags;
+		bool_t is_glob_shm_var_init;
+		bool_t is_var_q_init;
+	} flags;
 
 #ifdef MSH_WIN
-DWORD this_pid;
+	DWORD this_pid;
 #else
-pid_t this_pid;
+	pid_t this_pid;
 #endif
-
-uint32_t num_lcl_objs;
-
+	
+	uint32_t num_lcl_objs;
+	
 };
 
 MexInfo_t* g_info;

@@ -64,10 +64,10 @@ void init()
 	if(is_glob_init)
 	{
 		/* initialize shared memory */
-		memset(shm_data_ptr, 0, g_info->var_q_front->data_seg.seg_sz);
+		memset(g_info->var_q_front->data_seg.ptr, 0, g_info->var_q_front->data_seg.seg_sz);
 		
 		/* set the data to mirror the dummy variable at the end */
-		memcpy(shm_data_ptr, &hdr, hdr.obj_sz);
+		memcpy(g_info->var_q_front->data_seg.ptr, &hdr, hdr.obj_sz);
 	}
 	
 	
@@ -81,7 +81,7 @@ void init()
 		else
 		{
 			/* fetch the data rather than create a dummy variable */
-			shmFetch(shm_data_ptr, &g_info->var_q_front->var);
+			shmFetch(g_info->var_q_front->data_seg.ptr, &g_info->var_q_front->var);
 		}
 		mexMakeArrayPersistent(g_info->var_q_front->var);
 		g_info->flags.is_glob_shm_var_init = TRUE;
@@ -351,7 +351,7 @@ void mapDataSegment(void)
 #ifdef MSH_WIN
 	
 	g_info->var_q_front->data_seg.ptr = MapViewOfFile(g_info->var_q_front->data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->var_q_front->data_seg.seg_sz);
-	if(shm_data_ptr == NULL)
+	if(g_info->var_q_front->data_seg.ptr == NULL)
 	{
 		releaseProcLock();
 		readErrorMex("MapDataSegError", "Could not map the update memory segment (Error number %u)", GetLastError());
