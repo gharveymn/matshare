@@ -155,7 +155,111 @@ void mshShare(const mxArray* in_var)
 	
 	if(shm_update_info->sharetype == msh_SHARETYPE_COPY)
 	{
-	
+		/* copy to a new segment in all cases */
+		
+		VariableNode_t* new_front = mxCalloc(1, sizeof(VariableNode_t));
+		
+		/* scan input data */
+		shm_size = shmScan(in_var, &new_front->var);
+		
+		/* update the revision number and indicate our info is current */
+		new_front->rev_num = shm_update_info->rev_num + 1;
+		
+		/* create a unique new segment */
+		new_front->seg_num = shm_update_info->lead_seg_num + 1;
+
+#ifdef MSH_WIN
+		
+		/* change the map size */
+		new_front->data_seg.seg_sz = shm_size;
+		
+		/* split the 64-bit size */
+		lo_sz = (DWORD)(new_front->data_seg.seg_sz & 0xFFFFFFFFL);
+		hi_sz = (DWORD)((new_front->data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
+		
+		do
+		{
+			/* change the file name */
+			snprintf(new_front->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)new_front->seg_num);
+			temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz,new_front->data_seg.name);
+			err = GetLastError();
+			if(temp_handle == NULL)
+			{
+				releaseProcLock();
+				readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
+			}
+			else if(err == ERROR_ALREADY_EXISTS)
+			{
+				new_front->seg_num += 1;
+				if(CloseHandle(temp_handle) == 0)
+				{
+					err = GetLastError();
+					releaseProcLock();
+					readErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u).", err);
+				}
+			}
+		} while(err == ERROR_ALREADY_EXISTS);
+		new_front->data_seg.handle = temp_handle;
+		new_front->data_seg.is_init = TRUE;
+		
+		new_front->data_seg.ptr = MapViewOfFile(new_front->data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, new_front->data_seg.seg_sz);
+		if(new_front->data_seg.ptr == NULL)
+		{
+			err = GetLastError();
+			releaseProcLock();
+			readErrorMex("MapDataSegError", "Could not map the data memory segment (Error number %u)", err);
+		}
+		new_front->data_seg.is_mapped = TRUE;
+
+#else
+		
+		/* unmap in preparation for size change */
+				if(munmap(new_front->data_seg.ptr, new_front->data_seg.seg_sz) != 0)
+				{
+					releaseProcLock();
+					readMunmapError(errno);
+				}
+				new_front->data_seg.is_mapped = FALSE;
+				
+				new_front->data_seg.seg_sz = shm_size;
+				
+				/* change the map size */
+				if(ftruncate(new_front->data_seg.handle, new_front->data_seg.seg_sz) != 0)
+				{
+					releaseProcLock();
+					readFtruncateError(errno);
+				}
+				
+				/* remap the shared memory */
+				new_front->data_seg.ptr = mmap(NULL, new_front->data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, new_front->data_seg.handle, 0);
+				if(new_front->data_seg.ptr == MAP_FAILED)
+				{
+					releaseProcLock();
+					readMmapError(errno);
+				}
+				new_front->data_seg.is_mapped = TRUE;
+
+#endif
+		
+		/* warning: this may cause a collision in the rare case where one process is still at seg_num == 0
+		 * and lead_seg_num == UINT64_MAX; very unlikely, so the overhead isn't worth it */
+		shm_update_info->lead_seg_num = g_info->var_q_front->seg_num;
+		
+		
+		
+		/* copy data to the shared memory */
+		shmCopy(new_front->data_seg.ptr, in_var, new_front->var);
+		
+		mexMakeArrayPersistent(new_front->var);
+		g_info->flags.is_glob_shm_var_init = TRUE;
+		
+		/* associate g_shm_var with the new variable */
+		g_info->var_q_front->next = new_front;
+		g_info->var_q_front = new_front;
+		
+		updateAll();
+		releaseProcLock();
+		
 	}
 	else if(shm_update_info->sharetype == msh_SHARETYPE_REWRITE)
 	{
@@ -168,7 +272,7 @@ void mshShare(const mxArray* in_var)
 		 * disregard all linked lists and treat the shared data as a single variable
 		 * overwriting as we go
 		*/
-
+		
 		mxArray* temp_arr;
 		
 		/* detach the previous variable if needed */
@@ -218,17 +322,14 @@ void mshShare(const mxArray* in_var)
 			g_info->var_q_front->data_seg.seg_sz = shm_size;
 			
 			/* split the 64-bit size */
-			lo_sz = (DWORD) (g_info->var_q_front->data_seg.seg_sz & 0xFFFFFFFFL);
-			hi_sz = (DWORD) ((g_info->var_q_front->data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
+			lo_sz = (DWORD)(g_info->var_q_front->data_seg.seg_sz & 0xFFFFFFFFL);
+			hi_sz = (DWORD)((g_info->var_q_front->data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
 			
 			do
 			{
 				/* change the file name */
-				snprintf(g_info->var_q_front->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME,
-					    (unsigned long long) g_info->var_q_front->seg_num);
-				temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE,
-										  hi_sz, lo_sz,
-										  g_info->var_q_front->data_seg.name);
+				snprintf(g_info->var_q_front->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->var_q_front->seg_num);
+				temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->var_q_front->data_seg.name);
 				err = GetLastError();
 				if(temp_handle == NULL)
 				{
@@ -249,9 +350,7 @@ void mshShare(const mxArray* in_var)
 			g_info->var_q_front->data_seg.handle = temp_handle;
 			g_info->var_q_front->data_seg.is_init = TRUE;
 			
-			g_info->var_q_front->data_seg.ptr = MapViewOfFile(g_info->var_q_front->data_seg.handle,
-													FILE_MAP_ALL_ACCESS, 0, 0,
-													g_info->var_q_front->data_seg.seg_sz);
+			g_info->var_q_front->data_seg.ptr = MapViewOfFile(g_info->var_q_front->data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->var_q_front->data_seg.seg_sz);
 			if(g_info->var_q_front->data_seg.ptr == NULL)
 			{
 				err = GetLastError();
@@ -301,7 +400,7 @@ void mshShare(const mxArray* in_var)
 		
 		mexMakeArrayPersistent(g_info->var_q_front->var);
 		g_info->flags.is_glob_shm_var_init = TRUE;
-
+		
 		/* destroy the old variable */
 		if(!mxIsEmpty(g_info->var_q_front->var))
 		{
@@ -316,28 +415,28 @@ void mshShare(const mxArray* in_var)
 		releaseProcLock();
 
 #ifdef MSH_WIN
-			/* these only fire if we used a new map */
-			
-			/* decrement the kernel handle count */
-			if(g_info->swap_shm_data_seg.is_mapped)
+		/* these only fire if we used a new map */
+		
+		/* decrement the kernel handle count */
+		if(g_info->swap_shm_data_seg.is_mapped)
+		{
+			if(UnmapViewOfFile(g_info->swap_shm_data_seg.ptr) == 0)
 			{
-				if(UnmapViewOfFile(g_info->swap_shm_data_seg.ptr) == 0)
-				{
-					readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
-				}
-				g_info->swap_shm_data_seg.is_mapped = FALSE;
+				readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 			}
-			
-			if(g_info->swap_shm_data_seg.is_init)
+			g_info->swap_shm_data_seg.is_mapped = FALSE;
+		}
+		
+		if(g_info->swap_shm_data_seg.is_init)
+		{
+			if(CloseHandle(g_info->swap_shm_data_seg.handle) == 0)
 			{
-				if(CloseHandle(g_info->swap_shm_data_seg.handle) == 0)
-				{
-					readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
-				}
-				g_info->swap_shm_data_seg.is_init = FALSE;
+				readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
 			}
+			g_info->swap_shm_data_seg.is_init = FALSE;
+		}
 #endif
-
+	
 	}
 	
 	updateAll();
@@ -634,8 +733,7 @@ size_t shmScan_(const mxArray* in_var, mxArray** ret_var)
 
 size_t shmCopy(byte_t* shm_anchor, const mxArray* in_var, mxArray* ret_var)
 {
-	return shmCopy_(shm_anchor + padToAlign(sizeof(MemoryMetaHeader_t)), in_var, ret_var)
-		  + padToAlign(sizeof(MemoryMetaHeader_t));
+	return shmCopy_(shm_anchor + padToAlign(sizeof(MemoryMetaHeader_t)), in_var, ret_var) + padToAlign(sizeof(MemoryMetaHeader_t));
 }
 
 
@@ -739,9 +837,7 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var, mxArray* ret_var)
 				data_ptrs.child_hdrs[count] = cml_off;
 				
 				/* And fill it */
-				cml_off += shmCopy_(shm_anchor + data_ptrs.child_hdrs[count],
-								mxGetFieldByNumber(in_var, idx, field_num),
-								mxGetFieldByNumber(ret_var, idx, field_num));
+				cml_off += shmCopy_(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(in_var, idx, field_num), mxGetFieldByNumber(ret_var, idx, field_num));
 				
 			}
 			
@@ -765,8 +861,7 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var, mxArray* ret_var)
 			/* place relative offset into shared memory */
 			data_ptrs.child_hdrs[count] = cml_off;
 			
-			cml_off += shmCopy_(shm_anchor + data_ptrs.child_hdrs[count], mxGetCell(in_var, count),
-							mxGetCell(ret_var, count));
+			cml_off += shmCopy_(shm_anchor + data_ptrs.child_hdrs[count], mxGetCell(in_var, count), mxGetCell(ret_var, count));
 			
 			
 		}
@@ -903,8 +998,7 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var, mxArray* ret_var)
 
 size_t shmFetch(byte_t* shm_anchor, mxArray** ret_var)
 {
-	return shmFetch_(shm_anchor + padToAlign(sizeof(MemoryMetaHeader_t)), ret_var)
-		  + padToAlign(sizeof(MemoryMetaHeader_t));
+	return shmFetch_(shm_anchor + padToAlign(sizeof(MemoryMetaHeader_t)), ret_var) + padToAlign(sizeof(MemoryMetaHeader_t));
 }
 
 
@@ -1128,7 +1222,7 @@ void shmDetach(mxArray* ret_var)
 				new_pi = mxCalloc(nzmax, mxGetElementSize(ret_var));
 				mxSetImagData(ret_var, new_pi);
 			}
-
+			
 			new_ir = mxCalloc(nzmax, sizeof(mwIndex));
 			mxSetIr(ret_var, new_ir);
 			
@@ -1318,8 +1412,7 @@ bool_t shmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 			
 			for(idx = 0; idx < hdr->num_elems; idx++, count++)
 			{
-				if(!shmCompareSize_(shm_anchor + data_ptrs.child_hdrs[count],
-								mxGetFieldByNumber(comp_var, idx, field_num)))
+				if(!shmCompareSize_(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(comp_var, idx, field_num)))
 				{
 					return FALSE;
 				}
@@ -1377,6 +1470,7 @@ bool_t shmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 	return TRUE;
 	
 }
+
 
 mxLogical shmCompareContent(byte_t* shm_anchor, const mxArray* comp_var)
 {
@@ -1438,8 +1532,7 @@ mxLogical shmCompareContent_(byte_t* shm_anchor, const mxArray* comp_var)
 			for(idx = 0; idx < hdr->num_elems; idx++, count++)
 			{
 				
-				if(!shmCompareContent_(shm_anchor + data_ptrs.child_hdrs[count],
-								   mxGetFieldByNumber(comp_var, idx, field_num)))
+				if(!shmCompareContent_(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(comp_var, idx, field_num)))
 				{
 					return FALSE;
 				}
