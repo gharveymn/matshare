@@ -610,13 +610,19 @@ bool_t precheck(void)
 }
 
 
-void searchUnusedQueue(void)
+void removeUnused(void)
 {
 	VariableNode_t* curr_node = g_info->var_q_front;
+	VariableNode_t* prev_node;
+	VariableNode_t* next_node;
 	while(curr_node != NULL)
 	{
+		next_node = curr_node->next;
 		if(*curr_node->crosslink == NULL)
 		{
+			
+			prev_node = curr_node->prev;
+			
 			/* if there are no references to this variable do a destroy operation */
 			if(!mxIsEmpty(curr_node->var))
 			{
@@ -637,6 +643,25 @@ void searchUnusedQueue(void)
 			
 			if(curr_node->data_seg.is_init)
 			{
+				MemoryMetaHeader_t* curr_metadata = curr_node->data_seg.ptr;
+				if(curr_metadata->procs_using == 1)
+				{
+					/* if this is the last process using the memory, totally unlink */
+					
+					/* reset all references in shared memory */
+					if(prev_node != NULL)
+					{
+						MemoryMetaHeader_t* prev_metadata = prev_node->data_seg.ptr;
+						prev_metadata->next_seg_num = curr_metadata->next_seg_num;
+					}
+					
+					if(next_node != NULL)
+					{
+						MemoryMetaHeader_t* next_metadata = next_node->data_seg.ptr;
+						next_metadata->prev_seg_num = curr_metadata->prev_seg_num;
+					}
+				}
+				
 				if(CloseHandle(curr_node->data_seg.handle) == 0)
 				{
 					readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
@@ -644,30 +669,68 @@ void searchUnusedQueue(void)
 				curr_node->data_seg.is_init = FALSE;
 			}
 #else
-			if(g_info->var_q_front->data_seg.is_mapped)
+			if(curr_node->data_seg.is_mapped)
 			{
-				if(munmap(g_info->var_q_front->data_seg.ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
+				if(munmap(curr_node->data_seg.ptr, curr_node->data_seg.seg_sz) != 0)
 				{
 					readMunmapError(errno);
 				}
-				g_info->var_q_front->data_seg.is_mapped = FALSE;
+				curr_node->data_seg.is_mapped = FALSE;
 			}
 			
-			if(g_info->var_q_front->data_seg.is_init)
+			if(curr_node->data_seg.is_init)
 			{
-				if(will_remove)
+				MemoryMetaHeader_t* curr_metadata = curr_node->data_seg.ptr;
+				if(curr_metadata->procs_using == 1)
 				{
+					/* if this is the last process using the memory, totally unlink */
+					
+					/* reset all references in shared memory */
+					if(prev_node != NULL)
+					{
+						MemoryMetaHeader_t* prev_metadata = prev_node->data_seg.ptr;
+						prev_metadata->next_seg_num = curr_metadata->next_seg_num;
+					}
+					
+					if(next_node != NULL)
+					{
+						MemoryMetaHeader_t* next_metadata = next_node->data_seg.ptr;
+						next_metadata->prev_seg_num = curr_metadata->prev_seg_num;
+					}
+					
+					
 					if(shm_unlink(g_info->var_q_front->data_seg.name) != 0)
 					{
 						readShmUnlinkError(errno);
 					}
 				}
-				g_info->var_q_front->data_seg.is_init = FALSE;
+				curr_node->data_seg.is_init = FALSE;
 			}
 #endif
+			
+			/* reset references in prev and next var node */
+			if(prev_node != NULL)
+			{
+				prev_node->next = next_node;
+			}
+			
+			if(next_node != NULL)
+			{
+				next_node->prev = prev_node;
+			}
+			
+			if(g_info->var_q_front == curr_node)
+			{
+				g_info->var_q_front = next_node;
+			}
+			
+			mxFree(curr_node);
+			
+			
+			
 		}
 		
-		curr_node = curr_node->next;
+		curr_node = next_node;
 	}
 }
 

@@ -42,7 +42,7 @@ void parseParams(int num_params, const mxArray* in[]);
 
 void updateAll(void);
 
-void makeDummyVar(mxArray**);
+void removeUnused(void);
 
 void nullfcn(void);
 

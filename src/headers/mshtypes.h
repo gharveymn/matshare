@@ -72,7 +72,6 @@ extern int shm_unlink(const char* name);
 #endif
 
 /* these are used for recording structure field names */
-#define TERM_CHAR ';'          /*use this character to terminate a string containing the list of fields.  Do this because it can't be in a valid field name*/
 #define ALIGN_SIZE (size_t)0x20   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
 #define MXMALLOC_SIG_LEN 16
 
@@ -192,7 +191,6 @@ struct VariableNode_tag
 	mxArray* var;
 	mxArray** crosslink;
 	size_t seg_num;
-	size_t rev_num;
 	MemorySegment_t data_seg;
 };
 
