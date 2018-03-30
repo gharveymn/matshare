@@ -77,12 +77,12 @@ void onExit(void)
 	
 	if(g_info->flags.is_glob_shm_var_init)
 	{
-		if(!mxIsEmpty(g_info->var_q_front->var))
+		if(!mxIsEmpty(g_info->var_queue_front->var))
 		{
 			/* NULL all of the Matlab pointers */
-			shmDetach(g_info->var_q_front->var);
+			shmDetach(g_info->var_queue_front->var);
 		}
-		mxDestroyArray(g_info->var_q_front->var);
+		mxDestroyArray(g_info->var_queue_front->var);
 		g_info->flags.is_glob_shm_var_init = FALSE;
 	}
 
@@ -92,9 +92,9 @@ void onExit(void)
 	if(g_info->flags.is_proc_lock_init)
 	{
 		acquireProcLock();
-		if(g_info->shm_update_seg.is_mapped)
+		if(g_info->shm_info_seg.is_mapped)
 		{
-			shm_update_info->num_procs -= 1;
+			shm_info->num_procs -= 1;
 		}
 		releaseProcLock();
 		
@@ -106,46 +106,46 @@ void onExit(void)
 		
 	}
 #else
-	if(g_info->shm_update_seg.is_mapped)
+	if(g_info->shm_info_seg.is_mapped)
 	{
-		shm_update_info->num_procs -= 1;
+		shm_info->num_procs -= 1;
 	}
 #endif
 	
-	if(g_info->var_q_front->data_seg.is_mapped)
+	if(g_info->var_queue_front->data_seg.is_mapped)
 	{
-		if(UnmapViewOfFile(g_info->var_q_front->data_seg.ptr) == 0)
+		if(UnmapViewOfFile(g_info->var_queue_front->data_seg.ptr) == 0)
 		{
 			readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 		}
-		g_info->var_q_front->data_seg.is_mapped = FALSE;
+		g_info->var_queue_front->data_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->var_q_front->data_seg.is_init)
+	if(g_info->var_queue_front->data_seg.is_init)
 	{
-		if(CloseHandle(g_info->var_q_front->data_seg.handle) == 0)
+		if(CloseHandle(g_info->var_queue_front->data_seg.handle) == 0)
 		{
 			readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
 		}
-		g_info->var_q_front->data_seg.is_init = FALSE;
+		g_info->var_queue_front->data_seg.is_init = FALSE;
 	}
 	
-	if(g_info->shm_update_seg.is_mapped)
+	if(g_info->shm_info_seg.is_mapped)
 	{
-		if(UnmapViewOfFile(shm_update_info) == 0)
+		if(UnmapViewOfFile(shm_info) == 0)
 		{
 			readErrorMex("UnmapFileError", "Error unmapping the update file (Error Number %u)", GetLastError());
 		}
-		g_info->shm_update_seg.is_mapped = FALSE;
+		g_info->shm_info_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->shm_update_seg.is_init)
+	if(g_info->shm_info_seg.is_init)
 	{
-		if(CloseHandle(g_info->shm_update_seg.handle) == 0)
+		if(CloseHandle(g_info->shm_info_seg.handle) == 0)
 		{
 			readErrorMex("CloseHandleError", "Error closing the update file handle (Error Number %u)", GetLastError());
 		}
-		g_info->shm_update_seg.is_init = FALSE;
+		g_info->shm_info_seg.is_init = FALSE;
 	}
 	
 #ifdef MSH_AUTO_INIT
@@ -167,10 +167,10 @@ void onExit(void)
 	if(g_info->flags.is_proc_lock_init)
 	{
 		acquireProcLock();
-		if(g_info->shm_update_seg.is_mapped)
+		if(g_info->shm_info_seg.is_mapped)
 		{
-			shm_update_info->num_procs -= 1;
-			will_remove = (bool_t)(shm_update_info->num_procs == 0);
+			shm_info->num_procs -= 1;
+			will_remove = (bool_t)(shm_info->num_procs == 0);
 		}
 		releaseProcLock();
 		
@@ -184,54 +184,54 @@ void onExit(void)
 		
 	}
 #else
-	if(g_info->shm_update_seg.is_mapped)
+	if(g_info->shm_info_seg.is_mapped)
 	{
-		shm_update_info->num_procs -= 1;
-		will_remove = (bool_t)(shm_update_info->num_procs == 0);
+		shm_info->num_procs -= 1;
+		will_remove = (bool_t)(shm_info->num_procs == 0);
 	}
 #endif
 	
 	
-	if(g_info->var_q_front->data_seg.is_mapped)
+	if(g_info->var_queue_front->data_seg.is_mapped)
 	{
-		if(munmap(g_info->var_q_front->data_seg.ptr, g_info->var_q_front->data_seg.seg_sz) != 0)
+		if(munmap(g_info->var_queue_front->data_seg.ptr, g_info->var_queue_front->data_seg.seg_sz) != 0)
 		{
 			readMunmapError(errno);
 		}
-		g_info->var_q_front->data_seg.is_mapped = FALSE;
+		g_info->var_queue_front->data_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->var_q_front->data_seg.is_init)
+	if(g_info->var_queue_front->data_seg.is_init)
 	{
 		if(will_remove)
 		{
-			if(shm_unlink(g_info->var_q_front->data_seg.name) != 0)
+			if(shm_unlink(g_info->var_queue_front->data_seg.name) != 0)
 			{
 				readShmUnlinkError(errno);
 			}
 		}
-		g_info->var_q_front->data_seg.is_init = FALSE;
+		g_info->var_queue_front->data_seg.is_init = FALSE;
 	}
 	
-	if(g_info->shm_update_seg.is_mapped)
+	if(g_info->shm_info_seg.is_mapped)
 	{
-		if(munmap(shm_update_info, g_info->shm_update_seg.seg_sz) != 0)
+		if(munmap(shm_info, g_info->shm_info_seg.seg_sz) != 0)
 		{
 			readMunmapError(errno);
 		}
-		g_info->shm_update_seg.is_mapped = FALSE;
+		g_info->shm_info_seg.is_mapped = FALSE;
 	}
 	
-	if(g_info->shm_update_seg.is_init)
+	if(g_info->shm_info_seg.is_init)
 	{
 		if(will_remove)
 		{
-			if(shm_unlink(g_info->shm_update_seg.name) != 0)
+			if(shm_unlink(g_info->shm_info_seg.name) != 0)
 			{
 				readShmUnlinkError(errno);
 			}
 		}
-		g_info->shm_update_seg.is_init = FALSE;
+		g_info->shm_info_seg.is_init = FALSE;
 	}
 	
 #ifdef MSH_AUTO_INIT
@@ -249,7 +249,7 @@ void onExit(void)
 	
 	if(g_info->flags.is_var_q_init)
 	{
-		mxFree(g_info->var_q_front);
+		mxFree(g_info->var_queue_front);
 		g_info->flags.is_var_q_init = FALSE;
 	}
 	
@@ -308,7 +308,7 @@ void acquireProcLock(void)
 {
 #ifdef MSH_THREAD_SAFE
 	/* only request a lock if there is more than one process */
-	if(shm_update_info->num_procs > 1 && shm_update_info->is_thread_safe && !g_info->flags.is_proc_locked)
+	if(shm_info->num_procs > 1 && shm_info->is_thread_safe && !g_info->flags.is_proc_locked)
 	{
 #ifdef MSH_WIN
 		uint32_t ret = WaitForSingleObject(g_info->proc_lock, INFINITE);
@@ -497,13 +497,13 @@ void parseParams(int num_params, const mxArray* in[])
 					|| strcmp(val_str_l, "on") == 0
 					|| strcmp(val_str_l, "enable") == 0)
 			{
-				shm_update_info->is_thread_safe = TRUE;
+				shm_info->is_thread_safe = TRUE;
 			}
 			if(strcmp(val_str_l, "false") == 0
 			   || strcmp(val_str_l, "off") == 0
 			   || strcmp(val_str_l, "disable") == 0)
 			{
-				shm_update_info->is_thread_safe = FALSE;
+				shm_info->is_thread_safe = FALSE;
 			}
 			else
 			{
@@ -527,17 +527,17 @@ void parseParams(int num_params, const mxArray* in[])
 			else
 			{
 				acquireProcLock();
-				shm_update_info->security = (mode_t)strtol(val_str_l, NULL, 8);
-				if(fchmod(g_info->shm_update_seg.handle, shm_update_info->security) != 0)
+				shm_info->security = (mode_t)strtol(val_str_l, NULL, 8);
+				if(fchmod(g_info->shm_info_seg.handle, shm_info->security) != 0)
 				{
 					readFchmodError(errno);
 				}
-				if(fchmod(g_info->var_q_front->data_seg.handle, shm_update_info->security) != 0)
+				if(fchmod(g_info->var_queue_front->data_seg.handle, shm_info->security) != 0)
 				{
 					readFchmodError(errno);
 				}
 #ifdef MSH_THREAD_SAFE
-				if(fchmod(g_info->proc_lock, shm_update_info->security) != 0)
+				if(fchmod(g_info->proc_lock, shm_info->security) != 0)
 				{
 					readFchmodError(errno);
 				}
@@ -563,29 +563,29 @@ void parseParams(int num_params, const mxArray* in[])
 
 void updateAll(void)
 {
-	shm_update_info->upd_pid = g_info->this_pid;
-	shm_update_info->rev_num = g_info->var_q_front->rev_num;
-	shm_update_info->seg_num = g_info->var_q_front->seg_num;
-	shm_update_info->seg_sz = g_info->var_q_front->data_seg.seg_sz;
+	shm_info->upd_pid = g_info->this_pid;
+	shm_info->rev_num = g_info->var_queue_front->data_seg.ptr->rev_num;
+	shm_info->seg_num = g_info->var_queue_front->seg_num;
+	shm_info->seg_sz = g_info->var_queue_front->data_seg.seg_sz;
 #ifdef MSH_WIN
 	/* not sure if this is required on windows, but it doesn't hurt */
-	if(FlushViewOfFile(shm_update_info, g_info->shm_update_seg.seg_sz) == 0)
+	if(FlushViewOfFile(shm_info, g_info->shm_info_seg.seg_sz) == 0)
 	{
 		readErrorMex("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
 	}
-	if(FlushViewOfFile(g_info->var_q_front->data_seg.ptr, g_info->var_q_front->data_seg.seg_sz) == 0)
+	if(FlushViewOfFile(g_info->var_queue_front->data_seg.ptr, g_info->var_queue_front->data_seg.seg_sz) == 0)
 	{
 		readErrorMex("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
 	}
 #else
 	/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
 	 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
-	if(msync(shm_update_info, g_info->shm_update_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
+	if(msync(shm_info, g_info->shm_info_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
 	{
 		releaseProcLock();
 		readMsyncError(errno);
 	}
-	if(msync(g_info->var_q_front->data_seg.ptr, g_info->var_q_front->data_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
+	if(msync(g_info->var_queue_front->data_seg.ptr, g_info->var_queue_front->data_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
 	{
 		releaseProcLock();
 		readMsyncError(errno);
@@ -597,10 +597,10 @@ void updateAll(void)
 /* checks if everything is in working order before doing the operation */
 bool_t precheck(void)
 {
-	bool_t ret = g_info->shm_update_seg.is_init
-			   & g_info->shm_update_seg.is_mapped
-			   & g_info->var_q_front->data_seg.is_init
-			   & g_info->var_q_front->data_seg.is_mapped
+	bool_t ret = g_info->shm_info_seg.is_init
+			   & g_info->shm_info_seg.is_mapped
+			   & g_info->var_queue_front->data_seg.is_init
+			   & g_info->var_queue_front->data_seg.is_mapped
 			   & g_info->flags.is_glob_shm_var_init;
 #ifdef MSH_THREAD_SAFE
 	return ret & g_info->flags.is_proc_lock_init;
@@ -612,10 +612,11 @@ bool_t precheck(void)
 
 void removeUnused(void)
 {
-	VariableNode_t* curr_node = g_info->var_q_front;
+	VariableNode_t* curr_node = g_info->var_queue_front;
 	VariableNode_t* prev_node;
 	VariableNode_t* next_node;
-	while(curr_node != NULL)
+	size_t i;
+	for(i = 0; i < g_info->num_fetched_vars; i++)
 	{
 		next_node = curr_node->next;
 		if(*curr_node->crosslink == NULL)
@@ -634,7 +635,7 @@ void removeUnused(void)
 #ifdef MSH_WIN
 			if(curr_node->data_seg.is_mapped)
 			{
-				if(UnmapViewOfFile(g_info->var_q_front->data_seg.ptr) == 0)
+				if(UnmapViewOfFile(g_info->var_queue_front->data_seg.ptr) == 0)
 				{
 					readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 				}
@@ -643,22 +644,19 @@ void removeUnused(void)
 			
 			if(curr_node->data_seg.is_init)
 			{
-				MemoryMetaHeader_t* curr_metadata = curr_node->data_seg.ptr;
-				if(curr_metadata->procs_using == 1)
+				if(curr_node->data_seg.ptr->procs_using == 1 && curr_node->data_seg.ptr->is_fetched)
 				{
 					/* if this is the last process using the memory, totally unlink */
 					
 					/* reset all references in shared memory */
 					if(prev_node != NULL)
 					{
-						MemoryMetaHeader_t* prev_metadata = prev_node->data_seg.ptr;
-						prev_metadata->next_seg_num = curr_metadata->next_seg_num;
+						prev_node->data_seg.ptr->next_seg_num = curr_node->data_seg.ptr->next_seg_num;
 					}
 					
 					if(next_node != NULL)
 					{
-						MemoryMetaHeader_t* next_metadata = next_node->data_seg.ptr;
-						next_metadata->prev_seg_num = curr_metadata->prev_seg_num;
+						next_node->data_seg.ptr->prev_seg_num = curr_node->data_seg.ptr->prev_seg_num;
 					}
 				}
 				
@@ -688,18 +686,16 @@ void removeUnused(void)
 					/* reset all references in shared memory */
 					if(prev_node != NULL)
 					{
-						MemoryMetaHeader_t* prev_metadata = prev_node->data_seg.ptr;
-						prev_metadata->next_seg_num = curr_metadata->next_seg_num;
+						prev_node->data_seg.ptr->next_seg_num = curr_metadata->next_seg_num;
 					}
 					
 					if(next_node != NULL)
 					{
-						MemoryMetaHeader_t* next_metadata = next_node->data_seg.ptr;
-						next_metadata->prev_seg_num = curr_metadata->prev_seg_num;
+						next_node->data_seg.ptr->prev_seg_num = curr_metadata->prev_seg_num;
 					}
 					
 					
-					if(shm_unlink(g_info->var_q_front->data_seg.name) != 0)
+					if(shm_unlink(g_info->var_queue_front->data_seg.name) != 0)
 					{
 						readShmUnlinkError(errno);
 					}
@@ -719,9 +715,9 @@ void removeUnused(void)
 				next_node->prev = prev_node;
 			}
 			
-			if(g_info->var_q_front == curr_node)
+			if(g_info->var_queue_front == curr_node)
 			{
-				g_info->var_q_front = next_node;
+				g_info->var_queue_front = next_node;
 			}
 			
 			mxFree(curr_node);

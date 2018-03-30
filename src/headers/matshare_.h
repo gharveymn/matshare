@@ -6,7 +6,7 @@
 #include "mshutils.h"
 #include "init.h"
 
-void mshFetch(void);
+void mshFetch(int nlhs, mxArray* plhs[]);
 
 void mshShare(const mxArray* in_var);
 

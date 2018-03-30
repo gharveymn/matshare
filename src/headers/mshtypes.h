@@ -91,7 +91,6 @@ typedef enum
 typedef enum
 {
 	msh_SHARETYPE_COPY,               /* always create a new segment */
-	msh_SHARETYPE_REWRITE,          /* if the new variable has the same data size and attributes, rewrite, otherwise create new segment */
 	msh_SHARETYPE_OVERWRITE          /* reuse the same segment if the new variable is smaller than or the same size as the old one */
 } mshsharetype_t;
 
@@ -124,27 +123,31 @@ struct Header_tag
 	bool_t is_empty;
 };
 
+/* pointers to the data in virtual memory */
 typedef struct ShmData_tag ShmData_t;
 struct ShmData_tag
 {
-	mwSize* dims;                         /* pointer to the size array */
-	void* pr;                              /* real data portion */
-	void* pi;                              /* imaginary data portion */
-	mwIndex* ir;                         /* row indexes, for sparse */
-	mwIndex* jc;                    /* cumulative column counts, for sparse */
-	char_t* field_str;               /* list of a structures fields, each field name will be separated by a null character */
-	size_t* child_hdrs;                    /* array of corresponding children headers */
+	mwSize* dims;				/* pointer to the size array */
+	void* pr;					/* real data portion */
+	void* pi;					/* imaginary data portion */
+	mwIndex* ir;				/* row indexes, for sparse */
+	mwIndex* jc;				/* cumulative column counts, for sparse */
+	char_t* field_str;			/* list of a structures fields, each field name will be separated by a null character */
+	size_t* child_hdrs;           /* array of corresponding children headers */
 };
 
-typedef struct ShmSegmentInfo_tag ShmSegmentInfo_t;
-struct ShmSegmentInfo_tag
+
+/* structure of shared info about the shared segments */
+typedef struct ShmInfo_tag ShmInfo_t;
+struct ShmInfo_tag
 {
 	/* these are also all size_t to guarantee alignment for atomic operations */
 	size_t lead_seg_num;          /* 64 bit width is temporary ugly fix for theoretical issue of name collision */
 	size_t seg_num;
 	size_t rev_num;
 	size_t seg_sz;
-	size_t num_procs;
+	size_t num_shared_vars;
+	unsigned int num_procs;
 #ifdef MSH_WIN
 	DWORD upd_pid;
 #else
@@ -157,9 +160,23 @@ struct ShmSegmentInfo_tag
 #endif
 };
 
+typedef struct MemoryMetaHeader_tag MemoryMetaHeader_t;
+struct MemoryMetaHeader_tag
+{
+	size_t rev_num;
+	
+	/* use these to link together the memory segments */
+	size_t prev_seg_num;
+	size_t next_seg_num;
+	unsigned int procs_using;
+	bool_t is_fetched;
+};
+
 typedef struct MemorySegment_tag MemorySegment_t;
 struct MemorySegment_tag
 {
+	MemoryMetaHeader_t* ptr;
+	size_t seg_sz;
 	char_t name[MSH_MAX_NAME_LEN];
 	bool_t is_init;
 	bool_t is_mapped;
@@ -168,19 +185,6 @@ struct MemorySegment_tag
 #else
 	handle_t handle;
 #endif
-	size_t seg_sz;
-	void* ptr;
-};
-
-typedef struct MemoryMetaHeader_tag MemoryMetaHeader_t;
-struct MemoryMetaHeader_tag
-{
-	size_t procs_using;
-	size_t rev_num;
-	
-	/* use these to link together the memory segments */
-	size_t prev_seg_num;
-	size_t next_seg_num;
 };
 
 typedef struct VariableNode_tag VariableNode_t;
@@ -194,12 +198,14 @@ struct VariableNode_tag
 	MemorySegment_t data_seg;
 };
 
-typedef struct MexInfo_tag MexInfo_t;
-struct MexInfo_tag
+typedef struct LocalInfo_tag LocalInfo_t;
+struct LocalInfo_tag
 {
-	VariableNode_t* var_q_front;
-	MemorySegment_t shm_update_seg;
+	VariableNode_t* var_queue_front;
+	MemorySegment_t shm_info_seg;
 	MemorySegment_t swap_shm_data_seg;
+	
+	size_t num_fetched_vars;
 
 #ifdef MSH_AUTO_INIT
 	MemorySegment_t lcl_init_seg;
@@ -230,12 +236,12 @@ struct MexInfo_tag
 	pid_t this_pid;
 #endif
 	
-	uint32_t num_lcl_objs;
+	size_t num_registered_objs;
 	
 };
 
-MexInfo_t* g_info;
+LocalInfo_t* g_info;
 
-#define shm_update_info ((ShmSegmentInfo_t*)g_info->shm_update_seg.ptr)
+#define shm_info ((ShmInfo_t*)g_info->shm_info_seg.ptr)
 
 #endif //MATSHARE_MSH_TYPES_H
