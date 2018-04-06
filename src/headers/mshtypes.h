@@ -2,7 +2,6 @@
 #define MATSHARE_MSH_TYPES_H
 
 #include "mex.h"
-#include <stdint.h>
 #include "externtypes.h"
 
 
@@ -97,8 +96,8 @@ typedef enum
 
 /* captures fundamentals of the mxArray */
 /* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
-typedef struct Header_tag Header_t;
-struct Header_tag
+typedef struct Header_t Header_t;
+struct Header_t
 {
 	struct
 	{
@@ -124,8 +123,8 @@ struct Header_tag
 };
 
 /* pointers to the data in virtual memory */
-typedef struct ShmData_tag ShmData_t;
-struct ShmData_tag
+typedef struct ShmData_t ShmData_t;
+struct ShmData_t
 {
 	mwSize* dims;				/* pointer to the size array */
 	void* pr;					/* real data portion */
@@ -136,46 +135,21 @@ struct ShmData_tag
 	size_t* child_hdrs;           /* array of corresponding children headers */
 };
 
-
-/* structure of shared info about the shared segments */
-typedef struct ShmInfo_tag ShmInfo_t;
-struct ShmInfo_tag
+typedef struct SegmentMetadata_t SegmentMetadata_t;
+struct SegmentMetadata_t
 {
-	/* these are also all size_t to guarantee alignment for atomic operations */
-	size_t lead_seg_num;          /* 64 bit width is temporary ugly fix for theoretical issue of name collision */
-	size_t seg_num;
-	size_t rev_num;
-	size_t seg_sz;
-	size_t num_shared_vars;
-	unsigned int num_procs;
-#ifdef MSH_WIN
-	DWORD upd_pid;
-#else
-	pid_t upd_pid;
-	mode_t security;
-#endif
-	mshsharetype_t sharetype;
-#ifdef MSH_THREAD_SAFE
-	bool_t is_thread_safe;
-#endif
-};
-
-typedef struct MemoryMetaHeader_tag MemoryMetaHeader_t;
-struct MemoryMetaHeader_tag
-{
-	size_t rev_num;
-	
 	/* use these to link together the memory segments */
 	size_t prev_seg_num;
 	size_t next_seg_num;
+	size_t seg_sz;
 	unsigned int procs_using;
 	bool_t is_fetched;
 };
 
-typedef struct MemorySegment_tag MemorySegment_t;
-struct MemorySegment_tag
+typedef struct MemorySegment_t MemorySegment_t;
+struct MemorySegment_t
 {
-	MemoryMetaHeader_t* ptr;
+	SegmentMetadata_t* ptr;
 	size_t seg_sz;
 	char_t name[MSH_MAX_NAME_LEN];
 	bool_t is_init;
@@ -187,24 +161,62 @@ struct MemorySegment_tag
 #endif
 };
 
-typedef struct VariableNode_tag VariableNode_t;
-struct VariableNode_tag
+typedef struct VariableNode_t VariableNode_t;
+struct VariableNode_t
 {
 	VariableNode_t* next;
 	VariableNode_t* prev;
 	mxArray* var;
 	mxArray** crosslink;
 	size_t seg_num;
+	size_t next_seg_num;
+	size_t prev_seg_num;
 	MemorySegment_t data_seg;
+	bool_t will_free;
 };
 
-typedef struct LocalInfo_tag LocalInfo_t;
-struct LocalInfo_tag
+typedef struct NewVarNode_t NewVarNode_t;
+struct NewVarNode_t
+{
+	VariableNode_t* this_node;
+	VariableNode_t* next;
+};
+
+/* structure of shared info about the shared segments */
+typedef struct ShmInfo_t ShmInfo_t;
+struct ShmInfo_t
+{
+	/* these are also all size_t to guarantee alignment for atomic operations */
+	size_t lead_seg_num;
+	size_t first_seg_num;
+	struct
+	{
+		size_t seg_num;
+		size_t rev_num;
+		size_t seg_sz;
+	} overwrite_info;
+	size_t num_shared_vars;
+	unsigned int num_procs;
+#ifdef MSH_WIN
+	DWORD update_pid;
+#else
+	pid_t update_pid;
+	mode_t security;
+#endif
+	mshsharetype_t sharetype;
+#ifdef MSH_THREAD_SAFE
+	bool_t is_thread_safe;
+#endif
+};
+
+typedef struct LocalInfo_t LocalInfo_t;
+struct LocalInfo_t
 {
 	VariableNode_t* var_queue_front;
 	MemorySegment_t shm_info_seg;
 	MemorySegment_t swap_shm_data_seg;
 	
+	size_t rev_num;
 	size_t num_fetched_vars;
 
 #ifdef MSH_AUTO_INIT

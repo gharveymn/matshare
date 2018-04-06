@@ -47,9 +47,8 @@ void init()
 		g_info->flags.is_var_q_init = TRUE;
 	}
 	
-	g_info->var_queue_front->rev_num = shm_info->rev_num;
-	g_info->var_queue_front->seg_num = shm_info->seg_num;
-	g_info->var_queue_front->data_seg.seg_sz = shm_info->seg_sz;
+	g_info->var_queue_front->seg_num = shm_info->overwrite_info.seg_num;
+	g_info->var_queue_front->data_seg.seg_sz = shm_info->overwrite_info.seg_sz;
 	
 	if(!g_info->var_queue_front->data_seg.is_init)
 	{
@@ -60,6 +59,8 @@ void init()
 	{
 		mapDataSegment();
 	}
+	
+	g_info->rev_num = shm_info->overwrite_info.rev_num;
 	
 	if(is_glob_init)
 	{
@@ -81,7 +82,7 @@ void init()
 		else
 		{
 			/* fetch the data rather than create a dummy variable */
-			shmFetch(g_info->var_queue_front->data_seg.ptr, &g_info->var_queue_front->var);
+			shmFetch((byte_t*)g_info->var_queue_front->data_seg.ptr, &g_info->var_queue_front->var);
 		}
 		mexMakeArrayPersistent(g_info->var_queue_front->var);
 		g_info->flags.is_glob_shm_var_init = TRUE;
@@ -287,10 +288,10 @@ void globStartup(Header_t* hdr)
 		
 		shm_info->num_procs = 1;
 		shm_info->lead_seg_num = 0;
-		shm_info->seg_num = 0;
-		shm_info->rev_num = 0;
-		shm_info->seg_sz = hdr->obj_sz;
-		shm_info->upd_pid = g_info->this_pid;
+		shm_info->overwrite_info.seg_num = 0;
+		shm_info->overwrite_info.rev_num = 0;
+		shm_info->overwrite_info.seg_sz = hdr->obj_sz;
+		shm_info->update_pid = g_info->this_pid;
 #ifdef MSH_UNIX
 		shm_info->security = S_IRUSR | S_IWUSR; /** default value **/
 #endif
@@ -314,8 +315,8 @@ void initDataSegment(void)
 #ifdef MSH_WIN
 	
 	snprintf(g_info->var_queue_front->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->var_queue_front->seg_num);
-	uint32_t lo_sz = (uint32_t)(g_info->var_queue_front->data_seg.seg_sz & 0xFFFFFFFFL);
-	uint32_t hi_sz = (uint32_t)((g_info->var_queue_front->data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
+	DWORD lo_sz = (DWORD)(g_info->var_queue_front->data_seg.seg_sz & 0xFFFFFFFFL);
+	DWORD hi_sz = (DWORD)((g_info->var_queue_front->data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
 	g_info->var_queue_front->data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->var_queue_front->data_seg.name);
 	DWORD err = GetLastError();
 	if(g_info->var_queue_front->data_seg.handle == NULL)

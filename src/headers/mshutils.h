@@ -28,7 +28,7 @@ void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz);
 
 size_t padToAlign(size_t size);
 
-void makeMxMallocSignature(uint8_t* sig, size_t seg_size);
+void makeMxMallocSignature(unsigned char* sig, size_t seg_size);
 
 void acquireProcLock(void);
 

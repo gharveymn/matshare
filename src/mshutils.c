@@ -13,11 +13,11 @@
  * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
  * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
  */
-static const uint8_t c_MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
+static const unsigned char c_MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
 
 void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 {
-	uint8_t mxmalloc_sig[MXMALLOC_SIG_LEN];
+	unsigned char mxmalloc_sig[MXMALLOC_SIG_LEN];
 	makeMxMallocSignature(mxmalloc_sig, cpy_sz);
 	
 	memcpy(dest - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
@@ -45,7 +45,7 @@ void locateDataPointers(ShmData_t* data_ptrs, Header_t* hdr, byte_t* shm_anchor)
 }
 
 
-/* field names of a structure									     */
+/* field names of a structure	*/
 size_t getFieldNamesSize(const mxArray* mxStruct)
 {
 	const char_t* field_name;
@@ -267,7 +267,7 @@ size_t padToAlign(size_t size)
 }
 
 
-void makeMxMallocSignature(uint8_t* sig, size_t seg_size)
+void makeMxMallocSignature(unsigned char* sig, size_t seg_size)
 {
 	/*
 	 * MXMALLOC SIGNATURE INFO:
@@ -286,19 +286,21 @@ void makeMxMallocSignature(uint8_t* sig, size_t seg_size)
 	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
 	 */
 	
+	unsigned int i;
+	
 	memcpy(sig, c_MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
-	size_t multi = 1 << 4;
+	size_t multi = 1u << 4u;
 	
 	/* note: (x % 2^n) == (x & (2^n - 1)) */
 	if(seg_size > 0)
 	{
-		sig[0] = (uint8_t)((((seg_size + 0x0F)/multi) & (multi - 1))*multi);
+		sig[0] = (unsigned char)((((seg_size + 0x0F)/multi) & (multi - 1))*multi);
 		
 		/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
-		for(int i = 1; i < 4; i++)
+		for(i = 1; i < 4; i++)
 		{
-			multi = (size_t)1 << (1 << (2 + i));
-			sig[i] = (uint8_t)(((seg_size + 0x0F)/multi) & (multi - 1));
+			multi = (size_t)1u << (1u << (2u + i));
+			sig[i] = (unsigned char)(((seg_size + 0x0F)/multi) & (multi - 1));
 		}
 	}
 }
@@ -311,7 +313,7 @@ void acquireProcLock(void)
 	if(shm_info->num_procs > 1 && shm_info->is_thread_safe && !g_info->flags.is_proc_locked)
 	{
 #ifdef MSH_WIN
-		uint32_t ret = WaitForSingleObject(g_info->proc_lock, INFINITE);
+		DWORD ret = WaitForSingleObject(g_info->proc_lock, INFINITE);
 		if(ret == WAIT_ABANDONED)
 		{
 			readErrorMex("WaitProcLockAbandonedError", "One of the processes failed while using the lock. Cannot safely continue (Error number: %u).", GetLastError());
@@ -396,7 +398,7 @@ mshdirective_t parseDirective(const mxArray* in)
 	
 	if(mxIsNumeric(in))
 	{
-		return (mshdirective_t)*((uint8_t*)(mxGetData(in)));
+		return (mshdirective_t)*((unsigned char*)(mxGetData(in)));
 	}
 	else if(mxIsChar(in))
 	{
@@ -563,10 +565,10 @@ void parseParams(int num_params, const mxArray* in[])
 
 void updateAll(void)
 {
-	shm_info->upd_pid = g_info->this_pid;
-	shm_info->rev_num = g_info->var_queue_front->data_seg.ptr->rev_num;
-	shm_info->seg_num = g_info->var_queue_front->seg_num;
-	shm_info->seg_sz = g_info->var_queue_front->data_seg.seg_sz;
+	shm_info->update_pid = g_info->this_pid;
+	shm_info->overwrite_info.rev_num = g_info->rev_num;
+	shm_info->overwrite_info.seg_num = g_info->var_queue_front->seg_num;
+	shm_info->overwrite_info.seg_sz = g_info->var_queue_front->data_seg.seg_sz;
 #ifdef MSH_WIN
 	/* not sure if this is required on windows, but it doesn't hurt */
 	if(FlushViewOfFile(shm_info, g_info->shm_info_seg.seg_sz) == 0)

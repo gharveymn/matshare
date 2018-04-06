@@ -31,7 +31,11 @@ IF("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 
 	SET(SOURCE_FILES
 			src/matshare_.c src/headers/matshare_.h
-		   src/matlabutils.c src/headers/matlabutils.h src/init.c src/headers/init.h src/headers/mshtypes.h src/headers/externtypes.h src/mshutils.c src/headers/mshutils.h)
+		    src/matlabutils.c src/headers/matlabutils.h
+			src/init.c src/headers/init.h
+			src/headers/mshtypes.h
+			src/headers/externtypes.h
+			src/mshutils.c src/headers/mshutils.h)
 
 	ADD_EXECUTABLE(${OUT_NAME} ${SOURCE_FILES})
 
@@ -40,7 +44,7 @@ ELSE("${CMAKE_BUILD_TYPE}" STREQUAL "NO_MEX")
 	SET(INSTALL_OUTPUT_PATH "bin")
 	SET(CMAKE_CL_64 TRUE)
 	#set(CMAKE_VERBOSE_MAKEFILE ON)
-	#SET(MATLAB_ROOT "C:\\Program Files\\MATLAB\\R2017b")
+	SET(MATLAB_ROOT "C:\\Program Files\\MATLAB\\R2017b")
 	SET(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 	SET(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake) # add FindMatlab module
 
