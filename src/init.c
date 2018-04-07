@@ -42,20 +42,20 @@ void init()
 	
 	if(!g_info->flags.is_var_q_init)
 	{
-		g_info->var_queue_front = mxCalloc(1, sizeof(VariableNode_t));
-		mexMakeMemoryPersistent(g_info->var_queue_front);
+		g_info->var_stack_top = mxCalloc(1, sizeof(VariableNode_t));
+		mexMakeMemoryPersistent(g_info->var_stack_top);
 		g_info->flags.is_var_q_init = TRUE;
 	}
 	
-	g_info->var_queue_front->seg_num = shm_info->overwrite_info.seg_num;
-	g_info->var_queue_front->data_seg.seg_sz = shm_info->overwrite_info.seg_sz;
+	g_info->var_stack_top->seg_num = shm_info->overwrite_info.seg_num;
+	g_info->var_stack_top->data_seg.seg_sz = shm_info->overwrite_info.seg_sz;
 	
-	if(!g_info->var_queue_front->data_seg.is_init)
+	if(!g_info->var_stack_top->data_seg.is_init)
 	{
 		initDataSegment();
 	}
 	
-	if(!g_info->var_queue_front->data_seg.is_mapped)
+	if(!g_info->var_stack_top->data_seg.is_mapped)
 	{
 		mapDataSegment();
 	}
@@ -65,10 +65,10 @@ void init()
 	if(is_glob_init)
 	{
 		/* initialize shared memory */
-		memset(g_info->var_queue_front->data_seg.ptr, 0, g_info->var_queue_front->data_seg.seg_sz);
+		memset(g_info->var_stack_top->data_seg.ptr, 0, g_info->var_stack_top->data_seg.seg_sz);
 		
 		/* set the data to mirror the dummy variable at the end */
-		memcpy(g_info->var_queue_front->data_seg.ptr, &hdr, hdr.obj_sz);
+		memcpy(g_info->var_stack_top->data_seg.ptr, &hdr, hdr.obj_sz);
 	}
 	
 	
@@ -77,14 +77,14 @@ void init()
 		
 		if(is_glob_init)
 		{
-			g_info->var_queue_front->var = mxCreateDoubleMatrix(0, 0, mxREAL);
+			g_info->var_stack_top->var = mxCreateDoubleMatrix(0, 0, mxREAL);
 		}
 		else
 		{
 			/* fetch the data rather than create a dummy variable */
-			shmFetch((byte_t*)g_info->var_queue_front->data_seg.ptr, &g_info->var_queue_front->var);
+			shmFetch((byte_t*)g_info->var_stack_top->data_seg.ptr, &g_info->var_stack_top->var);
 		}
-		mexMakeArrayPersistent(g_info->var_queue_front->var);
+		mexMakeArrayPersistent(g_info->var_stack_top->var);
 		g_info->flags.is_glob_shm_var_init = TRUE;
 	}
 	else
@@ -113,12 +113,12 @@ void procStartup(void)
 	/* mxCalloc guarantees that these are zeroed
 	g_info->flags.is_proc_lock_init = FALSE;
 	
-	g_info->var_queue_front->data_seg = {0};
+	g_info->var_stack_top->data_seg = {0};
 	g_info->shm_info_seg.is_init = FALSE;
 	g_info->shm_info_seg.is_mapped = FALSE;
 	
-	g_info->var_queue_front->data_seg.is_init = FALSE;
-	g_info->var_queue_front->data_seg.is_mapped = FALSE;
+	g_info->var_stack_top->data_seg.is_init = FALSE;
+	g_info->var_stack_top->data_seg.is_mapped = FALSE;
 	
 	temp_info->startup_flag.is_mapped = FALSE;
 	
@@ -295,7 +295,12 @@ void globStartup(Header_t* hdr)
 #ifdef MSH_UNIX
 		shm_info->security = S_IRUSR | S_IWUSR; /** default value **/
 #endif
+
+#ifdef MSH_SHARETYPE_COPY
+		shm_info->sharetype = msh_SHARETYPE_COPY;
+#else
 		shm_info->sharetype = msh_SHARETYPE_OVERWRITE;
+#endif
 
 #ifdef MSH_THREAD_SAFE
 		shm_info->is_thread_safe = TRUE; 		/** default value **/
@@ -314,30 +319,30 @@ void initDataSegment(void)
 
 #ifdef MSH_WIN
 	
-	snprintf(g_info->var_queue_front->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->var_queue_front->seg_num);
-	DWORD lo_sz = (DWORD)(g_info->var_queue_front->data_seg.seg_sz & 0xFFFFFFFFL);
-	DWORD hi_sz = (DWORD)((g_info->var_queue_front->data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
-	g_info->var_queue_front->data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->var_queue_front->data_seg.name);
+	snprintf(g_info->var_stack_top->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)g_info->var_stack_top->seg_num);
+	DWORD lo_sz = (DWORD)(g_info->var_stack_top->data_seg.seg_sz & 0xFFFFFFFFL);
+	DWORD hi_sz = (DWORD)((g_info->var_stack_top->data_seg.seg_sz >> 32) & 0xFFFFFFFFL);
+	g_info->var_stack_top->data_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, g_info->var_stack_top->data_seg.name);
 	DWORD err = GetLastError();
-	if(g_info->var_queue_front->data_seg.handle == NULL)
+	if(g_info->var_stack_top->data_seg.handle == NULL)
 	{
 		releaseProcLock();
 		readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u)", err);
 	}
-	g_info->var_queue_front->data_seg.is_init = TRUE;
+	g_info->var_stack_top->data_seg.is_init = TRUE;
 	
 #else
 	
-	snprintf(g_info->var_queue_front->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)0);
+	snprintf(g_info->var_stack_top->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)0);
 	
-	g_info->var_queue_front->data_seg.handle = shm_open(g_info->var_queue_front->data_seg.name, O_RDWR | O_CREAT, shm_info->security);
-	if(g_info->var_queue_front->data_seg.handle == -1)
+	g_info->var_stack_top->data_seg.handle = shm_open(g_info->var_stack_top->data_seg.name, O_RDWR | O_CREAT, shm_info->security);
+	if(g_info->var_stack_top->data_seg.handle == -1)
 	{
 		readShmOpenError(errno);
 	}
-	g_info->var_queue_front->data_seg.is_init = TRUE;
+	g_info->var_stack_top->data_seg.is_init = TRUE;
 	
-	if(ftruncate(g_info->var_queue_front->data_seg.handle, g_info->var_queue_front->data_seg.seg_sz) != 0)
+	if(ftruncate(g_info->var_stack_top->data_seg.handle, g_info->var_stack_top->data_seg.seg_sz) != 0)
 	{
 		readFtruncateError(errno);
 	}
@@ -351,8 +356,8 @@ void mapDataSegment(void)
 {
 #ifdef MSH_WIN
 	
-	g_info->var_queue_front->data_seg.ptr = MapViewOfFile(g_info->var_queue_front->data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->var_queue_front->data_seg.seg_sz);
-	if(g_info->var_queue_front->data_seg.ptr == NULL)
+	g_info->var_stack_top->data_seg.ptr = MapViewOfFile(g_info->var_stack_top->data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->var_stack_top->data_seg.seg_sz);
+	if(g_info->var_stack_top->data_seg.ptr == NULL)
 	{
 		releaseProcLock();
 		readErrorMex("MapDataSegError", "Could not map the update memory segment (Error number %u)", GetLastError());
@@ -360,15 +365,15 @@ void mapDataSegment(void)
 	
 #else
 	
-	g_info->var_queue_front->data_seg.ptr = mmap(NULL, g_info->var_queue_front->data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->var_queue_front->data_seg.handle, 0);
-	if(g_info->var_queue_front->data_seg.ptr == MAP_FAILED)
+	g_info->var_stack_top->data_seg.ptr = mmap(NULL, g_info->var_stack_top->data_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->var_stack_top->data_seg.handle, 0);
+	if(g_info->var_stack_top->data_seg.ptr == MAP_FAILED)
 	{
 		readMmapError(errno);
 	}
 	
 #endif
 	
-	g_info->var_queue_front->data_seg.is_mapped = TRUE;
+	g_info->var_stack_top->data_seg.is_mapped = TRUE;
 	
 }
 

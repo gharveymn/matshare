@@ -26,6 +26,13 @@ try
 		fprintf('-Thread safety is disabled.\n')
 	end
 	
+	if(CopyOnWrite)
+		fprintf('-Compiling in copy-on-write mode.\n')
+		mexflags = [mexflags {'-DMSH_SHARETYPE_COPY'}];
+	else
+		fprintf('-Compiling in overwrite mode.\n')
+	end
+	
 	[comp,maxsz,endi] = computer;
 	
 	sources = {
@@ -61,7 +68,8 @@ try
 	fprintf(' successful.\n%s\n',['-The function is located in ' fullfile(pwd,'bin') '.'])
 	
 	addpath('bin');
-	clear mexflags sources output_path comp endi maxsz doINSTALL i ThreadSafety AutomaticInitialization DebugMode
+	clear mexflags sources output_path comp endi maxsz doINSTALL i ...
+	ThreadSafety AutomaticInitialization DebugMode CopyOnWrite
 	
 	
 catch ME

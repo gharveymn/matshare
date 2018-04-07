@@ -139,8 +139,8 @@ typedef struct SegmentMetadata_t SegmentMetadata_t;
 struct SegmentMetadata_t
 {
 	/* use these to link together the memory segments */
-	size_t prev_seg_num;
-	size_t next_seg_num;
+	int prev_seg_num;
+	int next_seg_num;
 	size_t seg_sz;
 	unsigned int procs_using;
 	bool_t is_fetched;
@@ -168,9 +168,9 @@ struct VariableNode_t
 	VariableNode_t* prev;
 	mxArray* var;
 	mxArray** crosslink;
-	size_t seg_num;
-	size_t next_seg_num;
-	size_t prev_seg_num;
+	int seg_num;
+	int next_seg_num;
+	int prev_seg_num;
 	MemorySegment_t data_seg;
 	bool_t will_free;
 };
@@ -187,11 +187,11 @@ typedef struct ShmInfo_t ShmInfo_t;
 struct ShmInfo_t
 {
 	/* these are also all size_t to guarantee alignment for atomic operations */
-	size_t lead_seg_num;
-	size_t first_seg_num;
+	int lead_seg_num;
+	int first_seg_num;
 	struct
 	{
-		size_t seg_num;
+		int seg_num;
 		size_t rev_num;
 		size_t seg_sz;
 	} overwrite_info;
@@ -212,9 +212,8 @@ struct ShmInfo_t
 typedef struct LocalInfo_t LocalInfo_t;
 struct LocalInfo_t
 {
-	VariableNode_t* var_queue_front;
+	VariableNode_t* var_stack_top;
 	MemorySegment_t shm_info_seg;
-	MemorySegment_t swap_shm_data_seg;
 	
 	size_t rev_num;
 	size_t num_fetched_vars;

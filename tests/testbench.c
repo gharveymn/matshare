@@ -61,16 +61,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	
 // 	mxArray* in = mxCreateDoubleMatrix(3,3,mxREAL);
 // 	mxArray* shared = mxCreateSharedDataCopy(in);
-// 	mxArray* in = prhs[0];
-// 	mxArrayStruct* in_tag = (mxArrayStruct*)in;
+ 	mxArray* in = prhs[0];
+ 	mxArrayStruct* in_tag = (mxArrayStruct*)in;
 // 	mxArray* in2 = prhs[1];
 // 	mxArrayStruct* in_tag2 = (mxArrayStruct*)in2;
 // 	mxArrayStruct* shared_tag = (mxArrayStruct*)shared;
     
-    plhs[0] = mxCreateSparse(0,0,1,mxREAL);
-    mexPrintf("%d\n",mxGetNumberOfElements(plhs[0]));
-    mexPrintf("%d\n",mxGetNzmax(plhs[0]));
-    mexPrintf("%d\n",mxIsEmpty(plhs[0]));
+    mexPrintf("%d\n",in_tag->RefCount);
+    
     
 // 	plhs[0] = mxCreateStructArray(0,NULL,0,NULL);
 // 	
