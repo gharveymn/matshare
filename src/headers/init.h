@@ -11,7 +11,7 @@ void procStartup(void);
 void initProcLock(void);
 void initUpdateSegment(void);
 void mapUpdateSegment(void);
-void globStartup(Header_t* hdr);
+void globStartup(SegmentMetadata_t* metadata, Header_t* hdr);
 void initDataSegment(void);
 void mapDataSegment(void);
 void autoInit(mshdirective_t directive);

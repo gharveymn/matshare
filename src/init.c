@@ -5,7 +5,7 @@ static bool_t is_glob_init;
 
 void init()
 {
-	
+	SegmentMetadata_t metadata;
 	Header_t hdr;
 	
 	/* lock the file */
@@ -28,7 +28,7 @@ void init()
 	}
 	
 	/* includes writing to shared memory, but the memory has been aligned so all writes are atomic */
-	globStartup(&hdr);
+	globStartup(&metadata, &hdr);
 
 #ifdef MSH_THREAD_SAFE
 	if(!g_info->flags.is_proc_lock_init)
@@ -64,11 +64,9 @@ void init()
 	
 	if(is_glob_init)
 	{
-		/* initialize shared memory */
-		memset(g_info->var_stack_top->data_seg.ptr, 0, g_info->var_stack_top->data_seg.seg_sz);
-		
-		/* set the data to mirror the dummy variable at the end */
-		memcpy(g_info->var_stack_top->data_seg.ptr, &hdr, hdr.obj_sz);
+		/* set the data to mirror the dummy variable */
+		memcpy(g_info->var_stack_top->data_seg.ptr, &metadata, padToAlign(sizeof(SegmentMetadata_t)));
+		memcpy(g_info->var_stack_top->data_seg.ptr + 1, &hdr, padToAlign(sizeof(Header_t)));
 	}
 	
 	
@@ -260,13 +258,19 @@ void mapUpdateSegment(void)
 }
 
 
-void globStartup(Header_t* hdr)
+void globStartup(SegmentMetadata_t* metadata, Header_t* hdr)
 {
 	if(is_glob_init)
 	{
 		/* this is the first region created */
 		/* this info shouldn't ever actually be used */
 		/* but make sure the memory segment is consistent */
+		metadata->prev_seg_num = -1;
+		metadata->next_seg_num = -1;
+		metadata->seg_sz = padToAlign(sizeof(SegmentMetadata_t)) + padToAlign(sizeof(Header_t));
+		unsigned int procs_using;
+		bool_t is_fetched;
+		
 		hdr->data_offsets.pr = SIZE_MAX;
 		hdr->data_offsets.pi = SIZE_MAX;
 		hdr->data_offsets.ir = SIZE_MAX;
@@ -290,7 +294,7 @@ void globStartup(Header_t* hdr)
 		shm_info->lead_seg_num = 0;
 		shm_info->overwrite_info.seg_num = 0;
 		shm_info->overwrite_info.rev_num = 0;
-		shm_info->overwrite_info.seg_sz = hdr->obj_sz;
+		shm_info->overwrite_info.seg_sz = padToAlign(sizeof(SegmentMetadata_t)) + padToAlign(sizeof(Header_t));
 		shm_info->update_pid = g_info->this_pid;
 #ifdef MSH_UNIX
 		shm_info->security = S_IRUSR | S_IWUSR; /** default value **/

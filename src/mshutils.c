@@ -76,6 +76,7 @@ void getNextFieldName(const char_t** field_str)
 
 void onExit(void)
 {
+	VariableNode_t* curr_var_node,* next_var_node;
 	
 	if(g_info->flags.is_glob_shm_var_init)
 	{
@@ -90,34 +91,63 @@ void onExit(void)
 
 #ifdef MSH_WIN
 
-#ifdef MSH_THREAD_SAFE
+
 	if(g_info->flags.is_proc_lock_init)
 	{
 		acquireProcLock();
-		if(g_info->shm_info_seg.is_mapped)
-		{
-			shm_info->num_procs -= 1;
-		}
-		releaseProcLock();
-		
-		if(CloseHandle(g_info->proc_lock) == 0)
-		{
-			readErrorMex("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
-		}
-		g_info->flags.is_proc_lock_init = FALSE;
-		
 	}
-#else
+
 	if(g_info->shm_info_seg.is_mapped)
 	{
 		shm_info->num_procs -= 1;
 	}
-#endif
+	
+	curr_var_node = g_info->var_stack_top;
+	while(curr_var_node != NULL)
+	{
+		next_var_node = curr_var_node->next;
+		if(curr_var_node->data_seg.is_mapped)
+		{
+			if(UnmapViewOfFile(curr_var_node->data_seg.ptr) == 0)
+			{
+				if(g_info->flags.is_proc_lock_init)
+				{ releaseProcLock(); }
+				readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
+			}
+			curr_var_node->data_seg.is_mapped = FALSE;
+		}
+		
+		if(curr_var_node->data_seg.is_init)
+		{
+			if(CloseHandle(curr_var_node->data_seg.handle) == 0)
+			{
+				if(g_info->flags.is_proc_lock_init)
+				{ releaseProcLock(); }
+				readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
+			}
+			curr_var_node->data_seg.is_init = FALSE;
+		}
+		
+		mxFree(curr_var_node);
+		
+		if(next_var_node != NULL)
+		{
+			next_var_node->prev = NULL;
+			next_var_node->prev_seg_num = -1;
+		}
+		
+		/* repoint top of the stack in case of crash */
+		g_info->var_stack_top = next_var_node;
+		curr_var_node = next_var_node;
+		
+	}
 	
 	if(g_info->var_stack_top->data_seg.is_mapped)
 	{
 		if(UnmapViewOfFile(g_info->var_stack_top->data_seg.ptr) == 0)
 		{
+			if(g_info->flags.is_proc_lock_init)
+			{ releaseProcLock(); }
 			readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 		}
 		g_info->var_stack_top->data_seg.is_mapped = FALSE;
@@ -127,6 +157,8 @@ void onExit(void)
 	{
 		if(CloseHandle(g_info->var_stack_top->data_seg.handle) == 0)
 		{
+			if(g_info->flags.is_proc_lock_init)
+			{ releaseProcLock(); }
 			readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
 		}
 		g_info->var_stack_top->data_seg.is_init = FALSE;
@@ -136,6 +168,8 @@ void onExit(void)
 	{
 		if(UnmapViewOfFile(shm_info) == 0)
 		{
+			if(g_info->flags.is_proc_lock_init)
+			{ releaseProcLock(); }
 			readErrorMex("UnmapFileError", "Error unmapping the update file (Error Number %u)", GetLastError());
 		}
 		g_info->shm_info_seg.is_mapped = FALSE;
@@ -145,6 +179,8 @@ void onExit(void)
 	{
 		if(CloseHandle(g_info->shm_info_seg.handle) == 0)
 		{
+			if(g_info->flags.is_proc_lock_init)
+			{ releaseProcLock(); }
 			readErrorMex("CloseHandleError", "Error closing the update file handle (Error Number %u)", GetLastError());
 		}
 		g_info->shm_info_seg.is_init = FALSE;
@@ -155,36 +191,44 @@ void onExit(void)
 	{
 		if(CloseHandle(g_info->lcl_init_seg.handle) == 0)
 		{
+			if(g_info->flags.is_proc_lock_init)
+			{ releaseProcLock(); }
 			readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
 		}
 		g_info->lcl_init_seg.is_init = FALSE;
 	}
 #endif
+	
+	if(g_info->flags.is_var_q_init)
+	{
+		mxFree(g_info->var_stack_top);
+		g_info->flags.is_var_q_init = FALSE;
+	}
+	
+	if(g_info->flags.is_proc_lock_init)
+	{
+		releaseProcLock();
+		if(CloseHandle(g_info->proc_lock) == 0)
+		{
+			readErrorMex("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
+		}
+		g_info->flags.is_proc_lock_init = FALSE;
+	}
 
 #else
 	
-	bool_t will_remove_data, will_remove_info = FALSE, is_proc_lock_init = g_info->flags.is_proc_lock_init;
-	VariableNode_t* curr_var_node,* next_var_node;
+	bool_t will_remove_data, will_remove_info = FALSE;
 	
-#ifdef MSH_THREAD_SAFE
-	if(is_proc_lock_init)
+	if(g_info->flags.is_proc_lock_init)
 	{
 		acquireProcLock();
-		if(g_info->shm_info_seg.is_mapped)
-		{
-			shm_info->num_procs -= 1;
-			will_remove_info = (bool_t)(shm_info->num_procs == 0);
-			
-		}
 	}
-#else
+
 	if(g_info->shm_info_seg.is_mapped)
 	{
 		shm_info->num_procs -= 1;
 		will_remove_info = (bool_t)(shm_info->num_procs == 0);
 	}
-#endif
-	
 	
 	curr_var_node = g_info->var_stack_top;
 	while(curr_var_node != NULL)
@@ -198,7 +242,7 @@ void onExit(void)
 			
 			if(munmap(curr_var_node->data_seg.ptr, curr_var_node->data_seg.seg_sz) != 0)
 			{
-				if(is_proc_lock_init)
+				if(g_info->flags.is_proc_lock_init)
 				{ releaseProcLock(); }
 				readMunmapError(errno);
 			}
@@ -211,7 +255,7 @@ void onExit(void)
 			{
 				if(shm_unlink(curr_var_node->data_seg.name) != 0)
 				{
-					if(is_proc_lock_init)
+					if(g_info->flags.is_proc_lock_init)
 					{ releaseProcLock(); }
 					readShmUnlinkError(errno);
 				}
@@ -228,7 +272,7 @@ void onExit(void)
 	{
 		if(munmap(shm_info, g_info->shm_info_seg.seg_sz) != 0)
 		{
-			if(is_proc_lock_init){releaseProcLock();}
+			if(g_info->flags.is_proc_lock_init){releaseProcLock();}
 			readMunmapError(errno);
 		}
 		g_info->shm_info_seg.is_mapped = FALSE;
@@ -240,7 +284,7 @@ void onExit(void)
 		{
 			if(shm_unlink(g_info->shm_info_seg.name) != 0)
 			{
-				if(is_proc_lock_init){releaseProcLock();}
+				if(g_info->flags.is_proc_lock_init){releaseProcLock();}
 				readShmUnlinkError(errno);
 			}
 		}
@@ -252,13 +296,11 @@ void onExit(void)
 	{
 		if(shm_unlink(g_info->lcl_init_seg.name) != 0)
 		{
-			if(is_proc_lock_init){releaseProcLock();}
+			if(g_info->flags.is_proc_lock_init){releaseProcLock();}
 			readShmUnlinkError(errno);
 		}
 		g_info->lcl_init_seg.is_init = FALSE;
 	}
-#endif
-
 #endif
 	
 	if(g_info->flags.is_var_q_init)
@@ -266,8 +308,8 @@ void onExit(void)
 		mxFree(g_info->var_stack_top);
 		g_info->flags.is_var_q_init = FALSE;
 	}
-	
-	if(is_proc_lock_init)
+
+	if(g_info->flags.is_proc_lock_init)
 	{
 		releaseProcLock();
 		if(will_remove_info)
@@ -277,7 +319,10 @@ void onExit(void)
 				readShmUnlinkError(errno);
 			}
 		}
+		g_info->flags.is_proc_lock_init = FALSE;
 	}
+	
+#endif
 	
 	mxFree(g_info);
 	g_info = NULL;
@@ -647,7 +692,7 @@ void removeUnused(void)
 	for(i = 0; i < g_info->num_fetched_vars; i++)
 	{
 		next_node = curr_node->next;
-		if(*curr_node->crosslink == NULL)
+		if(*curr_node->crosslink == NULL && curr_node->data_seg.is_mapped && curr_node->data_seg.ptr->is_fetched)
 		{
 			
 			prev_node = curr_node->prev;
@@ -713,7 +758,7 @@ void removeUnused(void)
 			
 			if(curr_node->data_seg.is_init)
 			{
-				MemoryMetaHeader_t* curr_metadata = curr_node->data_seg.ptr;
+				SegmentMetadata_t* curr_metadata = curr_node->data_seg.ptr;
 				if(curr_metadata->procs_using == 1)
 				{
 					/* if this is the last process using the memory, totally unlink */

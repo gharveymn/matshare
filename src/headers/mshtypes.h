@@ -43,7 +43,11 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 #  include "../extlib/mman-win32/sys/mman.h"
 extern int shm_open(const char* name, int oflag, mode_t mode);
 extern int shm_unlink(const char* name);
+extern int lockf(int fildes, int function, off_t size);
+extern int fchmod(int fildes, mode_t mode);
 #  include <sys/stat.h>
+#define F_LOCK 1
+#define F_ULOCK 0
 
 
 #ifndef MSH_UNIX
@@ -169,7 +173,7 @@ struct VariableNode_t
 	mxArray* var;
 	mxArray** crosslink;
 	int seg_num;
-	int next_seg_num;
+	int next_seg_num;		/* used to check if local var node matches shared var node */
 	int prev_seg_num;
 	MemorySegment_t data_seg;
 	bool_t will_free;
