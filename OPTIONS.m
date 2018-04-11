@@ -8,7 +8,7 @@ AutomaticInitialization = true;
 ThreadSafety = true;
 
 %% Specify whether matshare will use a copy-on-write mechanism
-CopyOnWrite = true;
+CopyOnWrite = false;
 
 %% Enables or disables debug mode
 DebugMode = true;

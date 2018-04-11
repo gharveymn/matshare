@@ -9,7 +9,7 @@ typedef struct
 {
 	void* name;             /*   prev - R2008b: Name of variable in workspace
 				               R2009a - R2010b: NULL
-				               R2011a - later : Reverse CrossLink pointer    */
+				               R2011a - later : Reverse crosslink pointer    */
 	mxClassID ClassID;      /* 0 = unknown     10 = int16
                                 1 = cell        11 = uint16
                                 2 = struct      12 = int32

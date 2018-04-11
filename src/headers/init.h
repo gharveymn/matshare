@@ -11,11 +11,9 @@ void procStartup(void);
 void initProcLock(void);
 void initUpdateSegment(void);
 void mapUpdateSegment(void);
-void globStartup(SegmentMetadata_t* metadata, Header_t* hdr);
+void globStartup(void);
 void initDataSegment(void);
 void mapDataSegment(void);
 void autoInit(mshdirective_t directive);
-
-extern size_t shmFetch_(byte_t* shm, mxArray** ret_var);
 
 #endif //MATSHARE_INIT_H

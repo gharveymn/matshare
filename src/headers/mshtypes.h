@@ -100,8 +100,7 @@ typedef enum
 
 /* captures fundamentals of the mxArray */
 /* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
-typedef struct Header_t Header_t;
-struct Header_t
+typedef struct
 {
 	struct
 	{
@@ -124,11 +123,10 @@ struct Header_t
 	bool_t is_sparse;
 	bool_t is_numeric;
 	bool_t is_empty;
-};
+} Header_t;
 
 /* pointers to the data in virtual memory */
-typedef struct ShmData_t ShmData_t;
-struct ShmData_t
+typedef struct
 {
 	mwSize* dims;				/* pointer to the size array */
 	void* pr;					/* real data portion */
@@ -137,21 +135,20 @@ struct ShmData_t
 	mwIndex* jc;				/* cumulative column counts, for sparse */
 	char_t* field_str;			/* list of a structures fields, each field name will be separated by a null character */
 	size_t* child_hdrs;           /* array of corresponding children headers */
-};
+} ShmData_t;
 
-typedef struct SegmentMetadata_t SegmentMetadata_t;
-struct SegmentMetadata_t
+typedef struct
 {
 	/* use these to link together the memory segments */
-	int prev_seg_num;
-	int next_seg_num;
+	signed long prev_seg_num;
+	signed long next_seg_num;
 	size_t seg_sz;
-	unsigned int procs_using;
-	bool_t is_fetched;
-};
+	unsigned int procs_using;		/* number of processes using this variable */
+	unsigned int procs_tracking;		/* number of processes tracking this memory segment */
+	bool_t is_fetched;				/* ensures that this memory segment has been referenced at least once before removing */
+} SegmentMetadata_t;
 
-typedef struct MemorySegment_t MemorySegment_t;
-struct MemorySegment_t
+typedef struct
 {
 	SegmentMetadata_t* ptr;
 	size_t seg_sz;
@@ -163,39 +160,53 @@ struct MemorySegment_t
 #else
 	handle_t handle;
 #endif
-};
+} MemorySegment_t;
 
-typedef struct VariableNode_t VariableNode_t;
-struct VariableNode_t
+struct SegmentNode_t;
+
+typedef struct VariableNode_t
 {
-	VariableNode_t* next;
-	VariableNode_t* prev;
+	struct VariableNode_t* next; /* next variable that is currently fetched and being used */
+	struct VariableNode_t* prev;
 	mxArray* var;
 	mxArray** crosslink;
-	int seg_num;
-	int next_seg_num;		/* used to check if local var node matches shared var node */
-	int prev_seg_num;
-	MemorySegment_t data_seg;
-	bool_t will_free;
-};
+	struct SegmentNode_t* seg_node;
+} VariableNode_t;
 
-typedef struct NewVarNode_t NewVarNode_t;
-struct NewVarNode_t
+typedef struct
 {
-	VariableNode_t* this_node;
-	VariableNode_t* next;
-};
+	VariableNode_t* front;
+	VariableNode_t* back;
+	size_t num_nodes;
+} VariableList_t;
+
+typedef struct SegmentNode_t
+{
+	struct SegmentNode_t* next;
+	struct SegmentNode_t* prev;
+	VariableNode_t* var_node;
+	signed long next_seg_num;
+	signed long prev_seg_num;
+	MemorySegment_t data_seg;
+	signed long seg_num;
+	bool_t will_free;
+} SegmentNode_t;
+
+typedef struct
+{
+	SegmentNode_t* front;
+	SegmentNode_t* back;
+	size_t num_nodes;
+} SegmentList_t;
 
 /* structure of shared info about the shared segments */
-typedef struct ShmInfo_t ShmInfo_t;
-struct ShmInfo_t
+typedef struct
 {
 	/* these are also all size_t to guarantee alignment for atomic operations */
-	int lead_seg_num;
-	int first_seg_num;
+	signed long lead_seg_num; 		/* caches the predicted next segment number */
+	signed long first_seg_num;		/* the first segment number in the list */
 	struct
 	{
-		int seg_num;
 		size_t rev_num;
 		size_t seg_sz;
 	} overwrite_info;
@@ -211,16 +222,15 @@ struct ShmInfo_t
 #ifdef MSH_THREAD_SAFE
 	bool_t is_thread_safe;
 #endif
-};
+} ShmInfo_t;
 
-typedef struct LocalInfo_t LocalInfo_t;
-struct LocalInfo_t
+typedef struct
 {
-	VariableNode_t* var_stack_top;
+	VariableList_t var_list;
+	SegmentList_t seg_list;
 	MemorySegment_t shm_info_seg;
 	
 	size_t rev_num;
-	size_t num_fetched_vars;
 
 #ifdef MSH_AUTO_INIT
 	MemorySegment_t lcl_init_seg;
@@ -237,12 +247,8 @@ struct LocalInfo_t
 	
 	struct
 	{
-#ifdef MSH_THREAD_SAFE
 		bool_t is_proc_lock_init;
 		bool_t is_proc_locked;
-#endif
-		bool_t is_glob_shm_var_init;
-		bool_t is_var_q_init;
 	} flags;
 
 #ifdef MSH_WIN
@@ -253,10 +259,9 @@ struct LocalInfo_t
 	
 	size_t num_registered_objs;
 	
-};
+} LocalInfo_t;
 
 LocalInfo_t* g_info;
-
 #define shm_info ((ShmInfo_t*)g_info->shm_info_seg.ptr)
 
 #endif //MATSHARE_MSH_TYPES_H

@@ -1,7 +1,6 @@
 #include "headers/mshutils.h"
 #include "headers/mshtypes.h"
 
-
 /*
  * NEW MXMALLOC SIGNATURE INFO:
  * HEADER:
@@ -21,7 +20,7 @@ void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 {
 	unsigned char mxmalloc_sig[MXMALLOC_SIG_LEN];
 	makeMxMallocSignature(mxmalloc_sig, cpy_sz);
-	
+
 	memcpy(dest - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
 	if(orig != NULL)
 	{
@@ -37,13 +36,13 @@ void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 
 void locateDataPointers(ShmData_t* data_ptrs, Header_t* hdr, byte_t* shm_anchor)
 {
-	data_ptrs->dims = (mwSize*)(shm_anchor + hdr->data_offsets.dims);
-	data_ptrs->pr = shm_anchor + hdr->data_offsets.pr;
-	data_ptrs->pi = shm_anchor + hdr->data_offsets.pi;
-	data_ptrs->ir = (mwIndex*)(shm_anchor + hdr->data_offsets.ir);
-	data_ptrs->jc = (mwIndex*)(shm_anchor + hdr->data_offsets.jc);
-	data_ptrs->field_str = shm_anchor + hdr->data_offsets.field_str;
-	data_ptrs->child_hdrs = (size_t*)(shm_anchor + hdr->data_offsets.child_hdrs);
+	data_ptrs->dims = hdr->data_offsets.dims == SIZE_MAX? NULL : (mwSize*)(shm_anchor + hdr->data_offsets.dims);
+	data_ptrs->pr = hdr->data_offsets.pr == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pr;
+	data_ptrs->pi = hdr->data_offsets.pi == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pi;
+	data_ptrs->ir = hdr->data_offsets.ir == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.ir);
+	data_ptrs->jc = hdr->data_offsets.jc == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.jc);
+	data_ptrs->field_str = hdr->data_offsets.field_str == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.field_str;
+	data_ptrs->child_hdrs = hdr->data_offsets.child_hdrs == SIZE_MAX? NULL : (size_t*)(shm_anchor + hdr->data_offsets.child_hdrs);
 }
 
 
@@ -53,7 +52,7 @@ size_t getFieldNamesSize(const mxArray* mxStruct)
 	const char_t* field_name;
 	int i, num_fields;
 	size_t cml_sz = 0;
-	
+
 	/* Go through them */
 	num_fields = mxGetNumberOfFields(mxStruct);
 	for(i = 0; i < num_fields; i++)
@@ -62,9 +61,9 @@ size_t getFieldNamesSize(const mxArray* mxStruct)
 		field_name = mxGetFieldNameByNumber(mxStruct, i);
 		cml_sz += strlen(field_name) + 1; /* remember to add the null termination */
 	}
-	
+
 	return cml_sz;
-	
+
 }
 
 
@@ -76,94 +75,81 @@ void getNextFieldName(const char_t** field_str)
 
 void onExit(void)
 {
+	bool_t will_remove_data;
 	VariableNode_t* curr_var_node,* next_var_node;
+	SegmentNode_t* curr_seg_node,* next_seg_node;
 	
-	if(g_info->flags.is_glob_shm_var_init)
-	{
-		if(!mxIsEmpty(g_info->var_stack_top->var))
-		{
-			/* NULL all of the Matlab pointers */
-			shmDetach(g_info->var_stack_top->var);
-		}
-		mxDestroyArray(g_info->var_stack_top->var);
-		g_info->flags.is_glob_shm_var_init = FALSE;
-	}
-
-#ifdef MSH_WIN
-
-
+	mshUpdateSegments();
+	
 	if(g_info->flags.is_proc_lock_init)
 	{
 		acquireProcLock();
 	}
+	
+	curr_var_node = g_info->var_list.front;
+	while(curr_var_node != NULL)
+	{
+		next_var_node = curr_var_node->next;
+		if(!mxIsEmpty(curr_var_node->var))
+		{
+			/* NULL all of the Matlab pointers */
+			shmDetach(curr_var_node->var);
+		}
+		mxDestroyArray(curr_var_node->var);
+		mxFree(curr_var_node);
+		curr_var_node = next_var_node;
+	}
+	
+#ifdef MSH_WIN
+
 
 	if(g_info->shm_info_seg.is_mapped)
 	{
 		shm_info->num_procs -= 1;
 	}
-	
-	curr_var_node = g_info->var_stack_top;
-	while(curr_var_node != NULL)
+
+	curr_seg_node = g_info->seg_list.front;
+	while(curr_seg_node != NULL)
 	{
-		next_var_node = curr_var_node->next;
-		if(curr_var_node->data_seg.is_mapped)
+		
+		next_seg_node = curr_seg_node->next;
+		if(curr_seg_node->data_seg.is_mapped)
 		{
-			if(UnmapViewOfFile(curr_var_node->data_seg.ptr) == 0)
+			
+			if(UnmapViewOfFile(curr_seg_node->data_seg.ptr) == 0)
 			{
 				if(g_info->flags.is_proc_lock_init)
 				{ releaseProcLock(); }
 				readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 			}
-			curr_var_node->data_seg.is_mapped = FALSE;
+			curr_seg_node->data_seg.is_mapped = FALSE;
 		}
-		
-		if(curr_var_node->data_seg.is_init)
+
+		if(curr_seg_node->data_seg.is_init)
 		{
-			if(CloseHandle(curr_var_node->data_seg.handle) == 0)
+			if(CloseHandle(curr_seg_node->data_seg.handle) == 0)
 			{
 				if(g_info->flags.is_proc_lock_init)
 				{ releaseProcLock(); }
 				readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
 			}
-			curr_var_node->data_seg.is_init = FALSE;
+			curr_seg_node->data_seg.is_init = FALSE;
 		}
+
+		if(next_seg_node != NULL)
+		{
+			next_seg_node->prev = NULL;
+			next_seg_node->prev_seg_num = -1;
+		}
+
+		/* repoint top of the stack in case of crash */
+		g_info->seg_list.front = next_seg_node;
 		
 		mxFree(curr_var_node);
-		
-		if(next_var_node != NULL)
-		{
-			next_var_node->prev = NULL;
-			next_var_node->prev_seg_num = -1;
-		}
-		
-		/* repoint top of the stack in case of crash */
-		g_info->var_stack_top = next_var_node;
 		curr_var_node = next_var_node;
-		
+
 	}
-	
-	if(g_info->var_stack_top->data_seg.is_mapped)
-	{
-		if(UnmapViewOfFile(g_info->var_stack_top->data_seg.ptr) == 0)
-		{
-			if(g_info->flags.is_proc_lock_init)
-			{ releaseProcLock(); }
-			readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
-		}
-		g_info->var_stack_top->data_seg.is_mapped = FALSE;
-	}
-	
-	if(g_info->var_stack_top->data_seg.is_init)
-	{
-		if(CloseHandle(g_info->var_stack_top->data_seg.handle) == 0)
-		{
-			if(g_info->flags.is_proc_lock_init)
-			{ releaseProcLock(); }
-			readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
-		}
-		g_info->var_stack_top->data_seg.is_init = FALSE;
-	}
-	
+
 	if(g_info->shm_info_seg.is_mapped)
 	{
 		if(UnmapViewOfFile(shm_info) == 0)
@@ -174,7 +160,7 @@ void onExit(void)
 		}
 		g_info->shm_info_seg.is_mapped = FALSE;
 	}
-	
+
 	if(g_info->shm_info_seg.is_init)
 	{
 		if(CloseHandle(g_info->shm_info_seg.handle) == 0)
@@ -185,7 +171,7 @@ void onExit(void)
 		}
 		g_info->shm_info_seg.is_init = FALSE;
 	}
-	
+
 #ifdef MSH_AUTO_INIT
 	if(g_info->lcl_init_seg.is_init)
 	{
@@ -198,13 +184,7 @@ void onExit(void)
 		g_info->lcl_init_seg.is_init = FALSE;
 	}
 #endif
-	
-	if(g_info->flags.is_var_q_init)
-	{
-		mxFree(g_info->var_stack_top);
-		g_info->flags.is_var_q_init = FALSE;
-	}
-	
+
 	if(g_info->flags.is_proc_lock_init)
 	{
 		releaseProcLock();
@@ -216,58 +196,65 @@ void onExit(void)
 	}
 
 #else
+
+	bool_t will_remove_info = FALSE;
 	
-	bool_t will_remove_data, will_remove_info = FALSE;
-	
-	if(g_info->flags.is_proc_lock_init)
-	{
-		acquireProcLock();
-	}
 
 	if(g_info->shm_info_seg.is_mapped)
 	{
 		shm_info->num_procs -= 1;
 		will_remove_info = (bool_t)(shm_info->num_procs == 0);
 	}
-	
-	curr_var_node = g_info->var_stack_top;
-	while(curr_var_node != NULL)
+
+	curr_seg_node = g_info->seg_list.front;
+	while(curr_seg_node != NULL)
 	{
+		next_seg_node = curr_seg_node->next;
+		
 		will_remove_data = FALSE;
-		next_var_node = curr_var_node->next;
-		if(curr_var_node->data_seg.is_mapped)
+		if(curr_seg_node->data_seg.is_mapped)
 		{
-			
-			will_remove_data = (bool_t) (curr_var_node->data_seg.ptr->procs_using == 1);
-			
-			if(munmap(curr_var_node->data_seg.ptr, curr_var_node->data_seg.seg_sz) != 0)
+
+			will_remove_data = (bool_t) (curr_seg_node->data_seg.ptr->procs_using == 1);
+
+			if(munmap(curr_seg_node->data_seg.ptr, curr_seg_node->data_seg.seg_sz) != 0)
 			{
 				if(g_info->flags.is_proc_lock_init)
 				{ releaseProcLock(); }
 				readMunmapError(errno);
 			}
-			curr_var_node->data_seg.is_mapped = FALSE;
+			curr_seg_node->data_seg.is_mapped = FALSE;
 		}
-		
-		if(curr_var_node->data_seg.is_init)
+
+		if(curr_seg_node->data_seg.is_init)
 		{
 			if(will_remove_data)
 			{
-				if(shm_unlink(curr_var_node->data_seg.name) != 0)
+				if(shm_unlink(curr_seg_node->data_seg.name) != 0)
 				{
 					if(g_info->flags.is_proc_lock_init)
 					{ releaseProcLock(); }
 					readShmUnlinkError(errno);
 				}
 			}
-			curr_var_node->data_seg.is_init = FALSE;
+			curr_seg_node->data_seg.is_init = FALSE;
 		}
 		
-		mxFree(curr_var_node);
-		curr_var_node = next_var_node;
 		
+		if(next_seg_node != NULL)
+		{
+			next_seg_node->prev = NULL;
+			next_seg_node->prev_seg_num = -1;
+		}
+
+		/* repoint top of the stack in case of crash */
+		g_info->seg_list.front = next_seg_node;
+
+		mxFree(curr_seg_node);
+		curr_seg_node = next_seg_node;
+
 	}
-	
+
 	if(g_info->shm_info_seg.is_mapped)
 	{
 		if(munmap(shm_info, g_info->shm_info_seg.seg_sz) != 0)
@@ -277,7 +264,7 @@ void onExit(void)
 		}
 		g_info->shm_info_seg.is_mapped = FALSE;
 	}
-	
+
 	if(g_info->shm_info_seg.is_init)
 	{
 		if(will_remove_info)
@@ -290,7 +277,7 @@ void onExit(void)
 		}
 		g_info->shm_info_seg.is_init = FALSE;
 	}
-	
+
 #ifdef MSH_AUTO_INIT
 	if(g_info->lcl_init_seg.is_init)
 	{
@@ -302,12 +289,6 @@ void onExit(void)
 		g_info->lcl_init_seg.is_init = FALSE;
 	}
 #endif
-	
-	if(g_info->flags.is_var_q_init)
-	{
-		mxFree(g_info->var_stack_top);
-		g_info->flags.is_var_q_init = FALSE;
-	}
 
 	if(g_info->flags.is_proc_lock_init)
 	{
@@ -321,13 +302,13 @@ void onExit(void)
 		}
 		g_info->flags.is_proc_lock_init = FALSE;
 	}
-	
+
 #endif
-	
+
 	mxFree(g_info);
 	g_info = NULL;
 	mexAtExit(nullfcn);
-	
+
 }
 
 
@@ -356,17 +337,17 @@ void makeMxMallocSignature(unsigned char* sig, size_t seg_size)
 	 * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
 	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
 	 */
-	
+
 	unsigned int i;
-	
+
 	memcpy(sig, c_MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
 	size_t multi = 1u << 4u;
-	
+
 	/* note: (x % 2^n) == (x & (2^n - 1)) */
 	if(seg_size > 0)
 	{
 		sig[0] = (unsigned char)((((seg_size + 0x0F)/multi) & (multi - 1))*multi);
-		
+
 		/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
 		for(i = 1; i < 4; i++)
 		{
@@ -394,7 +375,7 @@ void acquireProcLock(void)
 			readErrorMex("WaitProcLockFailedError", "The wait for process lock failed (Error number: %u).", GetLastError());
 		}
 #else
-		
+
 		if(lockf(g_info->proc_lock, F_LOCK, 0) != 0)
 		{
 			switch(errno)
@@ -422,7 +403,7 @@ void acquireProcLock(void)
 					readErrorMex("LockfUnknownError", "An unknown error occurred (Error number: %i)", errno);
 			}
 		}
-		
+
 #endif
 		g_info->flags.is_proc_locked = TRUE;
 	}
@@ -466,7 +447,7 @@ void releaseProcLock(void)
 
 mshdirective_t parseDirective(const mxArray* in)
 {
-	
+
 	if(mxIsNumeric(in))
 	{
 		return (mshdirective_t)*((unsigned char*)(mxGetData(in)));
@@ -479,7 +460,7 @@ mshdirective_t parseDirective(const mxArray* in)
 		{
 			dir_str[i] = (char_t)tolower(dir_str[i]);
 		}
-		
+
 		if(strcmp(dir_str, "share") == 0)
 		{
 			return msh_SHARE;
@@ -508,15 +489,15 @@ mshdirective_t parseDirective(const mxArray* in)
 		{
 			readErrorMex("InvalidDirectiveError", "Directive not recognized.");
 		}
-		
+
 	}
 	else
 	{
 		readErrorMex("InvalidDirectiveError", "Directive must either be 'uint8' or 'char_t'.");
 	}
-	
+
 	return msh_DEBUG;
-	
+
 }
 
 
@@ -530,19 +511,19 @@ void parseParams(int num_params, const mxArray* in[])
 	{
 		param = in[2*i];
 		val = in[2*i + 1];
-		
+
 		if(!mxIsChar(param) || !mxIsChar(val))
 		{
 			readErrorMex("InvalidArgumentError", "All parameters and values must be input as character arrays.");
 		}
-		
-		
+
+
 		param_str = mxArrayToString(param);
 		val_str = mxArrayToString(val);
-		
+
 		ps_len = mxGetNumberOfElements(param);
 		vs_len =  mxGetNumberOfElements(val);
-		
+
 		if(ps_len >= MSH_MAX_NAME_LEN)
 		{
 			readErrorMex("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
@@ -551,17 +532,17 @@ void parseParams(int num_params, const mxArray* in[])
 		{
 			readErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, param_str);
 		}
-		
+
 		for(int j = 0; j < ps_len; j++)
 		{
 			param_str_l[j] = (char)tolower(param_str[j]);
 		}
-		
+
 		for(int j = 0; j < vs_len; j++)
 		{
 			val_str_l[j] = (char)tolower(val_str[j]);
 		}
-		
+
 		if(strcmp(param_str_l, MSH_PARAM_THRSAFE_L) == 0)
 		{
 #ifdef MSH_THREAD_SAFE
@@ -588,7 +569,7 @@ void parseParams(int num_params, const mxArray* in[])
 #else
 			readErrorMex("InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
 #endif
-		
+
 		}
 		else if(strcmp(param_str, MSH_PARAM_SECURITY_L) == 0)
 		{
@@ -605,9 +586,14 @@ void parseParams(int num_params, const mxArray* in[])
 				{
 					readFchmodError(errno);
 				}
-				if(fchmod(g_info->var_stack_top->data_seg.handle, shm_info->security) != 0)
+				SegmentNode_t* curr_seg_node = g_info->seg_list.front;
+				while(curr_seg_node != NULL)
 				{
-					readFchmodError(errno);
+					if(fchmod(curr_seg_node->data_seg.handle, shm_info->security) != 0)
+					{
+						readFchmodError(errno);
+					}
+					curr_seg_node = curr_seg_node->next;
 				}
 #ifdef MSH_THREAD_SAFE
 				if(fchmod(g_info->proc_lock, shm_info->security) != 0)
@@ -626,10 +612,10 @@ void parseParams(int num_params, const mxArray* in[])
 		{
 			readErrorMex("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
-		
+
 		mxFree(param_str);
 		mxFree(val_str);
-	
+
 	}
 }
 
@@ -637,44 +623,44 @@ void parseParams(int num_params, const mxArray* in[])
 void updateAll(void)
 {
 	shm_info->update_pid = g_info->this_pid;
-	shm_info->overwrite_info.rev_num = g_info->rev_num;
-	shm_info->overwrite_info.seg_num = g_info->var_stack_top->seg_num;
-	shm_info->overwrite_info.seg_sz = g_info->var_stack_top->data_seg.seg_sz;
+	shm_info->overwrite_info.seg_sz = g_info->seg_list.back->data_seg.seg_sz;
+	
+	SegmentNode_t* curr_seg_node = g_info->seg_list.front;
+	while(curr_seg_node != NULL)
+	{
 #ifdef MSH_WIN
-	/* not sure if this is required on windows, but it doesn't hurt */
-	if(FlushViewOfFile(shm_info, g_info->shm_info_seg.seg_sz) == 0)
-	{
-		readErrorMex("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
-	}
-	if(FlushViewOfFile(g_info->var_stack_top->data_seg.ptr, g_info->var_stack_top->data_seg.seg_sz) == 0)
-	{
-		readErrorMex("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
-	}
+		/* not sure if this is required on windows, but it doesn't hurt */
+		if(FlushViewOfFile(shm_info, g_info->shm_info_seg.seg_sz) == 0)
+		{
+			readErrorMex("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
+		}
+		if(FlushViewOfFile(curr_seg_node->data_seg.ptr, curr_seg_node->data_seg.seg_sz) == 0)
+		{
+			readErrorMex("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
+		}
 #else
-	/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
-	 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
-	if(msync(shm_info, g_info->shm_info_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
-	{
-		releaseProcLock();
-		readMsyncError(errno);
-	}
-	if(msync(g_info->var_stack_top->data_seg.ptr, g_info->var_stack_top->data_seg.seg_sz, MS_SYNC|MS_INVALIDATE) != 0)
-	{
-		releaseProcLock();
-		readMsyncError(errno);
-	}
+		/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
+		 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
+		if(msync(shm_info, g_info->shm_info_seg.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
+		{
+			releaseProcLock();
+			readMsyncError(errno);
+		}
+		if(msync(curr_seg_node->data_seg.ptr, curr_seg_node->data_seg.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
+		{
+			releaseProcLock();
+			readMsyncError(errno);
+		}
 #endif
+		curr_seg_node = curr_seg_node->next;
+	}
 }
 
 
 /* checks if everything is in working order before doing the operation */
 bool_t precheck(void)
 {
-	bool_t ret = g_info->shm_info_seg.is_init
-			   & g_info->shm_info_seg.is_mapped
-			   & g_info->var_stack_top->data_seg.is_init
-			   & g_info->var_stack_top->data_seg.is_mapped
-			   & g_info->flags.is_glob_shm_var_init;
+	bool_t ret = g_info->shm_info_seg.is_init & g_info->shm_info_seg.is_mapped;
 #ifdef MSH_THREAD_SAFE
 	return ret & g_info->flags.is_proc_lock_init;
 #else
@@ -685,127 +671,135 @@ bool_t precheck(void)
 
 void removeUnused(void)
 {
-	VariableNode_t* curr_node = g_info->var_stack_top;
-	VariableNode_t* prev_node;
-	VariableNode_t* next_node;
-	size_t i;
-	for(i = 0; i < g_info->num_fetched_vars; i++)
+	VariableNode_t* curr_var_node = g_info->var_list.front,* prev_var_node,* next_var_node;
+	SegmentNode_t* curr_seg_node,* prev_seg_node,* next_seg_node;
+	
+	while(curr_var_node != NULL)
 	{
-		next_node = curr_node->next;
-		if(*curr_node->crosslink == NULL && curr_node->data_seg.is_mapped && curr_node->data_seg.ptr->is_fetched)
+		next_var_node = curr_var_node->next;
+		if(*curr_var_node->crosslink == NULL && curr_var_node->seg_node->data_seg.ptr->is_fetched)
 		{
-			
-			prev_node = curr_node->prev;
-			
+
+			prev_var_node = curr_var_node->prev;
+
 			/* if there are no references to this variable do a destroy operation */
-			if(!mxIsEmpty(curr_node->var))
+			if(!mxIsEmpty(curr_var_node->var))
 			{
 				/* NULL all of the Matlab pointers */
-				shmDetach(curr_node->var);
+				shmDetach(curr_var_node->var);
 			}
-			mxDestroyArray(curr_node->var);
-
-#ifdef MSH_WIN
-			if(curr_node->data_seg.is_mapped)
+			mxDestroyArray(curr_var_node->var);
+			
+			curr_seg_node = curr_var_node->seg_node;
+			next_seg_node = curr_seg_node->next;
+			prev_seg_node = curr_seg_node->prev;
+			
+			bool_t will_detach = FALSE;
+			if(curr_seg_node->data_seg.is_mapped)
 			{
-				if(UnmapViewOfFile(g_info->var_stack_top->data_seg.ptr) == 0)
+				if(curr_seg_node->data_seg.ptr->procs_using == 1)
+				{
+					/* if this is the last process using the memory, totally unlink */
+					will_detach = TRUE;
+					
+					/* reset all references in shared memory */
+					if(prev_seg_node != NULL)
+					{
+						prev_seg_node->data_seg.ptr->next_seg_num = curr_seg_node->data_seg.ptr->next_seg_num;
+						prev_seg_node->next = next_seg_node;
+					}
+					
+					if(next_seg_node != NULL)
+					{
+						next_seg_node->data_seg.ptr->prev_seg_num = curr_seg_node->data_seg.ptr->prev_seg_num;
+						next_seg_node->prev = prev_seg_node;
+					}
+					
+					if(g_info->seg_list.front == curr_seg_node)
+					{
+						g_info->seg_list.front = curr_seg_node->next;
+					}
+					
+					curr_seg_node->data_seg.ptr->procs_tracking -= 1;
+					
+				}
+				
+				curr_seg_node->data_seg.ptr->procs_using -= 1;
+				
+#ifdef MSH_WIN
+				if(UnmapViewOfFile(curr_seg_node->data_seg.ptr) == 0)
 				{
 					readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 				}
-				curr_node->data_seg.is_mapped = FALSE;
-			}
-			
-			if(curr_node->data_seg.is_init)
-			{
-				if(curr_node->data_seg.ptr->is_fetched)
-				{
-					if(curr_node->data_seg.ptr->procs_using == 1)
-					{
-						/* if this is the last process using the memory, totally unlink */
-						
-						/* reset all references in shared memory */
-						if(prev_node != NULL)
-						{
-							prev_node->data_seg.ptr->next_seg_num = curr_node->data_seg.ptr->next_seg_num;
-						}
-						
-						if(next_node != NULL)
-						{
-							next_node->data_seg.ptr->prev_seg_num = curr_node->data_seg.ptr->prev_seg_num;
-						}
-					}
-					else
-					{
-						curr_node->data_seg.ptr->procs_using -= 1;
-					}
-				}
-				
-				if(CloseHandle(curr_node->data_seg.handle) == 0)
-				{
-					readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
-				}
-				curr_node->data_seg.is_init = FALSE;
-			}
 #else
-			if(curr_node->data_seg.is_mapped)
-			{
-				if(munmap(curr_node->data_seg.ptr, curr_node->data_seg.seg_sz) != 0)
+				if(munmap(curr_seg_node->data_seg.ptr, curr_seg_node->data_seg.seg_sz) != 0)
 				{
 					readMunmapError(errno);
 				}
-				curr_node->data_seg.is_mapped = FALSE;
+#endif
+
+				curr_seg_node->data_seg.is_mapped = FALSE;
 			}
-			
-			if(curr_node->data_seg.is_init)
+
+			if(curr_seg_node->data_seg.is_init)
 			{
-				SegmentMetadata_t* curr_metadata = curr_node->data_seg.ptr;
-				if(curr_metadata->procs_using == 1)
+#ifdef MSH_WIN
+				if(CloseHandle(curr_seg_node->data_seg.handle) == 0)
 				{
-					/* if this is the last process using the memory, totally unlink */
-					
-					/* reset all references in shared memory */
-					if(prev_node != NULL)
-					{
-						prev_node->data_seg.ptr->next_seg_num = curr_metadata->next_seg_num;
-					}
-					
-					if(next_node != NULL)
-					{
-						next_node->data_seg.ptr->prev_seg_num = curr_metadata->prev_seg_num;
-					}
-					
-					
-					if(shm_unlink(g_info->var_stack_top->data_seg.name) != 0)
+					readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
+				}
+				
+				if(will_detach)
+				{
+					shm_info->num_shared_vars -= 1;
+				}
+#else
+				if(will_detach)
+				{
+					if(shm_unlink(curr_seg_node->data_seg.name) != 0)
 					{
 						readShmUnlinkError(errno);
 					}
+					shm_info->num_shared_vars -= 1;
 				}
-				curr_node->data_seg.is_init = FALSE;
-			}
 #endif
-			
+				curr_seg_node->data_seg.is_init = FALSE;
+			}
+
+
 			/* reset references in prev and next var node */
-			if(prev_node != NULL)
+			if(prev_var_node != NULL)
 			{
-				prev_node->next = next_node;
+				prev_var_node->next = next_var_node;
+			}
+
+			if(next_var_node != NULL)
+			{
+				next_var_node->prev = prev_var_node;
+			}
+
+			if(g_info->var_list.front == curr_var_node)
+			{
+				g_info->var_list.front = next_var_node;
 			}
 			
-			if(next_node != NULL)
+			if(will_detach)
 			{
-				next_node->prev = prev_node;
+				mxFree(curr_seg_node);
 			}
-			
-			if(g_info->var_stack_top == curr_node)
-			{
-				g_info->var_stack_top = next_node;
-			}
-			
-			mxFree(curr_node);
-			
+			mxFree(curr_var_node);
+
 		}
+
+		curr_var_node = next_var_node;
 		
-		curr_node = next_node;
 	}
+	
+	if(shm_info->num_shared_vars == 0)
+	{
+		shm_info->first_seg_num = -1;
+	}
+
 }
 
 
