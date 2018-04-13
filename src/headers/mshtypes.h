@@ -205,11 +205,7 @@ typedef struct
 	/* these are also all size_t to guarantee alignment for atomic operations */
 	signed long lead_seg_num; 		/* caches the predicted next segment number */
 	signed long first_seg_num;		/* the first segment number in the list */
-	struct
-	{
-		size_t rev_num;
-		size_t seg_sz;
-	} overwrite_info;
+	size_t rev_num;
 	size_t num_shared_vars;
 	unsigned int num_procs;
 #ifdef MSH_WIN
@@ -262,6 +258,8 @@ typedef struct
 } LocalInfo_t;
 
 LocalInfo_t* g_info;
+#define g_var_list g_info->var_list
+#define g_seg_list g_info->seg_list
 #define shm_info ((ShmInfo_t*)g_info->shm_info_seg.ptr)
 
 #endif //MATSHARE_MSH_TYPES_H

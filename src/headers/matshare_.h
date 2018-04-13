@@ -22,9 +22,9 @@ size_t shmRewrite(byte_t* shm_anchor, const mxArray* in_var);
 /* serialization will require.                                               */
 size_t shmScan(const mxArray* in_var);
 
-/* Descend through header and data structure and copy relevent data to       */
+/* Descend through header and data structure and copy relevant data to       */
 /* shared memory.                                                            */
-size_t shmCopy(byte_t* shm_anchor, const mxArray* in_var);
+void shmCopy(SegmentNode_t* seg_node, const mxArray* in_var);
 
 mxLogical shmCompareContent(byte_t* shm, const mxArray* comp_var);
 

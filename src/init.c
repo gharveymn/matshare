@@ -183,8 +183,7 @@ void globStartup(void)
 		shm_info->num_procs = 1;
 		shm_info->lead_seg_num = -1;
 		shm_info->first_seg_num = -1;
-		shm_info->overwrite_info.rev_num = 0;
-		shm_info->overwrite_info.seg_sz = 0;
+		shm_info->rev_num = 0;
 		shm_info->update_pid = g_info->this_pid;
 #ifdef MSH_UNIX
 		shm_info->security = S_IRUSR | S_IWUSR; /** default value **/

@@ -44,6 +44,18 @@ void updateAll(void);
 
 void removeUnused(void);
 
+void addSegment(size_t seg_sz);
+
+void removeSegment(SegmentNode_t* seg_node);
+
+void addVariable(SegmentNode_t* seg_node);
+
+void removeVariable(VariableNode_t* var_node);
+
+void cleanVariableList(void);
+
+void cleanSegmentList(void);
+
 void nullfcn(void);
 
 
