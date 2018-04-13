@@ -196,12 +196,6 @@ void mshShare(int nlhs, mxArray* plhs[], const mxArray* in_var)
 
 void mshFetch(int nlhs, mxArray* plhs[])
 {
-
-#ifdef MSH_WIN
-	DWORD err;
-#else
-	errno_t err;
-#endif
 	
 	VariableNode_t* new_var_node,* curr_var_node,* next_var_node;
 	SegmentNode_t* curr_seg_node;
