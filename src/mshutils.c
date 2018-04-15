@@ -1,6 +1,7 @@
 #include "headers/mshutils.h"
 #include "headers/mshtypes.h"
 
+
 /*
  * NEW MXMALLOC SIGNATURE INFO:
  * HEADER:
@@ -16,11 +17,12 @@
  */
 static const unsigned char c_MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
 
+
 void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 {
 	unsigned char mxmalloc_sig[MXMALLOC_SIG_LEN];
 	makeMxMallocSignature(mxmalloc_sig, cpy_sz);
-
+	
 	memcpy(dest - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
 	if(orig != NULL)
 	{
@@ -52,7 +54,7 @@ size_t getFieldNamesSize(const mxArray* mxStruct)
 	const char_t* field_name;
 	int i, num_fields;
 	size_t cml_sz = 0;
-
+	
 	/* Go through them */
 	num_fields = mxGetNumberOfFields(mxStruct);
 	for(i = 0; i < num_fields; i++)
@@ -61,9 +63,9 @@ size_t getFieldNamesSize(const mxArray* mxStruct)
 		field_name = mxGetFieldNameByNumber(mxStruct, i);
 		cml_sz += strlen(field_name) + 1; /* remember to add the null termination */
 	}
-
+	
 	return cml_sz;
-
+	
 }
 
 
@@ -86,13 +88,13 @@ void onExit(void)
 		acquireProcLock();
 	}
 	
-	cleanVariableList();
+	CleanVariableList();
 	
-	cleanSegmentList();
-	
+	CleanSegmentList();
+
 #ifdef MSH_WIN
-
-
+	
+	
 	if(g_info->shm_info_seg.is_mapped)
 	{
 		shm_info->num_procs -= 1;
@@ -144,33 +146,39 @@ void onExit(void)
 	}
 
 #else
-
+	
 	bool_t will_remove_info = FALSE;
 	
-
+	
 	if(g_info->shm_info_seg.is_mapped)
 	{
 		shm_info->num_procs -= 1;
 		will_remove_info = (bool_t)(shm_info->num_procs == 0);
 	}
-
+	
 	if(g_info->shm_info_seg.is_mapped)
 	{
 		if(munmap(shm_info, g_info->shm_info_seg.seg_sz) != 0)
 		{
-			if(g_info->flags.is_proc_lock_init){releaseProcLock();}
+			if(g_info->flags.is_proc_lock_init)
+			{
+				releaseProcLock();
+			}
 			readMunmapError(errno);
 		}
 		g_info->shm_info_seg.is_mapped = FALSE;
 	}
-
+	
 	if(g_info->shm_info_seg.is_init)
 	{
 		if(will_remove_info)
 		{
 			if(shm_unlink(g_info->shm_info_seg.name) != 0)
 			{
-				if(g_info->flags.is_proc_lock_init){releaseProcLock();}
+				if(g_info->flags.is_proc_lock_init)
+				{
+					releaseProcLock();
+				}
 				readShmUnlinkError(errno);
 			}
 		}
@@ -182,13 +190,16 @@ void onExit(void)
 	{
 		if(shm_unlink(g_info->lcl_init_seg.name) != 0)
 		{
-			if(g_info->flags.is_proc_lock_init){releaseProcLock();}
+			if(g_info->flags.is_proc_lock_init)
+			{
+				releaseProcLock();
+			}
 			readShmUnlinkError(errno);
 		}
 		g_info->lcl_init_seg.is_init = FALSE;
 	}
 #endif
-
+	
 	if(g_info->flags.is_proc_lock_init)
 	{
 		releaseProcLock();
@@ -203,18 +214,23 @@ void onExit(void)
 	}
 
 #endif
-
+	
 	mxFree(g_info);
 	g_info = NULL;
-	mexAtExit(nullfcn);
-
+	mexAtExit(NullFunction);
+	
+	if(mexIsLocked())
+	{
+		mexUnlock();
+	}
+	
 }
 
 
 size_t padToAlign(size_t size)
 {
 	/* note: (x % 2^n) == (x & (2^n - 1)) */
-	return size + ALIGN_SIZE - (size & (ALIGN_SIZE-1));
+	return size + ALIGN_SIZE - (size & (ALIGN_SIZE - 1));
 }
 
 
@@ -236,17 +252,17 @@ void makeMxMallocSignature(unsigned char* sig, size_t seg_size)
 	 * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
 	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
 	 */
-
+	
 	unsigned int i;
-
+	
 	memcpy(sig, c_MXMALLOC_SIGNATURE, MXMALLOC_SIG_LEN);
 	size_t multi = 1u << 4u;
-
+	
 	/* note: (x % 2^n) == (x & (2^n - 1)) */
 	if(seg_size > 0)
 	{
 		sig[0] = (unsigned char)((((seg_size + 0x0F)/multi) & (multi - 1))*multi);
-
+		
 		/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
 		for(i = 1; i < 4; i++)
 		{
@@ -274,23 +290,23 @@ void acquireProcLock(void)
 			readErrorMex("WaitProcLockFailedError", "The wait for process lock failed (Error number: %u).", GetLastError());
 		}
 #else
-
+		
 		if(lockf(g_info->proc_lock, F_LOCK, 0) != 0)
 		{
 			switch(errno)
 			{
 				case EBADF:
 					readErrorMex("LockfBadFileError", "The fildes argument is not a valid open file descriptor; "
-							"or function is F_LOCK or F_TLOCK and fildes is not a valid file descriptor open for writing.");
+											    "or function is F_LOCK or F_TLOCK and fildes is not a valid file descriptor open for writing.");
 				case EACCES:
 					readErrorMex("LockfAccessError", "The function argument is F_TLOCK or F_TEST and the section is already locked by another process.");
 				case EDEADLK:
 					readErrorMex("LockfDeadlockError", "lockf failed because of one of the following:\n"
-							"\tThe function argument is F_LOCK and a deadlock is detected.\n"
-							"\tThe function argument is F_LOCK, F_TLOCK, or F_ULOCK, and the request would cause the number of locks to exceed a system-imposed limit.");
+												"\tThe function argument is F_LOCK and a deadlock is detected.\n"
+												"\tThe function argument is F_LOCK, F_TLOCK, or F_ULOCK, and the request would cause the number of locks to exceed a system-imposed limit.");
 				case EOVERFLOW:
 					readErrorMex("LockfOverflowError", "The offset of the first, or if size is not 0 then the last, "
-							"byte in the requested section cannot be represented correctly in an object of type off_t.");
+												"byte in the requested section cannot be represented correctly in an object of type off_t.");
 				case EAGAIN:
 					readErrorMex("LockfAgainError", "The function argument is F_TLOCK or F_TEST and the section is already locked by another process.");
 				case ENOLCK:
@@ -332,7 +348,7 @@ void releaseProcLock(void)
 					readErrorMex("ULockfInterruptError", "A signal was caught during execution of the function.");
 				case EOVERFLOW:
 					readErrorMex("ULockfOverflowError", "The offset of the first, or if size is not 0 then the last, "
-							"byte in the requested section cannot be represented correctly in an object of type off_t.");
+												 "byte in the requested section cannot be represented correctly in an object of type off_t.");
 				default:
 					readErrorMex("ULockfUnknownError", "An unknown error occurred (Error number: %i)", errno);
 			}
@@ -359,7 +375,7 @@ mshdirective_t parseDirective(const mxArray* in)
 		{
 			dir_str[i] = (char_t)tolower(dir_str[i]);
 		}
-
+		
 		if(strcmp(dir_str, "share") == 0)
 		{
 			return msh_SHARE;
@@ -388,41 +404,41 @@ mshdirective_t parseDirective(const mxArray* in)
 		{
 			readErrorMex("InvalidDirectiveError", "Directive not recognized.");
 		}
-
+		
 	}
 	else
 	{
 		readErrorMex("InvalidDirectiveError", "Directive must either be 'uint8' or 'char_t'.");
 	}
-
+	
 	return msh_DEBUG;
-
+	
 }
 
 
 void parseParams(int num_params, const mxArray* in[])
 {
 	size_t i, j, ps_len, vs_len;
-	char* param_str,* val_str;
+	char* param_str, * val_str;
 	char param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
-	const mxArray* param,* val;
+	const mxArray* param, * val;
 	for(i = 0; i < num_params/2; i++)
 	{
 		param = in[2*i];
 		val = in[2*i + 1];
-
+		
 		if(!mxIsChar(param) || !mxIsChar(val))
 		{
 			readErrorMex("InvalidArgumentError", "All parameters and values must be input as character arrays.");
 		}
-
-
+		
+		
 		param_str = mxArrayToString(param);
 		val_str = mxArrayToString(val);
-
+		
 		ps_len = mxGetNumberOfElements(param);
-		vs_len =  mxGetNumberOfElements(val);
-
+		vs_len = mxGetNumberOfElements(val);
+		
 		if(ps_len >= MSH_MAX_NAME_LEN)
 		{
 			readErrorMex("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
@@ -431,30 +447,26 @@ void parseParams(int num_params, const mxArray* in[])
 		{
 			readErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, param_str);
 		}
-
+		
 		for(j = 0; j < ps_len; j++)
 		{
 			param_str_l[j] = (char)tolower(param_str[j]);
 		}
-
+		
 		for(j = 0; j < vs_len; j++)
 		{
 			val_str_l[j] = (char)tolower(val_str[j]);
 		}
-
+		
 		if(strcmp(param_str_l, MSH_PARAM_THRSAFE_L) == 0)
 		{
 #ifdef MSH_THREAD_SAFE
 			acquireProcLock();
-			if(strcmp(val_str_l, "true") == 0
-					|| strcmp(val_str_l, "on") == 0
-					|| strcmp(val_str_l, "enable") == 0)
+			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
 				shm_info->is_thread_safe = TRUE;
 			}
-			if(strcmp(val_str_l, "false") == 0
-			   || strcmp(val_str_l, "off") == 0
-			   || strcmp(val_str_l, "disable") == 0)
+			if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
 				shm_info->is_thread_safe = FALSE;
 			}
@@ -468,7 +480,7 @@ void parseParams(int num_params, const mxArray* in[])
 #else
 			readErrorMex("InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
 #endif
-
+		
 		}
 		else if(strcmp(param_str, MSH_PARAM_SECURITY_L) == 0)
 		{
@@ -511,10 +523,10 @@ void parseParams(int num_params, const mxArray* in[])
 		{
 			readErrorMex("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
-
+		
 		mxFree(param_str);
 		mxFree(val_str);
-
+		
 	}
 }
 
@@ -569,13 +581,13 @@ bool_t precheck(void)
 
 void removeUnused(void)
 {
-	VariableNode_t* curr_var_node = g_var_list.front,* next_var_node;
+	VariableNode_t* curr_var_node = g_var_list.front, * next_var_node;
 	while(curr_var_node != NULL)
 	{
 		next_var_node = curr_var_node->next;
-		if(*curr_var_node->crosslink == NULL && curr_var_node->seg_node->data_seg.ptr->is_fetched)
+		if(*curr_var_node->crosslink == NULL && curr_var_node->seg_node->data_seg.ptr->is_used)
 		{
-			removeVariable(curr_var_node);
+			RemoveVariable(curr_var_node);
 		}
 		curr_var_node = next_var_node;
 	}
@@ -584,34 +596,30 @@ void removeUnused(void)
 	{
 		shm_info->first_seg_num = -1;
 	}
-
+	
 }
 
 
-void addSegment(size_t seg_sz)
+SegmentNode_t* CreateSegment(const size_t seg_sz)
 {
-
 #ifdef MSH_WIN
 	DWORD hi_sz, lo_sz, err = 0;
 	HANDLE temp_handle;
 #else
 	handle_t temp_handle;
-	errno_t err = 0;
+	int err = 0;
 #endif
 	
 	SegmentNode_t* new_seg_node = mxCalloc(1, sizeof(SegmentNode_t));
 	mexMakeMemoryPersistent(new_seg_node);
+	new_seg_node->prev_seg_num = -1;
+	new_seg_node->next_seg_num = -1;
 	
 	/* create a unique new segment */
 	new_seg_node->seg_num = (shm_info->lead_seg_num == INT_MAX)? 0 : shm_info->lead_seg_num + 1;
 	
 	/* set the size */
 	new_seg_node->data_seg.seg_sz = seg_sz;
-	
-	if(g_seg_list.back != NULL)
-	{
-		new_seg_node->prev_seg_num = g_seg_list.back->seg_num;
-	}
 
 #ifdef MSH_WIN
 	
@@ -622,6 +630,7 @@ void addSegment(size_t seg_sz)
 	do
 	{
 		/* change the file name */
+		err = 0;
 		snprintf(new_seg_node->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME,
 			    (unsigned long long) new_seg_node->seg_num);
 		temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz,
@@ -657,11 +666,12 @@ void addSegment(size_t seg_sz)
 	new_seg_node->data_seg.is_mapped = TRUE;
 
 #else
-
+	
 	/* find an available shared memory file name */
 	do
 	{
 		/* change the file name */
+		err = 0;
 		snprintf(new_seg_node->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)new_seg_node->seg_num);
 		temp_handle = shm_open(new_seg_node->data_seg.name, O_RDWR | O_CREAT | O_EXCL, shm_info->security);
 		if(temp_handle == -1)
@@ -702,33 +712,181 @@ void addSegment(size_t seg_sz)
 	/*update the leading segment number */
 	shm_info->lead_seg_num = new_seg_node->seg_num;
 	
-	/* set new refs */
-	if(g_seg_list.back != NULL)
-	{
-		g_seg_list.back->next = new_seg_node;
-		new_seg_node->prev = g_seg_list.back;
-	}
-	else
-	{
-		g_seg_list.front = new_seg_node;
-		shm_info->first_seg_num = new_seg_node->seg_num;
-	}
-	
-	/* place this variable at the back of the list */
-	g_seg_list.back = new_seg_node;
-	
 	/* update number of vars in shared memory */
 	shm_info->num_shared_vars += 1;
-	g_seg_list.num_nodes += 1;
 	
 	/* update the revision number to indicate to retrieve new segments */
 	shm_info->rev_num += 1;
 	g_info->rev_num = shm_info->rev_num;
 	
+	return new_seg_node;
+	
 }
 
 
-void removeSegment(SegmentNode_t* seg_node)
+SegmentNode_t* OpenSegment(const signed long seg_num)
+{
+
+#ifdef MSH_WIN
+	DWORD err;
+#else
+	int err;
+#endif
+	
+	SegmentMetadata_t* temp_map;
+	
+	/* if this has not been fetched yet make a new var node with a new map */
+	SegmentNode_t* new_seg_node = mxCalloc(1, sizeof(SegmentNode_t));
+	mexMakeMemoryPersistent(new_seg_node);
+	new_seg_node->seg_num = seg_num;
+	
+	/* update the region name */
+	snprintf(new_seg_node->data_seg.name, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, (unsigned long long)new_seg_node->seg_num);
+
+#ifdef MSH_WIN
+	/* get the new file handle */
+			new_seg_node->data_seg.handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE,
+												   new_seg_node->data_seg.name);
+			if(new_seg_node->data_seg.handle == NULL)
+			{
+				err = GetLastError();
+				releaseProcLock();
+				readErrorMex("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
+			}
+			new_seg_node->data_seg.is_init = TRUE;
+			
+			
+			/* map the metadata to get the size of the segment */
+			temp_map = MapViewOfFile(new_seg_node->data_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0,
+								sizeof(SegmentMetadata_t));
+			if(temp_map == NULL)
+			{
+				err = GetLastError();
+				releaseProcLock();
+				readErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).",
+						   err);
+			}
+			else
+			{
+				/* get the segment size */
+				new_seg_node->data_seg.seg_sz = temp_map->seg_sz;
+			}
+			
+			/* unmap the temporary view */
+			if(UnmapViewOfFile(temp_map) == 0)
+			{
+				err = GetLastError();
+				releaseProcLock();
+				readErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u)", err);
+			}
+			
+			/* now map the whole thing */
+			new_seg_node->data_seg.ptr = MapViewOfFile(new_seg_node->data_seg.handle,
+											   FILE_MAP_ALL_ACCESS, 0, 0,
+											   new_seg_node->data_seg.seg_sz);
+			if(new_seg_node->data_seg.ptr == NULL)
+			{
+				err = GetLastError();
+				releaseProcLock();
+				readErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).",
+						   err);
+			}
+			new_seg_node->data_seg.is_mapped = TRUE;
+
+#else
+	/* get the new file handle */
+	new_seg_node->data_seg.handle = shm_open(new_seg_node->data_seg.name, O_RDWR, shm_info->security);
+	if(new_seg_node->data_seg.handle == -1)
+	{
+		err = errno;
+		releaseProcLock();
+		readShmOpenError(err);
+	}
+	new_seg_node->data_seg.is_init = TRUE;
+	
+	/* map the metadata to get the size of the segment */
+	temp_map = mmap(NULL, sizeof(SegmentMetadata_t), PROT_READ | PROT_WRITE, MAP_SHARED, new_seg_node->data_seg.handle, 0);
+	if(temp_map == MAP_FAILED)
+	{
+		err = errno;
+		releaseProcLock();
+		readMmapError(err);
+	}
+	
+	/* get the segment size */
+	new_seg_node->data_seg.seg_sz = temp_map->seg_sz;
+	
+	/* unmap the temporary map */
+	if(munmap(temp_map, sizeof(SegmentMetadata_t)) != 0)
+	{
+		err = errno;
+		releaseProcLock();
+		readMunmapError(err);
+	}
+	
+	/* now map the whole thing */
+	new_seg_node->data_seg.ptr = mmap(NULL, new_seg_node->data_seg.seg_sz, PROT_READ | PROT_WRITE, MAP_SHARED, new_seg_node->data_seg.handle, 0);
+	if(new_seg_node->data_seg.ptr == MAP_FAILED)
+	{
+		err = errno;
+		releaseProcLock();
+		readMmapError(err);
+	}
+	new_seg_node->data_seg.is_mapped = TRUE;
+#endif
+	
+	new_seg_node->prev_seg_num = new_seg_node->data_seg.ptr->prev_seg_num;
+	new_seg_node->next_seg_num = new_seg_node->data_seg.ptr->next_seg_num;
+	
+	new_seg_node->data_seg.ptr->procs_tracking += 1;
+	
+	return new_seg_node;
+}
+
+
+void AddSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node)
+{
+	
+	/* make sure we're up to date first */
+	mshUpdateSegments();
+	
+	/* this will be appended to the end so make sure next points to nothing */
+	seg_node->next = NULL;
+	seg_node->next_seg_num = -1;
+	
+	/* set new refs */
+	if(seg_list->num_nodes != 0)
+	{
+		/* set the relational segment numbers */
+		seg_list->back->next_seg_num = seg_node->seg_num;
+		seg_node->prev_seg_num = seg_list->back->seg_num;
+		
+		/* set the list pointers */
+		seg_list->back->next = seg_node;
+		seg_node->prev = seg_list->back;
+	}
+	else
+	{
+		/* if the back is NULL then the list is empty */
+		seg_list->front = seg_node;
+		
+		/* make sure these are set properly */
+		seg_node->prev = NULL;
+		seg_node->prev_seg_num = -1;
+		
+		/* set the first segment number to this */
+		shm_info->first_seg_num = seg_node->seg_num;
+	}
+	
+	/* place this variable at the back of the list */
+	seg_list->back = seg_node;
+	
+	seg_list->num_nodes += 1;
+	
+}
+
+
+void RemoveSegment(SegmentNode_t* seg_node)
 {
 	
 	bool_t will_unlink = FALSE;
@@ -770,7 +928,7 @@ void removeSegment(SegmentNode_t* seg_node)
 		
 		seg_node->data_seg.ptr->procs_tracking -= 1;
 		will_unlink = (bool_t)(seg_node->data_seg.ptr->procs_tracking == 0);
-	
+
 #ifdef MSH_WIN
 		if(UnmapViewOfFile(seg_node->data_seg.ptr) == 0)
 		{
@@ -810,38 +968,45 @@ void removeSegment(SegmentNode_t* seg_node)
 }
 
 
-void addVariable(SegmentNode_t* seg_node)
+VariableNode_t* CreateVariable(SegmentNode_t* seg_node)
 {
-	
 	VariableNode_t* new_var_node = mxMalloc(sizeof(VariableNode_t));
 	mexMakeMemoryPersistent(new_var_node);
 	
-	new_var_node->next = NULL;
-	new_var_node->prev = g_var_list.back;
 	new_var_node->seg_node = seg_node;
 	shmFetch((byte_t*)seg_node->data_seg.ptr, &new_var_node->var);
 	new_var_node->crosslink = &((mxArrayStruct*)new_var_node->var)->CrossLink;
-	seg_node->data_seg.ptr->is_fetched = TRUE;
-	
-	if(new_var_node->prev != NULL)
-	{
-		new_var_node->prev->next = new_var_node;
-	}
+	seg_node->data_seg.ptr->is_used = TRUE;
 	
 	seg_node->var_node = new_var_node;
 	
-	g_var_list.back = new_var_node;
-	if(g_var_list.front == NULL)
+	return new_var_node;
+}
+
+
+void AddVariable(VariableList_t* var_list, VariableNode_t* var_node)
+{
+	var_node->next = NULL;
+	
+	if(var_list->back != NULL)
 	{
-		g_var_list.front = new_var_node;
+		var_list->back->next = var_node;
+		var_node->prev = var_list->back;
+	}
+	else
+	{
+		var_list->front = var_node;
+		var_node->prev = NULL;
 	}
 	
-	g_var_list.num_nodes += 1;
+	var_list->back = var_node;
+	
+	var_list->num_nodes += 1;
 	
 }
 
 
-void removeVariable(VariableNode_t* var_node)
+void RemoveVariable(VariableNode_t* var_node)
 {
 	
 	SegmentNode_t* seg_node;
@@ -886,7 +1051,7 @@ void removeVariable(VariableNode_t* var_node)
 		
 		if(seg_node->data_seg.ptr->procs_using == 0)
 		{
-			removeSegment(seg_node);
+			RemoveSegment(seg_node);
 			shm_info->num_shared_vars -= 1;
 		}
 		
@@ -898,36 +1063,35 @@ void removeVariable(VariableNode_t* var_node)
 }
 
 
-void cleanVariableList(void)
+void CleanVariableList(void)
 {
 	acquireProcLock();
-	VariableNode_t* curr_var_node = g_var_list.front,* next_var_node;
+	VariableNode_t* curr_var_node = g_var_list.front, * next_var_node;
 	while(curr_var_node != NULL)
 	{
 		next_var_node = curr_var_node->next;
-		removeVariable(curr_var_node);
+		RemoveVariable(curr_var_node);
 		curr_var_node = next_var_node;
 	}
 	releaseProcLock();
 }
 
 
-void cleanSegmentList(void)
+void CleanSegmentList(void)
 {
 	acquireProcLock();
-	SegmentNode_t* curr_seg_node = g_seg_list.front,* next_seg_node;
+	SegmentNode_t* curr_seg_node = g_seg_list.front, * next_seg_node;
 	while(curr_seg_node != NULL)
 	{
 		next_seg_node = curr_seg_node->next;
-		removeSegment(curr_seg_node);
+		RemoveSegment(curr_seg_node);
 		curr_seg_node = next_seg_node;
 	}
 	releaseProcLock();
 }
 
 
-
-void nullfcn(void)
+void NullFunction(void)
 {
 	/* does nothing (so we can reset the mexAtExit function, since NULL is undocumented) */
 }

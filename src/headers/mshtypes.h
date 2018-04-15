@@ -15,6 +15,10 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 #  define TRUE 1
 #endif
 
+#ifndef SIZE_MAX
+#define SIZE_MAX ((size_t)(-1))
+#endif
+
 #define MSH_MAX_NAME_LEN 64
 #define MSH_UPDATE_SEGMENT_NAME "/MATSHARE_UPDATE_SEGMENT"
 #define MSH_LOCK_NAME "/MATSHARE_LOCK"
@@ -145,7 +149,7 @@ typedef struct
 	size_t seg_sz;
 	unsigned int procs_using;		/* number of processes using this variable */
 	unsigned int procs_tracking;		/* number of processes tracking this memory segment */
-	bool_t is_fetched;				/* ensures that this memory segment has been referenced at least once before removing */
+	bool_t is_used;				/* ensures that this memory segment has been referenced at least once before removing */
 } SegmentMetadata_t;
 
 typedef struct

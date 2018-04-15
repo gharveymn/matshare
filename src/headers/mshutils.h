@@ -44,19 +44,25 @@ void updateAll(void);
 
 void removeUnused(void);
 
-void addSegment(size_t seg_sz);
+SegmentNode_t* CreateSegment(size_t seg_sz);
 
-void removeSegment(SegmentNode_t* seg_node);
+SegmentNode_t* OpenSegment(signed long seg_num);
 
-void addVariable(SegmentNode_t* seg_node);
+void AddSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node);
 
-void removeVariable(VariableNode_t* var_node);
+void RemoveSegment(SegmentNode_t* seg_node);
 
-void cleanVariableList(void);
+VariableNode_t* CreateVariable(SegmentNode_t* seg_node);
 
-void cleanSegmentList(void);
+void AddVariable(VariableList_t* var_list, VariableNode_t* var_node);
 
-void nullfcn(void);
+void RemoveVariable(VariableNode_t* var_node);
+
+void CleanVariableList(void);
+
+void CleanSegmentList(void);
+
+void NullFunction(void);
 
 
 #endif //MATSHARE_MATSHAREUTILS_H

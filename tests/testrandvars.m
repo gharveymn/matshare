@@ -1,6 +1,6 @@
 rng('shuffle')
 numtests = 1;
-numsamples = 1000;
+numsamples = 100;
 lents = 0;
 
 maxDepth = 3;
