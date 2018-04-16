@@ -88,9 +88,9 @@ void onExit(void)
 		acquireProcLock();
 	}
 	
-	CleanVariableList();
+	CleanVariableList(&g_var_list);
 	
-	CleanSegmentList();
+	CleanSegmentList(&g_seg_list);
 
 #ifdef MSH_WIN
 	
@@ -497,7 +497,7 @@ void parseParams(int num_params, const mxArray* in[])
 				{
 					readFchmodError(errno);
 				}
-				SegmentNode_t* curr_seg_node = g_seg_list.front;
+				SegmentNode_t* curr_seg_node = g_seg_list.first;
 				while(curr_seg_node != NULL)
 				{
 					if(fchmod(curr_seg_node->data_seg.handle, shm_info->security) != 0)
@@ -535,7 +535,7 @@ void updateAll(void)
 {
 	shm_info->update_pid = g_info->this_pid;
 	
-	SegmentNode_t* curr_seg_node = g_seg_list.front;
+	SegmentNode_t* curr_seg_node = g_seg_list.first;
 	while(curr_seg_node != NULL)
 	{
 #ifdef MSH_WIN
@@ -579,22 +579,27 @@ bool_t precheck(void)
 }
 
 
-void removeUnused(void)
+void RemoveUnusedVariables(VariableList_t* var_list)
 {
-	VariableNode_t* curr_var_node = g_var_list.front, * next_var_node;
-	while(curr_var_node != NULL)
-	{
-		next_var_node = curr_var_node->next;
-		if(*curr_var_node->crosslink == NULL && curr_var_node->seg_node->data_seg.ptr->is_used)
-		{
-			RemoveVariable(curr_var_node);
-		}
-		curr_var_node = next_var_node;
-	}
+	VariableNode_t* curr_var_node, * next_var_node;
 	
-	if(shm_info->num_shared_vars == 0)
+	if(var_list != NULL)
 	{
-		shm_info->first_seg_num = -1;
+		curr_var_node = var_list->first;
+		while(curr_var_node != NULL)
+		{
+			next_var_node = curr_var_node->next;
+			if(*curr_var_node->crosslink == NULL && curr_var_node->seg_node->data_seg.ptr->is_used)
+			{
+				RemoveVariable(var_list, curr_var_node);
+			}
+			curr_var_node = next_var_node;
+		}
+		
+		if(shm_info->num_shared_vars == 0)
+		{
+			shm_info->first_seg_num = -1;
+		}
 	}
 	
 }
@@ -846,131 +851,164 @@ SegmentNode_t* OpenSegment(const signed long seg_num)
 
 void AddSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 {
-	
-	/* make sure we're up to date first */
-	mshUpdateSegments();
-	
-	/* this will be appended to the end so make sure next points to nothing */
-	seg_node->next = NULL;
-	seg_node->next_seg_num = -1;
-	
-	/* set new refs */
-	if(seg_list->num_nodes != 0)
+	if(seg_list != NULL && seg_node != NULL)
 	{
-		/* set the relational segment numbers */
-		seg_list->back->next_seg_num = seg_node->seg_num;
-		seg_node->prev_seg_num = seg_list->back->seg_num;
+		/* make sure we're up to date first */
+		if(seg_list == &g_seg_list)
+		{
+			mshUpdateSegments();
+		}
 		
-		/* set the list pointers */
-		seg_list->back->next = seg_node;
-		seg_node->prev = seg_list->back;
+		seg_node->parent_seg_list = seg_list;
+		
+		/* this will be appended to the end so make sure next points to nothing */
+		seg_node->next = NULL;
+		seg_node->next_seg_num = -1;
+		
+		/* always points to the end */
+		seg_node->prev = seg_list->last;
+		
+		/* set new refs */
+		if(seg_list->num_segs != 0)
+		{
+			/* set the relational segment numbers */
+			seg_list->last->next_seg_num = seg_node->seg_num;
+			seg_node->prev_seg_num = seg_list->last->seg_num;
+			
+			/* set list pointer */
+			seg_list->last->next = seg_node;
+		}
+		else
+		{
+			/* if the last is NULL then the list is empty */
+			seg_list->first = seg_node;
+			
+			/* make sure these are set properly */
+			seg_node->prev_seg_num = -1;
+			
+			/* set the first segment number to this */
+			shm_info->first_seg_num = seg_node->seg_num;
+		}
+		
+		/* place this variable at the last of the list */
+		seg_list->last = seg_node;
+		
+		/* increment number of segments */
+		seg_list->num_segs += 1;
+		
 	}
-	else
-	{
-		/* if the back is NULL then the list is empty */
-		seg_list->front = seg_node;
-		
-		/* make sure these are set properly */
-		seg_node->prev = NULL;
-		seg_node->prev_seg_num = -1;
-		
-		/* set the first segment number to this */
-		shm_info->first_seg_num = seg_node->seg_num;
-	}
-	
-	/* place this variable at the back of the list */
-	seg_list->back = seg_node;
-	
-	seg_list->num_nodes += 1;
 	
 }
 
 
-void RemoveSegment(SegmentNode_t* seg_node)
+void RemoveSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 {
 	
 	bool_t will_unlink = FALSE;
 	
-	if(g_seg_list.front == seg_node)
+	if(seg_list != NULL && seg_node != NULL)
 	{
-		g_seg_list.front = seg_node->next;
-		if(g_seg_list.front != NULL)
+		
+		if(seg_list == &g_seg_list)
 		{
-			shm_info->first_seg_num = g_seg_list.front->seg_num;
+			mshUpdateSegments();
 		}
-		else
+		
+		if(seg_node->var_node != NULL)
 		{
-			shm_info->first_seg_num = -1;
+			RemoveVariable(seg_node->var_node->parent_var_list, seg_node->var_node);
 		}
-	}
-	
-	if(g_seg_list.back == seg_node)
-	{
-		g_seg_list.back = seg_node->prev;
-	}
-	
-	g_seg_list.num_nodes -= 1;
-	
-	if(seg_node->data_seg.is_mapped)
-	{
-		/* reset all references in shared memory */
+		
+		if(seg_list->first == seg_node)
+		{
+			seg_list->first = seg_node->next;
+			if(seg_list->first != NULL)
+			{
+				shm_info->first_seg_num = seg_list->first->seg_num;
+			}
+			else
+			{
+				shm_info->first_seg_num = -1;
+			}
+		}
+		
+		if(seg_list->last == seg_node)
+		{
+			seg_list->last = seg_node->prev;
+		}
+		
+		/* reset local pointers */
 		if(seg_node->prev != NULL)
 		{
-			seg_node->prev->data_seg.ptr->next_seg_num = seg_node->data_seg.ptr->next_seg_num;
+			if(seg_node->prev->data_seg.is_mapped)
+			{
+				seg_node->prev->data_seg.ptr->next_seg_num = seg_node->next_seg_num;
+			}
 			seg_node->prev->next = seg_node->next;
 		}
 		
 		if(seg_node->next != NULL)
 		{
-			seg_node->next->data_seg.ptr->prev_seg_num = seg_node->data_seg.ptr->prev_seg_num;
+			if(seg_node->next->data_seg.is_mapped)
+			{
+				seg_node->next->data_seg.ptr->prev_seg_num = seg_node->prev_seg_num;
+			}
 			seg_node->next->prev = seg_node->prev;
 		}
 		
-		seg_node->data_seg.ptr->procs_tracking -= 1;
-		will_unlink = (bool_t)(seg_node->data_seg.ptr->procs_tracking == 0);
+		/* decrement the number of segments now in case we crash when doing the unmapping */
+		seg_list->num_segs -= 1;
+		
+		if(seg_node->data_seg.is_mapped)
+		{
+			seg_node->data_seg.ptr->procs_tracking -= 1;
+			
+			/* check if this process will unlink the shared memory (for linux) */
+			will_unlink = (bool_t)(seg_node->data_seg.ptr->procs_tracking == 0);
 
 #ifdef MSH_WIN
-		if(UnmapViewOfFile(seg_node->data_seg.ptr) == 0)
-		{
-			readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
-		}
-#else
-		if(munmap(seg_node->data_seg.ptr, seg_node->data_seg.seg_sz) != 0)
-		{
-			readMunmapError(errno);
-		}
-#endif
-		
-		seg_node->data_seg.is_mapped = FALSE;
-	}
-	
-	if(seg_node->data_seg.is_init)
-	{
-#ifdef MSH_WIN
-		if(CloseHandle(seg_node->data_seg.handle) == 0)
-		{
-			readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
-		}
-#else
-		if(will_unlink)
-		{
-			if(shm_unlink(seg_node->data_seg.name) != 0)
+			if(UnmapViewOfFile(seg_node->data_seg.ptr) == 0)
 			{
-				readShmUnlinkError(errno);
+				readErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 			}
-		}
+#else
+			if(munmap(seg_node->data_seg.ptr, seg_node->data_seg.seg_sz) != 0)
+			{
+				readMunmapError(errno);
+			}
 #endif
-		seg_node->data_seg.is_init = FALSE;
+			
+			seg_node->data_seg.is_mapped = FALSE;
+		}
+		
+		if(seg_node->data_seg.is_init)
+		{
+#ifdef MSH_WIN
+			if(CloseHandle(seg_node->data_seg.handle) == 0)
+			{
+				readErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
+			}
+#else
+			if(will_unlink)
+			{
+				if(shm_unlink(seg_node->data_seg.name) != 0)
+				{
+					readShmUnlinkError(errno);
+				}
+			}
+#endif
+			seg_node->data_seg.is_init = FALSE;
+		}
+		
+		mxFree(seg_node);
 	}
-	
-	mxFree(seg_node);
 	
 }
 
 
 VariableNode_t* CreateVariable(SegmentNode_t* seg_node)
 {
-	VariableNode_t* new_var_node = mxMalloc(sizeof(VariableNode_t));
+	VariableNode_t* new_var_node = mxCalloc(1, sizeof(VariableNode_t));
 	mexMakeMemoryPersistent(new_var_node);
 	
 	new_var_node->seg_node = seg_node;
@@ -986,36 +1024,41 @@ VariableNode_t* CreateVariable(SegmentNode_t* seg_node)
 
 void AddVariable(VariableList_t* var_list, VariableNode_t* var_node)
 {
-	var_node->next = NULL;
-	
-	if(var_list->back != NULL)
+	if(var_list != NULL && var_node != NULL)
 	{
-		var_list->back->next = var_node;
-		var_node->prev = var_list->back;
+		
+		var_node->parent_var_list = var_list;
+		
+		var_node->next = NULL;
+		var_node->prev = var_list->last;
+		
+		if(var_list->num_vars != 0)
+		{
+			/* set pointer in the last node to this new node */
+			var_list->last->next = var_node;
+		}
+		else
+		{
+			/* set the front to this node */
+			var_list->first = var_node;
+		}
+		
+		/* append to the end of the list */
+		var_list->last = var_node;
+		
+		/* increment number of variables */
+		var_list->num_vars += 1;
+		
 	}
-	else
-	{
-		var_list->front = var_node;
-		var_node->prev = NULL;
-	}
-	
-	var_list->back = var_node;
-	
-	var_list->num_nodes += 1;
 	
 }
 
 
-void RemoveVariable(VariableNode_t* var_node)
+void RemoveVariable(VariableList_t* var_list, VariableNode_t* var_node)
 {
 	
-	SegmentNode_t* seg_node;
-	
-	if(var_node != NULL)
+	if(var_list!= NULL && var_node != NULL)
 	{
-		mshUpdateSegments();
-		
-		seg_node = var_node->seg_node;
 		
 		if(!mxIsEmpty(var_node->var))
 		{
@@ -1036,26 +1079,37 @@ void RemoveVariable(VariableNode_t* var_node)
 			var_node->next->prev = var_node->prev;
 		}
 		
-		if(g_var_list.front == var_node)
+		if(var_list->first == var_node)
 		{
-			g_var_list.front = var_node->next;
+			var_list->first = var_node->next;
 		}
 		
-		if(g_var_list.back == var_node)
+		if(var_list->last == var_node)
 		{
-			g_var_list.back = var_node->prev;
+			var_list->last = var_node->prev;
 		}
 		
-		seg_node->data_seg.ptr->procs_using -= 1;
-		g_var_list.num_nodes -= 1;
+		/* decrement number of variables in the list */
+		var_list->num_vars -= 1;
 		
-		if(seg_node->data_seg.ptr->procs_using == 0)
+		/* decrement number of processes tracking this variable */
+		var_node->seg_node->data_seg.ptr->procs_using -= 1;
+		
+		if(var_node->seg_node->data_seg.ptr->procs_using == 0)
 		{
-			RemoveSegment(seg_node);
+			
+			if(var_list == &g_var_list)
+			{
+				mshUpdateSegments();
+			}
+			
+			RemoveSegment(var_node->seg_node->parent_seg_list, var_node->seg_node);
+			
+			/* this should only fire once when the number of procs using hits 0*/
 			shm_info->num_shared_vars -= 1;
 		}
 		
-		seg_node->var_node = NULL;
+		var_node->seg_node->var_node = NULL;
 		
 		mxFree(var_node);
 		
@@ -1063,31 +1117,39 @@ void RemoveVariable(VariableNode_t* var_node)
 }
 
 
-void CleanVariableList(void)
+void CleanVariableList(VariableList_t* var_list)
 {
-	acquireProcLock();
-	VariableNode_t* curr_var_node = g_var_list.front, * next_var_node;
-	while(curr_var_node != NULL)
+	VariableNode_t* curr_var_node,* next_var_node;
+	if(var_list != NULL)
 	{
-		next_var_node = curr_var_node->next;
-		RemoveVariable(curr_var_node);
-		curr_var_node = next_var_node;
+		acquireProcLock();
+		curr_var_node = var_list->first;
+		while(curr_var_node != NULL)
+		{
+			next_var_node = curr_var_node->next;
+			RemoveVariable(var_list, curr_var_node);
+			curr_var_node = next_var_node;
+		}
+		releaseProcLock();
 	}
-	releaseProcLock();
 }
 
 
-void CleanSegmentList(void)
+void CleanSegmentList(SegmentList_t* seg_list)
 {
-	acquireProcLock();
-	SegmentNode_t* curr_seg_node = g_seg_list.front, * next_seg_node;
-	while(curr_seg_node != NULL)
+	SegmentNode_t* curr_seg_node,* next_seg_node;
+	if(seg_list != NULL)
 	{
-		next_seg_node = curr_seg_node->next;
-		RemoveSegment(curr_seg_node);
-		curr_seg_node = next_seg_node;
+		acquireProcLock();
+		curr_seg_node = seg_list->first;
+		while(curr_seg_node != NULL)
+		{
+			next_seg_node = curr_seg_node->next;
+			RemoveSegment(seg_list, curr_seg_node);
+			curr_seg_node = next_seg_node;
+		}
+		releaseProcLock();
 	}
-	releaseProcLock();
 }
 
 

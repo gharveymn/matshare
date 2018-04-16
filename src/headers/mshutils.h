@@ -42,7 +42,7 @@ void parseParams(int num_params, const mxArray* in[]);
 
 void updateAll(void);
 
-void removeUnused(void);
+void RemoveUnusedVariables(VariableList_t* var_list);
 
 SegmentNode_t* CreateSegment(size_t seg_sz);
 
@@ -50,17 +50,17 @@ SegmentNode_t* OpenSegment(signed long seg_num);
 
 void AddSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node);
 
-void RemoveSegment(SegmentNode_t* seg_node);
+void RemoveSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node);
 
 VariableNode_t* CreateVariable(SegmentNode_t* seg_node);
 
 void AddVariable(VariableList_t* var_list, VariableNode_t* var_node);
 
-void RemoveVariable(VariableNode_t* var_node);
+void RemoveVariable(VariableList_t* var_list, VariableNode_t* var_node);
 
-void CleanVariableList(void);
+void CleanVariableList(VariableList_t* var_list);
 
-void CleanSegmentList(void);
+void CleanSegmentList(SegmentList_t* seg_list);
 
 void NullFunction(void);
 

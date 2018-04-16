@@ -1,4 +1,6 @@
 #include "headers/init.h"
+#include "headers/mshtypes.h"
+
 
 static bool_t is_glob_init;
 

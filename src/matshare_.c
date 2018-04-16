@@ -147,26 +147,26 @@ void mshShare(int nlhs, mxArray* plhs[], const mxArray* in_var)
 	
 	if(shm_info->sharetype == msh_SHARETYPE_COPY)
 	{
-		removeUnused();
+		RemoveUnusedVariables(&g_var_list);
 	}
 	else if(shm_info->sharetype == msh_SHARETYPE_OVERWRITE)
 	{
-		if(g_var_list.num_nodes != 0 &&
-		   !mxIsEmpty(g_var_list.back->var) &&
-		   (shmCompareSize((byte_t*)g_seg_list.back->data_seg.ptr, in_var) == TRUE))
+		if(g_var_list.num_vars != 0 &&
+		   !mxIsEmpty(g_var_list.last->var) &&
+		   (shmCompareSize((byte_t*)g_seg_list.last->data_seg.ptr, in_var) == TRUE))
 		{
 			/* DON'T INCREMENT THE REVISION NUMBER */
 			/* this is an in-place change, so everyone is still fine */
 			
 			/* do the rewrite after checking because the comparison is cheap */
-			shmRewrite((byte_t*)g_seg_list.back->data_seg.ptr, in_var);
+			shmRewrite((byte_t*)g_seg_list.last->data_seg.ptr, in_var);
 			
 			updateAll();
 			releaseProcLock();
 			
 			if(nlhs == 1)
 			{
-				plhs[0] = mxCreateSharedDataCopy(g_var_list.back->var);
+				plhs[0] = mxCreateSharedDataCopy(g_var_list.last->var);
 			}
 			
 			/* DON'T DO ANYTHING ELSE */
@@ -188,7 +188,7 @@ void mshShare(int nlhs, mxArray* plhs[], const mxArray* in_var)
 	
 	if(shm_info->sharetype == msh_SHARETYPE_OVERWRITE)
 	{
-		CleanVariableList();
+		CleanVariableList(&g_var_list);
 	}
 	
 	if(nlhs == 1)
@@ -208,7 +208,7 @@ void mshFetch(int nlhs, mxArray* plhs[])
 	
 	VariableNode_t* new_var_node,* curr_var_node,* next_var_node,* temp_var_node;
 	SegmentNode_t* curr_seg_node;
-	VariableList_t temp_var_list = {NULL, NULL, 0};
+	VariableList_t temp_var_list = {NULL, NULL, NULL, 0};
 	size_t i;
 	size_t ret_dims[2] = {1,1};
 	
@@ -221,9 +221,9 @@ void mshFetch(int nlhs, mxArray* plhs[])
 		
 		case msh_SHARETYPE_COPY:
 			
-			removeUnused();
+			RemoveUnusedVariables(&g_var_list);
 			
-			if(g_seg_list.num_nodes == 0)
+			if(g_seg_list.num_segs == 0)
 			{
 				for(i = 0; i < nlhs; i++)
 				{
@@ -239,18 +239,18 @@ void mshFetch(int nlhs, mxArray* plhs[])
 					return;
 				case 1:
 					
-					if(g_seg_list.back->var_node == NULL)
+					if(g_seg_list.last->var_node == NULL)
 					{
-						new_var_node = CreateVariable(g_seg_list.back);
+						new_var_node = CreateVariable(g_seg_list.last);
 						AddVariable(&g_var_list, new_var_node);
 					}
-					plhs[0] = mxCreateSharedDataCopy(g_seg_list.back->var_node->var);
+					plhs[0] = mxCreateSharedDataCopy(g_seg_list.last->var_node->var);
 					break;
 					
 				case 2:
 				case 3:
 					
-					curr_seg_node = g_seg_list.front;
+					curr_seg_node = g_seg_list.first;
 					while(curr_seg_node != NULL)
 					{
 						curr_var_node = curr_seg_node->var_node;
@@ -263,7 +263,7 @@ void mshFetch(int nlhs, mxArray* plhs[])
 							if(nlhs == 2)
 							{
 								/* place in new variables list */
-								temp_var_node = mxMalloc(sizeof(VariableNode_t));
+								temp_var_node = mxCalloc(1, sizeof(VariableNode_t));
 								temp_var_node->var = curr_seg_node->var_node->var;
 								
 								AddVariable(&temp_var_list, temp_var_node);
@@ -286,17 +286,17 @@ void mshFetch(int nlhs, mxArray* plhs[])
 						curr_seg_node = curr_seg_node->next;
 					}
 					
-					g_var_list.num_nodes = g_seg_list.num_nodes;
+					g_var_list.num_vars = g_seg_list.num_segs;
 					
-					plhs[0] = mxCreateSharedDataCopy(g_seg_list.back->var_node->var);
+					plhs[0] = mxCreateSharedDataCopy(g_seg_list.last->var_node->var);
 					
 					/* create outputs */
 					if(nlhs >= 2)
 					{
-						ret_dims[0] = temp_var_list.num_nodes;
+						ret_dims[0] = temp_var_list.num_vars;
 						plhs[1] = mxCreateCellArray(2, ret_dims);
-						curr_var_node = temp_var_list.front;
-						for(i = 0; i < temp_var_list.num_nodes; i++, curr_var_node = next_var_node)
+						curr_var_node = temp_var_list.first;
+						for(i = 0; i < temp_var_list.num_vars; i++, curr_var_node = next_var_node)
 						{
 							next_var_node = curr_var_node->next;
 							mxSetCell(plhs[1], i, mxCreateSharedDataCopy(curr_var_node->var));
@@ -305,10 +305,10 @@ void mshFetch(int nlhs, mxArray* plhs[])
 						
 						if(nlhs == 3)
 						{
-							ret_dims[0] = g_var_list.num_nodes;
+							ret_dims[0] = g_var_list.num_vars;
 							plhs[2] = mxCreateCellArray(2, ret_dims);
-							curr_var_node = g_var_list.front;
-							for(i = 0; i < g_var_list.num_nodes; i++, curr_var_node = curr_var_node->next)
+							curr_var_node = g_var_list.first;
+							for(i = 0; i < g_var_list.num_vars; i++, curr_var_node = curr_var_node->next)
 							{
 								mxSetCell(plhs[2], i, mxCreateSharedDataCopy(curr_var_node->var));
 							}
@@ -335,18 +335,18 @@ void mshFetch(int nlhs, mxArray* plhs[])
 			/* check if the current revision number is the same as the shm revision number
 			 * if it hasn't been changed then the segment was subject to an inplace change
 			 */
-			if(g_seg_list.back->var_node == NULL)
+			if(g_seg_list.last->var_node == NULL)
 			{
 				
 				/* remove all other variable nodes */
-				CleanVariableList();
+				CleanVariableList(&g_var_list);
 				
 				/* add the new variable */
-				new_var_node = CreateVariable(g_seg_list.back);
+				new_var_node = CreateVariable(g_seg_list.last);
 				AddVariable(&g_var_list, new_var_node);
 				
 			}
-			plhs[0] = mxCreateSharedDataCopy(g_var_list.back->var);
+			plhs[0] = mxCreateSharedDataCopy(g_var_list.last->var);
 			break;
 		default:
 			releaseProcLock();
@@ -381,7 +381,7 @@ void mshUpdateSegments(void)
 		g_info->rev_num = shm_info->rev_num;
 	}
 	
-	seg_node_iter = g_seg_list.front;
+	seg_node_iter = g_seg_list.first;
 	while(seg_node_iter != NULL)
 	{
 		
@@ -467,7 +467,7 @@ void mshUpdateSegments(void)
 	for(i = 0, curr_seg_num = shm_info->first_seg_num; i < shm_info->num_shared_vars && curr_seg_num != -1; i++)
 	{
 		
-		seg_node_iter = g_seg_list.front;
+		seg_node_iter = g_seg_list.first;
 		is_fetched = FALSE;
 		while(seg_node_iter != NULL)
 		{
@@ -508,8 +508,8 @@ void mshUpdateSegments(void)
 	}
 	
 	/* free nodes which were not reused in the new list */
-	seg_node_iter = g_seg_list.front;
-	for(i = 0; i < g_seg_list.num_nodes; i++)
+	seg_node_iter = g_seg_list.first;
+	for(i = 0; i < g_seg_list.num_segs; i++)
 	{
 		next_seg_node = seg_node_iter->next;
 		if(seg_node_iter->will_free)
@@ -519,14 +519,14 @@ void mshUpdateSegments(void)
 		seg_node_iter = next_seg_node;
 	}
 	
-	/* set the new list front */
-	g_seg_list.front = new_seg_list.front;
+	/* set the new list first */
+	g_seg_list.first = new_seg_list.first;
 	
-	/* the back */
-	g_seg_list.back = new_seg_list.back;
+	/* the last */
+	g_seg_list.last = new_seg_list.last;
 	
 	/* and the current number of tracked segments */
-	g_seg_list.num_nodes = shm_info->num_shared_vars;
+	g_seg_list.num_segs = shm_info->num_shared_vars;
 	
 	releaseProcLock();
 }

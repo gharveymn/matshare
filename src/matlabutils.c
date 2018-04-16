@@ -40,31 +40,6 @@ void readMunmapError_(const char* file_name, int line, int err)
 }
 
 
-void readSemError_(const char* file_name, int line, int err)
-{
-	switch(err)
-	{
-		case EACCES:
-			readErrorMex_(file_name, line, "SemOpenAccessError",
-					    "The named semaphore exists and the permissions specified by oflag are denied, or the named semaphore does not exist and permission to create the named semaphore is denied.");
-		case EINTR:
-			readErrorMex_(file_name, line, "SemOpenInterruptError", "The sem_open() operation was interrupted by a signal.");
-		case EINVAL:
-			readErrorMex_(file_name, line, "SemOpenInvalidError", "The sem_open() operation is not supported for the given name.");
-		case EMFILE:
-			readErrorMex_(file_name, line, "SemOpenTooManyFilesError", "Too many semaphore descriptors or file descriptors are currently in use by this process.");
-		case ENFILE:
-			readErrorMex_(file_name, line, "SemOpenTooManySemsError", "Too many semaphores are currently open in the system.");
-		case ENOSPC:
-			readErrorMex_(file_name, line, "SemOpenNoSpaceError", "There is insufficient space for the creation of the new named semaphore.");
-		case ENOSYS:
-			readErrorMex_(file_name, line, "SemOpenNotSupportedError", "The function sem_open() is not supported by this implementation.");
-		default:
-			readErrorMex_(file_name, line, "SemOpenUnknownError", "An unknown error occurred.");
-	}
-}
-
-
 void readMmapError_(const char* file_name, int line, int err)
 {
 	switch(err)

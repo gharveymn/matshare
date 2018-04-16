@@ -167,9 +167,12 @@ typedef struct
 } MemorySegment_t;
 
 struct SegmentNode_t;
+struct SegmentList_t;
+struct VariableList_t;
 
 typedef struct VariableNode_t
 {
+	struct VariableList_t* parent_var_list;
 	struct VariableNode_t* next; /* next variable that is currently fetched and being used */
 	struct VariableNode_t* prev;
 	mxArray* var;
@@ -177,15 +180,9 @@ typedef struct VariableNode_t
 	struct SegmentNode_t* seg_node;
 } VariableNode_t;
 
-typedef struct
-{
-	VariableNode_t* front;
-	VariableNode_t* back;
-	size_t num_nodes;
-} VariableList_t;
-
 typedef struct SegmentNode_t
 {
+	struct SegmentList_t* parent_seg_list;
 	struct SegmentNode_t* next;
 	struct SegmentNode_t* prev;
 	VariableNode_t* var_node;
@@ -196,11 +193,18 @@ typedef struct SegmentNode_t
 	bool_t will_free;
 } SegmentNode_t;
 
-typedef struct
+typedef struct VariableList_t
 {
-	SegmentNode_t* front;
-	SegmentNode_t* back;
-	size_t num_nodes;
+	VariableNode_t* first;
+	VariableNode_t* last;
+	size_t num_vars;
+} VariableList_t;
+
+typedef struct SegmentList_t
+{
+	SegmentNode_t* first;
+	SegmentNode_t* last;
+	size_t num_segs;
 } SegmentList_t;
 
 /* structure of shared info about the shared segments */
