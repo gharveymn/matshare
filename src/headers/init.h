@@ -6,14 +6,14 @@
 #include "mshutils.h"
 
 
-void init();
-void procStartup(void);
-void initProcLock(void);
-void initUpdateSegment(void);
-void mapUpdateSegment(void);
-void globStartup(void);
+void InitializeMatshare();
+void ProcStartup(void);
+void InitProcLock(void);
+void InitUpdateSegment(void);
+void MapUpdateSegment(void);
+void GlobalStartup(void);
 void initDataSegment(void);
 void mapDataSegment(void);
-void autoInit(mshdirective_t directive);
+void AutoInit(mshdirective_t directive);
 
 #endif //MATSHARE_INIT_H

@@ -15,32 +15,32 @@
 
 
 /*field names of a structure */
-size_t getFieldNamesSize(const mxArray* mxStruct);
+size_t GetFieldNamesSize(const mxArray* mxStruct);
 
-void onExit(void);
+void OnExit(void);
 
-void getNextFieldName(const char_t** field_str);
+void GetNextFieldName(const char_t** field_str);
 
 /* Pads the size to something that guarantees pointer alignment.			*/
-void locateDataPointers(ShmData_t* data_ptrs, Header_t* hdr, byte_t* shm_anchor);
+void LocateDataPointers(ShmData_t* data_ptrs, Header_t* hdr, byte_t* shm_anchor);
 
-void* memCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz);
+void* MemCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz);
 
-size_t padToAlign(size_t size);
+size_t PadToAlign(size_t size);
 
-void makeMxMallocSignature(unsigned char* sig, size_t seg_size);
+void MakeMxMallocSignature(unsigned char* sig, size_t seg_size);
 
-void acquireProcLock(void);
+void AcquireProcLock(void);
 
-void releaseProcLock(void);
+void ReleaseProcLock(void);
 
-mshdirective_t parseDirective(const mxArray* in);
+mshdirective_t ParseDirective(const mxArray* in);
 
-bool_t precheck(void);
+bool_t Precheck(void);
 
-void parseParams(int num_params, const mxArray* in[]);
+void ParseParams(int num_params, const mxArray** in);
 
-void updateAll(void);
+void UpdateAll(void);
 
 void RemoveUnusedVariables(VariableList_t* var_list);
 

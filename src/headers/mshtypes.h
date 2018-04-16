@@ -44,6 +44,7 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 #  define MSH_UNIX
 #endif
 #elif defined(DEBUG_UNIX_ON_WINDOWS)
+#define ftruncate ftruncate64
 #  include "../extlib/mman-win32/sys/mman.h"
 extern int shm_open(const char* name, int oflag, mode_t mode);
 extern int shm_unlink(const char* name);

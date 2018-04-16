@@ -4,7 +4,7 @@
 
 static bool_t is_glob_init;
 
-void init()
+void InitializeMatshare()
 {
 	/* lock the file */
 	mexLock();
@@ -13,32 +13,32 @@ void init()
 	is_glob_init = FALSE;
 	
 	/* find out if this has been initialized yet in this process */
-	procStartup();
+	ProcStartup();
 	
 	if(!g_info->shm_info_seg.is_init)
 	{
-		initUpdateSegment();
+		InitUpdateSegment();
 	}
 	
 	if(!g_info->shm_info_seg.is_mapped)
 	{
-		mapUpdateSegment();
+		MapUpdateSegment();
 	}
 	
 	/* includes writing to shared memory, but the memory has been aligned so all writes are atomic */
-	globStartup();
+	GlobalStartup();
 
 #ifdef MSH_THREAD_SAFE
 	if(!g_info->flags.is_proc_lock_init)
 	{
-		initProcLock();
+		InitProcLock();
 	}
 #endif
 
 }
 
 
-void procStartup(void)
+void ProcStartup(void)
 {
 	g_info = mxCalloc(1, sizeof(LocalInfo_t));
 	mexMakeMemoryPersistent(g_info);
@@ -49,12 +49,12 @@ void procStartup(void)
 	g_info->this_pid = getpid();
 #endif
 	
-	mexAtExit(onExit);
+	mexAtExit(OnExit);
 	
 }
 
 
-void initProcLock(void)
+void InitProcLock(void)
 {
 #ifdef MSH_THREAD_SAFE
 
@@ -67,7 +67,7 @@ void initProcLock(void)
 	g_info->proc_lock = CreateMutex(&g_info->lock_sec, FALSE, MSH_LOCK_NAME);
 	if(g_info->proc_lock == NULL)
 	{
-		readErrorMex("Internal:InitMutexError", "Failed to create the mutex (Error number: %u).", GetLastError());
+		ReadErrorMex("Internal:InitMutexError", "Failed to create the mutex (Error number: %u).", GetLastError());
 	}
 
 #else
@@ -75,7 +75,7 @@ void initProcLock(void)
 	g_info->proc_lock = shm_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, shm_info->security);
 	if(g_info->proc_lock == -1)
 	{
-		readShmOpenError(errno);
+		ReadShmOpenError(errno);
 	}
 	
 //	g_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, shm_info->security, 1);
@@ -93,7 +93,7 @@ void initProcLock(void)
 }
 
 
-void initUpdateSegment(void)
+void InitUpdateSegment(void)
 {
 
 	g_info->shm_info_seg.seg_sz = sizeof(ShmInfo_t);
@@ -105,7 +105,7 @@ void initUpdateSegment(void)
 	if(g_info->shm_info_seg.handle == NULL)
 	{
 		releaseProcLock();
-		readErrorMex("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).");
+		ReadErrorMex("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).");
 	}
 	g_info->shm_info_seg.is_init = TRUE;
 	
@@ -113,7 +113,7 @@ void initUpdateSegment(void)
 	
 #else
 	
-	/* Try to open an already created segment so we can get the global init signal */
+	/* Try to open an already created segment so we can get the global InitializeMatshare signal */
 	strncpy(g_info->shm_info_seg.name, MSH_UPDATE_SEGMENT_NAME, MSH_MAX_NAME_LEN*sizeof(char));
 	g_info->shm_info_seg.handle = shm_open(g_info->shm_info_seg.name, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
 	if(g_info->shm_info_seg.handle == -1)
@@ -126,12 +126,12 @@ void initUpdateSegment(void)
 			g_info->shm_info_seg.handle = shm_open(g_info->shm_info_seg.name, O_RDWR, S_IRUSR | S_IWUSR);
 			if(g_info->shm_info_seg.handle == -1)
 			{
-				readShmOpenError(errno);
+				ReadShmOpenError(errno);
 			}
 		}
 		else
 		{
-			readShmOpenError(errno);
+			ReadShmOpenError(errno);
 		}
 	}
 	else
@@ -142,7 +142,7 @@ void initUpdateSegment(void)
 	
 	if(ftruncate(g_info->shm_info_seg.handle, g_info->shm_info_seg.seg_sz) != 0)
 	{
-		readFtruncateError(errno);
+		ReadFtruncateError(errno);
 	}
 	
 
@@ -150,7 +150,7 @@ void initUpdateSegment(void)
 
 }
 
-void mapUpdateSegment(void)
+void MapUpdateSegment(void)
 {
 #ifdef MSH_WIN
 	
@@ -159,7 +159,7 @@ void mapUpdateSegment(void)
 	if(shm_info == NULL)
 	{
 		releaseProcLock();
-		readErrorMex("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", err);
+		ReadErrorMex("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", err);
 	}
 
 #else
@@ -168,7 +168,7 @@ void mapUpdateSegment(void)
 	g_info->shm_info_seg.ptr = mmap(NULL, g_info->shm_info_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_info_seg.handle, 0);
 	if(shm_info == MAP_FAILED)
 	{
-		readMmapError(errno);
+		ReadMmapError(errno);
 	}
 
 #endif
@@ -178,7 +178,7 @@ void mapUpdateSegment(void)
 }
 
 
-void globStartup(void)
+void GlobalStartup(void)
 {
 	if(is_glob_init)
 	{
@@ -209,7 +209,7 @@ void globStartup(void)
 }
 
 
-void autoInit(mshdirective_t directive)
+void AutoInit(mshdirective_t directive)
 {
 	char init_check_name[MSH_MAX_NAME_LEN] = {0};
 #ifdef MSH_WIN
@@ -218,7 +218,7 @@ void autoInit(mshdirective_t directive)
 	DWORD err = GetLastError();
 	if(temp_handle == NULL)
 	{
-		readErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
+		ReadErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
 	}
 	else if(err != ERROR_ALREADY_EXISTS)
 	{
@@ -226,7 +226,7 @@ void autoInit(mshdirective_t directive)
 		{
 			if(CloseHandle(temp_handle) == 0)
 			{
-				readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
+				ReadErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
 			}
 			return;
 		}
@@ -241,7 +241,7 @@ void autoInit(mshdirective_t directive)
 	{
 		if(CloseHandle(temp_handle) == 0)
 		{
-			readErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
+			ReadErrorMex("CloseHandleError", "Error closing the InitializeMatshare file handle (Error Number %u)", GetLastError());
 		}
 	}
 #else
@@ -252,7 +252,7 @@ void autoInit(mshdirective_t directive)
 		/* we want this to error if it does exist */
 		if(errno != EEXIST)
 		{
-			readShmOpenError(errno);
+			ReadShmOpenError(errno);
 		}
 	}
 	else
@@ -261,13 +261,13 @@ void autoInit(mshdirective_t directive)
 		{
 			if(shm_unlink(init_check_name) != 0)
 			{
-				readShmUnlinkError(errno);
+				ReadShmUnlinkError(errno);
 			}
 			return;
 		}
 		
 		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
-		init();
+		InitializeMatshare();
 		g_info->lcl_init_seg.handle = temp_handle;
 		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
 		g_info->lcl_init_seg.is_init = TRUE;

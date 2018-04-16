@@ -40,28 +40,28 @@ extern int shm_unlink(const char *name);
 #define MATLAB_WARN_MESSAGE ""
 
 
-void readErrorMex_(const char* file_name, int line, const char* error_id, const char* error_message, ...);
-void readWarnMex(const char* warn_id, const char* warn_message, ...);
+void ReadErrorMex_(const char* file_name, int line, const char* error_id, const char* error_message, ...);
+void ReadWarnMex(const char* warn_id, const char* warn_message, ...);
 
 /* defined so we don't have write __FILE__, __LINE__ every time */
-#define readErrorMex(error_id, error_message, ...) readErrorMex_(__FILE__ , __LINE__, error_id, error_message , ##__VA_ARGS__)
+#define ReadErrorMex(error_id, error_message, ...) ReadErrorMex_(__FILE__ , __LINE__, error_id, error_message , ##__VA_ARGS__)
 
 
 #ifdef MSH_UNIX
-void readFtruncateError_(const char* file_name, int line, int err);
-void readShmOpenError_(const char* file_name, int line, int err);
-void readShmUnlinkError_(const char* file_name, int line, int err);
-void readMmapError_(const char* file_name, int line, int err);
-void readMunmapError_(const char* file_name, int line, int err);
-void readMsyncError_(const char* file_name, int line, int err);
-void readFchmodError_(const char* file_name, int line, int err);
-#define readFtruncateError(err) readFtruncateError_(__FILE__ , __LINE__, err)
-#define readShmOpenError(err) readShmOpenError_(__FILE__ , __LINE__, err)
-#define readShmUnlinkError(err) readShmUnlinkError_(__FILE__ , __LINE__, err)
-#define readMmapError(err) readMmapError_(__FILE__ , __LINE__, err)
-#define readMunmapError(err) readMunmapError_(__FILE__ , __LINE__, err)
-#define readMsyncError(err) readMsyncError_(__FILE__ , __LINE__, err)
-#define readFchmodError(err) readFchmodError_(__FILE__ , __LINE__, err)
+void ReadFtruncateError_(const char* file_name, int line, int err);
+void ReadShmOpenError_(const char* file_name, int line, int err);
+void ReadShmUnlinkError_(const char* file_name, int line, int err);
+void ReadMmapError_(const char* file_name, int line, int err);
+void ReadMunmapError_(const char* file_name, int line, int err);
+void ReadMsyncError_(const char* file_name, int line, int err);
+void ReadFchmodError_(const char* file_name, int line, int err);
+#define ReadFtruncateError(err) ReadFtruncateError_(__FILE__ , __LINE__, err)
+#define ReadShmOpenError(err) ReadShmOpenError_(__FILE__ , __LINE__, err)
+#define ReadShmUnlinkError(err) ReadShmUnlinkError_(__FILE__ , __LINE__, err)
+#define ReadMmapError(err) ReadMmapError_(__FILE__ , __LINE__, err)
+#define ReadMunmapError(err) ReadMunmapError_(__FILE__ , __LINE__, err)
+#define ReadMsyncError(err) ReadMsyncError_(__FILE__ , __LINE__, err)
+#define ReadFchmodError(err) ReadFchmodError_(__FILE__ , __LINE__, err)
 #endif
 
 #endif //MATSHARE_UTILS_H
