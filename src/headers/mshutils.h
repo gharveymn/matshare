@@ -13,6 +13,9 @@
 #define MSH_PARAM_SECURITY_U "Security"
 #define MSH_PARAM_SECURITY_L "security"
 
+#define MSH_PARAM_COPYONWRITE_U "CopyOnWrite"
+#define MSH_PARAM_COPYONWRITE_L "copyonwrite"
+
 
 /*field names of a structure */
 size_t GetFieldNamesSize(const mxArray* mxStruct);
@@ -22,7 +25,7 @@ void OnExit(void);
 void GetNextFieldName(const char_t** field_str);
 
 /* Pads the size to something that guarantees pointer alignment.			*/
-void LocateDataPointers(ShmData_t* data_ptrs, Header_t* hdr, byte_t* shm_anchor);
+ShmData_t LocateDataPointers(const Header_t* const hdr, byte_t* const shm_anchor);
 
 void* MemCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz);
 
@@ -30,9 +33,9 @@ size_t PadToAlign(size_t size);
 
 void MakeMxMallocSignature(unsigned char* sig, size_t seg_size);
 
-void AcquireProcLock(void);
+void AcquireProcessLock(void);
 
-void ReleaseProcLock(void);
+void ReleaseProcessLock(void);
 
 mshdirective_t ParseDirective(const mxArray* in);
 

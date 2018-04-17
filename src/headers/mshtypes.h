@@ -133,13 +133,13 @@ typedef struct
 /* pointers to the data in virtual memory */
 typedef struct
 {
-	mwSize* dims;				/* pointer to the size array */
-	void* pr;					/* real data portion */
-	void* pi;					/* imaginary data portion */
-	mwIndex* ir;				/* row indexes, for sparse */
-	mwIndex* jc;				/* cumulative column counts, for sparse */
-	char_t* field_str;			/* list of a structures fields, each field name will be separated by a null character */
-	size_t* child_hdrs;           /* array of corresponding children headers */
+	mwSize* const dims;				/* pointer to the size array */
+	void* const pr;					/* real data portion */
+	void* const pi;					/* imaginary data portion */
+	mwIndex* const ir;				/* row indexes, for sparse */
+	mwIndex* const jc;				/* cumulative column counts, for sparse */
+	char_t* const field_str;			/* list of a structures fields, each field name will be separated by a null character */
+	size_t* const child_hdrs;           /* array of corresponding children headers */
 } ShmData_t;
 
 typedef struct

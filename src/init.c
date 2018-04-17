@@ -104,7 +104,7 @@ void InitUpdateSegment(void)
 	DWORD err = GetLastError();
 	if(g_info->shm_info_seg.handle == NULL)
 	{
-		releaseProcLock();
+		ReleaseProcessLock();
 		ReadErrorMex("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).");
 	}
 	g_info->shm_info_seg.is_init = TRUE;
@@ -158,7 +158,7 @@ void MapUpdateSegment(void)
 	DWORD err = GetLastError();
 	if(shm_info == NULL)
 	{
-		releaseProcLock();
+		ReleaseProcessLock();
 		ReadErrorMex("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", err);
 	}
 
@@ -232,7 +232,7 @@ void AutoInit(mshdirective_t directive)
 		}
 		
 		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
-		init();
+		InitializeMatshare();
 		g_info->lcl_init_seg.handle = temp_handle;
 		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
 		g_info->lcl_init_seg.is_init = TRUE;

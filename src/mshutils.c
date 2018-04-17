@@ -36,15 +36,17 @@ void* MemCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 }
 
 
-void LocateDataPointers(ShmData_t* data_ptrs, Header_t* hdr, byte_t* shm_anchor)
+ShmData_t LocateDataPointers(const Header_t* const hdr, byte_t* const shm_anchor)
 {
-	data_ptrs->dims = hdr->data_offsets.dims == SIZE_MAX? NULL : (mwSize*)(shm_anchor + hdr->data_offsets.dims);
-	data_ptrs->pr = hdr->data_offsets.pr == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pr;
-	data_ptrs->pi = hdr->data_offsets.pi == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pi;
-	data_ptrs->ir = hdr->data_offsets.ir == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.ir);
-	data_ptrs->jc = hdr->data_offsets.jc == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.jc);
-	data_ptrs->field_str = hdr->data_offsets.field_str == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.field_str;
-	data_ptrs->child_hdrs = hdr->data_offsets.child_hdrs == SIZE_MAX? NULL : (size_t*)(shm_anchor + hdr->data_offsets.child_hdrs);
+	return (ShmData_t){
+					hdr->data_offsets.dims == SIZE_MAX? NULL : (mwSize*)(shm_anchor + hdr->data_offsets.dims),				/* dims */
+					hdr->data_offsets.pr == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pr,							/* pr */
+					hdr->data_offsets.pi == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pi,							/* pi */
+					hdr->data_offsets.ir == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.ir),					/* ir */
+					hdr->data_offsets.jc == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.jc),					/* jc */
+					hdr->data_offsets.field_str == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.field_str,				/* field_str */
+					hdr->data_offsets.child_hdrs == SIZE_MAX? NULL : (size_t*)(shm_anchor + hdr->data_offsets.child_hdrs)		/* child_hdrs */
+			};
 }
 
 
@@ -85,7 +87,7 @@ void OnExit(void)
 	
 	if(g_info->flags.is_proc_lock_init)
 	{
-		AcquireProcLock();
+		AcquireProcessLock();
 	}
 	
 	CleanVariableList(&g_var_list);
@@ -105,7 +107,8 @@ void OnExit(void)
 		if(UnmapViewOfFile(shm_info) == 0)
 		{
 			if(g_info->flags.is_proc_lock_init)
-			{ releaseProcLock(); }
+			{
+				ReleaseProcessLock(); }
 			ReadErrorMex("UnmapFileError", "Error unmapping the update file (Error Number %u)", GetLastError());
 		}
 		g_info->shm_info_seg.is_mapped = FALSE;
@@ -116,7 +119,8 @@ void OnExit(void)
 		if(CloseHandle(g_info->shm_info_seg.handle) == 0)
 		{
 			if(g_info->flags.is_proc_lock_init)
-			{ releaseProcLock(); }
+			{
+				ReleaseProcessLock(); }
 			ReadErrorMex("CloseHandleError", "Error closing the update file handle (Error Number %u)", GetLastError());
 		}
 		g_info->shm_info_seg.is_init = FALSE;
@@ -128,7 +132,8 @@ void OnExit(void)
 		if(CloseHandle(g_info->lcl_init_seg.handle) == 0)
 		{
 			if(g_info->flags.is_proc_lock_init)
-			{ releaseProcLock(); }
+			{
+				ReleaseProcessLock(); }
 			ReadErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
 		}
 		g_info->lcl_init_seg.is_init = FALSE;
@@ -137,7 +142,7 @@ void OnExit(void)
 
 	if(g_info->flags.is_proc_lock_init)
 	{
-		releaseProcLock();
+		ReleaseProcessLock();
 		if(CloseHandle(g_info->proc_lock) == 0)
 		{
 			ReadErrorMex("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
@@ -162,7 +167,7 @@ void OnExit(void)
 		{
 			if(g_info->flags.is_proc_lock_init)
 			{
-				ReleaseProcLock();
+				ReleaseProcessLock();
 			}
 			ReadMunmapError(errno);
 		}
@@ -177,7 +182,7 @@ void OnExit(void)
 			{
 				if(g_info->flags.is_proc_lock_init)
 				{
-					ReleaseProcLock();
+					ReleaseProcessLock();
 				}
 				ReadShmUnlinkError(errno);
 			}
@@ -192,7 +197,7 @@ void OnExit(void)
 		{
 			if(g_info->flags.is_proc_lock_init)
 			{
-				ReleaseProcLock();
+				ReleaseProcessLock();
 			}
 			ReadShmUnlinkError(errno);
 		}
@@ -202,7 +207,7 @@ void OnExit(void)
 	
 	if(g_info->flags.is_proc_lock_init)
 	{
-		ReleaseProcLock();
+		ReleaseProcessLock();
 		if(will_remove_info)
 		{
 			if(shm_unlink(MSH_LOCK_NAME) != 0)
@@ -273,7 +278,7 @@ void MakeMxMallocSignature(unsigned char* sig, size_t seg_size)
 }
 
 
-void AcquireProcLock(void)
+void AcquireProcessLock(void)
 {
 #ifdef MSH_THREAD_SAFE
 	/* only request a lock if there is more than one process */
@@ -326,7 +331,7 @@ void AcquireProcLock(void)
 }
 
 
-void ReleaseProcLock(void)
+void ReleaseProcessLock(void)
 {
 #ifdef MSH_THREAD_SAFE
 	if(g_info->flags.is_proc_locked)
@@ -419,8 +424,8 @@ mshdirective_t ParseDirective(const mxArray* in)
 void ParseParams(int num_params, const mxArray** in)
 {
 	size_t i, j, ps_len, vs_len;
-	char* param_str, * val_str;
-	char param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
+	char param_str[MSH_MAX_NAME_LEN] = {0}, val_str[MSH_MAX_NAME_LEN] = {0},
+			param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
 	const mxArray* param, * val;
 	for(i = 0; i < num_params/2; i++)
 	{
@@ -432,21 +437,20 @@ void ParseParams(int num_params, const mxArray** in)
 			ReadErrorMex("InvalidArgumentError", "All parameters and values must be input as character arrays.");
 		}
 		
-		
-		param_str = mxArrayToString(param);
-		val_str = mxArrayToString(val);
-		
 		ps_len = mxGetNumberOfElements(param);
 		vs_len = mxGetNumberOfElements(val);
 		
-		if(ps_len >= MSH_MAX_NAME_LEN)
+		if(ps_len + 1 > MSH_MAX_NAME_LEN)
 		{
 			ReadErrorMex("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
-		else if(vs_len >= MSH_MAX_NAME_LEN)
+		else if(vs_len + 1 > MSH_MAX_NAME_LEN)
 		{
 			ReadErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, param_str);
 		}
+		
+		mxGetString(param, param_str, MSH_MAX_NAME_LEN);
+		mxGetString(val, val_str, MSH_MAX_NAME_LEN);
 		
 		for(j = 0; j < ps_len; j++)
 		{
@@ -461,7 +465,7 @@ void ParseParams(int num_params, const mxArray** in)
 		if(strcmp(param_str_l, MSH_PARAM_THRSAFE_L) == 0)
 		{
 #ifdef MSH_THREAD_SAFE
-			AcquireProcLock();
+			AcquireProcessLock();
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
 				shm_info->is_thread_safe = TRUE;
@@ -472,17 +476,17 @@ void ParseParams(int num_params, const mxArray** in)
 			}
 			else
 			{
-				ReleaseProcLock();
+				ReleaseProcessLock();
 				ReadErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THRSAFE_U);
 			}
 			UpdateAll();
-			ReleaseProcLock();
+			ReleaseProcessLock();
 #else
 			ReadErrorMex("InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
 #endif
 		
 		}
-		else if(strcmp(param_str, MSH_PARAM_SECURITY_L) == 0)
+		else if(strcmp(param_str_l, MSH_PARAM_SECURITY_L) == 0)
 		{
 #ifdef MSH_UNIX
 			if(vs_len < 3 || vs_len > 4)
@@ -491,7 +495,7 @@ void ParseParams(int num_params, const mxArray** in)
 			}
 			else
 			{
-				AcquireProcLock();
+				AcquireProcessLock();
 				shm_info->security = (mode_t)strtol(val_str_l, NULL, 8);
 				if(fchmod(g_info->shm_info_seg.handle, shm_info->security) != 0)
 				{
@@ -513,19 +517,34 @@ void ParseParams(int num_params, const mxArray** in)
 				}
 #endif
 				UpdateAll();
-				ReleaseProcLock();
+				ReleaseProcessLock();
 			}
 #else
 			ReadErrorMex("InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
 #endif
 		}
+		else if(strcmp(param_str_l, MSH_PARAM_COPYONWRITE_L) == 0)
+		{
+			AcquireProcessLock();
+			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
+			{
+				shm_info->sharetype = msh_SHARETYPE_COPY;
+			}
+			if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
+			{
+				shm_info->sharetype = msh_SHARETYPE_OVERWRITE;
+			}
+			else
+			{
+				ReleaseProcessLock();
+				ReadErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_COPYONWRITE_U);
+			}
+			ReleaseProcessLock();
+		}
 		else
 		{
 			ReadErrorMex("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
-		
-		mxFree(param_str);
-		mxFree(val_str);
 		
 	}
 }
@@ -553,12 +572,12 @@ void UpdateAll(void)
 		 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
 		if(msync(shm_info, g_info->shm_info_seg.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
 		{
-			ReleaseProcLock();
+			ReleaseProcessLock();
 			ReadMsyncError(errno);
 		}
 		if(msync(curr_seg_node->data_seg.ptr, curr_seg_node->data_seg.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
 		{
-			ReleaseProcLock();
+			ReleaseProcessLock();
 			ReadMsyncError(errno);
 		}
 #endif
@@ -605,7 +624,7 @@ void RemoveUnusedVariables(VariableList_t* var_list)
 }
 
 
-SegmentNode_t* CreateSegment(const size_t seg_sz)
+SegmentNode_t* CreateSegment(size_t seg_sz)
 {
 #ifdef MSH_WIN
 	DWORD hi_sz, lo_sz, err = 0;
@@ -643,7 +662,7 @@ SegmentNode_t* CreateSegment(const size_t seg_sz)
 		err = GetLastError();
 		if(temp_handle == NULL)
 		{
-			releaseProcLock();
+			ReleaseProcessLock();
 			ReadErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
 		}
 		else if(err == ERROR_ALREADY_EXISTS)
@@ -652,7 +671,7 @@ SegmentNode_t* CreateSegment(const size_t seg_sz)
 			if(CloseHandle(temp_handle) == 0)
 			{
 				err = GetLastError();
-				releaseProcLock();
+				ReleaseProcessLock();
 				ReadErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u).", err);
 			}
 		}
@@ -665,7 +684,7 @@ SegmentNode_t* CreateSegment(const size_t seg_sz)
 	if(new_seg_node->data_seg.ptr == NULL)
 	{
 		err = GetLastError();
-		releaseProcLock();
+		ReleaseProcessLock();
 		ReadErrorMex("MapDataSegError", "Could not map the data memory segment (Error number %u)", err);
 	}
 	new_seg_node->data_seg.is_mapped = TRUE;
@@ -688,7 +707,7 @@ SegmentNode_t* CreateSegment(const size_t seg_sz)
 			}
 			else
 			{
-				ReleaseProcLock();
+				ReleaseProcessLock();
 				ReadShmOpenError(err);
 			}
 		}
@@ -699,7 +718,7 @@ SegmentNode_t* CreateSegment(const size_t seg_sz)
 	/* change the map size */
 	if(ftruncate(new_seg_node->data_seg.handle, new_seg_node->data_seg.seg_sz) != 0)
 	{
-		ReleaseProcLock();
+		ReleaseProcessLock();
 		ReadFtruncateError(errno);
 	}
 	
@@ -707,7 +726,7 @@ SegmentNode_t* CreateSegment(const size_t seg_sz)
 	new_seg_node->data_seg.ptr = mmap(NULL, new_seg_node->data_seg.seg_sz, PROT_READ | PROT_WRITE, MAP_SHARED, new_seg_node->data_seg.handle, 0);
 	if(new_seg_node->data_seg.ptr == MAP_FAILED)
 	{
-		ReleaseProcLock();
+		ReleaseProcessLock();
 		ReadMmapError(errno);
 	}
 	new_seg_node->data_seg.is_mapped = TRUE;
@@ -729,7 +748,7 @@ SegmentNode_t* CreateSegment(const size_t seg_sz)
 }
 
 
-SegmentNode_t* OpenSegment(const signed long seg_num)
+SegmentNode_t* OpenSegment(signed long seg_num)
 {
 
 #ifdef MSH_WIN
@@ -755,7 +774,7 @@ SegmentNode_t* OpenSegment(const signed long seg_num)
 			if(new_seg_node->data_seg.handle == NULL)
 			{
 				err = GetLastError();
-				releaseProcLock();
+				ReleaseProcessLock();
 				ReadErrorMex("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
 			}
 			new_seg_node->data_seg.is_init = TRUE;
@@ -767,7 +786,7 @@ SegmentNode_t* OpenSegment(const signed long seg_num)
 			if(temp_map == NULL)
 			{
 				err = GetLastError();
-				releaseProcLock();
+				ReleaseProcessLock();
 				ReadErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).",
 						   err);
 			}
@@ -781,7 +800,7 @@ SegmentNode_t* OpenSegment(const signed long seg_num)
 			if(UnmapViewOfFile(temp_map) == 0)
 			{
 				err = GetLastError();
-				releaseProcLock();
+				ReleaseProcessLock();
 				ReadErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u)", err);
 			}
 			
@@ -792,7 +811,7 @@ SegmentNode_t* OpenSegment(const signed long seg_num)
 			if(new_seg_node->data_seg.ptr == NULL)
 			{
 				err = GetLastError();
-				releaseProcLock();
+				ReleaseProcessLock();
 				ReadErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).",
 						   err);
 			}
@@ -804,7 +823,7 @@ SegmentNode_t* OpenSegment(const signed long seg_num)
 	if(new_seg_node->data_seg.handle == -1)
 	{
 		err = errno;
-		ReleaseProcLock();
+		ReleaseProcessLock();
 		ReadShmOpenError(err);
 	}
 	new_seg_node->data_seg.is_init = TRUE;
@@ -814,7 +833,7 @@ SegmentNode_t* OpenSegment(const signed long seg_num)
 	if(temp_map == MAP_FAILED)
 	{
 		err = errno;
-		ReleaseProcLock();
+		ReleaseProcessLock();
 		ReadMmapError(err);
 	}
 	
@@ -825,7 +844,7 @@ SegmentNode_t* OpenSegment(const signed long seg_num)
 	if(munmap(temp_map, sizeof(SegmentMetadata_t)) != 0)
 	{
 		err = errno;
-		ReleaseProcLock();
+		ReleaseProcessLock();
 		ReadMunmapError(err);
 	}
 	
@@ -834,7 +853,7 @@ SegmentNode_t* OpenSegment(const signed long seg_num)
 	if(new_seg_node->data_seg.ptr == MAP_FAILED)
 	{
 		err = errno;
-		ReleaseProcLock();
+		ReleaseProcessLock();
 		ReadMmapError(err);
 	}
 	new_seg_node->data_seg.is_mapped = TRUE;
@@ -1122,7 +1141,7 @@ void CleanVariableList(VariableList_t* var_list)
 	VariableNode_t* curr_var_node,* next_var_node;
 	if(var_list != NULL)
 	{
-		AcquireProcLock();
+		AcquireProcessLock();
 		curr_var_node = var_list->first;
 		while(curr_var_node != NULL)
 		{
@@ -1130,7 +1149,7 @@ void CleanVariableList(VariableList_t* var_list)
 			RemoveVariable(var_list, curr_var_node);
 			curr_var_node = next_var_node;
 		}
-		ReleaseProcLock();
+		ReleaseProcessLock();
 	}
 }
 
@@ -1140,7 +1159,7 @@ void CleanSegmentList(SegmentList_t* seg_list)
 	SegmentNode_t* curr_seg_node,* next_seg_node;
 	if(seg_list != NULL)
 	{
-		AcquireProcLock();
+		AcquireProcessLock();
 		curr_seg_node = seg_list->first;
 		while(curr_seg_node != NULL)
 		{
@@ -1148,7 +1167,7 @@ void CleanSegmentList(SegmentList_t* seg_list)
 			RemoveSegment(seg_list, curr_seg_node);
 			curr_seg_node = next_seg_node;
 		}
-		ReleaseProcLock();
+		ReleaseProcessLock();
 	}
 }
 
