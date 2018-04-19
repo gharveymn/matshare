@@ -1,7 +1,6 @@
 #include "headers/mshutils.h"
 #include "headers/mshtypes.h"
 
-
 /*
  * NEW MXMALLOC SIGNATURE INFO:
  * HEADER:
@@ -39,14 +38,14 @@ void* MemCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 ShmData_t LocateDataPointers(const Header_t* const hdr, byte_t* const shm_anchor)
 {
 	return (ShmData_t){
-					hdr->data_offsets.dims == SIZE_MAX? NULL : (mwSize*)(shm_anchor + hdr->data_offsets.dims),				/* dims */
-					hdr->data_offsets.pr == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pr,							/* pr */
-					hdr->data_offsets.pi == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pi,							/* pi */
-					hdr->data_offsets.ir == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.ir),					/* ir */
-					hdr->data_offsets.jc == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.jc),					/* jc */
-					hdr->data_offsets.field_str == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.field_str,				/* field_str */
-					hdr->data_offsets.child_hdrs == SIZE_MAX? NULL : (size_t*)(shm_anchor + hdr->data_offsets.child_hdrs)		/* child_hdrs */
-			};
+			hdr->data_offsets.dims == SIZE_MAX? NULL : (mwSize*)(shm_anchor + hdr->data_offsets.dims),				/* dims */
+			hdr->data_offsets.pr == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pr,							/* pr */
+			hdr->data_offsets.pi == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pi,							/* pi */
+			hdr->data_offsets.ir == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.ir),					/* ir */
+			hdr->data_offsets.jc == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.jc),					/* jc */
+			hdr->data_offsets.field_str == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.field_str,				/* field_str */
+			hdr->data_offsets.child_hdrs == SIZE_MAX? NULL : (size_t*)(shm_anchor + hdr->data_offsets.child_hdrs)		/* child_hdrs */
+	};
 }
 
 
@@ -80,14 +79,14 @@ void GetNextFieldName(const char_t** field_str)
 void OnExit(void)
 {
 	
-	if(g_info->shm_info_seg.is_mapped && shm_info->sharetype == msh_SHARETYPE_COPY)
-	{
-		MshUpdateSegments();
-	}
-	
 	if(g_info->flags.is_proc_lock_init)
 	{
 		AcquireProcessLock();
+	}
+	
+	if(g_info->shm_info_seg.is_mapped && shm_info->sharetype == msh_SHARETYPE_COPY)
+	{
+		MshUpdateSegments();
 	}
 	
 	CleanVariableList(&g_var_list);
@@ -125,20 +124,6 @@ void OnExit(void)
 		}
 		g_info->shm_info_seg.is_init = FALSE;
 	}
-
-#ifdef MSH_AUTO_INIT
-	if(g_info->lcl_init_seg.is_init)
-	{
-		if(CloseHandle(g_info->lcl_init_seg.handle) == 0)
-		{
-			if(g_info->flags.is_proc_lock_init)
-			{
-				ReleaseProcessLock(); }
-			ReadErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
-		}
-		g_info->lcl_init_seg.is_init = FALSE;
-	}
-#endif
 
 	if(g_info->flags.is_proc_lock_init)
 	{
@@ -189,21 +174,6 @@ void OnExit(void)
 		}
 		g_info->shm_info_seg.is_init = FALSE;
 	}
-
-#ifdef MSH_AUTO_INIT
-	if(g_info->lcl_init_seg.is_init)
-	{
-		if(shm_unlink(g_info->lcl_init_seg.name) != 0)
-		{
-			if(g_info->flags.is_proc_lock_init)
-			{
-				ReleaseProcessLock();
-			}
-			ReadShmUnlinkError(errno);
-		}
-		g_info->lcl_init_seg.is_init = FALSE;
-	}
-#endif
 	
 	if(g_info->flags.is_proc_lock_init)
 	{
@@ -554,34 +524,38 @@ void UpdateAll(void)
 {
 	shm_info->update_pid = g_info->this_pid;
 	
-	SegmentNode_t* curr_seg_node = g_seg_list.first;
-	while(curr_seg_node != NULL)
+	/* only flush the memory when there is more than one process */
+	if(shm_info->num_procs > 1)
 	{
+		SegmentNode_t* curr_seg_node = g_seg_list.first;
+		while(curr_seg_node != NULL)
+		{
 #ifdef MSH_WIN
-		/* not sure if this is required on windows, but it doesn't hurt */
-		if(FlushViewOfFile(shm_info, g_info->shm_info_seg.seg_sz) == 0)
-		{
-			ReadErrorMex("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
-		}
-		if(FlushViewOfFile(curr_seg_node->data_seg.ptr, curr_seg_node->data_seg.seg_sz) == 0)
-		{
-			ReadErrorMex("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
-		}
+			/* not sure if this is required on windows, but it doesn't hurt */
+			if(FlushViewOfFile(shm_info, g_info->shm_info_seg.seg_sz) == 0)
+			{
+				ReadErrorMex("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
+			}
+			if(FlushViewOfFile(curr_seg_node->data_seg.ptr, curr_seg_node->data_seg.seg_sz) == 0)
+			{
+				ReadErrorMex("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
+			}
 #else
-		/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
-		 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
-		if(msync(shm_info, g_info->shm_info_seg.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
-		{
-			ReleaseProcessLock();
-			ReadMsyncError(errno);
-		}
-		if(msync(curr_seg_node->data_seg.ptr, curr_seg_node->data_seg.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
-		{
-			ReleaseProcessLock();
-			ReadMsyncError(errno);
-		}
+			/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
+			 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
+			if(msync(shm_info, g_info->shm_info_seg.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
+			{
+				ReleaseProcessLock();
+				ReadMsyncError(errno);
+			}
+			if(msync(curr_seg_node->data_seg.ptr, curr_seg_node->data_seg.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
+			{
+				ReleaseProcessLock();
+				ReadMsyncError(errno);
+			}
 #endif
-		curr_seg_node = curr_seg_node->next;
+			curr_seg_node = curr_seg_node->next;
+		}
 	}
 }
 
@@ -922,8 +896,10 @@ void AddSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 
 void RemoveSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 {
-	
+
+
 	bool_t will_unlink = FALSE;
+
 	
 	if(seg_list != NULL && seg_node != NULL)
 	{
@@ -982,7 +958,7 @@ void RemoveSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 		{
 			seg_node->data_seg.ptr->procs_tracking -= 1;
 			
-			/* check if this process will unlink the shared memory (for linux) */
+			/* check if this process will unlink the shared memory (for linux, but we'll keep the info around for Windows for now) */
 			will_unlink = (bool_t)(seg_node->data_seg.ptr->procs_tracking == 0);
 
 #ifdef MSH_WIN
@@ -1141,7 +1117,6 @@ void CleanVariableList(VariableList_t* var_list)
 	VariableNode_t* curr_var_node,* next_var_node;
 	if(var_list != NULL)
 	{
-		AcquireProcessLock();
 		curr_var_node = var_list->first;
 		while(curr_var_node != NULL)
 		{
@@ -1149,7 +1124,6 @@ void CleanVariableList(VariableList_t* var_list)
 			RemoveVariable(var_list, curr_var_node);
 			curr_var_node = next_var_node;
 		}
-		ReleaseProcessLock();
 	}
 }
 
@@ -1159,7 +1133,6 @@ void CleanSegmentList(SegmentList_t* seg_list)
 	SegmentNode_t* curr_seg_node,* next_seg_node;
 	if(seg_list != NULL)
 	{
-		AcquireProcessLock();
 		curr_seg_node = seg_list->first;
 		while(curr_seg_node != NULL)
 		{
@@ -1167,7 +1140,6 @@ void CleanSegmentList(SegmentList_t* seg_list)
 			RemoveSegment(seg_list, curr_seg_node);
 			curr_seg_node = next_seg_node;
 		}
-		ReleaseProcessLock();
 	}
 }
 

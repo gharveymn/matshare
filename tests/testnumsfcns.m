@@ -1,9 +1,8 @@
 clear x
 
-nums = 50000;
+nums = 5000000;
 lents = 0;
 disp(getmem);
-mshinit;
 tic
 for i = 1:nums
 	

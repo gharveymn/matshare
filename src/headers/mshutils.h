@@ -67,5 +67,4 @@ void CleanSegmentList(SegmentList_t* seg_list);
 
 void NullFunction(void);
 
-
 #endif //MATSHARE_MATSHAREUTILS_H

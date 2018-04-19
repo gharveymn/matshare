@@ -10,15 +10,6 @@ try
 		mexflags = {'-O', '-silent', '-outdir', output_path};
 	end
 	
-	if(AutomaticInitialization)
-		fprintf('-Automatic initialization is enabled.\n')
-		copyfile(fullfile(pwd,'src','entry','MatShareAI.m'), fullfile(pwd,'bin','MatShare.m'));
-		mexflags = [mexflags {'-DMSH_AUTO_INIT'}];
-	else
-		copyfile(fullfile(pwd,'src','entry','MatShareMI.m'), fullfile(pwd,'bin','MatShare.m'));
-		fprintf('-Automatic initialization is disabled.\n')
-	end
-	
 	if(ThreadSafety)
 		fprintf('-Thread safety is enabled.\n')
 		mexflags = [mexflags {'-DMSH_THREAD_SAFE'}];
@@ -49,6 +40,7 @@ try
 	if(ispc)
 		
 		mexflags = [mexflags,{'-DMATLAB_WINDOWS'}];
+		mexflags = [mexflags,{'-lShlwapi'}];
 		
 	else
 		

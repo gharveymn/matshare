@@ -1,5 +1,7 @@
 #include "headers/matshare_.h"
 
+LocalInfo_t* g_info = NULL;
+
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
 /*                                                                           */
@@ -30,9 +32,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* get the directive */
 	directive = ParseDirective(in_directive);
 
-#ifdef MSH_AUTO_INIT
-	AutoInit(directive);
-#endif
+	InitializeMatshare();
 	
 	if(directive != msh_DETACH && directive != msh_INIT && Precheck() != TRUE)
 	{
@@ -116,11 +116,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			g_info->num_registered_objs += 1;
 			break;
 		case msh_INIT:
-#ifndef MSH_AUTO_INIT
-			init();
-#else
-			ReadWarnMex("AutoInitWarn", "matshare has been compiled with automatic initialization turned on. There is not need to call mshinit.");
-#endif
 			break;
 		default:
 			ReadErrorMex("UnknownDirectiveError", "Unrecognized directive.");
@@ -192,7 +187,9 @@ void MshShare(int nlhs, mxArray** plhs, const mxArray* in_var)
 	}
 	
 	UpdateAll();
+	
 	ReleaseProcessLock();
+	
 }
 
 
@@ -205,9 +202,9 @@ void MshFetch(int nlhs, mxArray** plhs)
 	size_t i;
 	size_t ret_dims[2] = {1, 1};
 	
-	MshUpdateSegments();
-	
 	AcquireProcessLock();
+	
+	MshUpdateSegments();
 	
 	switch(shm_info->sharetype)
 	{
@@ -356,12 +353,6 @@ void MshFetch(int nlhs, mxArray** plhs)
  */
 void MshUpdateSegments(void)
 {
-	size_t i;
-	signed long curr_seg_num;
-	bool_t is_fetched;
-	
-	SegmentNode_t* seg_node_iter, * new_seg_node = NULL, * next_seg_node;
-	SegmentList_t new_seg_list = {NULL, NULL, 0};
 	
 	if(g_info->rev_num == shm_info->rev_num)
 	{
@@ -373,6 +364,13 @@ void MshUpdateSegments(void)
 		/* make sure that subfunctions don't get stuck in a loop by resetting this immediately */
 		g_info->rev_num = shm_info->rev_num;
 	}
+	
+	size_t i;
+	signed long curr_seg_num;
+	bool_t is_fetched;
+	
+	SegmentNode_t* seg_node_iter, * new_seg_node = NULL, * next_seg_node;
+	SegmentList_t new_seg_list = {NULL, NULL, 0};
 	
 	seg_node_iter = g_seg_list.first;
 	while(seg_node_iter != NULL)
@@ -391,10 +389,6 @@ void MshUpdateSegments(void)
 			{
 				if(UnmapViewOfFile(seg_node_iter->data_seg.ptr) == 0)
 				{
-					if(g_info->flags.is_proc_lock_init)
-					{
-						ReleaseProcessLock();
-					}
 					ReadErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
 				}
 				seg_node_iter->data_seg.is_mapped = FALSE;
@@ -404,10 +398,6 @@ void MshUpdateSegments(void)
 			{
 				if(CloseHandle(seg_node_iter->data_seg.handle) == 0)
 				{
-					if(g_info->flags.is_proc_lock_init)
-					{
-						ReleaseProcessLock();
-					}
 					ReadErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
 				}
 				seg_node_iter->data_seg.is_init = FALSE;
@@ -461,8 +451,6 @@ void MshUpdateSegments(void)
 		}
 		seg_node_iter = next_seg_node;
 	}
-	
-	AcquireProcessLock();
 	
 	/* construct a new list of segments, reusing what we can */
 	for(i = 0, curr_seg_num = shm_info->first_seg_num; i < shm_info->num_shared_vars && curr_seg_num != -1; i++)
@@ -528,7 +516,6 @@ void MshUpdateSegments(void)
 	/* and the current number of tracked segments */
 	g_seg_list.num_segs = shm_info->num_shared_vars;
 	
-	ReleaseProcessLock();
 }
 
 
@@ -1270,13 +1257,15 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 	
 	/* for working with payload ... */
 	Header_t* hdr;
+	mwSize* dims;
+	size_t* child_hdrs;
 	
 	/* for structures */
 	int field_num;                /* current field */
 	
 	/* retrieve the data */
 	hdr = (Header_t*)shm_anchor;
-	ShmData_t data_ptrs = LocateDataPointers(hdr, shm_anchor);
+	dims = (mwSize*)(shm_anchor + hdr->data_offsets.dims);
 	
 	const char_t* field_name;
 	
@@ -1287,7 +1276,7 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 	
 	/* the size pointer */
 	/* eventually eliminate this check for sparses */
-	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var) || memcmp(data_ptrs.dims, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0)
+	if(hdr->num_dims != mxGetNumberOfDimensions(comp_var))
 	{
 		return FALSE;
 	}
@@ -1296,13 +1285,20 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 	if(hdr->classid == mxSTRUCT_CLASS)
 	{
 		
+		if(memcmp(dims, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0)
+		{
+			return FALSE;
+		}
+		
+		
 		if(hdr->num_fields != mxGetNumberOfFields(comp_var))
 		{
 			return FALSE;
 		}
 		
 		/* Go through each element */
-		field_name = data_ptrs.field_str;
+		field_name = shm_anchor + hdr->data_offsets.field_str;
+		child_hdrs = (size_t*)(shm_anchor + hdr->data_offsets.child_hdrs);
 		for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)     /* each field */
 		{
 			
@@ -1313,7 +1309,7 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 			
 			for(idx = 0; idx < hdr->num_elems; idx++, count++)
 			{
-				if(!ShmCompareSize_(shm_anchor + data_ptrs.child_hdrs[count], mxGetFieldByNumber(comp_var, idx, field_num)))
+				if(!ShmCompareSize_(shm_anchor + child_hdrs[count], mxGetFieldByNumber(comp_var, idx, field_num)))
 				{
 					return FALSE;
 				}
@@ -1327,9 +1323,15 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 	else if(hdr->classid == mxCELL_CLASS) /* Cell case */
 	{
 		
+		if(memcmp(dims, mxGetDimensions(comp_var), sizeof(mwSize)*hdr->num_dims) != 0)
+		{
+			return FALSE;
+		}
+		
+		child_hdrs = (size_t*)(shm_anchor + hdr->data_offsets.child_hdrs);
 		for(count = 0; count < hdr->num_elems; count++)
 		{
-			if(!ShmCompareSize_(shm_anchor + data_ptrs.child_hdrs[count], mxGetCell(comp_var, count)))
+			if(!ShmCompareSize_(shm_anchor + child_hdrs[count], mxGetCell(comp_var, count)))
 			{
 				return FALSE;
 			}
@@ -1346,21 +1348,20 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 			return FALSE;
 		}
 		
-		if(hdr->is_sparse != mxIsSparse(comp_var))
-		{
-			return FALSE;
-		}
-		
 		if(hdr->is_sparse)
 		{
-			if(hdr->nzmax != mxGetNzmax(comp_var) || (data_ptrs.dims)[1] != mxGetN(comp_var))
+			if(!mxIsSparse(comp_var) ||
+			   hdr->nzmax != mxGetNzmax(comp_var) ||
+			   dims[1] != mxGetN(comp_var))
 			{
 				return FALSE;
 			}
 		}
 		else
 		{
-			if(hdr->num_elems != mxGetNumberOfElements(comp_var))
+			
+			if(mxIsSparse(comp_var) ||
+			   hdr->num_elems != mxGetNumberOfElements(comp_var))
 			{
 				return FALSE;
 			}

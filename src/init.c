@@ -1,18 +1,22 @@
 #include "headers/init.h"
-#include "headers/mshtypes.h"
-
 
 static bool_t is_glob_init;
 
 void InitializeMatshare()
 {
+	
+	/* this memory should persist if this is not the first time running */
+	if(g_info != NULL)
+	{
+		return;
+	}
+	
 	/* lock the file */
 	mexLock();
 	
 	//assume not
 	is_glob_init = FALSE;
 	
-	/* find out if this has been initialized yet in this process */
 	ProcStartup();
 	
 	if(!g_info->shm_info_seg.is_init)
@@ -95,22 +99,21 @@ void InitProcLock(void)
 
 void InitUpdateSegment(void)
 {
-
-	g_info->shm_info_seg.seg_sz = sizeof(ShmInfo_t);
 	
+	g_info->shm_info_seg.seg_sz = sizeof(ShmInfo_t);
+
 #ifdef MSH_WIN
 	
 	g_info->shm_info_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)g_info->shm_info_seg.seg_sz, MSH_UPDATE_SEGMENT_NAME);
 	DWORD err = GetLastError();
 	if(g_info->shm_info_seg.handle == NULL)
 	{
-		ReleaseProcessLock();
 		ReadErrorMex("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).");
 	}
 	g_info->shm_info_seg.is_init = TRUE;
 	
 	is_glob_init = (bool_t)(err != ERROR_ALREADY_EXISTS); /* initialize if the segment does not already exist */
-	
+
 #else
 	
 	/* Try to open an already created segment so we can get the global InitializeMatshare signal */
@@ -144,11 +147,12 @@ void InitUpdateSegment(void)
 	{
 		ReadFtruncateError(errno);
 	}
-	
+
 
 #endif
 
 }
+
 
 void MapUpdateSegment(void)
 {
@@ -158,7 +162,6 @@ void MapUpdateSegment(void)
 	DWORD err = GetLastError();
 	if(shm_info == NULL)
 	{
-		ReleaseProcessLock();
 		ReadErrorMex("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", err);
 	}
 
@@ -198,7 +201,7 @@ void GlobalStartup(void)
 #endif
 
 #ifdef MSH_THREAD_SAFE
-		shm_info->is_thread_safe = TRUE; 		/** default value **/
+		shm_info->is_thread_safe = TRUE;          /** default value **/
 #endif
 	
 	}
@@ -206,71 +209,4 @@ void GlobalStartup(void)
 	{
 		shm_info->num_procs += 1;
 	}
-}
-
-
-void AutoInit(mshdirective_t directive)
-{
-	char init_check_name[MSH_MAX_NAME_LEN] = {0};
-#ifdef MSH_WIN
-	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, GetProcessId(GetCurrentProcess()));
-	HANDLE temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 1, init_check_name);
-	DWORD err = GetLastError();
-	if(temp_handle == NULL)
-	{
-		ReadErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
-	}
-	else if(err != ERROR_ALREADY_EXISTS)
-	{
-		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
-		{
-			if(CloseHandle(temp_handle) == 0)
-			{
-				ReadErrorMex("CloseHandleError", "Error closing the init file handle (Error Number %u)", GetLastError());
-			}
-			return;
-		}
-		
-		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
-		InitializeMatshare();
-		g_info->lcl_init_seg.handle = temp_handle;
-		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
-		g_info->lcl_init_seg.is_init = TRUE;
-	}
-	else
-	{
-		if(CloseHandle(temp_handle) == 0)
-		{
-			ReadErrorMex("CloseHandleError", "Error closing the InitializeMatshare file handle (Error Number %u)", GetLastError());
-		}
-	}
-#else
-	snprintf(init_check_name, MSH_MAX_NAME_LEN, MSH_INIT_CHECK_NAME, (unsigned long)(getpid()));
-	int temp_handle;
-	if((temp_handle = shm_open(init_check_name, O_RDONLY|O_CREAT|O_EXCL, 0))  == -1)
-	{
-		/* we want this to error if it does exist */
-		if(errno != EEXIST)
-		{
-			ReadShmOpenError(errno);
-		}
-	}
-	else
-	{
-		if(directive == msh_DETACH || directive == msh_OBJ_DEREGISTER)
-		{
-			if(shm_unlink(init_check_name) != 0)
-			{
-				ReadShmUnlinkError(errno);
-			}
-			return;
-		}
-		
-		/*then this is the process initializer (and maybe the global initializer; we'll find out later) */
-		InitializeMatshare();
-		g_info->lcl_init_seg.handle = temp_handle;
-		memcpy(g_info->lcl_init_seg.name, init_check_name, MSH_MAX_NAME_LEN*sizeof(char));
-		g_info->lcl_init_seg.is_init = TRUE;
-	}
-#endif
 }

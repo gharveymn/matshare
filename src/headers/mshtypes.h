@@ -4,7 +4,6 @@
 #include "mex.h"
 #include "externtypes.h"
 
-
 extern mxArray* mxCreateSharedDataCopy(mxArray*);
 
 #ifndef FALSE
@@ -23,10 +22,6 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 #define MSH_UPDATE_SEGMENT_NAME "/MATSHARE_UPDATE_SEGMENT"
 #define MSH_LOCK_NAME "/MATSHARE_LOCK"
 #define MSH_SEGMENT_NAME "/MATSHARE_SEGMENT%0llx"
-
-#ifdef MSH_AUTO_INIT
-#define MSH_INIT_CHECK_NAME "MATSHARE_INIT%lu"
-#endif
 
 #if defined(MATLAB_UNIX)
 #  include <sys/mman.h>
@@ -131,7 +126,7 @@ typedef struct
 } Header_t;
 
 /* pointers to the data in virtual memory */
-typedef struct
+typedef const struct
 {
 	mwSize* const dims;				/* pointer to the size array */
 	void* const pr;					/* real data portion */
@@ -237,10 +232,6 @@ typedef struct
 	
 	size_t rev_num;
 
-#ifdef MSH_AUTO_INIT
-	MemorySegment_t lcl_init_seg;
-#endif
-
 #ifdef MSH_THREAD_SAFE
 #ifdef MSH_WIN
 	SECURITY_ATTRIBUTES lock_sec;
@@ -266,7 +257,7 @@ typedef struct
 	
 } LocalInfo_t;
 
-LocalInfo_t* g_info;
+extern LocalInfo_t* g_info;
 #define g_var_list g_info->var_list
 #define g_seg_list g_info->seg_list
 #define shm_info ((ShmInfo_t*)g_info->shm_info_seg.ptr)

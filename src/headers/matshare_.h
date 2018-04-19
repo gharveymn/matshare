@@ -48,5 +48,4 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var);
 
 mxLogical ShmCompareContent_(byte_t* shm, const mxArray* comp_var);
 
-
 #endif
