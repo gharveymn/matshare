@@ -47,19 +47,27 @@ void UpdateAll(void);
 
 void RemoveUnusedVariables(VariableList_t* var_list);
 
-SegmentNode_t* CreateSegment(size_t seg_sz);
+SegmentInfo_t CreateSegment(size_t seg_sz);
 
-SegmentNode_t* OpenSegment(signed long seg_num);
+SegmentInfo_t OpenSegment(signed long seg_num);
 
-void AddSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node);
+SegmentNode_t* CreateSegmentNode(SegmentInfo_t seg_info);
 
-void RemoveSegment(SegmentList_t* seg_list, SegmentNode_t* seg_node);
+void AddSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
 
-VariableNode_t* CreateVariable(SegmentNode_t* seg_node);
+void RemoveSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
 
-void AddVariable(VariableList_t* var_list, VariableNode_t* var_node);
+void DestroySegmentNode(SegmentNode_t* seg_node);
 
-void RemoveVariable(VariableList_t* var_list, VariableNode_t* var_node);
+VariableNode_t* CreateVariableNode(SegmentNode_t* seg_node);
+
+void AddVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
+
+void RemoveVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
+
+void DestroyVariable(VariableNode_t* var_node);
+
+void DestroyVariableNode(VariableNode_t* var_node);
 
 void CleanVariableList(VariableList_t* var_list);
 

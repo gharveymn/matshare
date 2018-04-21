@@ -44,7 +44,7 @@ void InitializeMatshare()
 
 void ProcStartup(void)
 {
-	g_info = mxCalloc(1, sizeof(LocalInfo_t));
+	g_info = mxCalloc(1, sizeof(GlobalInfo_t));
 	mexMakeMemoryPersistent(g_info);
 
 #ifdef MSH_WIN
@@ -76,13 +76,13 @@ void InitProcLock(void)
 
 #else
 	
-	g_info->proc_lock = shm_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, shm_info->security);
+	g_info->proc_lock = shm_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, s_info->security);
 	if(g_info->proc_lock == -1)
 	{
 		ReadShmOpenError(errno);
 	}
 	
-//	g_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, shm_info->security, 1);
+//	g_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, s_info->security, 1);
 //	if(g_info->proc_lock == SEM_FAILED)
 //	{
 //		readSemError(errno);
@@ -100,7 +100,7 @@ void InitProcLock(void)
 void InitUpdateSegment(void)
 {
 	
-	g_info->shm_info_seg.seg_sz = sizeof(ShmInfo_t);
+	g_info->shm_info_seg.seg_sz = sizeof(SharedInfo_t);
 
 #ifdef MSH_WIN
 	
@@ -158,18 +158,18 @@ void MapUpdateSegment(void)
 {
 #ifdef MSH_WIN
 	
-	g_info->shm_info_seg.ptr = MapViewOfFile(g_info->shm_info_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_info_seg.seg_sz);
+	g_info->shm_info_seg.s_ptr = MapViewOfFile(g_info->shm_info_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_info->shm_info_seg.seg_sz);
 	DWORD err = GetLastError();
-	if(shm_info == NULL)
+	if(s_info == NULL)
 	{
 		ReadErrorMex("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", err);
 	}
 
 #else
 	
-	/* `shm_info` is this but casted to type `ShmInfo_t` */
-	g_info->shm_info_seg.ptr = mmap(NULL, g_info->shm_info_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_info_seg.handle, 0);
-	if(shm_info == MAP_FAILED)
+	/* `s_info` is this but casted to type `SharedInfo_t` */
+	g_info->shm_info_seg.s_ptr = mmap(NULL, g_info->shm_info_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_info->shm_info_seg.handle, 0);
+	if(s_info == MAP_FAILED)
 	{
 		ReadMmapError(errno);
 	}
@@ -185,28 +185,28 @@ void GlobalStartup(void)
 {
 	if(is_glob_init)
 	{
-		shm_info->num_procs = 1;
-		shm_info->lead_seg_num = -1;
-		shm_info->first_seg_num = -1;
-		shm_info->rev_num = 0;
-		shm_info->update_pid = g_info->this_pid;
+		s_info->num_procs = 1;
+		s_info->last_seg_num = -1;
+		s_info->first_seg_num = -1;
+		s_info->rev_num = 0;
+		s_info->update_pid = g_info->this_pid;
 #ifdef MSH_UNIX
-		shm_info->security = S_IRUSR | S_IWUSR; /** default value **/
+		s_info->security = S_IRUSR | S_IWUSR; /** default value **/
 #endif
 
 #ifdef MSH_SHARETYPE_COPY
-		shm_info->sharetype = msh_SHARETYPE_COPY;
+		s_info->sharetype = msh_SHARETYPE_COPY;
 #else
-		shm_info->sharetype = msh_SHARETYPE_OVERWRITE;
+		s_info->sharetype = msh_SHARETYPE_OVERWRITE;
 #endif
 
 #ifdef MSH_THREAD_SAFE
-		shm_info->is_thread_safe = TRUE;          /** default value **/
+		s_info->is_thread_safe = TRUE;          /** default value **/
 #endif
 	
 	}
 	else
 	{
-		shm_info->num_procs += 1;
+		s_info->num_procs += 1;
 	}
 }

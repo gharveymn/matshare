@@ -21,7 +21,7 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 #define MSH_MAX_NAME_LEN 64
 #define MSH_UPDATE_SEGMENT_NAME "/MATSHARE_UPDATE_SEGMENT"
 #define MSH_LOCK_NAME "/MATSHARE_LOCK"
-#define MSH_SEGMENT_NAME "/MATSHARE_SEGMENT%0llx"
+#define MSH_SEGMENT_NAME "/MATSHARE_SEGMENT%0lx"
 
 #if defined(MATLAB_UNIX)
 #  include <sys/mman.h>
@@ -140,6 +140,7 @@ typedef const struct
 typedef struct
 {
 	/* use these to link together the memory segments */
+	signed long seg_num;
 	signed long prev_seg_num;
 	signed long next_seg_num;
 	size_t seg_sz;
@@ -150,7 +151,7 @@ typedef struct
 
 typedef struct
 {
-	SegmentMetadata_t* ptr;
+	SegmentMetadata_t* s_ptr;
 	size_t seg_sz;
 	char_t name[MSH_MAX_NAME_LEN];
 	bool_t is_init;
@@ -160,7 +161,7 @@ typedef struct
 #else
 	handle_t handle;
 #endif
-} MemorySegment_t;
+} SegmentInfo_t;
 
 struct SegmentNode_t;
 struct SegmentList_t;
@@ -182,10 +183,7 @@ typedef struct SegmentNode_t
 	struct SegmentNode_t* next;
 	struct SegmentNode_t* prev;
 	VariableNode_t* var_node;
-	signed long next_seg_num;
-	signed long prev_seg_num;
-	MemorySegment_t data_seg;
-	signed long seg_num;
+	SegmentInfo_t seg_info;
 	bool_t will_free;
 } SegmentNode_t;
 
@@ -207,7 +205,7 @@ typedef struct SegmentList_t
 typedef struct
 {
 	/* these are also all size_t to guarantee alignment for atomic operations */
-	signed long lead_seg_num; 		/* caches the predicted next segment number */
+	signed long last_seg_num; 		/* caches the predicted next segment number */
 	signed long first_seg_num;		/* the first segment number in the list */
 	size_t rev_num;
 	size_t num_shared_vars;
@@ -222,13 +220,13 @@ typedef struct
 #ifdef MSH_THREAD_SAFE
 	bool_t is_thread_safe;
 #endif
-} ShmInfo_t;
+} SharedInfo_t;
 
 typedef struct
 {
 	VariableList_t var_list;
 	SegmentList_t seg_list;
-	MemorySegment_t shm_info_seg;
+	SegmentInfo_t shm_info_seg;
 	
 	size_t rev_num;
 
@@ -255,11 +253,11 @@ typedef struct
 	
 	size_t num_registered_objs;
 	
-} LocalInfo_t;
+} GlobalInfo_t;
 
-extern LocalInfo_t* g_info;
+extern GlobalInfo_t* g_info;
 #define g_var_list g_info->var_list
 #define g_seg_list g_info->seg_list
-#define shm_info ((ShmInfo_t*)g_info->shm_info_seg.ptr)
+#define s_info ((SharedInfo_t*)g_info->shm_info_seg.s_ptr)
 
 #endif //MATSHARE_MSH_TYPES_H
