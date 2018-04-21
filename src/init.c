@@ -189,7 +189,7 @@ void GlobalStartup(void)
 		s_info->last_seg_num = -1;
 		s_info->first_seg_num = -1;
 		s_info->rev_num = 0;
-		s_info->update_pid = g_info->this_pid;
+		/* s_info->update_pid = g_info->this_pid; */
 #ifdef MSH_UNIX
 		s_info->security = S_IRUSR | S_IWUSR; /** default value **/
 #endif

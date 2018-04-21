@@ -522,7 +522,7 @@ void ParseParams(int num_params, const mxArray** in)
 
 void UpdateAll(void)
 {
-	s_info->update_pid = g_info->this_pid;
+	/* s_info->update_pid = g_info->this_pid; */
 	
 	/* only flush the memory when there is more than one process */
 	if(s_info->num_procs > 1)

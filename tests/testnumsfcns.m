@@ -1,6 +1,6 @@
 clear x
 
-nums = 500000;
+nums = 5000000;
 lents = 0;
 disp(getmem);
 tic

@@ -208,21 +208,21 @@ void MshFetch(int nlhs, mxArray** plhs)
 	
 	MshUpdateSegments();
 	
+	if(g_seg_list.num_segs == 0)
+	{
+		for(i = 0; i < nlhs; i++)
+		{
+			plhs[i] = mxCreateDoubleMatrix(0, 0, mxREAL);
+		}
+		return;
+	}
+	
 	switch(s_info->sharetype)
 	{
 		
 		case msh_SHARETYPE_COPY:
 			
 			RemoveUnusedVariables(&g_var_list);
-			
-			if(g_seg_list.num_segs == 0)
-			{
-				for(i = 0; i < nlhs; i++)
-				{
-					plhs[i] = mxCreateDoubleMatrix(0, 0, mxREAL);
-				}
-				return;
-			}
 			
 			switch(nlhs)
 			{
@@ -1211,7 +1211,6 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 	
 	/* retrieve the data */
 	hdr = (Header_t*)shm_anchor;
-	dims = (mwSize*)(shm_anchor + hdr->data_offsets.dims);
 	
 	const char_t* field_name;
 	
@@ -1284,6 +1283,7 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 		
 		if(hdr->is_sparse)
 		{
+			dims = (mwSize*)(shm_anchor + hdr->data_offsets.dims);
 			if(!mxIsSparse(comp_var) ||
 			   hdr->nzmax != mxGetNzmax(comp_var) ||
 			   dims[1] != mxGetN(comp_var))
@@ -1293,7 +1293,6 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 		}
 		else
 		{
-			
 			if(mxIsSparse(comp_var) || hdr->num_elems != mxGetNumberOfElements(comp_var))
 			{
 				return FALSE;
