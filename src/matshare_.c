@@ -1120,7 +1120,6 @@ size_t ShmRewrite_(byte_t* shm_anchor, const mxArray* in_var, mxArray* rewrite_v
 	
 	const mwSize* dims = mxGetDimensions(in_var);
 	mwSize num_dims = mxGetNumberOfDimensions(in_var);
-	mxSetDimensions(rewrite_var, dims, num_dims);
 	
 	/* begin hack (set the dimensions in all crosslinks) */
 	mxArray* curr_var = rewrite_var;
