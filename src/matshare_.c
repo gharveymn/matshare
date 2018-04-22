@@ -282,7 +282,7 @@ void MshFetch(int nlhs, mxArray** plhs)
 					/* create outputs */
 					if(nlhs >= 2)
 					{
-						ret_dims[0] = temp_var_list.num_vars;
+						ret_dims[1] = temp_var_list.num_vars;
 						plhs[1] = mxCreateCellArray(2, ret_dims);
 						curr_var_node = temp_var_list.first;
 						for(i = 0; i < temp_var_list.num_vars; i++, curr_var_node = next_var_node)
@@ -294,7 +294,7 @@ void MshFetch(int nlhs, mxArray** plhs)
 						
 						if(nlhs == 3)
 						{
-							ret_dims[0] = g_var_list.num_vars;
+							ret_dims[1] = g_var_list.num_vars;
 							plhs[2] = mxCreateCellArray(2, ret_dims);
 							curr_var_node = g_var_list.first;
 							for(i = 0; i < g_var_list.num_vars; i++, curr_var_node = curr_var_node->next)

@@ -602,10 +602,6 @@ void RemoveUnusedVariables(VariableList_t* var_list)
 			curr_var_node = next_var_node;
 		}
 		
-		if(s_info->num_shared_vars == 0)
-		{
-			s_info->first_seg_num = -1;
-		}
 	}
 	
 }
@@ -1016,11 +1012,6 @@ void CloseSegment(SegmentNode_t* seg_node)
 		}
 	}
 	
-	if(is_last_tracking)
-	{
-		s_info->num_shared_vars -= 1;
-	}
-	
 }
 
 
@@ -1096,10 +1087,8 @@ void DestroySegment(SegmentNode_t* seg_node)
 		}
 	}
 	
-	if(is_last_tracking)
-	{
-		s_info->num_shared_vars -= 1;
-	}
+	s_info->num_shared_vars -= 1;
+	
 }
 
 void CloseSegmentNode(SegmentNode_t* seg_node)
@@ -1131,7 +1120,7 @@ void DestroySegmentNode(SegmentNode_t* seg_node)
 			DestroyVariableNode(seg_node->var_node);
 		}
 		
-		CloseSegment(seg_node);
+		DestroySegment(seg_node);
 		RemoveSegmentNode(seg_node->parent_seg_list, seg_node);
 		mxFree(seg_node);
 	}
