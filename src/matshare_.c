@@ -175,7 +175,7 @@ void MshShare(int nlhs, mxArray** plhs, const mxArray* in_var)
 
 	if(s_info->sharetype == msh_SHARETYPE_OVERWRITE)
 	{
-		CleanSegmentList(&g_seg_list);
+		DestroySegmentList(&g_seg_list);
 	}
 	
 	/* track the new segment */
@@ -244,15 +244,14 @@ void MshFetch(int nlhs, mxArray** plhs)
 					curr_seg_node = g_seg_list.first;
 					while(curr_seg_node != NULL)
 					{
-						curr_var_node = curr_seg_node->var_node;
-						if(curr_var_node == NULL)
+						if(curr_seg_node->var_node == NULL)
 						{
 							/* create the variable node if it hasnt been created yet */
 							AddVariableNode(&g_var_list, CreateVariableNode(curr_seg_node));
 							
-							if(nlhs == 2)
+							if(nlhs >= 2)
 							{
-								/* place in new variables list */
+								/* place in new variables list, which is only needed to keep track of the new variables */
 								temp_var_node = mxCalloc(1, sizeof(VariableNode_t));
 								temp_var_node->var = curr_seg_node->var_node->var;
 								
@@ -304,7 +303,9 @@ void MshFetch(int nlhs, mxArray** plhs)
 							}
 						}
 					}
-				
+
+					break;
+
 				default:
 					ReadErrorMex("OutputError", "Too many outputs.");
 			}
@@ -376,14 +377,13 @@ void MshUpdateSegments(void)
 		
 		next_seg_node = curr_seg_node->next;
 		
-		/* mark each node for deletion unless it will be reused */
-		curr_seg_node->will_free = TRUE;
-		
-		/* check if the data segment is ready for deletion */
-		if(curr_seg_node->seg_info.s_ptr->is_used && curr_seg_node->seg_info.s_ptr->procs_using == 0)
+		/* Check if the data segment is ready for deletion. This must be a hook since the segments are not up to date yet*/
+		if(curr_seg_node->seg_info.s_ptr->is_invalid)
 		{
-			DestroySegmentNode(curr_seg_node);
+			curr_seg_node->seg_info.s_ptr->is_invalid = TRUE;
+			CloseSegmentNode(curr_seg_node);
 		}
+		
 		curr_seg_node = next_seg_node;
 	}
 	
@@ -403,7 +403,6 @@ void MshUpdateSegments(void)
 			{
 				/* hook the currently used node into the list */
 				new_seg_node = curr_seg_node;
-				curr_seg_node->will_free = FALSE;
 				
 				is_fetched = TRUE;
 				break;
@@ -431,18 +430,6 @@ void MshUpdateSegments(void)
 		
 		new_seg_node->parent_seg_list = &g_seg_list;
 		
-	}
-	
-	/* free nodes which were not reused in the new list */
-	curr_seg_node = g_seg_list.first;
-	while(curr_seg_node != NULL)
-	{
-		next_seg_node = curr_seg_node->next;
-		if(curr_seg_node->will_free)
-		{
-			mxFree(curr_seg_node);
-		}
-		curr_seg_node = next_seg_node;
 	}
 	
 	/* set the new pointers in place */

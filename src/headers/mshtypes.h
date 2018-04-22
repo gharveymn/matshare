@@ -147,6 +147,7 @@ typedef struct
 	unsigned int procs_using;		/* number of processes using this variable */
 	unsigned int procs_tracking;		/* number of processes tracking this memory segment */
 	bool_t is_used;				/* ensures that this memory segment has been referenced at least once before removing */
+	bool_t is_invalid;				/* set to TRUE if this segment is to be freed by all processes */
 } SegmentMetadata_t;
 
 typedef struct

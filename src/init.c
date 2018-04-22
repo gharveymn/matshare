@@ -21,12 +21,12 @@ void InitializeMatshare()
 	
 	if(!g_info->shm_info_seg.is_init)
 	{
-		InitUpdateSegment();
+		InitInfoSegment();
 	}
 	
 	if(!g_info->shm_info_seg.is_mapped)
 	{
-		MapUpdateSegment();
+		MapInfoSegment();
 	}
 	
 	/* includes writing to shared memory, but the memory has been aligned so all writes are atomic */
@@ -97,7 +97,7 @@ void InitProcLock(void)
 }
 
 
-void InitUpdateSegment(void)
+void InitInfoSegment(void)
 {
 	
 	g_info->shm_info_seg.seg_sz = sizeof(SharedInfo_t);
@@ -154,7 +154,7 @@ void InitUpdateSegment(void)
 }
 
 
-void MapUpdateSegment(void)
+void MapInfoSegment(void)
 {
 #ifdef MSH_WIN
 	
@@ -164,6 +164,9 @@ void MapUpdateSegment(void)
 	{
 		ReadErrorMex("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", err);
 	}
+	
+	/* lock this virtual mapping to physical memory to make sure it doesn't get written to the pagefile */
+	VirtualLock(g_info->shm_info_seg.s_ptr, g_info->shm_info_seg.seg_sz);
 
 #else
 	

@@ -8,8 +8,8 @@
 void InitializeMatshare();
 void ProcStartup(void);
 void InitProcLock(void);
-void InitUpdateSegment(void);
-void MapUpdateSegment(void);
+void InitInfoSegment(void);
+void MapInfoSegment(void);
 void GlobalStartup(void);
 
 #endif //MATSHARE_INIT_H

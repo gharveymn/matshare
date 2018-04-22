@@ -102,7 +102,11 @@ void OnExit(void)
 	
 	if(g_info->shm_info_seg.is_mapped)
 	{
-		if(UnmapViewOfFile(s_info) == 0)
+		
+		/* unlock this set of pages */
+		VirtualUnlock(g_info->shm_info_seg.s_ptr, g_info->shm_info_seg.seg_sz);
+		
+		if(UnmapViewOfFile(g_info->shm_info_seg.s_ptr) == 0)
 		{
 			if(g_info->flags.is_proc_lock_init)
 			{
@@ -584,7 +588,16 @@ void RemoveUnusedVariables(VariableList_t* var_list)
 			next_var_node = curr_var_node->next;
 			if(*curr_var_node->crosslink == NULL && curr_var_node->seg_node->seg_info.s_ptr->is_used)
 			{
-				DestroyVariableNode(curr_var_node);
+				if(curr_var_node->seg_node->seg_info.s_ptr->procs_using == 1)
+				{
+					/* if this is the last process using this variable, destroy the segment completely */
+					DestroySegmentNode(curr_var_node->seg_node);
+				}
+				else
+				{
+					/* otherwise just take out the variable */
+					DestroyVariableNode(curr_var_node);
+				}
 			}
 			curr_var_node = next_var_node;
 		}
@@ -714,6 +727,8 @@ SegmentInfo_t CreateSegment(size_t seg_sz)
 	
 	/* make sure that this segment has been used at least once before freeing it */
 	seg_info.s_ptr->is_used = FALSE;
+	
+	seg_info.s_ptr->is_invalid = FALSE;
 	
 	/* set the segment number */
 	seg_info.s_ptr->seg_num = new_seg_num;
@@ -951,8 +966,8 @@ void RemoveSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 	
 }
 
-
-void DestroySegment(SegmentNode_t* seg_node)
+/* Close the references to this segment. Segment list may not be up to date. */
+void CloseSegment(SegmentNode_t* seg_node)
 {
 	
 	bool_t is_last_tracking = FALSE;
@@ -961,6 +976,65 @@ void DestroySegment(SegmentNode_t* seg_node)
 		
 		if(seg_node->seg_info.is_mapped)
 		{
+			seg_node->seg_info.s_ptr->procs_tracking -= 1;
+			
+			/* check if this process will unlink the shared memory (for linux, but we'll keep the info around for Windows for now) */
+			is_last_tracking = (bool_t)(seg_node->seg_info.s_ptr->procs_tracking == 0);
+
+#ifdef MSH_WIN
+			if(UnmapViewOfFile(seg_node->seg_info.s_ptr) == 0)
+			{
+				ReadErrorMex("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
+			}
+#else
+			if(munmap(seg_node->seg_info.s_ptr, seg_node->seg_info.seg_sz) != 0)
+					{
+						ReadMunmapError(errno);
+					}
+#endif
+			
+			seg_node->seg_info.is_mapped = FALSE;
+		}
+		
+		if(seg_node->seg_info.is_init)
+		{
+#ifdef MSH_WIN
+			if(CloseHandle(seg_node->seg_info.handle) == 0)
+			{
+				ReadErrorMex("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
+			}
+#else
+			if(will_unlink)
+					{
+						if(shm_unlink(seg_node->seg_info.name) != 0)
+						{
+							ReadShmUnlinkError(errno);
+						}
+					}
+#endif
+			seg_node->seg_info.is_init = FALSE;
+		}
+	}
+	
+	if(is_last_tracking)
+	{
+		s_info->num_shared_vars -= 1;
+	}
+	
+}
+
+
+/* Signal to destroy this segment. Segment list must be fully up to date beforehand */
+void DestroySegment(SegmentNode_t* seg_node)
+{
+	bool_t is_last_tracking = FALSE;
+	if(seg_node != NULL)
+	{
+		
+		if(seg_node->seg_info.is_mapped)
+		{
+			/* signal that this segment is to be freed */
+			seg_node->seg_info.s_ptr->is_invalid = TRUE;
 			
 			if(seg_node->seg_info.s_ptr->seg_num == s_info->first_seg_num)
 			{
@@ -1026,7 +1100,23 @@ void DestroySegment(SegmentNode_t* seg_node)
 	{
 		s_info->num_shared_vars -= 1;
 	}
-	
+}
+
+void CloseSegmentNode(SegmentNode_t* seg_node)
+{
+	if(seg_node != NULL)
+	{
+		
+		if(seg_node->var_node != NULL)
+		{
+			seg_node->var_node->seg_node = NULL;
+			DestroyVariableNode(seg_node->var_node);
+		}
+		
+		CloseSegment(seg_node);
+		RemoveSegmentNode(seg_node->parent_seg_list, seg_node);
+		mxFree(seg_node);
+	}
 }
 
 
@@ -1040,8 +1130,8 @@ void DestroySegmentNode(SegmentNode_t* seg_node)
 			seg_node->var_node->seg_node = NULL;
 			DestroyVariableNode(seg_node->var_node);
 		}
-
-		DestroySegment(seg_node);
+		
+		CloseSegment(seg_node);
 		RemoveSegmentNode(seg_node->parent_seg_list, seg_node);
 		mxFree(seg_node);
 	}
@@ -1160,17 +1250,9 @@ void DestroyVariableNode(VariableNode_t* var_node)
 	{
 		DestroyVariable(var_node);
 		RemoveVariableNode(var_node->parent_var_list, var_node);
-		
-		/* if this is the last process using the variable, completely remove */
-		if(var_node->seg_node != NULL && var_node->seg_node->seg_info.s_ptr->procs_using == 0)
-		{
-			/* remove the segment node */
-			DestroySegmentNode(var_node->seg_node);
-		}
 		mxFree(var_node);
 	}
 }
-
 
 void CleanVariableList(VariableList_t* var_list)
 {
@@ -1197,6 +1279,23 @@ void CleanSegmentList(SegmentList_t* seg_list)
 		while(curr_seg_node != NULL)
 		{
 			next_seg_node = curr_seg_node->next;
+			CloseSegmentNode(curr_seg_node);
+			curr_seg_node = next_seg_node;
+		}
+	}
+}
+
+
+void DestroySegmentList(SegmentList_t* seg_list)
+{
+	SegmentNode_t* curr_seg_node, * next_seg_node;
+	if(seg_list != NULL)
+	{
+		curr_seg_node = seg_list->first;
+		while(curr_seg_node != NULL)
+		{
+			next_seg_node = curr_seg_node->next;
+			curr_seg_node->seg_info.s_ptr->is_invalid = TRUE;
 			DestroySegmentNode(curr_seg_node);
 			curr_seg_node = next_seg_node;
 		}

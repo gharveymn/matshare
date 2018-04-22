@@ -73,6 +73,10 @@ void CleanVariableList(VariableList_t* var_list);
 
 void CleanSegmentList(SegmentList_t* seg_list);
 
+void DestroySegmentList(SegmentList_t* seg_list);
+
+void CloseSegmentNode(SegmentNode_t* seg_node);
+
 void NullFunction(void);
 
 #endif //MATSHARE_MATSHAREUTILS_H
