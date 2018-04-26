@@ -1,3 +1,3 @@
-function mshparam(varargin)
+function mshparameter(varargin)
     matshare_(uint8(3),varargin{:});
 end

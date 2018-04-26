@@ -12,7 +12,7 @@ SET(SOURCE_FILES
 		init.c headers/init.h
 		mshutils.c headers/mshutils.h
 		headers/mshtypes.h
-		headers/externtypes.h)
+		headers/externtypes.h mshlists.c headers/mshlists.h)
 
 IF(UXWIN)
 	SET(SOURCE_FILES
@@ -23,7 +23,7 @@ IF(UXWIN)
 			headers/mshtypes.h
 			extlib/mman-win32/sys/mman.h
 			headers/externtypes.h
-			mshutils.c headers/mshutils.h)
+			mshutils.c headers/mshutils.h mshlists.c headers/mshlists.h)
 ENDIF(UXWIN)
 
 ADD_LIBRARY(${MEX_FILE_NAME} SHARED ${SOURCE_FILES} ${CMAKE_SOURCE_DIR}/Matlabdef.def)

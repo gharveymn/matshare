@@ -4,6 +4,7 @@
 #include "mex.h"
 #include "externtypes.h"
 
+
 extern mxArray* mxCreateSharedDataCopy(mxArray*);
 
 #ifndef FALSE
@@ -16,6 +17,10 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 
 #ifndef SIZE_MAX
 #define SIZE_MAX ((size_t)(-1))
+#endif
+
+#ifndef LONG_MAX
+#define LONG_MAX 2147483647L
 #endif
 
 #define MSH_MAX_NAME_LEN 64
@@ -75,26 +80,39 @@ extern int fchmod(int fildes, mode_t mode);
 #endif
 
 /* these are used for recording structure field names */
-#define ALIGN_SIZE (size_t)0x20   /*the pointer alignment size, so if pdata is a valid pointer then &pdata[i*align_size] will also be.  Ensure this is >= 4*/
-#define MXMALLOC_SIG_LEN 16
+#define ALIGN_SIZE (size_t)0x20   /* The pointer alignment size; ensure this is a multiple of 32 for AVX alignment */
+#define MXMALLOC_SIG_LEN 16		/* length of the mxMalloc signature */
 
-typedef char char_t;
-typedef char_t byte_t;
-typedef bool bool_t;
+typedef char char_t;			/* characters */
+typedef signed char schar_t;		/* signed 8 bits */
+typedef unsigned char uchar_t;	/* unsigned 8 bits */
+typedef uchar_t byte_t;			/* reading physical memory */
+typedef uchar_t bool_t;			/* conditionals */
+typedef signed long seg_num_t;		/* segment number identifiers */
+#define SEG_NUM_MAX LONG_MAX	/* the maximum segment number */
 #ifdef MSH_UNIX
-typedef int handle_t;
+typedef int handle_t;			/* give fds a uniform identifier */
 #endif
 
 typedef enum
 {
-	msh_SHARE, msh_FETCH, msh_DETACH, msh_PARAM, msh_DEEPCOPY, msh_DEBUG, msh_OBJ_REGISTER, msh_OBJ_DEREGISTER, msh_INIT
+	msh_SHARE          = 0,
+	msh_FETCH          = 1,
+	msh_DETACH         = 2,
+	msh_PARAM          = 3,
+	msh_DEEPCOPY       = 4,
+	msh_DEBUG          = 5,
+	msh_OBJ_REGISTER   = 6,
+	msh_OBJ_DEREGISTER = 7,
+	msh_INIT           = 8,
+	msh_CLEAR          = 9
 } mshdirective_t;
 
 
 typedef enum
 {
-	msh_SHARETYPE_COPY,               /* always create a new segment */
-	msh_SHARETYPE_OVERWRITE          /* reuse the same segment if the new variable is smaller than or the same size as the old one */
+	msh_SHARETYPE_COPY = 0,               /* always create a new segment */
+	msh_SHARETYPE_OVERWRITE = 1          /* reuse the same segment if the new variable is smaller than or the same size as the old one */
 } mshsharetype_t;
 
 
@@ -128,26 +146,26 @@ typedef struct
 /* pointers to the data in virtual memory */
 typedef struct
 {
-	mwSize* dims;				/* pointer to the size array */
-	void* data;					/* real data portion */
-	void* imag_data;					/* imaginary data portion */
-	mwIndex* ir;				/* row indexes, for sparse */
-	mwIndex* jc;				/* cumulative column counts, for sparse */
-	char_t* field_str;			/* list of a structures fields, each field name will be separated by a null character */
+	mwSize* dims;                    /* pointer to the size array */
+	void* data;                         /* real data portion */
+	void* imag_data;                         /* imaginary data portion */
+	mwIndex* ir;                    /* row indexes, for sparse */
+	mwIndex* jc;                    /* cumulative column counts, for sparse */
+	char_t* field_str;               /* list of a structures fields, each field name will be separated by a null character */
 	size_t* child_hdrs;           /* array of corresponding children headers */
 } SharedDataPointers_t;
 
 typedef struct
 {
 	/* use these to link together the memory segments */
-	signed long seg_num;
-	signed long prev_seg_num;
-	signed long next_seg_num;
+	seg_num_t seg_num;
+	seg_num_t prev_seg_num;
+	seg_num_t next_seg_num;
 	size_t seg_sz;
-	unsigned int procs_using;		/* number of processes using this variable */
-	unsigned int procs_tracking;		/* number of processes tracking this memory segment */
-	bool_t is_used;				/* ensures that this memory segment has been referenced at least once before removing */
-	bool_t is_invalid;				/* set to TRUE if this segment is to be freed by all processes */
+	unsigned int procs_using;          /* number of processes using this variable */
+	unsigned int procs_tracking;          /* number of processes tracking this memory segment */
+	bool_t is_used;                    /* ensures that this memory segment has been referenced at least once before removing */
+	bool_t is_invalid;                    /* set to TRUE if this segment is to be freed by all processes */
 } SegmentMetadata_t;
 
 typedef struct
@@ -206,8 +224,8 @@ typedef struct SegmentList_t
 typedef struct
 {
 	/* these are also all size_t to guarantee alignment for atomic operations */
-	signed long last_seg_num; 		/* caches the predicted next segment number */
-	signed long first_seg_num;		/* the first segment number in the list */
+	seg_num_t last_seg_num;          /* caches the predicted next segment number */
+	seg_num_t first_seg_num;          /* the first segment number in the list */
 	size_t rev_num;
 	size_t num_shared_vars;
 	unsigned int num_procs;
@@ -257,15 +275,15 @@ typedef struct
 } GlobalInfo_t;
 
 #define LocateDataPointers(hdr, shm_anchor) \
-	(SharedDataPointers_t){\
-		(hdr)->data_offsets.dims == SIZE_MAX? NULL : (mwSize*)((shm_anchor) + (hdr)->data_offsets.dims),                    /* dims */\
-		(hdr)->data_offsets.data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.data,                               /* data */\
-		(hdr)->data_offsets.imag_data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.imag_data,                     /* imag_data */\
-		(hdr)->data_offsets.ir == SIZE_MAX? NULL : (mwIndex*)((shm_anchor) + (hdr)->data_offsets.ir),                       /* ir */\
-		(hdr)->data_offsets.jc == SIZE_MAX? NULL : (mwIndex*)((shm_anchor) + (hdr)->data_offsets.jc),                       /* jc */\
-		(hdr)->data_offsets.field_str == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.field_str,                     /* field_str */\
-		(hdr)->data_offsets.child_hdrs == SIZE_MAX? NULL : (size_t*)((shm_anchor) + (hdr)->data_offsets.child_hdrs)         /* child_hdrs */\
-	};
+     (SharedDataPointers_t){\
+          (hdr)->data_offsets.dims == SIZE_MAX? NULL : (mwSize*)((shm_anchor) + (hdr)->data_offsets.dims),                    /* dims */\
+          (hdr)->data_offsets.data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.data,                               /* data */\
+          (hdr)->data_offsets.imag_data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.imag_data,                     /* imag_data */\
+          (hdr)->data_offsets.ir == SIZE_MAX? NULL : (mwIndex*)((shm_anchor) + (hdr)->data_offsets.ir),                       /* ir */\
+          (hdr)->data_offsets.jc == SIZE_MAX? NULL : (mwIndex*)((shm_anchor) + (hdr)->data_offsets.jc),                       /* jc */\
+          (hdr)->data_offsets.field_str == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.field_str,                     /* field_str */\
+          (hdr)->data_offsets.child_hdrs == SIZE_MAX? NULL : (size_t*)((shm_anchor) + (hdr)->data_offsets.child_hdrs)         /* child_hdrs */\
+     };
 
 extern GlobalInfo_t* g_info;
 #define g_var_list g_info->var_list

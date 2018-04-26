@@ -1,5 +1,4 @@
 #include "headers/matshare_.h"
-#include "headers/mshtypes.h"
 
 
 GlobalInfo_t* g_info = NULL;
@@ -33,7 +32,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	/* get the directive */
 	directive = ParseDirective(in_directive);
-
+	
 	InitializeMatshare();
 	
 	if(directive != msh_DETACH && directive != msh_INIT && Precheck() != TRUE)
@@ -86,10 +85,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			if(g_info->num_registered_objs == 0)
 			{
 				OnExit();
-				if(mexIsLocked())
-				{
-					mexUnlock();
-				}
 			}
 			
 			break;
@@ -98,7 +93,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* set parameters for matshare to use */
 			
 			num_params = nrhs - 1;
-			if(num_params % 2 != 0)
+			if(num_params%2 != 0)
 			{
 				ReadErrorMex("InvalNumArgsError", "The number of parameters input must be a multiple of two.");
 			}
@@ -119,6 +114,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		case msh_INIT:
 			break;
+		case msh_CLEAR:
+			DestroySegmentList(&g_seg_list);
+			break;
 		default:
 			ReadErrorMex("UnknownDirectiveError", "Unrecognized directive.");
 			break;
@@ -135,7 +133,7 @@ void MshShare(int nlhs, mxArray** plhs, const mxArray* in_var)
 	
 	AcquireProcessLock();
 	
-	MshUpdateSegments();
+	UpdateSharedSegments();
 	
 	if(s_info->sharetype == msh_SHARETYPE_COPY)
 	{
@@ -143,7 +141,7 @@ void MshShare(int nlhs, mxArray** plhs, const mxArray* in_var)
 	}
 	else if(s_info->sharetype == msh_SHARETYPE_OVERWRITE)
 	{
-		if(g_var_list.num_vars != 0 && !mxIsEmpty(g_var_list.last->var) && (ShmCompareSize((byte_t*)g_seg_list.last->seg_info.s_ptr, in_var) == TRUE))
+		if(g_var_list.num_vars != 0  && (ShmCompareSize((byte_t*)g_seg_list.last->seg_info.s_ptr, in_var) == TRUE))
 		{
 			/* DON'T INCREMENT THE REVISION NUMBER */
 			/* this is an in-place change, so everyone is still fine */
@@ -174,7 +172,7 @@ void MshShare(int nlhs, mxArray** plhs, const mxArray* in_var)
 	
 	/* copy data to the shared memory */
 	ShmCopy(new_seg_node, in_var);
-
+	
 	if(s_info->sharetype == msh_SHARETYPE_OVERWRITE)
 	{
 		DestroySegmentList(&g_seg_list);
@@ -208,7 +206,7 @@ void MshFetch(int nlhs, mxArray** plhs)
 	
 	AcquireProcessLock();
 	
-	MshUpdateSegments();
+	UpdateSharedSegments();
 	
 	if(g_seg_list.num_segs == 0)
 	{
@@ -305,9 +303,9 @@ void MshFetch(int nlhs, mxArray** plhs)
 							}
 						}
 					}
-
+					
 					break;
-
+				
 				default:
 					ReadErrorMex("OutputError", "Too many outputs.");
 			}
@@ -353,7 +351,7 @@ void MshFetch(int nlhs, mxArray** plhs)
 /**
  * Update the local segment list from shared memory
  */
-void MshUpdateSegments(void)
+void UpdateSharedSegments(void)
 {
 	
 	if(g_info->rev_num == s_info->rev_num)
@@ -367,10 +365,10 @@ void MshUpdateSegments(void)
 		g_info->rev_num = s_info->rev_num;
 	}
 	
-	signed long curr_seg_num;
+	seg_num_t curr_seg_num;
 	bool_t is_fetched;
 	
-	SegmentNode_t* curr_seg_node,* next_seg_node, * new_seg_node = NULL;
+	SegmentNode_t* curr_seg_node, * next_seg_node, * new_seg_node = NULL;
 	SegmentList_t new_seg_list = {NULL, NULL, 0};
 	
 	curr_seg_node = g_seg_list.first;
@@ -543,11 +541,15 @@ size_t ShmScan_(const mxArray* in_var)
 			/* len(data)==nzmax, len(imag_data)==nzmax, len(ir)=nzmax, len(jc)==N+1 */
 			
 			/* ensure both pointers are aligned individually */
+#ifdef MX_HAS_INTERLEAVED_COMPLEX
+			cml_sz += padded_mxmalloc_sig_len + PadToAlign((1 + mxIsComplex(in_var))*hdr.elem_size*hdr.nzmax);
+#else
 			cml_sz += padded_mxmalloc_sig_len + PadToAlign(hdr.elem_size*hdr.nzmax);
 			if(hdr.complexity == mxCOMPLEX)
 			{
 				cml_sz += padded_mxmalloc_sig_len + PadToAlign(hdr.elem_size*hdr.nzmax);
 			}
+#endif
 			cml_sz += padded_mxmalloc_sig_len + PadToAlign(sizeof(mwIndex)*(hdr.nzmax));              /* ir */
 			cml_sz += padded_mxmalloc_sig_len + PadToAlign(sizeof(mwIndex)*(mxGetN(in_var) + 1));     /* jc */
 			
@@ -557,11 +559,15 @@ size_t ShmScan_(const mxArray* in_var)
 			/* ensure both pointers are aligned individually */
 			if(!hdr.is_empty)
 			{
+#ifdef MX_HAS_INTERLEAVED_COMPLEX
+				cml_sz += padded_mxmalloc_sig_len + PadToAlign((1 + mxIsComplex(in_var))*hdr.elem_size*hdr.num_elems);
+#else
 				cml_sz += padded_mxmalloc_sig_len + PadToAlign(hdr.elem_size*hdr.num_elems);
 				if(hdr.complexity == mxCOMPLEX)
 				{
 					cml_sz += padded_mxmalloc_sig_len + PadToAlign(hdr.elem_size*hdr.num_elems);
 				}
+#endif
 			}
 		}
 		
@@ -578,12 +584,12 @@ size_t ShmScan_(const mxArray* in_var)
 
 void ShmCopy(SegmentNode_t* seg_node, const mxArray* in_var)
 {
-	shmCopy_(((byte_t*)seg_node->seg_info.s_ptr) + PadToAlign(sizeof(SegmentMetadata_t)), in_var);
+	ShmCopy_(((byte_t*)seg_node->seg_info.s_ptr) + PadToAlign(sizeof(SegmentMetadata_t)), in_var);
 }
 
 
 /* ------------------------------------------------------------------------- */
-/* shmCopy_                                                                  */
+/* ShmCopy_                                                                  */
 /*                                                                           */
 /* Descend through header and data structure and copy relevent data to       */
 /* shared memory.                                                            */
@@ -595,7 +601,7 @@ void ShmCopy(SegmentNode_t* seg_node, const mxArray* in_var)
 /* Returns:                                                                  */
 /*    void                                                                   */
 /* ------------------------------------------------------------------------- */
-size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var)
+size_t ShmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 {
 	
 	const size_t padded_mxmalloc_sig_len = PadToAlign(MXMALLOC_SIG_LEN);
@@ -610,8 +616,11 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 	mwSize* dims;
 	size_t* child_hdrs;
 	char_t* field_str;
-	void* data,* imag_data;
-	mwIndex* ir,* jc;
+	void* data;
+#ifndef MX_HAS_INTERLEAVED_COMPLEX
+	void* imag_data;
+#endif
+	mwIndex* ir, * jc;
 	
 	/* initialize header info */
 	
@@ -684,7 +693,7 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 				child_hdrs[count] = cml_off;
 				
 				/* And fill it */
-				cml_off += shmCopy_(shm_anchor + child_hdrs[count], mxGetFieldByNumber(in_var, idx, field_num));
+				cml_off += ShmCopy_(shm_anchor + child_hdrs[count], mxGetFieldByNumber(in_var, idx, field_num));
 				
 			}
 			
@@ -708,7 +717,7 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 			/* place relative offset into shared memory */
 			child_hdrs[count] = cml_off;
 			
-			cml_off += shmCopy_(shm_anchor + child_hdrs[count], mxGetCell(in_var, count));
+			cml_off += ShmCopy_(shm_anchor + child_hdrs[count], mxGetCell(in_var, count));
 			
 			
 		}
@@ -791,19 +800,19 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 			if(!hdr.is_empty)
 			{
 #ifdef MX_HAS_INTERLEAVED_COMPLEX
-				cpy_sz = (1 + mxIsComplex(in_var))*(hdr.nzmax)*(hdr.elem_size);
+				cpy_sz = (1 + mxIsComplex(in_var))*(hdr.num_elems)*(hdr.elem_size);
 			
-			/* add the size of the mxMalloc signature */
-			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
-			hdr.data_offsets.data = cml_off, data = shm_ptr;
-			
-			/* copy over the data with the signature */
-			MemCpyMex(data, mxGetData(in_var), cpy_sz);
-			
-			shift = PadToAlign(cpy_sz);
-			cml_off += shift, shm_ptr += shift;
+				/* add the size of the mxMalloc signature */
+				cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+				hdr.data_offsets.data = cml_off, data = shm_ptr;
+				
+				/* copy over the data with the signature */
+				MemCpyMex(data, mxGetData(in_var), cpy_sz);
+				
+				shift = PadToAlign(cpy_sz);
+				cml_off += shift, shm_ptr += shift;
 #else
-				cpy_sz = (hdr.nzmax)*(hdr.elem_size);
+				cpy_sz = hdr.num_elems*hdr.elem_size;
 				
 				/* add the size of the mxMalloc signature */
 				cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
@@ -880,7 +889,7 @@ size_t ShmFetch_(byte_t* shm_anchor, mxArray** ret_var)
 			field_names[field_num] = field_name;
 		}
 		*ret_var = mxCreateStructArray(hdr->num_dims, data_ptrs.dims, hdr->num_fields, field_names);
-		mxFree(field_names);
+		mxFree((char**)field_names);
 		
 		/* Go through each element */
 		for(field_num = 0, count = 0; field_num < hdr->num_fields; field_num++)     /* each field */
@@ -924,19 +933,19 @@ size_t ShmFetch_(byte_t* shm_anchor, mxArray** ret_var)
 				ReadErrorMex("UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'double' or 'logical'");
 			}
 			
-			if(!hdr->is_empty)
+			/* free the real and imaginary data */
+			mxFree(mxGetData(*ret_var));
+
+#ifndef MX_HAS_INTERLEAVED_COMPLEX
+			if(hdr->complexity)
 			{
-				/* free the real and imaginary data */
-				mxFree(mxGetData(*ret_var));
-				if(hdr->complexity)
-				{
-					mxFree(mxGetImagData(*ret_var));
-				}
-				
-				/* free the pointers relating to sparse */
-				mxFree(mxGetIr(*ret_var));
-				mxFree(mxGetJc(*ret_var));
+				mxFree(mxGetImagData(*ret_var));
 			}
+#endif
+			
+			/* free the pointers relating to sparse */
+			mxFree(mxGetIr(*ret_var));
+			mxFree(mxGetJc(*ret_var));
 			
 			mxSetNzmax(*ret_var, hdr->nzmax);
 			
@@ -988,7 +997,7 @@ void ShmDetach(mxArray* ret_var)
 	mwSize nzmax = 0;
 	
 	/* restore matlab  memory */
-	if(ret_var == NULL || mxIsEmpty(ret_var))
+	if(ret_var == NULL)
 	{
 		return;
 	}
@@ -999,10 +1008,10 @@ void ShmDetach(mxArray* ret_var)
 		num_fields = mxGetNumberOfFields(ret_var);
 		for(field_num = 0; field_num < num_fields; field_num++)     /* each field */
 		{
-			for(idx = 0; idx < num_elems; idx++)
+			for(idx = 0; idx < num_elems; idx++)				/* each element */
 			{
 				ShmDetach(mxGetFieldByNumber(ret_var, idx, field_num));
-			}/* detach this one */
+			}
 		}
 	}
 	else if(mxIsCell(ret_var))
@@ -1012,7 +1021,7 @@ void ShmDetach(mxArray* ret_var)
 		for(idx = 0; idx < num_elems; idx++)
 		{
 			ShmDetach(mxGetCell(ret_var, idx));
-		}/* detach this one */
+		}
 		
 	}
 	else if(mxIsNumeric(ret_var) || mxIsLogical(ret_var) || mxIsChar(ret_var))  /* a matrix containing data */
@@ -1021,18 +1030,11 @@ void ShmDetach(mxArray* ret_var)
 		/* handle sparse objects */
 		if(mxIsSparse(ret_var))
 		{
-			/* I don't seem to be able to give sparse arrays zero size so (nzmax must be 1) */
 			num_dims = 2;
 			nzmax = 1;
 			
-			if(mxIsEmpty(ret_var))
-			{
-				ReleaseProcessLock();
-				ReadErrorMex("InvalidSparseError", "Detached sparse was unexpectedly empty.");
-			}
-			
 			/* allocate 1 element */
-#ifdef MX_HAS_INTERVLEAVED_COMPLEX
+#ifdef MX_HAS_INTERLEAVED_COMPLEX
 			new_data_ptrs.data = mxCalloc((1 + mxIsComplex(ret_var))*nzmax, mxGetElementSize(ret_var));
 #else
 			new_data_ptrs.data = mxCalloc(nzmax, mxGetElementSize(ret_var));
@@ -1195,8 +1197,7 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 	if(hdr->classid == mxSTRUCT_CLASS)
 	{
 		
-		if(hdr->num_fields != mxGetNumberOfFields(comp_var)||
-		   hdr->num_elems != mxGetNumberOfElements(comp_var))
+		if(hdr->num_fields != mxGetNumberOfFields(comp_var) || hdr->num_elems != mxGetNumberOfElements(comp_var))
 		{
 			return FALSE;
 		}
@@ -1256,9 +1257,7 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 		if(hdr->is_sparse)
 		{
 			dims = (mwSize*)(shm_anchor + hdr->data_offsets.dims);
-			if(!mxIsSparse(comp_var) ||
-			   hdr->nzmax != mxGetNzmax(comp_var) ||
-			   dims[1] != mxGetN(comp_var))
+			if(!mxIsSparse(comp_var) || hdr->nzmax != mxGetNzmax(comp_var) || dims[1] != mxGetN(comp_var))
 			{
 				return FALSE;
 			}

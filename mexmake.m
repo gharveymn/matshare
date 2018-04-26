@@ -30,7 +30,8 @@ try
 			'matshare_.c',...
 			'matlabutils.c',...
 			'mshutils.c',...
-			'init.c'
+			'init.c',...
+			'mshlists.c'
 			};
 		
 	for i = 1:numel(sources)
@@ -40,7 +41,6 @@ try
 	if(ispc)
 		
 		mexflags = [mexflags,{'-DMATLAB_WINDOWS'}];
-		mexflags = [mexflags,{'-lShlwapi'}];
 		
 	else
 		
@@ -50,7 +50,11 @@ try
 	end
 	
 	if(maxsz > 2^31-1)
-		mexflags = [mexflags {'-largeArrayDims'}];
+		if(verLessThan('matlab','9.4'))
+			mexflags = [mexflags {'-largeArrayDims'}];
+		else
+			mexflags = [mexflags, {'-R2018a'}];
+		end
 	else
 		mexflags = [mexflags {'-compatibleArrayDims', '-DMATLAB_32BIT'}];
 	end

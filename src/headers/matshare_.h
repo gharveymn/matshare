@@ -4,13 +4,14 @@
 #include "mshtypes.h"
 #include "matlabutils.h"
 #include "mshutils.h"
+#include "mshlists.h"
 #include "init.h"
 
 void MshFetch(int nlhs, mxArray** plhs);
 
 void MshShare(int nlhs, mxArray** plhs, const mxArray* in_var);
 
-void MshUpdateSegments(void);
+void UpdateSharedSegments(void);
 
 void ShmFetch(byte_t* shm, mxArray** ret_var);
 
@@ -44,7 +45,7 @@ size_t ShmScan_(const mxArray* in_var);
 
 /* Descend through header and data structure and copy relevent data to       */
 /* shared memory.                                                            */
-size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var);
+size_t ShmCopy_(byte_t* shm_anchor, const mxArray* in_var);
 
 mxLogical ShmCompareContent_(byte_t* shm, const mxArray* comp_var);
 
