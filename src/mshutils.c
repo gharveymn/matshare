@@ -1,4 +1,5 @@
 #include "headers/mshutils.h"
+#include "headers/mshtypes.h"
 
 
 /*
@@ -33,20 +34,6 @@ void* MemCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 	}
 	return dest;
 }
-
-
-ShmData_t LocateDataPointers(const Header_t* const hdr, byte_t* const shm_anchor)
-{
-	return (ShmData_t){hdr->data_offsets.dims == SIZE_MAX? NULL : (mwSize*)(shm_anchor + hdr->data_offsets.dims),                    /* dims */
-				    hdr->data_offsets.pr == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pr,                                   /* pr */
-				    hdr->data_offsets.pi == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.pi,                                   /* pi */
-				    hdr->data_offsets.ir == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.ir),                         /* ir */
-				    hdr->data_offsets.jc == SIZE_MAX? NULL : (mwIndex*)(shm_anchor + hdr->data_offsets.jc),                         /* jc */
-				    hdr->data_offsets.field_str == SIZE_MAX? NULL : shm_anchor + hdr->data_offsets.field_str,                    /* field_str */
-				    hdr->data_offsets.child_hdrs == SIZE_MAX? NULL : (size_t*)(shm_anchor + hdr->data_offsets.child_hdrs)          /* child_hdrs */
-	};
-}
-
 
 /* field names of a structure	*/
 size_t GetFieldNamesSize(const mxArray* mxStruct)
@@ -573,6 +560,24 @@ bool_t Precheck(void)
 #else
 	return ret;
 #endif
+}
+
+
+void SetDataPointers(mxArray* var, SharedDataPointers_t* data_ptrs)
+{
+	
+	mxSetData(var, data_ptrs->data);
+
+#ifndef MX_HAS_INTERVLEAVED_COMPLEX
+	mxSetImagData(var, data_ptrs->imag_data);
+#endif
+	
+	if(mxIsSparse(var))
+	{
+		mxSetIr(var, data_ptrs->ir);
+		mxSetJc(var, data_ptrs->jc);
+	}
+	
 }
 
 

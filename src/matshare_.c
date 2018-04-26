@@ -1,4 +1,6 @@
 #include "headers/matshare_.h"
+#include "headers/mshtypes.h"
+
 
 GlobalInfo_t* g_info = NULL;
 
@@ -96,7 +98,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* set parameters for matshare to use */
 			
 			num_params = nrhs - 1;
-			if(num_params%2 != 0)
+			if(num_params % 2 != 0)
 			{
 				ReadErrorMex("InvalNumArgsError", "The number of parameters input must be a multiple of two.");
 			}
@@ -538,7 +540,7 @@ size_t ShmScan_(const mxArray* in_var)
 		
 		if(hdr.is_sparse)
 		{
-			/* len(pr)==nzmax, len(pi)==nzmax, len(ir)=nzmax, len(jc)==N+1 */
+			/* len(data)==nzmax, len(imag_data)==nzmax, len(ir)=nzmax, len(jc)==N+1 */
 			
 			/* ensure both pointers are aligned individually */
 			cml_sz += padded_mxmalloc_sig_len + PadToAlign(hdr.elem_size*hdr.nzmax);
@@ -552,12 +554,14 @@ size_t ShmScan_(const mxArray* in_var)
 		}
 		else
 		{
-			
 			/* ensure both pointers are aligned individually */
-			cml_sz += padded_mxmalloc_sig_len + PadToAlign(hdr.elem_size*hdr.num_elems);
-			if(hdr.complexity == mxCOMPLEX)
+			if(!hdr.is_empty)
 			{
 				cml_sz += padded_mxmalloc_sig_len + PadToAlign(hdr.elem_size*hdr.num_elems);
+				if(hdr.complexity == mxCOMPLEX)
+				{
+					cml_sz += padded_mxmalloc_sig_len + PadToAlign(hdr.elem_size*hdr.num_elems);
+				}
 			}
 		}
 		
@@ -606,15 +610,15 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 	mwSize* dims;
 	size_t* child_hdrs;
 	char_t* field_str;
-	void* pr,* pi;
+	void* data,* imag_data;
 	mwIndex* ir,* jc;
 	
 	/* initialize header info */
 	
 	/* these are updated when the data is copied over */
 	hdr.data_offsets.dims = SIZE_MAX;
-	hdr.data_offsets.pr = SIZE_MAX;
-	hdr.data_offsets.pi = SIZE_MAX;
+	hdr.data_offsets.data = SIZE_MAX;
+	hdr.data_offsets.imag_data = SIZE_MAX;
 	hdr.data_offsets.ir = SIZE_MAX;
 	hdr.data_offsets.jc = SIZE_MAX;
 	hdr.data_offsets.field_str = SIZE_MAX;
@@ -720,32 +724,45 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 			/* note: in this case hdr->is_empty means the sparse is 0x0
 			 *  also note that nzmax is still 1 */
 			
+			/* copy data */
+#ifdef MX_HAS_INTERLEAVED_COMPLEX
+			cpy_sz = (1 + mxIsComplex(in_var))*(hdr.nzmax)*(hdr.elem_size);
 			
-			/* copy pr */
+			/* add the size of the mxMalloc signature */
+			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+			hdr.data_offsets.data = cml_off, data = shm_ptr;
+			
+			/* copy over the data with the signature */
+			MemCpyMex(data, mxGetData(in_var), cpy_sz);
+			
+			shift = PadToAlign(cpy_sz);
+			cml_off += shift, shm_ptr += shift;
+#else
 			cpy_sz = (hdr.nzmax)*(hdr.elem_size);
 			
 			/* add the size of the mxMalloc signature */
 			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
-			hdr.data_offsets.pr = cml_off, pr = shm_ptr;
+			hdr.data_offsets.data = cml_off, data = shm_ptr;
 			
 			/* copy over the data with the signature */
-			MemCpyMex(pr, mxGetData(in_var), cpy_sz);
+			MemCpyMex(data, mxGetData(in_var), cpy_sz);
 			
 			shift = PadToAlign(cpy_sz);
 			cml_off += shift, shm_ptr += shift;
 			
-			/* copy pi */
+			/* copy imag_data */
 			if(hdr.complexity == mxCOMPLEX)
 			{
 				cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
-				hdr.data_offsets.pi = cml_off, pi = shm_ptr;
+				hdr.data_offsets.imag_data = cml_off, imag_data = shm_ptr;
 				
-				MemCpyMex(pi, mxGetImagData(in_var), cpy_sz);
+				MemCpyMex(imag_data, mxGetImagData(in_var), cpy_sz);
 				
 				shift = PadToAlign(cpy_sz);
 				cml_off += shift, shm_ptr += shift;
 				
 			}
+#endif
 			
 			/* copy ir */
 			cpy_sz = hdr.nzmax*sizeof(mwIndex);
@@ -770,26 +787,47 @@ size_t shmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 		}
 		else
 		{
-			/* copy pr */
-			cpy_sz = (hdr.num_elems)*(hdr.elem_size);
-			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
-			hdr.data_offsets.pr = cml_off, pr = shm_ptr;
+			/* copy data */
+			if(!hdr.is_empty)
+			{
+#ifdef MX_HAS_INTERLEAVED_COMPLEX
+				cpy_sz = (1 + mxIsComplex(in_var))*(hdr.nzmax)*(hdr.elem_size);
 			
-			MemCpyMex(pr, mxGetData(in_var), cpy_sz);
+			/* add the size of the mxMalloc signature */
+			cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+			hdr.data_offsets.data = cml_off, data = shm_ptr;
+			
+			/* copy over the data with the signature */
+			MemCpyMex(data, mxGetData(in_var), cpy_sz);
 			
 			shift = PadToAlign(cpy_sz);
 			cml_off += shift, shm_ptr += shift;
-			
-			/* copy complex data as well */
-			if(hdr.complexity == mxCOMPLEX)
-			{
-				cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
-				hdr.data_offsets.pi = cml_off, pi = shm_ptr;
+#else
+				cpy_sz = (hdr.nzmax)*(hdr.elem_size);
 				
-				MemCpyMex(pi, mxGetImagData(in_var), cpy_sz);
+				/* add the size of the mxMalloc signature */
+				cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+				hdr.data_offsets.data = cml_off, data = shm_ptr;
+				
+				/* copy over the data with the signature */
+				MemCpyMex(data, mxGetData(in_var), cpy_sz);
 				
 				shift = PadToAlign(cpy_sz);
-				cml_off += shift;/*, shm_ptr += shift;*/
+				cml_off += shift, shm_ptr += shift;
+				
+				/* copy imag_data */
+				if(hdr.complexity == mxCOMPLEX)
+				{
+					cml_off += padded_mxmalloc_sig_len, shm_ptr += padded_mxmalloc_sig_len;
+					hdr.data_offsets.imag_data = cml_off, imag_data = shm_ptr;
+					
+					MemCpyMex(imag_data, mxGetImagData(in_var), cpy_sz);
+					
+					shift = PadToAlign(cpy_sz);
+					cml_off += shift, shm_ptr += shift;
+					
+				}
+#endif
 			}
 		}
 		
@@ -829,7 +867,7 @@ size_t ShmFetch_(byte_t* shm_anchor, mxArray** ret_var)
 	
 	/* retrieve the data */
 	hdr = (Header_t*)shm_anchor;
-	ShmData_t data_ptrs = LocateDataPointers(hdr, shm_anchor);
+	SharedDataPointers_t data_ptrs = LocateDataPointers(hdr, shm_anchor);
 	
 	/* Structure case */
 	if(hdr->classid == mxSTRUCT_CLASS)
@@ -888,72 +926,42 @@ size_t ShmFetch_(byte_t* shm_anchor, mxArray** ret_var)
 			
 			if(!hdr->is_empty)
 			{
-				/* set the real and imaginary data */
+				/* free the real and imaginary data */
 				mxFree(mxGetData(*ret_var));
-				mxSetData(*ret_var, data_ptrs.pr);
 				if(hdr->complexity)
 				{
 					mxFree(mxGetImagData(*ret_var));
-					mxSetImagData(*ret_var, data_ptrs.pi);
 				}
 				
-				/* set the pointers relating to sparse */
+				/* free the pointers relating to sparse */
 				mxFree(mxGetIr(*ret_var));
-				mxSetIr(*ret_var, data_ptrs.ir);
-				
 				mxFree(mxGetJc(*ret_var));
-				mxSetJc(*ret_var, data_ptrs.jc);
 			}
 			
-			mxSetDimensions(*ret_var, data_ptrs.dims, hdr->num_dims);
 			mxSetNzmax(*ret_var, hdr->nzmax);
 			
 		}
 		else
 		{
 			
-			if(hdr->is_empty)
+			if(hdr->is_numeric)
 			{
-				if(hdr->is_numeric)
-				{
-					*ret_var = mxCreateNumericArray(hdr->num_dims, data_ptrs.dims, hdr->classid, hdr->complexity);
-				}
-				else if(hdr->classid == mxLOGICAL_CLASS)
-				{
-					*ret_var = mxCreateLogicalArray(hdr->num_dims, data_ptrs.dims);
-				}
-				else
-				{
-					*ret_var = mxCreateCharArray(hdr->num_dims, data_ptrs.dims);
-				}
+				*ret_var = mxCreateNumericArray(0, NULL, hdr->classid, hdr->complexity);
+			}
+			else if(hdr->classid == mxLOGICAL_CLASS)
+			{
+				*ret_var = mxCreateLogicalArray(0, NULL);
 			}
 			else
 			{
-				if(hdr->is_numeric)
-				{
-					*ret_var = mxCreateNumericArray(0, NULL, hdr->classid, hdr->complexity);
-				}
-				else if(hdr->classid == mxLOGICAL_CLASS)
-				{
-					*ret_var = mxCreateLogicalArray(0, NULL);
-				}
-				else
-				{
-					*ret_var = mxCreateCharArray(0, NULL);
-				}
-				
-				/* set the real and imaginary data */
-				mxSetData(*ret_var, data_ptrs.pr);
-				if(hdr->complexity)
-				{
-					mxSetImagData(*ret_var, data_ptrs.pi);
-				}
-				
-				mxSetDimensions(*ret_var, data_ptrs.dims, hdr->num_dims);
-				
+				*ret_var = mxCreateCharArray(0, NULL);
 			}
 			
 		}
+		
+		/* set all data */
+		SetDataPointers(*ret_var, &data_ptrs);
+		mxSetDimensions(*ret_var, data_ptrs.dims, hdr->num_dims);
 		
 	}
 	return hdr->obj_sz;
@@ -975,9 +983,8 @@ void ShmDetach(mxArray* ret_var)
 {
 	size_t num_dims = 0, idx, num_elems;
 	int field_num, num_fields;
-	mwSize null_dims[] = {0, 0};
-	void* new_pr = NULL, * new_pi = NULL;
-	void* new_ir = NULL, * new_jc = NULL;
+	mwSize new_dims[] = {0, 0};
+	SharedDataPointers_t new_data_ptrs = {NULL};
 	mwSize nzmax = 0;
 	
 	/* restore matlab  memory */
@@ -1025,54 +1032,39 @@ void ShmDetach(mxArray* ret_var)
 			}
 			
 			/* allocate 1 element */
-			new_pr = mxCalloc(nzmax, mxGetElementSize(ret_var));
-			mxSetData(ret_var, new_pr);
+#ifdef MX_HAS_INTERVLEAVED_COMPLEX
+			new_data_ptrs.data = mxCalloc((1 + mxIsComplex(ret_var))*nzmax, mxGetElementSize(ret_var));
+#else
+			new_data_ptrs.data = mxCalloc(nzmax, mxGetElementSize(ret_var));
 			if(mxIsComplex(ret_var))
 			{
-				new_pi = mxCalloc(nzmax, mxGetElementSize(ret_var));
-				mxSetImagData(ret_var, new_pi);
+				new_data_ptrs.imag_data = mxCalloc(nzmax, mxGetElementSize(ret_var));
 			}
+#endif
 			
-			new_ir = mxCalloc(nzmax, sizeof(mwIndex));
-			mxSetIr(ret_var, new_ir);
+			new_data_ptrs.ir = mxCalloc(nzmax, sizeof(mwIndex));
+			new_data_ptrs.jc = mxCalloc(new_dims[1] + 1, sizeof(mwIndex));
 			
-			new_jc = mxCalloc(null_dims[1] + 1, sizeof(mwIndex));
-			mxSetJc(ret_var, new_jc);
-			
-			mxSetDimensions(ret_var, null_dims, num_dims);
 			mxSetNzmax(ret_var, nzmax);
 			
 		}
-		else
-		{
-			mxSetData(ret_var, new_pr);
-			if(mxIsComplex(ret_var))
-			{
-				mxSetImagData(ret_var, new_pi);
-			}
-			
-			mxSetDimensions(ret_var, null_dims, num_dims);
-			
-		}
+		
+		SetDataPointers(ret_var, &new_data_ptrs);
+		mxSetDimensions(ret_var, new_dims, num_dims);
 		
 		/** HACK **/
 		/* reset all the crosslinks so nothing in MATLAB is pointing to shared data (which will be gone soon) */
 		mxArray* link;
 		for(link = ((mxArrayStruct*)ret_var)->CrossLink; link != NULL && link != ret_var; link = ((mxArrayStruct*)link)->CrossLink)
 		{
-			mxSetDimensions(link, null_dims, num_dims);
-			mxSetData(link, new_pr);
-			if(mxIsComplex(link))
-			{
-				mxSetImagData(link, new_pi);
-			}
 			
 			if(mxIsSparse(link))
 			{
 				mxSetNzmax(ret_var, nzmax);
-				mxSetIr(link, new_ir);
-				mxSetJc(link, new_jc);
 			}
+			
+			SetDataPointers(link, &new_data_ptrs);
+			mxSetDimensions(link, new_dims, num_dims);
 			
 		}
 		
@@ -1103,7 +1095,7 @@ size_t ShmRewrite_(byte_t* shm_anchor, const mxArray* in_var, mxArray* rewrite_v
 	
 	/* retrieve the data */
 	hdr = (Header_t*)shm_anchor;
-	ShmData_t data_ptrs = LocateDataPointers(hdr, shm_anchor);
+	SharedDataPointers_t data_ptrs = LocateDataPointers(hdr, shm_anchor);
 	
 	const mwSize* dims = mxGetDimensions(in_var);
 	mwSize num_dims = mxGetNumberOfDimensions(in_var);
@@ -1144,30 +1136,24 @@ size_t ShmRewrite_(byte_t* shm_anchor, const mxArray* in_var, mxArray* rewrite_v
 		/* if sparse get a list of the elements */
 		if(hdr->is_sparse)
 		{
-			/* rewrite real data */
-			memcpy(data_ptrs.pr, mxGetData(in_var), (hdr->nzmax)*(hdr->elem_size));
-			
-			/* if complex get a pointer to the complex data */
-			if(hdr->complexity == mxCOMPLEX)
-			{
-				memcpy(data_ptrs.pi, mxGetImagData(in_var), (hdr->nzmax)*(hdr->elem_size));
-			}
-			
 			memcpy(data_ptrs.ir, mxGetIr(in_var), (hdr->nzmax)*sizeof(mwIndex));
 			memcpy(data_ptrs.jc, mxGetJc(in_var), ((data_ptrs.dims)[1] + 1)*sizeof(mwIndex));
 		}
-		else
-		{
-			/* rewrite real data */
-			memcpy(data_ptrs.pr, mxGetData(in_var), (hdr->num_elems)*(hdr->elem_size));
-			
-			/* if complex get a pointer to the complex data */
-			if(hdr->complexity == mxCOMPLEX)
-			{
-				memcpy(data_ptrs.pi, mxGetImagData(in_var), (hdr->num_elems)*(hdr->elem_size));
-			}
-		}
+
+#ifdef MX_HAS_INTERLEAVED_COMPLEX
+		/* rewrite all data */
+		memcpy(data_ptrs.data, mxGetData(in_var), (1 + mxIsComplex(in_var))*(hdr->num_elems)*(hdr->elem_size));
+#else
+		/* rewrite real data */
+		memcpy(data_ptrs.data, mxGetData(in_var), (hdr->num_elems)*(hdr->elem_size));
 		
+		/* if complex get a pointer to the complex data */
+		if(hdr->complexity == mxCOMPLEX)
+		{
+			memcpy(data_ptrs.imag_data, mxGetImagData(in_var), (hdr->num_elems)*(hdr->elem_size));
+		}
+#endif
+	
 	}
 	
 	return hdr->obj_sz;
@@ -1308,7 +1294,7 @@ mxLogical ShmCompareContent_(byte_t* shm_anchor, const mxArray* comp_var)
 	
 	/* for working with payload ... */
 	Header_t* hdr;
-	ShmData_t data_ptrs;
+	SharedDataPointers_t data_ptrs;
 	
 	/* for structures */
 	int field_num;                /* current field */
@@ -1382,7 +1368,7 @@ mxLogical ShmCompareContent_(byte_t* shm_anchor, const mxArray* comp_var)
 		/* this is the address of the first data */
 		
 		//these should point to the same location
-		if(data_ptrs.pr != mxGetData(comp_var))
+		if(data_ptrs.data != mxGetData(comp_var))
 		{
 			return FALSE;
 		}
@@ -1397,7 +1383,7 @@ mxLogical ShmCompareContent_(byte_t* shm_anchor, const mxArray* comp_var)
 			
 			
 			//these should point to the same location
-			if(data_ptrs.pi != mxGetImagData(comp_var))
+			if(data_ptrs.imag_data != mxGetImagData(comp_var))
 			{
 				return FALSE;
 			}

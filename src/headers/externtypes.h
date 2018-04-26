@@ -44,8 +44,8 @@ typedef struct
 		size_t* dims;       /* Pointer to dims array for nD > 2 arrays       */
 	} Mdims;
 	size_t N;               /* Product of dims 2:end                         */
-	void* pr;               /* Real Data Pointer (or cell/field elements)    */
-	void* pi;               /* Imag Data Pointer (or field information)      */
+	void* data;               /* Real Data Pointer (or cell/field elements)    */
+	void* imag_data;               /* Imag Data Pointer (or field information)      */
 	union ir_data
 	{
 		mwIndex* ir;        /* Pointer to row values for sparse arrays       */

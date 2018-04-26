@@ -24,9 +24,6 @@ void OnExit(void);
 
 void GetNextFieldName(const char_t** field_str);
 
-/* Pads the size to something that guarantees pointer alignment.			*/
-ShmData_t LocateDataPointers(const Header_t* const hdr, byte_t* const shm_anchor);
-
 void* MemCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz);
 
 size_t PadToAlign(size_t size);
@@ -46,6 +43,8 @@ void ParseParams(int num_params, const mxArray** in);
 void UpdateAll(void);
 
 void RemoveUnusedVariables(VariableList_t* var_list);
+
+void SetDataPointers(mxArray* var, SharedDataPointers_t* data_ptrs);
 
 SegmentInfo_t CreateSegment(size_t seg_sz);
 

@@ -105,16 +105,16 @@ typedef struct
 	struct
 	{
 		size_t dims;
-		size_t pr;
-		size_t pi;
+		size_t data;
+		size_t imag_data;
 		size_t ir;
 		size_t jc;
 		size_t field_str;
 		size_t child_hdrs;          /* offset of array of the offsets of the children*/
 	} data_offsets;               /* these are actually the relative offsets of data in shared memory (needed because memory maps are to virtual pointers) */
 	size_t num_dims;          /* dimensionality of the matrix */
-	size_t elem_size;               /* size of each element in pr and pi */
-	size_t num_elems;          /* length of pr,pi */
+	size_t elem_size;               /* size of each element in data and imag_data */
+	size_t num_elems;          /* length of data,imag_data */
 	size_t nzmax;
 	size_t obj_sz;               /* size of serialized object */
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
@@ -126,16 +126,16 @@ typedef struct
 } Header_t;
 
 /* pointers to the data in virtual memory */
-typedef const struct
+typedef struct
 {
-	mwSize* const dims;				/* pointer to the size array */
-	void* const pr;					/* real data portion */
-	void* const pi;					/* imaginary data portion */
-	mwIndex* const ir;				/* row indexes, for sparse */
-	mwIndex* const jc;				/* cumulative column counts, for sparse */
-	char_t* const field_str;			/* list of a structures fields, each field name will be separated by a null character */
-	size_t* const child_hdrs;           /* array of corresponding children headers */
-} ShmData_t;
+	mwSize* dims;				/* pointer to the size array */
+	void* data;					/* real data portion */
+	void* imag_data;					/* imaginary data portion */
+	mwIndex* ir;				/* row indexes, for sparse */
+	mwIndex* jc;				/* cumulative column counts, for sparse */
+	char_t* field_str;			/* list of a structures fields, each field name will be separated by a null character */
+	size_t* child_hdrs;           /* array of corresponding children headers */
+} SharedDataPointers_t;
 
 typedef struct
 {
@@ -255,6 +255,17 @@ typedef struct
 	size_t num_registered_objs;
 	
 } GlobalInfo_t;
+
+#define LocateDataPointers(hdr, shm_anchor) \
+	(SharedDataPointers_t){\
+		(hdr)->data_offsets.dims == SIZE_MAX? NULL : (mwSize*)((shm_anchor) + (hdr)->data_offsets.dims),                    /* dims */\
+		(hdr)->data_offsets.data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.data,                               /* data */\
+		(hdr)->data_offsets.imag_data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.imag_data,                     /* imag_data */\
+		(hdr)->data_offsets.ir == SIZE_MAX? NULL : (mwIndex*)((shm_anchor) + (hdr)->data_offsets.ir),                       /* ir */\
+		(hdr)->data_offsets.jc == SIZE_MAX? NULL : (mwIndex*)((shm_anchor) + (hdr)->data_offsets.jc),                       /* jc */\
+		(hdr)->data_offsets.field_str == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.field_str,                     /* field_str */\
+		(hdr)->data_offsets.child_hdrs == SIZE_MAX? NULL : (size_t*)((shm_anchor) + (hdr)->data_offsets.child_hdrs)         /* child_hdrs */\
+	};
 
 extern GlobalInfo_t* g_info;
 #define g_var_list g_info->var_list
