@@ -13,10 +13,10 @@
 %
 
 % This is hopefully temporary, but we may need a rewrite in C++ for R2018a
-if(~verLessThan('matlab','9.4'))
-	error(['This function requires MATLAB version R2017b and below to compile. With some work, a new version will' ...
-	'be available for R2018a and above']);
-end
+% if(~verLessThan('matlab','9.4'))
+% 	error(['This function requires MATLAB version R2017b and below to compile. With some work, a new version will' ...
+% 	'be available for R2018a and above']);
+% end
 
 OPTIONS;
 mexmake;

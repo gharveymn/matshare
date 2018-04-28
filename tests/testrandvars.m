@@ -19,6 +19,7 @@ doplot = false;
 docompare = false;
 dokeepall = false;
 dosavestate = false;
+dotimes = false;
 numelems = 0;
 avgmultiplier = 0;
 

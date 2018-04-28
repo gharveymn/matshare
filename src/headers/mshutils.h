@@ -27,7 +27,8 @@ void GetNextFieldName(const char_t** field_str);
 
 void* MemCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz);
 
-size_t PadToAlign(size_t size);
+/* note: must be > 0 */
+#define PadToAlign(size) ((size) + (ALIGN_SHIFT - (((size) - 1) & ALIGN_SHIFT)))
 
 void MakeMxMallocSignature(unsigned char* sig, size_t seg_size);
 

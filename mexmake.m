@@ -53,7 +53,9 @@ try
 		if(verLessThan('matlab','9.4'))
 			mexflags = [mexflags {'-largeArrayDims'}];
 		else
-			mexflags = [mexflags, {'-R2018a'}];
+			warning(['Compiling in compatibility mode; the R2018a MEX api does not support certain functions '...
+				'which are integral to this function'])
+			mexflags = [mexflags, {'-R2017b'}];
 		end
 	else
 		mexflags = [mexflags {'-compatibleArrayDims', '-DMATLAB_32BIT'}];

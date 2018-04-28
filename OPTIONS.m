@@ -5,7 +5,7 @@
 ThreadSafety = true;
 
 %% Specify whether matshare will use a copy-on-write mechanism
-CopyOnWrite = false;
+CopyOnWrite = true;
 
 %% Enables or disables debug mode
 DebugMode = true;

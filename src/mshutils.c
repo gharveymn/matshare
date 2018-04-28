@@ -20,7 +20,7 @@ static const unsigned char c_MXMALLOC_SIGNATURE[MXMALLOC_SIG_LEN] = {16, 0, 0, 0
 
 void* MemCpyMex(byte_t* dest, byte_t* orig, size_t cpy_sz)
 {
-	unsigned char mxmalloc_sig[MXMALLOC_SIG_LEN];
+	uchar_t mxmalloc_sig[MXMALLOC_SIG_LEN];
 	MakeMxMallocSignature(mxmalloc_sig, cpy_sz);
 	
 	memcpy(dest - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
@@ -193,15 +193,7 @@ void OnExit(void)
 	
 }
 
-
-size_t PadToAlign(size_t size)
-{
-	/* note: (x % 2^n) == (x & (2^n - 1)) */
-	return size + ALIGN_SIZE - (size & (ALIGN_SIZE - 1));
-}
-
-
-void MakeMxMallocSignature(unsigned char* sig, size_t seg_size)
+void MakeMxMallocSignature(uchar_t* sig, size_t seg_size)
 {
 	/*
 	 * MXMALLOC SIGNATURE INFO:
@@ -228,13 +220,13 @@ void MakeMxMallocSignature(unsigned char* sig, size_t seg_size)
 	/* note: (x % 2^n) == (x & (2^n - 1)) */
 	if(seg_size > 0)
 	{
-		sig[0] = (unsigned char)((((seg_size + 0x0F)/multi) & (multi - 1))*multi);
+		sig[0] = (uchar_t)((((seg_size + 0x0F)/multi) & (multi - 1))*multi);
 		
 		/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
 		for(i = 1; i < 4; i++)
 		{
 			multi = (size_t)1u << (1u << (2u + i));
-			sig[i] = (unsigned char)(((seg_size + 0x0F)/multi) & (multi - 1));
+			sig[i] = (uchar_t)(((seg_size + 0x0F)/multi) & (multi - 1));
 		}
 	}
 }
@@ -491,7 +483,7 @@ void ParseParams(int num_params, const mxArray** in)
 			{
 				s_info->sharetype = msh_SHARETYPE_COPY;
 			}
-			if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
+			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
 				s_info->sharetype = msh_SHARETYPE_OVERWRITE;
 			}

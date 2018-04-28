@@ -80,8 +80,9 @@ extern int fchmod(int fildes, mode_t mode);
 #endif
 
 /* these are used for recording structure field names */
-#define ALIGN_SIZE (size_t)0x20   /* The pointer alignment size; ensure this is a multiple of 32 for AVX alignment */
-#define MXMALLOC_SIG_LEN 16		/* length of the mxMalloc signature */
+#define ALIGN_SIZE (size_t)0x20u  /* The pointer alignment size; ensure this is a multiple of 32 for AVX alignment */
+#define ALIGN_SHIFT (ALIGN_SIZE-1)
+#define MXMALLOC_SIG_LEN 0x10u	/* length of the mxMalloc signature */
 
 typedef char char_t;			/* characters */
 typedef signed char schar_t;		/* signed 8 bits */
@@ -117,43 +118,69 @@ typedef enum
 
 
 /* captures fundamentals of the mxArray */
-/* In the shared memory the storage order is [header, size array, field_names, real dat, image data, sparse index r, sparse index c]  */
+/* A variable shall be packed as so: [{Header_t, dims}, (child offsets, field names, data, imag_data, ir, jc)] where {} is required, () is optional  */
 typedef struct
 {
 	struct
 	{
-		size_t dims;
 		size_t data;
+#ifndef MX_HAS_INTERLEAVED_COMPLEX
 		size_t imag_data;
-		size_t ir;
-		size_t jc;
-		size_t field_str;
-		size_t child_hdrs;          /* offset of array of the offsets of the children*/
+#endif
+		union
+		{
+			size_t ir;
+			size_t field_str;
+		};
+		union
+		{
+			size_t jc;
+			size_t child_offs; /* offset of array of the offsets of the children*/
+		};
 	} data_offsets;               /* these are actually the relative offsets of data in shared memory (needed because memory maps are to virtual pointers) */
 	size_t num_dims;          /* dimensionality of the matrix */
 	size_t elem_size;               /* size of each element in data and imag_data */
-	size_t num_elems;          /* length of data,imag_data */
+	size_t num_elems;          /* length of data, imag_data */
 	size_t nzmax;
-	size_t obj_sz;               /* size of serialized object */
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
 	mxClassID classid;       /* matlab class id */
 	mxComplexity complexity;
 	bool_t is_sparse;
 	bool_t is_numeric;
-	bool_t is_empty;
 } Header_t;
+
+#define MshGetDimensions(offset) ((offset) + sizeof(Header_t))
+#define MshIsEmpty(hdr) ((hdr).num_elems == 0)
+
+#define LocateDataPointers(hdr, shm_anchor) \
+     (SharedDataPointers_t){\
+		(mwSize*)MshGetDimensions(shm_anchor),       /* dims */\
+          (hdr)->data_offsets.data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.data,               /* data */\
+          (hdr)->data_offsets.imag_data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.imag_data,     /* imag_data */\
+          (hdr)->data_offsets.ir == SIZE_MAX? NULL : (void*)((shm_anchor) + (hdr)->data_offsets.ir),          /* ir/field_str */\
+          (hdr)->data_offsets.jc == SIZE_MAX? NULL : (void*)((shm_anchor) + (hdr)->data_offsets.jc),          /* jc/child_hdrs */\
+     };
 
 /* pointers to the data in virtual memory */
 typedef struct
 {
-	mwSize* dims;                    /* pointer to the size array */
-	void* data;                         /* real data portion */
-	void* imag_data;                         /* imaginary data portion */
-	mwIndex* ir;                    /* row indexes, for sparse */
-	mwIndex* jc;                    /* cumulative column counts, for sparse */
-	char_t* field_str;               /* list of a structures fields, each field name will be separated by a null character */
-	size_t* child_hdrs;           /* array of corresponding children headers */
+	mwSize* dims;                   /* pointer to the dimensions array */
+	void* data;                     /* real data portion */
+#ifndef MX_HAS_INTERLEAVED_COMPLEX
+	void* imag_data;                /* imaginary data portion */
+#endif
+	union
+	{
+		mwIndex* ir;                 /* row indexes, for sparse */
+		char_t* field_str;          /* cumulative column counts, for sparse */
+	};
+	union
+	{
+		mwIndex* jc;                 /* list of a structures fields, each field name will be separated by a null character */
+		size_t* child_hdrs;         /* array of corresponding children headers */
+	};
 } SharedDataPointers_t;
+
 
 typedef struct
 {
@@ -274,16 +301,6 @@ typedef struct
 	
 } GlobalInfo_t;
 
-#define LocateDataPointers(hdr, shm_anchor) \
-     (SharedDataPointers_t){\
-          (hdr)->data_offsets.dims == SIZE_MAX? NULL : (mwSize*)((shm_anchor) + (hdr)->data_offsets.dims),                    /* dims */\
-          (hdr)->data_offsets.data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.data,                               /* data */\
-          (hdr)->data_offsets.imag_data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.imag_data,                     /* imag_data */\
-          (hdr)->data_offsets.ir == SIZE_MAX? NULL : (mwIndex*)((shm_anchor) + (hdr)->data_offsets.ir),                       /* ir */\
-          (hdr)->data_offsets.jc == SIZE_MAX? NULL : (mwIndex*)((shm_anchor) + (hdr)->data_offsets.jc),                       /* jc */\
-          (hdr)->data_offsets.field_str == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.field_str,                     /* field_str */\
-          (hdr)->data_offsets.child_hdrs == SIZE_MAX? NULL : (size_t*)((shm_anchor) + (hdr)->data_offsets.child_hdrs)         /* child_hdrs */\
-     };
 
 extern GlobalInfo_t* g_info;
 #define g_var_list g_info->var_list

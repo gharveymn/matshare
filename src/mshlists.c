@@ -511,7 +511,15 @@ void DestroySegmentNode(SegmentNode_t* seg_node)
 			DestroyVariableNode(seg_node->var_node);
 		}
 		
-		DestroySegment(seg_node);
+		if(seg_node->seg_info.s_ptr->is_invalid)
+		{
+			CloseSegment(seg_node);
+		}
+		else
+		{
+			DestroySegment(seg_node);
+		}
+		
 		RemoveSegmentNode(seg_node->parent_seg_list, seg_node);
 		mxFree(seg_node);
 	}
@@ -672,7 +680,6 @@ void DestroySegmentList(SegmentList_t* seg_list)
 		while(curr_seg_node != NULL)
 		{
 			next_seg_node = curr_seg_node->next;
-			curr_seg_node->seg_info.s_ptr->is_invalid = TRUE;
 			DestroySegmentNode(curr_seg_node);
 			curr_seg_node = next_seg_node;
 		}
