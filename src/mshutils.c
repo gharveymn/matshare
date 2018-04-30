@@ -62,7 +62,7 @@ void GetNextFieldName(const char_t** field_str)
 }
 
 
-void OnExit(void)
+void MshExit(void)
 {
 	
 	if(g_info->flags.is_proc_lock_init)
@@ -370,6 +370,12 @@ void ParseParams(int num_params, const mxArray** in)
 	size_t i, j, ps_len, vs_len;
 	char param_str[MSH_MAX_NAME_LEN] = {0}, val_str[MSH_MAX_NAME_LEN] = {0}, param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
 	const mxArray* param, * val;
+	
+	if(num_params % 2 != 0)
+	{
+		ReadErrorMex("InvalNumArgsError", "The number of parameters input must be a multiple of two.");
+	}
+	
 	for(i = 0; i < num_params/2; i++)
 	{
 		param = in[2*i];

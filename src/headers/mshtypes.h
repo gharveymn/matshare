@@ -151,15 +151,6 @@ typedef struct
 #define MshIsComplex(hdr_ptr) ((hdr_ptr)->data_offsets.imag_data != SIZE_MAX)
 #define MshGetComplexity(hdr_ptr) MshIsComplex(hdr_ptr)? mxCOMPLEX : mxREAL
 
-#define LocateDataPointers(hdr, shm_anchor) \
-     (SharedDataPointers_t){\
-		(mwSize*)MshGetDimensions(shm_anchor),       /* dims */\
-          (hdr)->data_offsets.data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.data,               /* data */\
-          (hdr)->data_offsets.imag_data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.imag_data,     /* imag_data */\
-          (hdr)->data_offsets.ir == SIZE_MAX? NULL : (void*)((shm_anchor) + (hdr)->data_offsets.ir),          /* ir/field_str */\
-          (hdr)->data_offsets.jc == SIZE_MAX? NULL : (void*)((shm_anchor) + (hdr)->data_offsets.jc),          /* jc/child_hdrs */\
-     };
-
 /* pointers to the data in virtual memory */
 typedef struct
 {

@@ -22,7 +22,7 @@
 /*field names of a structure */
 size_t GetFieldNamesSize(const mxArray* mxStruct);
 
-void OnExit(void);
+void MshExit(void);
 
 void GetNextFieldName(const char_t** field_str);
 

@@ -1,6 +1,5 @@
 #include "headers/matshare_.h"
 
-
 GlobalInfo_t* g_info = NULL;
 
 /* ------------------------------------------------------------------------- */
@@ -9,55 +8,46 @@ GlobalInfo_t* g_info = NULL;
 /* ------------------------------------------------------------------------- */
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
-
-//	mexPrintf("%s\n", mexIsLocked()? "MEX is locked": "MEX is unlocked" );
+	/* number of inputs other than the msh_directive */
+	int num_in_vars = nrhs - 1;
 	
-	int num_params;
+	/* inputs */
+	const mxArray* in_directive = prhs[0];
+	const mxArray** in_vars = prhs + 1;
 	
-	/* For inputs */
-	const mxArray* in_directive;               /* Directive {clone, attach, detach, free} */
-	
-	/* For storing inputs */
-	mshdirective_t directive;
+	/* resultant matshare directive */
+	mshdirective_t msh_directive;
 	
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		ReadErrorMex("NotEnoughInputsError", "Minimum input arguments missing; must supply a directive.");
+		ReadErrorMex("NotEnoughInputsError", "Minimum input arguments missing; must supply a msh_directive.");
 	}
 	
-	/* assign inputs */
-	in_directive = prhs[0];
-	
-	/* get the directive */
-	directive = ParseDirective(in_directive);
+	/* get the msh_directive */
+	msh_directive = ParseDirective(in_directive);
 	
 	InitializeMatshare();
 	
-	if(directive != msh_DETACH && directive != msh_INIT && Precheck() != TRUE)
+	if(msh_directive != msh_DETACH && Precheck() != TRUE)
 	{
 		ReadErrorMex("NotInitializedError", "At least one of the needed shared memory segments has not been initialized. Cannot continue.");
 	}
 	
 	
-	switch(directive)
+	switch(msh_directive)
 	{
 		case msh_SHARE:
-			/********************/
-			/*	Share case	*/
-			/********************/
+			
 			AcquireProcessLock();
 			{
-				MshShare(nlhs, plhs, nrhs - 1, prhs + 1);
+				MshShare(nlhs, plhs, num_in_vars, in_vars);
 			}
 			ReleaseProcessLock();
 			
 			break;
 		
 		case msh_FETCH:
-			/********************/
-			/*	Fetch case	*/
-			/********************/
 			
 			AcquireProcessLock();
 			{
@@ -70,40 +60,33 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		case msh_OBJ_DEREGISTER:
 			/* deregister an object tracking this function */
 			g_info->num_registered_objs -= 1;
-			/* fall through to check if we should clear everything */
-		case msh_DETACH:
-			/********************/
-			/*	Dettach case	*/
-			/********************/
-			
-			/* this only actually frees if it is the last object using the function in the current process */
 			if(g_info->num_registered_objs == 0)
 			{
-				OnExit();
+				/* if we deregistered the last object the remove variables that aren't being used elsewhere in this process */
+				RemoveUnusedVariables(&g_var_list);
 			}
+			
+			break;
+		case msh_DETACH:
+			
+			MshExit();
 			
 			break;
 		
 		case msh_PARAM:
-			/* set parameters for matshare to use */
 			
-			num_params = nrhs - 1;
-			if(num_params%2 != 0)
-			{
-				ReadErrorMex("InvalNumArgsError", "The number of parameters input must be a multiple of two.");
-			}
-			
-			ParseParams(num_params, prhs + 1);
+			ParseParams(num_in_vars, in_vars);
 			
 			break;
 		
 		case msh_DEEPCOPY:
-			//plhs[0] = mxDuplicateArray(g_var_list_front->var);
+			/* plhs[0] = mxDuplicateArray(g_var_list_front->var); */
 			break;
 		case msh_DEBUG:
 			/* STUB: maybe print debug information at some point */
 			break;
 		case msh_OBJ_REGISTER:
+			
 			/* tell matshare to register a new object */
 			g_info->num_registered_objs += 1;
 			break;
@@ -115,13 +98,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			AcquireProcessLock();
 			{
 				UpdateSharedSegments();
-				MshClear(nrhs - 1, prhs + 1);
+				MshClear(num_in_vars, in_vars);
 			}
 			ReleaseProcessLock();
 			
 			break;
 		default:
-			ReadErrorMex("UnknownDirectiveError", "Unrecognized directive.");
+			ReadErrorMex("UnknownDirectiveError", "Unrecognized msh_directive.");
 			break;
 	}
 	

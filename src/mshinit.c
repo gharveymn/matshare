@@ -53,7 +53,7 @@ void ProcStartup(void)
 	g_info->this_pid = getpid();
 #endif
 	
-	mexAtExit(OnExit);
+	mexAtExit(MshExit);
 	
 }
 

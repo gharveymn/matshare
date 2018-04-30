@@ -13,6 +13,16 @@
 /* adds the total size of the aligned data */
 #define AddDataSize(obj_sz, data_sz) (obj_sz) += GetDataShift(obj_sz) + (data_sz);
 
+/* creates a struct for holding the pointers to shared data */
+#define LocateDataPointers(hdr, shm_anchor) \
+     (SharedDataPointers_t){\
+		(mwSize*)MshGetDimensions(shm_anchor),       /* dims */\
+          (hdr)->data_offsets.data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.data,               /* data */\
+          (hdr)->data_offsets.imag_data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.imag_data,     /* imag_data */\
+          (hdr)->data_offsets.ir == SIZE_MAX? NULL : (void*)((shm_anchor) + (hdr)->data_offsets.ir),          /* ir/field_str */\
+          (hdr)->data_offsets.jc == SIZE_MAX? NULL : (void*)((shm_anchor) + (hdr)->data_offsets.jc),          /* jc/child_hdrs */\
+     };
+
 typedef struct
 {
 	size_t curr_off;
