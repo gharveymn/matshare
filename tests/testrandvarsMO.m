@@ -3,7 +3,10 @@ numtests = 1;
 numsamples = 100000;
 lents = 0;
 
+clearstridemax = 15;
 clearstride = 5;
+
+mshclearstridemax = 100;
 mshclearstride = 50;
 
 maxDepth = 2;
@@ -25,6 +28,8 @@ dosavestate = false;
 numelems = 0;
 avgmultiplier = 0;
 
+times = zeros(numsamples,1);
+
 savepath = fullfile(fileparts(mfilename('fullpath')), '..', 'res','states',currtime);
 if(dosavestate)
 	mkdirifnotexist(savepath)
@@ -45,6 +50,8 @@ for j = 1:numtests
 			end
 			save(fullfile(savepath, 'stateonesh.mat'));
 		end
+		
+		tic;
 		if(dokeepall)
 			eval(['mshshare(ts' num2str(i) '1);']);
 		else
@@ -52,6 +59,7 @@ for j = 1:numtests
 		end
 		
 		[x,y,z] = mshfetch;
+		times(i) = toc;
 		
 		if(dosavestate)
 			if(i ~= 1)
@@ -76,17 +84,20 @@ for j = 1:numtests
 			lents = numel(timestr);
 		end
 		
-		if(mod(i,clearstride)==0)
+		if(mod(i,clearstride) == 0)
 			clear x y z
+			clearstride = randi(clearstridemax);
 		end
 		
-		if(mod(i,mshclearstride)==0)
+		if(mod(i,mshclearstride) == 0)
 			mshclear
+			mshclearstide = randi(mshclearstridemax);
 		end
 		
 		
 	end
 end
 
+plot(times);
 
 fprintf('\n');

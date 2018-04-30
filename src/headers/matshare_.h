@@ -5,13 +5,28 @@
 #include "matlabutils.h"
 #include "mshutils.h"
 #include "mshlists.h"
-#include "init.h"
+#include "mshinit.h"
+
+/* finds the shift needed to add a mxMalloc signature and have data 32 byte aligned */
+#define GetDataShift(obj_sz) PadToAlign((obj_sz) + MXMALLOC_SIG_LEN) - (obj_sz)
+
+/* adds the total size of the aligned data */
+#define AddDataSize(obj_sz, data_sz) (obj_sz) += GetDataShift(obj_sz) + (data_sz);
+
+typedef struct
+{
+	size_t curr_off;
+	byte_t* ptr;
+} SharedMemoryTracker_t;
+#define MemoryShift(shm_tracker, shift) (shm_tracker).curr_off += (shift), (shm_tracker).ptr += (shift)
+
+#define GetChildHeader(shm_anchor, child_hdr_offs, i) ((shm_anchor) + (child_hdr_offs)[(i)])
 
 void MshFetch(int nlhs, mxArray** plhs);
 
-void MshShare(int nlhs, mxArray** plhs, const mxArray* in_var);
+void MshShare(int nlhs, mxArray** plhs, int num_vars, const mxArray* in_vars[]);
 
-void UpdateSharedSegments(void);
+void MshClear(int num_inputs, const mxArray* in_vars[]);
 
 void ShmFetch(byte_t* shm, mxArray** ret_var);
 

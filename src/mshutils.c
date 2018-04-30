@@ -70,12 +70,10 @@ void OnExit(void)
 		AcquireProcessLock();
 	}
 	
-	if(g_info->shm_info_seg.is_mapped && s_info->sharetype == msh_SHARETYPE_COPY)
+	if(g_info->shm_info_seg.is_mapped)
 	{
 		UpdateSharedSegments();
 	}
-	
-	CleanVariableList(&g_var_list);
 	
 	CleanSegmentList(&g_seg_list);
 
@@ -95,10 +93,6 @@ void OnExit(void)
 		
 		if(UnmapViewOfFile(g_info->shm_info_seg.s_ptr) == 0)
 		{
-			if(g_info->flags.is_proc_lock_init)
-			{
-				ReleaseProcessLock();
-			}
 			ReadErrorMex("UnmapFileError", "Error unmapping the update file (Error Number %u)", GetLastError());
 		}
 		g_info->shm_info_seg.is_mapped = FALSE;
@@ -108,10 +102,6 @@ void OnExit(void)
 	{
 		if(CloseHandle(g_info->shm_info_seg.handle) == 0)
 		{
-			if(g_info->flags.is_proc_lock_init)
-			{
-				ReleaseProcessLock();
-			}
 			ReadErrorMex("CloseHandleError", "Error closing the update file handle (Error Number %u)", GetLastError());
 		}
 		g_info->shm_info_seg.is_init = FALSE;
@@ -559,10 +549,7 @@ void SetDataPointers(mxArray* var, SharedDataPointers_t* data_ptrs)
 {
 	
 	mxSetData(var, data_ptrs->data);
-
-#ifndef MX_HAS_INTERLEAVED_COMPLEX
 	mxSetImagData(var, data_ptrs->imag_data);
-#endif
 	
 	if(mxIsSparse(var))
 	{

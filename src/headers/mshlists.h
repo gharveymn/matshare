@@ -34,4 +34,6 @@ void DestroySegmentList(SegmentList_t* seg_list);
 
 void CloseSegmentNode(SegmentNode_t* seg_node);
 
+void UpdateSharedSegments(void);
+
 #endif //MATSHARE_MSHLISTS_H

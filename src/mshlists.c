@@ -39,7 +39,6 @@ SegmentInfo_t CreateSegment(size_t seg_sz)
 		err = GetLastError();
 		if(temp_handle == NULL)
 		{
-			ReleaseProcessLock();
 			ReadErrorMex("CreateFileError", "Error creating the file mapping (Error Number %u).", err);
 		}
 		else if(err == ERROR_ALREADY_EXISTS)
@@ -47,7 +46,6 @@ SegmentInfo_t CreateSegment(size_t seg_sz)
 			if(CloseHandle(temp_handle) == 0)
 			{
 				err = GetLastError();
-				ReleaseProcessLock();
 				ReadErrorMex("CloseHandleError", "Error closing the file handle (Error Number %u).", err);
 			}
 		}
@@ -59,7 +57,6 @@ SegmentInfo_t CreateSegment(size_t seg_sz)
 	if(seg_info.s_ptr == NULL)
 	{
 		err = GetLastError();
-		ReleaseProcessLock();
 		ReadErrorMex("MapDataSegError", "Could not map the data memory segment (Error number %u)", err);
 	}
 	seg_info.is_mapped = TRUE;
@@ -179,7 +176,6 @@ SegmentInfo_t OpenSegment(seg_num_t seg_num)
 	if(seg_info.handle == NULL)
 	{
 		err = GetLastError();
-		ReleaseProcessLock();
 		ReadErrorMex("OpenFileError", "Error opening the file mapping (Error Number %u)", err);
 	}
 	seg_info.is_init = TRUE;
@@ -190,7 +186,6 @@ SegmentInfo_t OpenSegment(seg_num_t seg_num)
 	if(temp_map == NULL)
 	{
 		err = GetLastError();
-		ReleaseProcessLock();
 		ReadErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
 	}
 	else
@@ -203,7 +198,6 @@ SegmentInfo_t OpenSegment(seg_num_t seg_num)
 	if(UnmapViewOfFile(temp_map) == 0)
 	{
 		err = GetLastError();
-		ReleaseProcessLock();
 		ReadErrorMex("UnmapFileError", "Error unmapping the file (Error Number %u)", err);
 	}
 	
@@ -212,7 +206,6 @@ SegmentInfo_t OpenSegment(seg_num_t seg_num)
 	if(seg_info.s_ptr == NULL)
 	{
 		err = GetLastError();
-		ReleaseProcessLock();
 		ReadErrorMex("MappingError", "Could not fetch the memory segment (Error number: %d).", err);
 	}
 	seg_info.is_mapped = TRUE;
@@ -684,4 +677,96 @@ void DestroySegmentList(SegmentList_t* seg_list)
 			curr_seg_node = next_seg_node;
 		}
 	}
+}
+
+
+/**
+ * Update the local segment list from shared memory
+ */
+void UpdateSharedSegments(void)
+{
+	
+	if(g_info->rev_num == s_info->rev_num)
+	{
+		/* we should be up to date if this is true */
+		return;
+	}
+	else
+	{
+		/* make sure that subfunctions don't get stuck in a loop by resetting this immediately */
+		g_info->rev_num = s_info->rev_num;
+	}
+	
+	seg_num_t curr_seg_num;
+	bool_t is_fetched;
+	
+	SegmentNode_t* curr_seg_node, * next_seg_node, * new_seg_node = NULL;
+	SegmentList_t new_seg_list = {NULL, NULL, 0};
+	
+	curr_seg_node = g_seg_list.first;
+	while(curr_seg_node != NULL)
+	{
+		
+		next_seg_node = curr_seg_node->next;
+		
+		/* Check if the data segment is ready for deletion.
+		 * Segment should not be hooked into the shared linked list */
+		if(curr_seg_node->seg_info.s_ptr->is_invalid)
+		{
+			CloseSegmentNode(curr_seg_node);
+		}
+		
+		curr_seg_node = next_seg_node;
+	}
+	
+	/* construct a new list of segments, reusing what we can */
+	for(new_seg_list.num_segs = 0, curr_seg_num = s_info->first_seg_num;
+	    new_seg_list.num_segs < s_info->num_shared_vars;
+	    new_seg_list.num_segs++, curr_seg_num = new_seg_node->seg_info.s_ptr->next_seg_num)
+	{
+		
+		curr_seg_node = g_seg_list.first;
+		is_fetched = FALSE;
+		while(curr_seg_node != NULL)
+		{
+			
+			/* check if the current segment has been fetched */
+			if(curr_seg_node->seg_info.s_ptr->seg_num == curr_seg_num)
+			{
+				/* hook the currently used node into the list */
+				new_seg_node = curr_seg_node;
+				
+				is_fetched = TRUE;
+				break;
+			}
+			curr_seg_node = curr_seg_node->next;
+		}
+		
+		if(!is_fetched)
+		{
+			new_seg_node = CreateSegmentNode(OpenSegment(curr_seg_num));
+		}
+		
+		/* take advantage of double link and only set pointers in one direction for now for a split structure*/
+		new_seg_node->prev = new_seg_list.last;
+		new_seg_list.last = new_seg_node;
+		
+		new_seg_node->parent_seg_list = &g_seg_list;
+		
+	}
+	
+	/* set the new pointers in place */
+	if(new_seg_list.num_segs > 0)
+	{
+		curr_seg_node = new_seg_list.last;
+		while(curr_seg_node->prev != NULL)
+		{
+			curr_seg_node->prev->next = curr_seg_node;
+			curr_seg_node = curr_seg_node->prev;
+		}
+		new_seg_list.first = curr_seg_node;
+	}
+	
+	g_seg_list = new_seg_list;
+	
 }

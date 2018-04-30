@@ -124,9 +124,7 @@ typedef struct
 	struct
 	{
 		size_t data;
-#ifndef MX_HAS_INTERLEAVED_COMPLEX
 		size_t imag_data;
-#endif
 		union
 		{
 			size_t ir;
@@ -144,13 +142,14 @@ typedef struct
 	size_t nzmax;
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
 	mxClassID classid;       /* matlab class id */
-	mxComplexity complexity;
 	bool_t is_sparse;
 	bool_t is_numeric;
 } Header_t;
 
 #define MshGetDimensions(offset) ((offset) + sizeof(Header_t))
-#define MshIsEmpty(hdr) ((hdr).num_elems == 0)
+#define MshIsEmpty(hdr_ptr) ((hdr_ptr)->num_elems == 0)
+#define MshIsComplex(hdr_ptr) ((hdr_ptr)->data_offsets.imag_data != SIZE_MAX)
+#define MshGetComplexity(hdr_ptr) MshIsComplex(hdr_ptr)? mxCOMPLEX : mxREAL
 
 #define LocateDataPointers(hdr, shm_anchor) \
      (SharedDataPointers_t){\
@@ -166,9 +165,7 @@ typedef struct
 {
 	mwSize* dims;                   /* pointer to the dimensions array */
 	void* data;                     /* real data portion */
-#ifndef MX_HAS_INTERLEAVED_COMPLEX
-	void* imag_data;                /* imaginary data portion */
-#endif
+	void* imag_data;
 	union
 	{
 		mwIndex* ir;                 /* row indexes, for sparse */

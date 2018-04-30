@@ -1,3 +1,3 @@
-function mshclear
-	matshare_(uint8(9));
+function mshclear(varargin)
+	matshare_(uint8(9), varargin{:});
 end

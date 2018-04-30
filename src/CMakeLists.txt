@@ -9,7 +9,7 @@ SET(SOURCE_FILES
 		${MATLAB_INCLUDE_DIR}/mex.h
 		matshare_.c headers/matshare_.h
 	     matlabutils.c headers/matlabutils.h
-		init.c headers/init.h
+		mshinit.c headers/mshinit.h
 		mshutils.c headers/mshutils.h
 		headers/mshtypes.h
 		headers/externtypes.h mshlists.c headers/mshlists.h)
@@ -19,7 +19,7 @@ IF(UXWIN)
 			${MATLAB_INCLUDE_DIR}/mex.h
 			matshare_.c headers/matshare_.h
 		    matlabutils.c headers/matlabutils.h
-			init.c headers/init.h
+			mshinit.c headers/mshinit.h
 			headers/mshtypes.h
 			extlib/mman-win32/sys/mman.h
 			headers/externtypes.h
