@@ -8,4 +8,4 @@ ThreadSafety = true;
 CopyOnWrite = false;
 
 %% Enables or disables debug mode
-DebugMode = false;
+DebugMode = true;

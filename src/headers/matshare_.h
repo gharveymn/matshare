@@ -16,11 +16,11 @@
 /* creates a struct for holding the pointers to shared data */
 #define LocateDataPointers(hdr, shm_anchor) \
      (SharedDataPointers_t){\
-		(mwSize*)MshGetDimensions(shm_anchor),       /* dims */\
-          (hdr)->data_offsets.data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.data,               /* data */\
-          (hdr)->data_offsets.imag_data == SIZE_MAX? NULL : (shm_anchor) + (hdr)->data_offsets.imag_data,     /* imag_data */\
-          (hdr)->data_offsets.ir == SIZE_MAX? NULL : (void*)((shm_anchor) + (hdr)->data_offsets.ir),          /* ir/field_str */\
-          (hdr)->data_offsets.jc == SIZE_MAX? NULL : (void*)((shm_anchor) + (hdr)->data_offsets.jc),          /* jc/child_hdrs */\
+		MshGetDimensions(shm_anchor),       /* dims */\
+          MshGetData(shm_anchor),               /* data */\
+          MshGetImagData(shm_anchor),     /* imag_data */\
+          MshGetIr(shm_anchor),          /* ir/field_str */\
+          MshGetJc(shm_anchor),          /* jc/child_hdrs */\
      };
 
 typedef struct

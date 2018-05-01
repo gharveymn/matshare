@@ -311,53 +311,13 @@ void ReleaseProcessLock(void)
 
 mshdirective_t ParseDirective(const mxArray* in)
 {
-	int i;
-	if(mxIsNumeric(in))
+	if(mxGetClassID(in) == mxUINT8_CLASS)
 	{
-		return (mshdirective_t)*((unsigned char*)(mxGetData(in)));
-	}
-	else if(mxIsChar(in))
-	{
-		char_t dir_str[9];
-		mxGetString(in, dir_str, 9);
-		for(i = 0; dir_str[i]; i++)
-		{
-			dir_str[i] = (char_t)tolower(dir_str[i]);
-		}
-		
-		if(strcmp(dir_str, "share") == 0)
-		{
-			return msh_SHARE;
-		}
-		else if(strcmp(dir_str, "detach") == 0)
-		{
-			return msh_DETACH;
-		}
-		else if(strcmp(dir_str, "fetch") == 0)
-		{
-			return msh_FETCH;
-		}
-		else if(strcmp(dir_str, "ShmCopy_") == 0)
-		{
-			return msh_DEEPCOPY;
-		}
-		else if(strcmp(dir_str, "debug") == 0)
-		{
-			return msh_DEBUG;
-		}
-		else if(strcmp(dir_str, "clone") == 0)
-		{
-			return msh_SHARE;
-		}
-		else
-		{
-			ReadErrorMex("InvalidDirectiveError", "Directive not recognized.");
-		}
-		
+		return (mshdirective_t)*((uchar_t*)(mxGetData(in)));
 	}
 	else
 	{
-		ReadErrorMex("InvalidDirectiveError", "Directive must either be 'uint8' or 'char_t'.");
+		ReadErrorMex("InvalidDirectiveError", "Directive must be type 'uint8'.");
 	}
 	
 	return msh_DEBUG;
@@ -501,16 +461,16 @@ void ParseParams(int num_params, const mxArray** in)
 
 void UpdateAll(void)
 {
-	/* s_info->update_pid = g_info->this_pid; */
+
+#ifdef MSH_WIN
 	
-	/* only flush the memory when there is more than one process */
+	/* only flush the memory when there is more than one process
+	 * this appears to only write to pagefile.sys, but it's difficult to find information
 	if(s_info->num_procs > 1)
 	{
 		SegmentNode_t* curr_seg_node = g_seg_list.first;
 		while(curr_seg_node != NULL)
 		{
-#ifdef MSH_WIN
-			/* not sure if this is required on windows, but it doesn't hurt */
 			if(FlushViewOfFile(s_info, g_info->shm_info_seg.seg_sz) == 0)
 			{
 				ReadErrorMex("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
@@ -519,23 +479,33 @@ void UpdateAll(void)
 			{
 				ReadErrorMex("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
 			}
+
+			curr_seg_node = curr_seg_node->next;
+		}
+	}
+	*/
 #else
-			/* yes, this is required to ensure the changes are written (mmap creates a virtual address space)
-			 * no, I don't know how this is possible without doubling the actual amount of RAM needed */
+	
+	/* only flush the memory when there is more than one process */
+	if(s_info->num_procs > 1)
+	{
+		SegmentNode_t* curr_seg_node = g_seg_list.first;
+		while(curr_seg_node != NULL)
+		{
+			/* flushes any possible local caches to the shared memory */
 			if(msync(s_info, g_info->shm_info_seg.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
 			{
-				ReleaseProcessLock();
 				ReadMsyncError(errno);
 			}
 			if(msync(curr_seg_node->seg_info.s_ptr, curr_seg_node->seg_info.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
 			{
-				ReleaseProcessLock();
 				ReadMsyncError(errno);
 			}
-#endif
 			curr_seg_node = curr_seg_node->next;
 		}
 	}
+
+#endif
 }
 
 

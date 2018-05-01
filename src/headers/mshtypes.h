@@ -146,7 +146,11 @@ typedef struct
 	bool_t is_numeric;
 } Header_t;
 
-#define MshGetDimensions(offset) ((offset) + sizeof(Header_t))
+#define MshGetDimensions(shm_anchor) (mwSize*)((shm_anchor) + sizeof(Header_t))
+#define MshGetData(shm_anchor) ((shm_anchor) + (hdr)->data_offsets.data)
+#define MshGetImagData(shm_anchor) ((shm_anchor) + (hdr)->data_offsets.imag_data)
+#define MshGetIr(shm_anchor) (mwIndex*)((shm_anchor) + (hdr)->data_offsets.ir)
+#define MshGetJc(shm_anchor) (mwIndex*)((shm_anchor) + (hdr)->data_offsets.jc)
 #define MshIsEmpty(hdr_ptr) ((hdr_ptr)->num_elems == 0)
 #define MshIsComplex(hdr_ptr) ((hdr_ptr)->data_offsets.imag_data != SIZE_MAX)
 #define MshGetComplexity(hdr_ptr) MshIsComplex(hdr_ptr)? mxCOMPLEX : mxREAL
