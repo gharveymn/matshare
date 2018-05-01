@@ -80,45 +80,47 @@ extern int fchmod(int fildes, mode_t mode);
 #endif
 
 /* these are used for recording structure field names */
-#define ALIGN_SIZE (size_t)0x20u  /* The pointer alignment size; ensure this is a multiple of 32 for AVX alignment */
-#define ALIGN_SHIFT (ALIGN_SIZE-1)
-#define MXMALLOC_SIG_LEN 0x10u	/* length of the mxMalloc signature */
+#define ALIGN_SIZE (size_t)0x20u    /* The pointer alignment size; ensure this is a multiple of 32 for AVX alignment */
+#define ALIGN_SHIFT (size_t)0x1Fu /* (ALIGN_SIZE-1) micro-optimization */
+#define MXMALLOC_SIG_LEN 0x10u      /* length of the mxMalloc signature */
 
-typedef char char_t;			/* characters */
-typedef signed char schar_t;		/* signed 8 bits */
-typedef unsigned char uchar_t;	/* unsigned 8 bits */
-typedef uchar_t byte_t;			/* reading physical memory */
-typedef uchar_t bool_t;			/* conditionals */
-typedef signed long seg_num_t;		/* segment number identifiers */
-#define SEG_NUM_MAX LONG_MAX	/* the maximum segment number */
+/* readability typedefs */
+typedef char char_t;                     /* characters */
+typedef signed char schar_t;             /* signed 8 bits */
+typedef unsigned char uchar_t;           /* unsigned 8 bits */
+typedef uchar_t byte_t;                  /* reading physical memory */
+typedef uchar_t bool_t;                  /* conditionals */
+typedef signed long msh_segmentnumber_t; /* segment number identifiers */
 #ifdef MSH_UNIX
 typedef int handle_t;			/* give fds a uniform identifier */
 #endif
 
+#define SEG_NUM_MAX LONG_MAX      /* the maximum segment number */
+
 typedef enum
 {
-	msh_SHARE          = 0,
-	msh_FETCH          = 1,
-	msh_DETACH         = 2,
-	msh_PARAM          = 3,
-	msh_DEEPCOPY       = 4,
-	msh_DEBUG          = 5,
-	msh_OBJ_REGISTER   = 6,
+	msh_SHARE = 0,
+	msh_FETCH = 1,
+	msh_DETACH = 2,
+	msh_PARAM = 3,
+	msh_DEEPCOPY = 4,
+	msh_DEBUG = 5, /* unused */
+	msh_OBJ_REGISTER = 6,
 	msh_OBJ_DEREGISTER = 7,
-	msh_INIT           = 8,
-	msh_CLEAR          = 9
-} mshdirective_t;
+	msh_INIT = 8, /* unused */
+	msh_CLEAR = 9
+} msh_directive_t;
 
 
 typedef enum
 {
 	msh_SHARETYPE_COPY = 0,               /* always create a new segment */
 	msh_SHARETYPE_OVERWRITE = 1          /* reuse the same segment if the new variable is smaller than or the same size as the old one */
-} mshsharetype_t;
+} msh_sharetype_t;
 
 
 /* captures fundamentals of the mxArray */
-/* A variable shall be packed as so: [{Header_t, dims}, (child offsets, field names, data, imag_data, ir, jc)] where {} is required, () is optional  */
+/* A variable shall be packed as so: [{s_Header_t, dims}, (child offsets, field names, data, imag_data, ir, jc)] where {} is required, () is optional  */
 typedef struct
 {
 	struct
@@ -144,9 +146,9 @@ typedef struct
 	mxClassID classid;       /* matlab class id */
 	bool_t is_sparse;
 	bool_t is_numeric;
-} Header_t;
+} s_Header_t;
 
-#define MshGetDimensions(shm_anchor) (mwSize*)((shm_anchor) + sizeof(Header_t))
+#define MshGetDimensions(shm_anchor) (mwSize*)((shm_anchor) + sizeof(s_Header_t))
 #define MshGetData(shm_anchor) ((shm_anchor) + (hdr)->data_offsets.data)
 #define MshGetImagData(shm_anchor) ((shm_anchor) + (hdr)->data_offsets.imag_data)
 #define MshGetIr(shm_anchor) (mwIndex*)((shm_anchor) + (hdr)->data_offsets.ir)
@@ -174,22 +176,22 @@ typedef struct
 } SharedDataPointers_t;
 
 
-typedef struct
+typedef struct s_SegmentMetadata_t
 {
 	/* use these to link together the memory segments */
-	seg_num_t seg_num;
-	seg_num_t prev_seg_num;
-	seg_num_t next_seg_num;
+	msh_segmentnumber_t seg_num;
+	msh_segmentnumber_t prev_seg_num;
+	msh_segmentnumber_t next_seg_num;
 	size_t seg_sz;
 	unsigned int procs_using;          /* number of processes using this variable */
 	unsigned int procs_tracking;          /* number of processes tracking this memory segment */
 	bool_t is_used;                    /* ensures that this memory segment has been referenced at least once before removing */
 	bool_t is_invalid;                    /* set to TRUE if this segment is to be freed by all processes */
-} SegmentMetadata_t;
+} s_SegmentMetadata_t;
 
-typedef struct
+typedef struct SegmentInfo_t
 {
-	SegmentMetadata_t* s_ptr;
+	void* s_ptr;
 	size_t seg_sz;
 	char_t name[MSH_MAX_NAME_LEN];
 	bool_t is_init;
@@ -217,13 +219,19 @@ typedef struct VariableNode_t
 
 typedef struct SegmentNode_t
 {
-	struct SegmentList_t* parent_seg_list;
 	struct SegmentNode_t* next;
 	struct SegmentNode_t* prev;
 	VariableNode_t* var_node;
 	SegmentInfo_t seg_info;
-	bool_t will_free;
 } SegmentNode_t;
+
+#define SegmentRawPointer(seg_node) ((seg_node)->seg_info.s_ptr)
+#define SegmentMetadata(seg_node) ((s_SegmentMetadata_t*)(seg_node)->seg_info.s_ptr)
+#define SegmentStart(seg_node) ((byte_t*)(seg_node)->seg_info.s_ptr)
+#define SegmentData(seg_node) (SegmentStart(seg_node) + PadToAlign(sizeof(s_SegmentMetadata_t)))
+#define SegmentSize(seg_node) (seg_node)->seg_info.seg_sz;
+
+
 
 typedef struct VariableList_t
 {
@@ -243,8 +251,8 @@ typedef struct SegmentList_t
 typedef struct
 {
 	/* these are also all size_t to guarantee alignment for atomic operations */
-	seg_num_t last_seg_num;          /* caches the predicted next segment number */
-	seg_num_t first_seg_num;          /* the first segment number in the list */
+	msh_segmentnumber_t last_seg_num;          /* caches the predicted next segment number */
+	msh_segmentnumber_t first_seg_num;          /* the first segment number in the list */
 	size_t rev_num;
 	size_t num_shared_vars;
 	unsigned int num_procs;
@@ -254,11 +262,14 @@ typedef struct
 	pid_t update_pid;
 	mode_t security;
 #endif
-	mshsharetype_t sharetype;
-#ifdef MSH_THREAD_SAFE
-	bool_t is_thread_safe;
-#endif
-} SharedInfo_t;
+	
+	struct
+	{
+		bool_t is_thread_safe;
+		bool_t will_remove_unused;
+		msh_sharetype_t sharetype;
+	} user_def;
+} s_SharedInfo_t;
 
 typedef struct
 {
@@ -295,8 +306,8 @@ typedef struct
 
 
 extern GlobalInfo_t* g_info;
-#define g_var_list g_info->var_list
-#define g_seg_list g_info->seg_list
-#define s_info ((SharedInfo_t*)g_info->shm_info_seg.s_ptr)
+#define g_var_list (g_info->var_list)
+#define g_seg_list (g_info->seg_list)
+#define s_info ((s_SharedInfo_t*)g_info->shm_info_seg.s_ptr)
 
 #endif //MATSHARE_MSH_TYPES_H

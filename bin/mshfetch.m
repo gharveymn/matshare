@@ -1,17 +1,14 @@
-function varargout = mshfetch
-	% get callback
+function [data, new, all] = mshfetch
+	% ordered by predicted usage amounts to slightly improve performance
 	switch(nargout)
+		case 1
+			data = matshare_(uint8(1));
+		case 3
+			[data, new, all] = matshare_(uint8(1));
+		case 2
+			[data, new] = matshare_(uint8(1));
 		case 0
 			matshare_(uint8(1));
-		case 1
-			varargout{1} = matshare_(uint8(1));
-		case 2
-			[varargout{1},varargout{2}] = matshare_(uint8(1));
-		case 3
-			[varargout{1},varargout{2},varargout{3}] = matshare_(uint8(1));
-		otherwise
-			ME = MException('mshshare:tooManyOutputsError','Too many outputs');
-			throw(ME);
 	end
 end
 

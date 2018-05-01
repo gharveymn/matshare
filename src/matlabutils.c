@@ -1,4 +1,5 @@
 #include "headers/matlabutils.h"
+void (*g_matlab_error_callback)(void) = NULL;
 
 #ifdef MSH_UNIX
 
@@ -156,7 +157,7 @@ void ReadMsyncError_(const char* file_name, int line, int err)
 #endif
 
 
-void ReadErrorMex_(const char* file_name, int line, const char* error_id, const char* error_message, ...)
+void ReadMexError_(const char* file_name, int line, const char* error_id, const char* error_message, ...)
 {
 	
 	char full_message[FULL_ERROR_MESSAGE_SIZE] = {0};
@@ -176,7 +177,7 @@ void ReadErrorMex_(const char* file_name, int line, const char* error_id, const 
 }
 
 
-void ReadWarnMex(const char* warn_id, const char* warn_message, ...)
+void ReadMexWarning(const char* warn_id, const char* warn_message, ...)
 {
 	char full_message[FULL_WARNING_MESSAGE_SIZE] = {0};
 	char message_buffer[WARNING_MESSAGE_SIZE] = {0};
@@ -191,5 +192,23 @@ void ReadWarnMex(const char* warn_id, const char* warn_message, ...)
 	sprintf(full_message, MATLAB_WARN_MESSAGE_FMT, message_buffer, MATLAB_WARN_MESSAGE);
 	
 	mexWarnMsgIdAndTxt(warn_id_buffer, full_message);
-	
+}
+
+
+void SetMexErrorCallback(void (*callback_function)(void))
+{
+	if(callback_function != NULL)
+	{
+		g_matlab_error_callback = callback_function;
+	}
+	else
+	{
+		g_matlab_error_callback = NullCallback;
+	}
+}
+
+
+void NullCallback(void)
+{
+	/* does nothing */
 }

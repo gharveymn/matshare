@@ -62,7 +62,7 @@ void GetNextFieldName(const char_t** field_str)
 }
 
 
-void MshExit(void)
+void MshOnExit(void)
 {
 	
 	if(g_info->flags.is_proc_lock_init)
@@ -79,7 +79,6 @@ void MshExit(void)
 
 #ifdef MSH_WIN
 	
-	
 	if(g_info->shm_info_seg.is_mapped)
 	{
 		s_info->num_procs -= 1;
@@ -93,7 +92,7 @@ void MshExit(void)
 		
 		if(UnmapViewOfFile(g_info->shm_info_seg.s_ptr) == 0)
 		{
-			ReadErrorMex("UnmapFileError", "Error unmapping the update file (Error Number %u)", GetLastError());
+			ReadMexError("UnmapFileError", "Error unmapping the update file (Error Number %u)", GetLastError());
 		}
 		g_info->shm_info_seg.is_mapped = FALSE;
 	}
@@ -102,7 +101,7 @@ void MshExit(void)
 	{
 		if(CloseHandle(g_info->shm_info_seg.handle) == 0)
 		{
-			ReadErrorMex("CloseHandleError", "Error closing the update file handle (Error Number %u)", GetLastError());
+			ReadMexError("CloseHandleError", "Error closing the update file handle (Error Number %u)", GetLastError());
 		}
 		g_info->shm_info_seg.is_init = FALSE;
 	}
@@ -112,7 +111,7 @@ void MshExit(void)
 		ReleaseProcessLock();
 		if(CloseHandle(g_info->proc_lock) == 0)
 		{
-			ReadErrorMex("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
+			ReadMexError("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
 		}
 		g_info->flags.is_proc_lock_init = FALSE;
 	}
@@ -183,6 +182,16 @@ void MshExit(void)
 	
 }
 
+
+void MshOnError(void)
+{
+	if(g_info != NULL)
+	{
+		ReleaseProcessLock();
+	}
+}
+
+
 void MakeMxMallocSignature(uchar_t* sig, size_t seg_size)
 {
 	/*
@@ -226,17 +235,17 @@ void AcquireProcessLock(void)
 {
 #ifdef MSH_THREAD_SAFE
 	/* only request a lock if there is more than one process */
-	if(s_info->num_procs > 1 && s_info->is_thread_safe && !g_info->flags.is_proc_locked)
+	if(s_info->num_procs > 1 && s_info->user_def.is_thread_safe && !g_info->flags.is_proc_locked)
 	{
 #ifdef MSH_WIN
 		DWORD ret = WaitForSingleObject(g_info->proc_lock, INFINITE);
 		if(ret == WAIT_ABANDONED)
 		{
-			ReadErrorMex("WaitProcLockAbandonedError", "One of the processes failed while using the lock. Cannot safely continue (Error number: %u).", GetLastError());
+			ReadMexError("WaitProcLockAbandonedError", "One of the processes failed while using the lock. Cannot safely continue (Error number: %u).", GetLastError());
 		}
 		else if(ret == WAIT_FAILED)
 		{
-			ReadErrorMex("WaitProcLockFailedError", "The wait for process lock failed (Error number: %u).", GetLastError());
+			ReadMexError("WaitProcLockFailedError", "The wait for process lock failed (Error number: %u).", GetLastError());
 		}
 #else
 		
@@ -245,26 +254,26 @@ void AcquireProcessLock(void)
 			switch(errno)
 			{
 				case EBADF:
-					ReadErrorMex("LockfBadFileError", "The fildes argument is not a valid open file descriptor; "
+					ReadMexError("LockfBadFileError", "The fildes argument is not a valid open file descriptor; "
 											    "or function is F_LOCK or F_TLOCK and fildes is not a valid file descriptor open for writing.");
 				case EACCES:
-					ReadErrorMex("LockfAccessError", "The function argument is F_TLOCK or F_TEST and the section is already locked by another process.");
+					ReadMexError("LockfAccessError", "The function argument is F_TLOCK or F_TEST and the section is already locked by another process.");
 				case EDEADLK:
-					ReadErrorMex("LockfDeadlockError", "lockf failed because of one of the following:\n"
+					ReadMexError("LockfDeadlockError", "lockf failed because of one of the following:\n"
 												"\tThe function argument is F_LOCK and a deadlock is detected.\n"
 												"\tThe function argument is F_LOCK, F_TLOCK, or F_ULOCK, and the request would cause the number of locks to exceed a system-imposed limit.");
 				case EOVERFLOW:
-					ReadErrorMex("LockfOverflowError", "The offset of the first, or if size is not 0 then the last, "
+					ReadMexError("LockfOverflowError", "The offset of the first, or if size is not 0 then the last, "
 												"byte in the requested section cannot be represented correctly in an object of type off_t.");
 				case EAGAIN:
-					ReadErrorMex("LockfAgainError", "The function argument is F_TLOCK or F_TEST and the section is already locked by another process.");
+					ReadMexError("LockfAgainError", "The function argument is F_TLOCK or F_TEST and the section is already locked by another process.");
 				case ENOLCK:
-					ReadErrorMex("LockfNoLockError", "The function argument is F_LOCK, F_TLOCK, or F_ULOCK, and the request would cause the number of locks to exceed a system-imposed limit.");
+					ReadMexError("LockfNoLockError", "The function argument is F_LOCK, F_TLOCK, or F_ULOCK, and the request would cause the number of locks to exceed a system-imposed limit.");
 				case EOPNOTSUPP:
 				case EINVAL:
-					ReadErrorMex("LockfOperationNotSupportedError", "The implementation does not support the locking of files of the type indicated by the fildes argument.");
+					ReadMexError("LockfOperationNotSupportedError", "The implementation does not support the locking of files of the type indicated by the fildes argument.");
 				default:
-					ReadErrorMex("LockfUnknownError", "An unknown error occurred (Error number: %i)", errno);
+					ReadMexError("LockfUnknownError", "An unknown error occurred (Error number: %i)", errno);
 			}
 		}
 
@@ -284,7 +293,7 @@ void ReleaseProcessLock(void)
 #ifdef MSH_WIN
 		if(ReleaseMutex(g_info->proc_lock) == 0)
 		{
-			ReadErrorMex("ReleaseMutexError", "The process lock release failed (Error number: %u).", GetLastError());
+			ReadMexError("ReleaseMutexError", "The process lock release failed (Error number: %u).", GetLastError());
 		}
 #else
 		if(lockf(g_info->proc_lock, F_ULOCK, 0) != 0)
@@ -292,14 +301,14 @@ void ReleaseProcessLock(void)
 			switch(errno)
 			{
 				case EBADF:
-					ReadErrorMex("ULockfBadFileError", "The fildes argument is not a valid open file descriptor.");
+					ReadMexError("ULockfBadFileError", "The fildes argument is not a valid open file descriptor.");
 				case EINTR:
-					ReadErrorMex("ULockfInterruptError", "A signal was caught during execution of the function.");
+					ReadMexError("ULockfInterruptError", "A signal was caught during execution of the function.");
 				case EOVERFLOW:
-					ReadErrorMex("ULockfOverflowError", "The offset of the first, or if size is not 0 then the last, "
+					ReadMexError("ULockfOverflowError", "The offset of the first, or if size is not 0 then the last, "
 												 "byte in the requested section cannot be represented correctly in an object of type off_t.");
 				default:
-					ReadErrorMex("ULockfUnknownError", "An unknown error occurred (Error number: %i)", errno);
+					ReadMexError("ULockfUnknownError", "An unknown error occurred (Error number: %i)", errno);
 			}
 		}
 #endif
@@ -309,15 +318,15 @@ void ReleaseProcessLock(void)
 }
 
 
-mshdirective_t ParseDirective(const mxArray* in)
+msh_directive_t ParseDirective(const mxArray* in)
 {
 	if(mxGetClassID(in) == mxUINT8_CLASS)
 	{
-		return (mshdirective_t)*((uchar_t*)(mxGetData(in)));
+		return (msh_directive_t)*((uchar_t*)(mxGetData(in)));
 	}
 	else
 	{
-		ReadErrorMex("InvalidDirectiveError", "Directive must be type 'uint8'.");
+		ReadMexError("InvalidDirectiveError", "Directive must be type 'uint8'.");
 	}
 	
 	return msh_DEBUG;
@@ -331,9 +340,18 @@ void ParseParams(int num_params, const mxArray** in)
 	char param_str[MSH_MAX_NAME_LEN] = {0}, val_str[MSH_MAX_NAME_LEN] = {0}, param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
 	const mxArray* param, * val;
 	
+	if(num_params == 0)
+	{
+#ifdef MSH_WIN
+	mexPrintf(MSH_PARAM_INFO, s_info->user_def.is_thread_safe? "true" : "false", s_info->user_def.sharetype == msh_SHARETYPE_COPY? "true" : "false");
+#else
+	mexPrintf(MSH_PARAM_INFO, s_info->user_def.is_thread_safe? "true" : "false", s_info->user_def.sharetype == msh_SHARETYPE_COPY? "true" : "false", s_info->security);
+#endif
+	}
+	
 	if(num_params % 2 != 0)
 	{
-		ReadErrorMex("InvalNumArgsError", "The number of parameters input must be a multiple of two.");
+		ReadMexError("InvalNumArgsError", "The number of parameters input must be a multiple of two.");
 	}
 	
 	for(i = 0; i < num_params/2; i++)
@@ -343,7 +361,7 @@ void ParseParams(int num_params, const mxArray** in)
 		
 		if(!mxIsChar(param) || !mxIsChar(val))
 		{
-			ReadErrorMex("InvalidArgumentError", "All parameters and values must be input as character arrays.");
+			ReadMexError("InvalidArgumentError", "All parameters and values must be input as character arrays.");
 		}
 		
 		ps_len = mxGetNumberOfElements(param);
@@ -351,11 +369,11 @@ void ParseParams(int num_params, const mxArray** in)
 		
 		if(ps_len + 1 > MSH_MAX_NAME_LEN)
 		{
-			ReadErrorMex("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
+			ReadMexError("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
 		else if(vs_len + 1 > MSH_MAX_NAME_LEN)
 		{
-			ReadErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, param_str);
+			ReadMexError("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, param_str);
 		}
 		
 		mxGetString(param, param_str, MSH_MAX_NAME_LEN);
@@ -371,27 +389,26 @@ void ParseParams(int num_params, const mxArray** in)
 			val_str_l[j] = (char)tolower(val_str[j]);
 		}
 		
-		if(strcmp(param_str_l, MSH_PARAM_THRSAFE_L) == 0)
+		if(strcmp(param_str_l, MSH_PARAM_THREADSAFETY_L) == 0)
 		{
 #ifdef MSH_THREAD_SAFE
 			AcquireProcessLock();
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
-				s_info->is_thread_safe = TRUE;
+				s_info->user_def.is_thread_safe = TRUE;
 			}
 			if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
-				s_info->is_thread_safe = FALSE;
+				s_info->user_def.is_thread_safe = FALSE;
 			}
 			else
 			{
-				ReleaseProcessLock();
-				ReadErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THRSAFE_U);
+				ReadMexError("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THREADSAFETY);
 			}
 			UpdateAll();
 			ReleaseProcessLock();
 #else
-			ReadErrorMex("InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
+			ReadMexError("InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
 #endif
 		
 		}
@@ -400,7 +417,7 @@ void ParseParams(int num_params, const mxArray** in)
 #ifdef MSH_UNIX
 			if(vs_len < 3 || vs_len > 4)
 			{
-				ReadErrorMex("InvalidParamValueError", "Too many or too few digits in \"%s\" for parameter \"%s\". Must have either 3 or 4 digits.", val_str, MSH_PARAM_SECURITY_U);
+				ReadMexError("InvalidParamValueError", "Too many or too few digits in \"%s\" for parameter \"%s\". Must have either 3 or 4 digits.", val_str, MSH_PARAM_SECURITY_U);
 			}
 			else
 			{
@@ -429,7 +446,7 @@ void ParseParams(int num_params, const mxArray** in)
 				ReleaseProcessLock();
 			}
 #else
-			ReadErrorMex("InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
+			ReadMexError("InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
 #endif
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_COPYONWRITE_L) == 0)
@@ -437,22 +454,38 @@ void ParseParams(int num_params, const mxArray** in)
 			AcquireProcessLock();
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
-				s_info->sharetype = msh_SHARETYPE_COPY;
+				s_info->user_def.sharetype = msh_SHARETYPE_COPY;
 			}
 			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
-				s_info->sharetype = msh_SHARETYPE_OVERWRITE;
+				s_info->user_def.sharetype = msh_SHARETYPE_OVERWRITE;
 			}
 			else
 			{
-				ReleaseProcessLock();
-				ReadErrorMex("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_COPYONWRITE_U);
+				ReadMexError("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_COPYONWRITE_U);
+			}
+			ReleaseProcessLock();
+		}
+		else if(strcmp(param_str_l, MSH_PARAM_REMOVEUNUSED_L) == 0)
+		{
+			AcquireProcessLock();
+			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
+			{
+				s_info->user_def.will_remove_unused = TRUE;
+			}
+			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
+			{
+				s_info->user_def.will_remove_unused = FALSE;
+			}
+			else
+			{
+				ReadMexError("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_REMOVEUNUSED_U);
 			}
 			ReleaseProcessLock();
 		}
 		else
 		{
-			ReadErrorMex("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
+			ReadMexError("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
 		
 	}
@@ -473,11 +506,11 @@ void UpdateAll(void)
 		{
 			if(FlushViewOfFile(s_info, g_info->shm_info_seg.seg_sz) == 0)
 			{
-				ReadErrorMex("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
+				ReadMexError("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
 			}
 			if(FlushViewOfFile(curr_seg_node->seg_info.s_ptr, curr_seg_node->seg_info.seg_sz) == 0)
 			{
-				ReadErrorMex("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
+				ReadMexError("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
 			}
 
 			curr_seg_node = curr_seg_node->next;
@@ -535,33 +568,35 @@ void SetDataPointers(mxArray* var, SharedDataPointers_t* data_ptrs)
 	
 }
 
+void WriteSegmentName(char name_buffer[static MSH_MAX_NAME_LEN], msh_segmentnumber_t seg_num)
+{
+	snprintf(name_buffer, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, seg_num);
+}
 
-void RemoveUnusedVariables(VariableList_t* var_list)
+
+void RemoveUnusedVariables(void)
 {
 	VariableNode_t* curr_var_node, * next_var_node;
 	
-	if(var_list != NULL)
+	curr_var_node = g_var_list.first;
+	
+	while(curr_var_node != NULL)
 	{
-		curr_var_node = var_list->first;
-		while(curr_var_node != NULL)
+		next_var_node = curr_var_node->next;
+		if(*curr_var_node->crosslink == NULL && SegmentMetadata(curr_var_node->seg_node)->is_used)
 		{
-			next_var_node = curr_var_node->next;
-			if(*curr_var_node->crosslink == NULL && curr_var_node->seg_node->seg_info.s_ptr->is_used)
+			if(SegmentMetadata(curr_var_node->seg_node)->procs_using == 1)
 			{
-				if(curr_var_node->seg_node->seg_info.s_ptr->procs_using == 1)
-				{
-					/* if this is the last process using this variable, destroy the segment completely */
-					DestroySegmentNode(curr_var_node->seg_node);
-				}
-				else
-				{
-					/* otherwise just take out the variable */
-					DestroyVariableNode(curr_var_node);
-				}
+				/* if this is the last process using this variable, destroy the segment completely */
+				DestroySegmentNode(&g_seg_list, curr_var_node->seg_node);
 			}
-			curr_var_node = next_var_node;
+			else
+			{
+				/* otherwise just take out the variable */
+				DestroyVariableNode(curr_var_node);
+			}
 		}
-		
+		curr_var_node = next_var_node;
 	}
 	
 }

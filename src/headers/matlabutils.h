@@ -40,11 +40,13 @@ extern int shm_unlink(const char *name);
 #define MATLAB_WARN_MESSAGE ""
 
 
-void ReadErrorMex_(const char* file_name, int line, const char* error_id, const char* error_message, ...);
-void ReadWarnMex(const char* warn_id, const char* warn_message, ...);
+void ReadMexError_(const char* file_name, int line, const char* error_id, const char* error_message, ...);
+void ReadMexWarning(const char* warn_id, const char* warn_message, ...);
+void SetMexErrorCallback(void (*callback_function)(void));
+void NullCallback(void);
 
 /* defined so we don't have write __FILE__, __LINE__ every time */
-#define ReadErrorMex(error_id, error_message, ...) ReadErrorMex_(__FILE__ , __LINE__, error_id, error_message , ##__VA_ARGS__)
+#define ReadMexError(error_id, error_message, ...) ReadMexError_(__FILE__ , __LINE__, error_id, error_message , ##__VA_ARGS__)
 
 
 #ifdef MSH_UNIX
@@ -63,5 +65,7 @@ void ReadFchmodError_(const char* file_name, int line, int err);
 #define ReadMsyncError(err) ReadMsyncError_(__FILE__ , __LINE__, err)
 #define ReadFchmodError(err) ReadFchmodError_(__FILE__ , __LINE__, err)
 #endif
+
+void (*g_matlab_error_callback)(void);
 
 #endif //MATSHARE_UTILS_H

@@ -16,12 +16,12 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	const mxArray** in_vars = prhs + 1;
 	
 	/* resultant matshare directive */
-	mshdirective_t msh_directive;
+	msh_directive_t msh_directive;
 	
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		ReadErrorMex("NotEnoughInputsError", "Minimum input arguments missing; must supply a msh_directive.");
+		ReadMexError("NotEnoughInputsError", "Minimum input arguments missing; must supply a msh_directive.");
 	}
 	
 	/* get the msh_directive */
@@ -31,9 +31,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	if(msh_directive != msh_DETACH && Precheck() != TRUE)
 	{
-		ReadErrorMex("NotInitializedError", "At least one of the needed shared memory segments has not been initialized. Cannot continue.");
+		ReadMexError("NotInitializedError", "At least one of the needed shared memory segments has not been initialized. Cannot continue.");
 	}
-	
 	
 	switch(msh_directive)
 	{
@@ -62,14 +61,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			g_info->num_registered_objs -= 1;
 			if(g_info->num_registered_objs == 0)
 			{
-				/* if we deregistered the last object the remove variables that aren't being used elsewhere in this process */
-				RemoveUnusedVariables(&g_var_list);
+				/* if we deregistered the last object then remove variables that aren't being used elsewhere in this process */
+				RemoveUnusedVariables();
 			}
 			
 			break;
 		case msh_DETACH:
 			
-			MshExit();
+			MshOnExit();
 			
 			break;
 		
@@ -80,7 +79,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		
 		case msh_DEEPCOPY:
-			/* plhs[0] = mxDuplicateArray(g_var_list_front->var); */
+			
+			AcquireProcessLock();
+			{
+				MshDeepcopy(nlhs, plhs);
+			}
+			ReleaseProcessLock();
+			
 			break;
 		case msh_DEBUG:
 			/* STUB: maybe print debug information at some point */
@@ -89,6 +94,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			/* tell matshare to register a new object */
 			g_info->num_registered_objs += 1;
+			
 			break;
 		case msh_INIT:
 			/* deprecated; does nothing */
@@ -97,14 +103,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			AcquireProcessLock();
 			{
-				UpdateSharedSegments();
 				MshClear(num_in_vars, in_vars);
 			}
 			ReleaseProcessLock();
 			
 			break;
 		default:
-			ReadErrorMex("UnknownDirectiveError", "Unrecognized msh_directive.");
+			ReadMexError("UnknownDirectiveError", "Unrecognized msh_directive.");
 			break;
 	}
 	
@@ -121,7 +126,7 @@ void MshShare(int nlhs, mxArray** plhs, int num_vars, const mxArray* in_vars[])
 	/* check the inputs */
 	if(num_vars < 1)
 	{
-		ReadErrorMex("NoVariableError", "No variable supplied to clone.");
+		ReadMexError("NoVariableError", "No variable supplied to clone.");
 	}
 	
 	UpdateSharedSegments();
@@ -131,27 +136,27 @@ void MshShare(int nlhs, mxArray** plhs, int num_vars, const mxArray* in_vars[])
 		
 		if(!(mxIsNumeric(in_var) || mxIsLogical(in_var) || mxIsChar(in_var) || mxIsStruct(in_var) || mxIsCell(in_var)))
 		{
-			ReadErrorMex("InvalidTypeError", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+			ReadMexError("InvalidTypeError", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 		}
 		
-		switch(s_info->sharetype)
+		switch(s_info->user_def.sharetype)
 		{
 			
 			case msh_SHARETYPE_COPY:
 				
-				RemoveUnusedVariables(&g_var_list);
+				RemoveUnusedVariables();
 				
 				break;
 			
 			case msh_SHARETYPE_OVERWRITE:
 				
-				if(g_var_list.num_vars != 0 && (ShmCompareSize((byte_t*)g_seg_list.last->seg_info.s_ptr, in_var) == TRUE))
+				if(g_var_list.num_vars != 0 && (ShmCompareSize_(SegmentData(g_seg_list.last), in_var) == TRUE))
 				{
 					/* DON'T INCREMENT THE REVISION NUMBER */
 					/* this is an in-place change, so everyone is still fine */
 					
 					/* do the rewrite after checking because the comparison is cheap */
-					ShmRewrite((byte_t*)g_seg_list.last->seg_info.s_ptr, in_var, g_var_list.last->var);
+					ShmRewrite_(SegmentData(g_seg_list.last), in_var, g_var_list.last->var);
 					
 					/* DON'T DO ANYTHING ELSE */
 					continue;
@@ -164,15 +169,15 @@ void MshShare(int nlhs, mxArray** plhs, int num_vars, const mxArray* in_vars[])
 				break;
 			
 			default:
-				ReadErrorMex("UnexpectedError", "Invalid sharetype. The shared memory has been corrupted.");
+				ReadMexError("UnexpectedError", "Invalid sharetype. The shared memory has been corrupted.");
 			
 		}
 		
 		/* scan input data */
-		new_seg_node = CreateSegmentNode(CreateSegment(ShmScan(in_var)));
+		new_seg_node = CreateSegmentNode(CreateSegment(ShmScan_(in_var)));
 		
 		/* copy data to the shared memory */
-		ShmCopy(new_seg_node, in_var);
+		ShmCopy_(SegmentData(new_seg_node), in_var);
 		
 		/* track the new segment */
 		AddSegmentNode(&g_seg_list, new_seg_node);
@@ -192,127 +197,167 @@ void MshShare(int nlhs, mxArray** plhs, int num_vars, const mxArray* in_vars[])
 void MshFetch(int nlhs, mxArray** plhs)
 {
 	
-	VariableNode_t* curr_var_node, * first_new_var = NULL;
+	VariableNode_t* curr_var_node;
 	SegmentNode_t* curr_seg_node;
 	size_t i, num_new_vars = 0;
-	size_t ret_dims[2] = {1, 1};
-	
+	size_t ret_dims[2];
 	
 	UpdateSharedSegments();
 	
-	if(g_seg_list.num_segs == 0)
+	if(s_info->user_def.sharetype == msh_SHARETYPE_COPY)
 	{
-		for(i = 0; i < nlhs; i++)
-		{
-			plhs[i] = mxCreateDoubleMatrix(0, 0, mxREAL);
-		}
-		return;
+		RemoveUnusedVariables();
 	}
 	
-	switch(s_info->sharetype)
+	if(nlhs >= 1)
 	{
-		
-		case msh_SHARETYPE_COPY:
+		if(nlhs >= 2)
+		{
 			
-			RemoveUnusedVariables(&g_var_list);
-			
-			switch(nlhs)
+			for(i = 0, curr_seg_node = g_seg_list.first;
+					i < g_seg_list.num_segs;
+					i++, curr_seg_node = curr_seg_node->next)
 			{
-				case 0:
-					/* do nothing */
-					return;
-				case 1:
-					
-					if(g_seg_list.last->var_node == NULL)
-					{
-						AddVariableNode(&g_var_list, CreateVariableNode(g_seg_list.last));
-					}
-					plhs[0] = mxCreateSharedDataCopy(g_seg_list.last->var_node->var);
-					break;
-				
-				case 2:
-				case 3:
-					
-					curr_seg_node = g_seg_list.first;
-					while(curr_seg_node != NULL)
-					{
-						if(curr_seg_node->var_node == NULL)
-						{
-							/* create the variable node if it hasnt been created yet */
-							AddVariableNode(&g_var_list, CreateVariableNode(curr_seg_node));
-							
-							if(num_new_vars == 0)
-							{
-								first_new_var = curr_seg_node->var_node;
-							}
-							
-							num_new_vars += 1;
-							
-						}
-						curr_seg_node = curr_seg_node->next;
-					}
-					
-					g_var_list.num_vars = g_seg_list.num_segs;
-					
-					plhs[0] = mxCreateSharedDataCopy(g_seg_list.last->var_node->var);
-					
-					/* return the new variables detected */
-					ret_dims[1] = num_new_vars;
-					plhs[1] = mxCreateCellArray(2, ret_dims);
-					curr_var_node = first_new_var;
-					for(i = 0; i < num_new_vars; i++, curr_var_node = curr_var_node->next)
-					{
-						mxSetCell(plhs[1], i, mxCreateSharedDataCopy(curr_var_node->var));
-					}
-					
-					if(nlhs == 3)
-					{
-						/* retrieve all segment variables */
-						ret_dims[1] = g_seg_list.num_segs;
-						plhs[2] = mxCreateCellArray(2, ret_dims);
-						curr_seg_node = g_seg_list.first;
-						for(i = 0; i < g_seg_list.num_segs; i++, curr_seg_node = curr_seg_node->next)
-						{
-							mxSetCell(plhs[2], i, mxCreateSharedDataCopy(curr_seg_node->var_node->var));
-						}
-					}
-					
-					break;
-				
-				default:
-					ReadErrorMex("OutputError", "Too many outputs.");
+				if(curr_seg_node->var_node == NULL)
+				{
+					/* create the variable node if it hasnt been created yet */
+					AddVariableNode(&g_var_list, CreateVariableNode(curr_seg_node));
+					num_new_vars += 1;
+				}
 			}
 			
-			break;
-		case msh_SHARETYPE_OVERWRITE:
+			/* return the new variables detected */
+			ret_dims[0] = (size_t)(num_new_vars != 0);
+			ret_dims[1] = num_new_vars;
+			plhs[1] = mxCreateCellArray(2, ret_dims);
 			
-			if(nlhs == 0)
+			for(i = 0, curr_var_node = g_var_list.last;
+					i < num_new_vars;
+					i++, curr_var_node = curr_var_node->prev)
 			{
-				/* in this case MshFetch is just used to clear out unused variables and update this process */
-				return;
-			}
-			else if(nlhs > 1)
-			{
-				ReadErrorMex("OutputError", "Too many outputs.");
+				mxSetCell(plhs[1], num_new_vars - 1 - i, mxCreateSharedDataCopy(curr_var_node->var));
 			}
 			
-			/* check if the current revision number is the same as the shm revision number
-			 * if it hasn't been changed then the segment was subject to an inplace change
-			 */
-			if(g_seg_list.last->var_node == NULL)
+			if(nlhs == 3)
 			{
+				/* retrieve all segment variables */
+				ret_dims[0] = (size_t)(g_seg_list.num_segs != 0);
+				ret_dims[1] = g_seg_list.num_segs;
+				plhs[2] = mxCreateCellArray(2, ret_dims);
 				
-				/* remove all other variable nodes */
-				CleanVariableList(&g_var_list);
-				
-				/* add the new variable */
+				for(i = 0, curr_seg_node = g_seg_list.first;
+						i < g_seg_list.num_segs;
+						i++, curr_seg_node = curr_seg_node->next)
+				{
+					mxSetCell(plhs[2], i, mxCreateSharedDataCopy(curr_seg_node->var_node->var));
+				}
+			}
+			else
+			{
+				ReadMexError("TooManyOutputsError", "Too many outputs.");
+			}
+		}
+		else
+		{
+			if(g_seg_list.last != NULL && g_seg_list.last->var_node == NULL)
+			{
 				AddVariableNode(&g_var_list, CreateVariableNode(g_seg_list.last));
-				
 			}
-			plhs[0] = mxCreateSharedDataCopy(g_var_list.last->var);
-			break;
-		default:
-			ReadErrorMex("UnexpectedError", "Invalid sharetype. The shared memory has been corrupted.");
+		}
+		
+		if(g_seg_list.last != NULL)
+		{
+			plhs[0] = mxCreateSharedDataCopy(g_seg_list.last->var_node->var);
+		}
+		else
+		{
+			plhs[0] = mxCreateDoubleMatrix(0, 0, mxREAL);
+		}
+		
+	}
+	
+}
+
+
+void MshDeepcopy(int nlhs, mxArray** plhs)
+{
+	
+	VariableNode_t* curr_var_node;
+	SegmentNode_t* curr_seg_node;
+	size_t i, num_new_vars = 0;
+	size_t ret_dims[2];
+	
+	UpdateSharedSegments();
+	
+	if(s_info->user_def.sharetype == msh_SHARETYPE_COPY)
+	{
+		RemoveUnusedVariables();
+	}
+	
+	if(nlhs >= 1)
+	{
+		if(nlhs >= 2)
+		{
+			
+			for(i = 0, curr_seg_node = g_seg_list.first;
+			    i < g_seg_list.num_segs;
+			    i++, curr_seg_node = curr_seg_node->next)
+			{
+				if(curr_seg_node->var_node == NULL)
+				{
+					/* create the variable node if it hasnt been created yet */
+					AddVariableNode(&g_var_list, CreateVariableNode(curr_seg_node));
+					num_new_vars += 1;
+				}
+			}
+			
+			/* return the new variables detected */
+			ret_dims[0] = (size_t)(num_new_vars != 0);
+			ret_dims[1] = num_new_vars;
+			plhs[1] = mxCreateCellArray(2, ret_dims);
+			
+			for(i = 0, curr_var_node = g_var_list.last;
+			    i < num_new_vars;
+			    i++, curr_var_node = curr_var_node->prev)
+			{
+				mxSetCell(plhs[1], num_new_vars - 1 - i, mxDuplicateArray(curr_var_node->var));
+			}
+			
+			if(nlhs == 3)
+			{
+				/* retrieve all segment variables */
+				ret_dims[0] = (size_t)(g_seg_list.num_segs != 0);
+				ret_dims[1] = g_seg_list.num_segs;
+				plhs[2] = mxCreateCellArray(2, ret_dims);
+				
+				for(i = 0, curr_seg_node = g_seg_list.first;
+				    i < g_seg_list.num_segs;
+				    i++, curr_seg_node = curr_seg_node->next)
+				{
+					mxSetCell(plhs[2], i, mxDuplicateArray(curr_seg_node->var_node->var));
+				}
+			}
+			else
+			{
+				ReadMexError("TooManyOutputsError", "Too many outputs.");
+			}
+		}
+		else
+		{
+			if(g_seg_list.last != NULL && g_seg_list.last->var_node == NULL)
+			{
+				AddVariableNode(&g_var_list, CreateVariableNode(g_seg_list.last));
+			}
+		}
+		
+		if(g_seg_list.last != NULL)
+		{
+			plhs[0] = mxDuplicateArray(g_seg_list.last->var_node->var);
+		}
+		else
+		{
+			plhs[0] = mxCreateDoubleMatrix(0, 0, mxREAL);
+		}
 		
 	}
 	
@@ -325,6 +370,8 @@ void MshClear(int num_inputs, const mxArray* in_vars[])
 	VariableNode_t* curr_var_node, * next_var_node;
 	mxArray* link;
 	int i;
+	
+	UpdateSharedSegments();
 	
 	if(num_inputs > 0)
 	{
@@ -340,7 +387,7 @@ void MshClear(int num_inputs, const mxArray* in_vars[])
 				{
 					if(link == in_vars[i])
 					{
-						DestroySegmentNode(curr_var_node->seg_node);
+						DestroySegmentNode(&g_seg_list, curr_var_node->seg_node);
 						break;
 					}
 					link = ((mxArrayStruct*)link)->CrossLink;
@@ -358,35 +405,11 @@ void MshClear(int num_inputs, const mxArray* in_vars[])
 }
 
 
-size_t ShmScan(const mxArray* in_var)
-{
-	return ShmScan_(in_var) + PadToAlign(sizeof(SegmentMetadata_t));
-}
-
-
-/* ------------------------------------------------------------------------- */
-/* ShmScan_                                                                  */
-/*                                                                           */
-/* Recursively descend through Matlab matrix to assess how much space its    */
-/* serialization will require.                                               */
-/*                                                                           */
-/* Arguments:                                                                */
-/*    header to populate.                                                    */
-/*    data container to populate.                                            */
-/*    mxArray to analyze.                                                    */
-/* Returns:                                                                  */
-/*    size that shared memory segment will need to be.                       */
-/* ------------------------------------------------------------------------- */
 size_t ShmScan_(const mxArray* in_var)
 {
 	
-	if(in_var == NULL)
-	{
-		ReadErrorMex("UnexpectedError", "Input variable was unexpectedly NULL.");
-	}
-	
 	/* counters */
-	Header_t hdr;
+	s_Header_t hdr;
 	size_t idx, count, this_obj_sz = 0, sub_obj_sz = 0;
 	int field_num;
 	
@@ -401,7 +424,7 @@ size_t ShmScan_(const mxArray* in_var)
 	hdr.is_numeric = mxIsNumeric(in_var);
 	
 	/* Add space for the header */
-	this_obj_sz += sizeof(Header_t);
+	this_obj_sz += sizeof(s_Header_t);
 	
 	/* Add space for the dimensions */
 	this_obj_sz += mxGetNumberOfDimensions(in_var)*sizeof(mwSize);
@@ -474,7 +497,7 @@ size_t ShmScan_(const mxArray* in_var)
 	}
 	else
 	{
-		ReadErrorMex("Internal:UnexpectedError", "Tried to clone an unsupported type.");
+		ReadMexError("Internal:UnexpectedError", "Tried to clone an unsupported type.");
 	}
 	
 	/* sub-objects will already be aligned */
@@ -482,29 +505,11 @@ size_t ShmScan_(const mxArray* in_var)
 }
 
 
-void ShmCopy(SegmentNode_t* seg_node, const mxArray* in_var)
-{
-	ShmCopy_(((byte_t*)seg_node->seg_info.s_ptr) + PadToAlign(sizeof(SegmentMetadata_t)), in_var);
-}
 
-
-/* ------------------------------------------------------------------------- */
-/* ShmCopy_                                                                  */
-/*                                                                           */
-/* Descend through header and data structure and copy relevent data to       */
-/* shared memory.                                                            */
-/*                                                                           */
-/* Arguments:                                                                */
-/*    header to serialize.                                                   */
-/*    data container of pointers to data to serialize.                       */
-/*    pointer to shared memory segment.                                      */
-/* Returns:                                                                  */
-/*    void                                                                   */
-/* ------------------------------------------------------------------------- */
 size_t ShmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 {
 	
-	Header_t hdr;
+	s_Header_t hdr;
 	SharedMemoryTracker_t shm_tracker = {0, shm_anchor};
 	size_t shift, idx, cpy_sz, count;
 	
@@ -537,7 +542,7 @@ size_t ShmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 	hdr.is_sparse = mxIsSparse(in_var);
 	hdr.is_numeric = mxIsNumeric(in_var);
 	
-	MemoryShift(shm_tracker, sizeof(Header_t));
+	MemoryShift(shm_tracker, sizeof(s_Header_t));
 	
 	/* copy the dimensions */
 	dims = (mwSize*)shm_tracker.ptr;
@@ -687,17 +692,10 @@ size_t ShmCopy_(byte_t* shm_anchor, const mxArray* in_var)
 		
 	}
 	
-	memcpy(shm_anchor, &hdr, sizeof(Header_t));
+	memcpy(shm_anchor, &hdr, sizeof(s_Header_t));
 	
 	return PadToAlign(shm_tracker.curr_off);
 	
-}
-
-
-void ShmFetch(byte_t* shm_anchor, mxArray** ret_var)
-{
-	ShmFetch_(shm_anchor + PadToAlign(sizeof(SegmentMetadata_t)), ret_var);
-	mexMakeArrayPersistent(*ret_var);
 }
 
 
@@ -709,7 +707,7 @@ void ShmFetch_(byte_t* shm_anchor, mxArray** ret_var)
 	mxArray* ret_child;
 	
 	/* for working with payload ... */
-	Header_t* hdr;
+	s_Header_t* hdr;
 	
 	/* for structures */
 	int field_num;                /* current field */
@@ -718,7 +716,7 @@ void ShmFetch_(byte_t* shm_anchor, mxArray** ret_var)
 	const char_t* field_name;
 	
 	/* retrieve the data */
-	hdr = (Header_t*)shm_anchor;
+	hdr = (s_Header_t*)shm_anchor;
 	SharedDataPointers_t data_ptrs = LocateDataPointers(hdr, shm_anchor);
 	
 	/* Structure case */
@@ -772,15 +770,7 @@ void ShmFetch_(byte_t* shm_anchor, mxArray** ret_var)
 			}
 			else
 			{
-				ReadErrorMex("UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'double' or 'logical'");
-			}
-			
-			/* free the real and imaginary data */
-			mxFree(mxGetData(*ret_var));
-
-			if(MshIsComplex(hdr))
-			{
-				mxFree(mxGetImagData(*ret_var));
+				ReadMexError("UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'double' or 'logical'");
 			}
 			
 			/* free the pointers relating to sparse */
@@ -806,14 +796,23 @@ void ShmFetch_(byte_t* shm_anchor, mxArray** ret_var)
 				*ret_var = mxCreateCharArray(0, NULL);
 			}
 			
-			if(!MshIsComplex(hdr))
+			if(MshIsEmpty(hdr))
 			{
+				data_ptrs.data = NULL;
 				data_ptrs.imag_data = NULL;
 			}
 			
-			data_ptrs.ir = NULL;
-			data_ptrs.jc = NULL;
-			
+		}
+		
+		/* free temporary data pointers (may be NULL) */
+		mxFree(mxGetData(*ret_var));
+		if(MshIsComplex(hdr))
+		{
+			mxFree(mxGetImagData(*ret_var));
+		}
+		else
+		{
+			data_ptrs.imag_data = NULL;
 		}
 		
 		/* set all data */
@@ -824,17 +823,6 @@ void ShmFetch_(byte_t* shm_anchor, mxArray** ret_var)
 }
 
 
-/* ------------------------------------------------------------------------- */
-/* ShmDetach                                                                */
-/*                                                                           */
-/* Remove shared memory references to input matrix (in-situ), recursively    */
-/* if needed.                                                                */
-/*                                                                           */
-/* Arguments:                                                                */
-/*    Input matrix to remove references.                                     */
-/* Returns:                                                                  */
-/*    Pointer to start of shared memory segment.                             */
-/* ------------------------------------------------------------------------- */
 void ShmDetach(mxArray* ret_var)
 {
 	mxArray* link;
@@ -914,15 +902,10 @@ void ShmDetach(mxArray* ret_var)
 	}
 	else
 	{
-		ReadErrorMex("InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
+		ReadMexError("InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
 	}
 }
 
-
-void ShmRewrite(byte_t* shm_anchor, const mxArray* in_var, mxArray* rewrite_var)
-{
-	ShmRewrite_(shm_anchor + PadToAlign(sizeof(SegmentMetadata_t)), in_var, rewrite_var);
-}
 
 
 void ShmRewrite_(byte_t* shm_anchor, const mxArray* in_var, mxArray* rewrite_var)
@@ -930,13 +913,13 @@ void ShmRewrite_(byte_t* shm_anchor, const mxArray* in_var, mxArray* rewrite_var
 	size_t idx, count, cpy_sz;
 	
 	/* for working with payload */
-	Header_t* hdr;
+	s_Header_t* hdr;
 	
 	/* for structures */
 	int field_num;                /* current field */
 	
 	/* retrieve the data */
-	hdr = (Header_t*)shm_anchor;
+	hdr = (s_Header_t*)shm_anchor;
 	SharedDataPointers_t data_ptrs = LocateDataPointers(hdr, shm_anchor);
 	
 	const mwSize* new_dims = mxGetDimensions(in_var);
@@ -1005,12 +988,6 @@ void ShmRewrite_(byte_t* shm_anchor, const mxArray* in_var, mxArray* rewrite_var
 }
 
 
-bool_t ShmCompareSize(byte_t* shm_anchor, const mxArray* comp_var)
-{
-	return ShmCompareSize_(shm_anchor + PadToAlign(sizeof(SegmentMetadata_t)), comp_var);
-}
-
-
 bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 {
 	
@@ -1022,7 +999,7 @@ bool_t ShmCompareSize_(byte_t* shm_anchor, const mxArray* comp_var)
 	int field_num;                /* current field */
 	
 	/* retrieve the data */
-	Header_t* hdr = (Header_t*)shm_anchor;
+	s_Header_t* hdr = (s_Header_t*)shm_anchor;
 	mwSize* curr_dims;
 	
 	const char_t* field_name;

@@ -36,23 +36,9 @@ void MshFetch(int nlhs, mxArray** plhs);
 
 void MshShare(int nlhs, mxArray** plhs, int num_vars, const mxArray* in_vars[]);
 
+void MshDeepcopy(int nlhs, mxArray** plhs);
+
 void MshClear(int num_inputs, const mxArray* in_vars[]);
-
-void ShmFetch(byte_t* shm, mxArray** ret_var);
-
-bool_t ShmCompareSize(byte_t* shm, const mxArray* comp_var);
-
-void ShmRewrite(byte_t* shm_anchor, const mxArray* in_var, mxArray* rewrite_var);
-
-/* Recursively descend through Matlab matrix to assess how much space its    */
-/* serialization will require.                                               */
-size_t ShmScan(const mxArray* in_var);
-
-/* Descend through header and data structure and copy relevant data to       */
-/* shared memory.                                                            */
-void ShmCopy(SegmentNode_t* seg_node, const mxArray* in_var);
-
-/* mxLogical ShmCompareContent(byte_t* shm, const mxArray* comp_var); */
 
 /* Remove shared memory references to input matrix (in-situ), recursively    */
 /* if needed.                                                                */

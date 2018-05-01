@@ -1,11 +1,14 @@
-function varargout = mshshare(varargin)
-	if(nargout > 1)
-		ME = MException('mshshare:tooManyOutputsError','Too many outputs');
-		throw(ME);
-	elseif(nargout == 1)
-		varargout{1} = matshare_(uint8(0), varargin{:});
-	else
-		matshare_(uint8(0), varargin{:});
+function [data, new, all] = mshshare(in)
+	% ordered by predicted usage amounts to slightly improve performance
+	switch(nargout)
+		case 0
+			matshare_(uint8(0), in);
+		case 1
+			data = matshare_(uint8(0), in);
+		case 3
+			[data, new, all] = matshare_(uint8(0), in);
+		case 2
+			[data, new] = matshare_(uint8(0), in);
 	end
 end
 
