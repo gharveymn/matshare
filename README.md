@@ -5,24 +5,24 @@
 To compile `matshare` simply run INSTALL.m. Run ‘./tests/testmulti.m’ to verify that everything is working correctly. There are several ways to use `matshare` depending on your needs, and some methods give better performance than others. In the interest of performance, both the automatic initialization and thread safety features may be disabled by editing OPTIONS.m (thread safety can also be turned off after compilation using `mshparam`).
 
 
- The easiest way to use `matshare` is with objects. The class MatShare.m allows one to treat shared variables as if they were normal variables. To use this, create an object and use the ‘data’ property to read and write to shared memory. For example,
+ The easiest way to use `matshare` is with objects. The class MatShare.m allows one to treat shared variables as if they were normal variables. To use this, create an object and use the ‘s_data’ property to read and write to shared memory. For example,
 
 #### Process 1
 ```matlab
 >> shared1 = MatShare;
->> shared1.data = rand(3);
+>> shared1.s_data = rand(3);
 ```
 #### Process 2
 ```matlab
 >> shared2 = MatShare;
->> shared2.data
+>> shared2.s_data
 ans =
     0.9649    0.9572    0.1419
     0.1576    0.4854    0.4218
     0.9706    0.8003    0.9157
 ```
 
-If you assign a new value to the `data` property `MatShare` will update the shared memory automatically, and also clean up any existing references you might have. Multiple objects in the same process will point to the same memory, and the memory is only cleared when the last object in the last process is cleared. The penalty with assuming this syntax is mostly performance; since this is using a  MATLAB class it is natural that the performance is slower.
+If you assign a new value to the `s_data` property `MatShare` will update the shared memory automatically, and also clean up any existing references you might have. Multiple objects in the same process will point to the same memory, and the memory is only cleared when the last object in the last process is cleared. The penalty with assuming this syntax is mostly performance; since this is using a  MATLAB class it is natural that the performance is slower.
 
 
 A faster method of using `matshare` is with the entry functions prefixed with ‘`msh`’. The syntax in this case is also very simple, 

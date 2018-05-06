@@ -2,7 +2,24 @@
 #define MATSHARE_MSHLISTS_H
 
 #include "mshtypes.h"
-#include "matshare_.h"
+
+typedef struct VariableNode_t
+{
+	struct VariableList_t* parent_var_list;
+	struct VariableNode_t* next; /* next variable that is currently fetched and being used */
+	struct VariableNode_t* prev;
+	mxArray* var;
+	struct SegmentNode_t* seg_node;
+} VariableNode_t;
+
+typedef struct SegmentNode_t
+{
+	struct SegmentList_t* parent_seg_list;
+	struct SegmentNode_t* next;
+	struct SegmentNode_t* prev;
+	VariableNode_t* var_node;
+	struct SegmentInfo_t seg_info;
+} SegmentNode_t;
 
 /**
  * Note: matshare links segments in shared memory by assigning each segment a "segment number."
@@ -15,45 +32,44 @@
  */
 
 
+SegmentMetadata_t* msh_GetSegmentMetadata(SegmentNode_t* seg_node);
+
+SharedVariableHeader_t* MshGetSegmentData(SegmentNode_t* seg_node);
+
+size_t msh_FindSegmentSize(const mxArray* in_var);
+
 /**
  * Creates a new shared memory segment with the specified size and hooks it into
  * the shared memory linked list. Automatically ensures that the segment tracking
  * by this process is up to date.
  *
  * @note Modifies the shared memory linked list.
+ * @param seg_list The list which will track the segment.
  * @param seg_sz The size of the new segment.
  * @return A struct containing information about the segment.
  */
-SegmentInfo_t CreateSegment(size_t seg_sz);
+SegmentNode_t* CreateSegment(SegmentList_t* seg_list, size_t seg_sz);
 
 
 /**
  * Opens a segment in shared memory based on the segment number.
  *
- * @note Interacts with shared memory, but does not modify.
+ * @note Interacts with but does not modify the shared memory linked list.
+ * @param seg_list The list which will track the segment.
  * @param seg_num The segment number of the shared memory segment (used by matshare to identify the memory segment).
  * @return A struct containing information about the segment.
  */
-SegmentInfo_t OpenSegment(msh_segmentnumber_t seg_num);
-
-
-/**
- * Create a new segment node.
- *
- * @note Completely local.
- * @param seg_info A struct containing info about a shared segment created either by OpenSegment or CreateSegment.
- * @return The newly allocated segment node.
- */
-SegmentNode_t* CreateSegmentNode(SegmentInfo_t seg_info);
+SegmentNode_t* OpenSegment(SegmentList_t* seg_list, msh_segmentnumber_t seg_num);
 
 
 /**
  * Closes the memory segment that the segment node is associated with.
+ * This should only run if the segment has been invalidated.
  *
- * @note Interacts but does not modify the shared memory linked list.
+ * @note Interacts with but does not modify the shared memory linked list.
  * @param seg_node The segment node containing the segment to close.
  */
-void CloseSegment(SegmentNode_t* seg_node);
+void DetachSegment(SegmentNode_t* seg_node);
 
 
 /**
@@ -61,71 +77,64 @@ void CloseSegment(SegmentNode_t* seg_node);
  * removes the segment from the shared segment linked list and marks the segment
  * for deletion by other processes.
  *
- * @note Modifies shared memory.
+ * @note Modifies the shared memory linked list.
  * @param seg_node The segment node associated to the segment to be destroyed.
  */
 void DestroySegment(SegmentNode_t* seg_node);
 
 
 /**
- * Add a segment node to the specified segment list.
+ * Creates a new MATLAB variable from the specified shared segment, stores
+ * it in a variable node, and adds the variable node to the specified list.
  *
  * @note Completely local.
- * @param seg_list The segment list which the segment node will be appended to.
- * @param seg_node The segment node to be appended.
+ * @param var_list The list which will track the variable.
+ * @param seg_node The segment node associated to the shared data.
+ * @return The variable node containing the new MATLAB variable.
  */
-void AddSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
+VariableNode_t* CreateVariable(VariableList_t* var_list, SegmentNode_t* seg_node);
 
 
 /**
- * Removes a segment node from the specified segment list.
+ * Detaches and destroys the variable contained in the specified variable node.
  *
- * @note Completely local.
- * @param seg_list The segment list which the segment node will be removed from.
- * @param seg_node The segment to be removed.
+ * @note Interacts with shared memory but does not modify the shared linked list.
+ * @param var_node The variable node containing the variable to be destroyed.
  */
-void RemoveSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
-
-
-/**
- * Closes the segment, removes the segment from the specified segment list
- * and frees the segment node.
- *
- * @note Completely local.
- * @param seg_list
- * @param seg_node
- */
-void CloseSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
-
-
-void DestroySegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
-
-
-VariableNode_t* CreateVariableNode(SegmentNode_t* seg_node);
-
-
-void AddVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
-
-
-void RemoveVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
-
-
 void DestroyVariable(VariableNode_t* var_node);
 
 
-void DestroyVariableNode(VariableNode_t* var_node);
+/**
+ * Destroys all variables in the specified variable list.
+ *
+ * @param var_list The variable list which will be cleared.
+ */
+void ClearVariableList(VariableList_t* var_list);
 
 
-void CleanVariableList(VariableList_t* var_list);
+/**
+ * Detaches all segments in the specified segment list. Must be up to date.
+ *
+ * @note May call functions which modify the shared memory linked list.
+ * @param seg_list The segment list for which all segments will be detached.
+ */
+void DetachSegmentList(SegmentList_t* seg_list);
 
 
-void CleanSegmentList(SegmentList_t* seg_list);
+/**
+ * Destroys all segments in the specified segment list.
+ *
+ * @note Calls functions which modify the shared memory linked list.
+ * @param seg_list The segment list to be cleared.
+ */
+void ClearSegmentList(SegmentList_t* seg_list);
 
 
-void DestroySegmentList(SegmentList_t* seg_list);
-
-
+/**
+ * Updates the local tracking of the shared memory linked list. Must be called
+ * before making modifications to shared memory.
+ */
 void UpdateSharedSegments(void);
 
 
-#endif //MATSHARE_MSHLISTS_H
+#endif /* MATSHARE_MSHLISTS_H */

@@ -1,5 +1,5 @@
 #include "headers/matlabutils.h"
-void (*g_matlab_error_callback)(void) = NULL;
+static void (*matlab_error_callback)(void) = NULL;
 
 #ifdef MSH_UNIX
 
@@ -171,7 +171,8 @@ void ReadMexError_(const char* file_name, int line, const char* error_id, const 
 	
 	sprintf(error_id_buffer, MATLAB_ERROR_ID, error_id);
 	sprintf(full_message, MATLAB_ERROR_MESSAGE_FMT, error_id, file_name, line, message_buffer, MATLAB_HELP_MESSAGE);
-
+	
+	matlab_error_callback();
 	mexErrMsgIdAndTxt(error_id_buffer, full_message);
 
 }
@@ -199,11 +200,11 @@ void SetMexErrorCallback(void (*callback_function)(void))
 {
 	if(callback_function != NULL)
 	{
-		g_matlab_error_callback = callback_function;
+		matlab_error_callback = callback_function;
 	}
 	else
 	{
-		g_matlab_error_callback = NullCallback;
+		matlab_error_callback = NullCallback;
 	}
 }
 

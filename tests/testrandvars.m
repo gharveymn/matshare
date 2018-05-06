@@ -5,7 +5,7 @@ lents = 0;
 
 maxDepth = 2;
 minelem = 0;
-maxelem = 1000;
+maxelem = 10;
 maxElementsv = round(linspace(minelem,maxelem,numtests));
 ignoreUnusables = true;
 stride = numsamples;
@@ -22,6 +22,8 @@ dosavestate = false;
 dotimes = false;
 numelems = 0;
 avgmultiplier = 0;
+
+times = zeros(numsamples,1);
 
 savepath = fullfile(fileparts(mfilename('fullpath')), '..', 'res','states',currtime);
 if(dosavestate)
@@ -43,6 +45,8 @@ for j = 1:numtests
 				end
 				save(fullfile(savepath, 'stateonesh.mat'));
 			end
+			
+			tic;
 			if(dokeepall)
 				eval(['mshshare(ts' num2str(i) '1);']);
 			else
@@ -50,6 +54,7 @@ for j = 1:numtests
 			end
 			
 			x1 = mshfetch;
+			times(i) = toc;
 			
 			if(dosavestate)
 				if(i ~= 1)
@@ -86,7 +91,9 @@ for j = 1:numtests
 				mshshare(ts2);
 			end
 			
+			tic;
 			x2 = mshfetch;
+			times(i) = toc;
 			
 			if(dosavestate)
 				if(i ~= 2)
@@ -113,6 +120,9 @@ for j = 1:numtests
 		end
 		
 	end
+	
+	plot(movmean(times,round(numel(times)/10)));
+	
 end
 
 

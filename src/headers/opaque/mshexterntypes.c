@@ -1,16 +1,11 @@
-#ifndef MATSHARE_EXTERNTYPES_H
-#define MATSHARE_EXTERNTYPES_H
+#include "../mshexterntypes.h"
 
-#include "mex.h"
-
-
-/* Credit to Yair M. Altman for this */
-typedef struct
+struct InternalMexStruct_t
 {
 	void* name;             /*   prev - R2008b: Name of variable in workspace
 				               R2009a - R2010b: NULL
 				               R2011a - later : Reverse crosslink pointer    */
-	mxClassID ClassID;      /* 0 = unknown     10 = int16
+	mxClassID class_id;      /* 0 = unknown     10 = int16
                                 1 = cell        11 = uint16
                                 2 = struct      12 = int32
                                 3 = logical     13 = uint32
@@ -21,7 +16,7 @@ typedef struct
                                 8 = int8        18 = object (old style)
                                 9 = uint8       19 = index (deprecated)
                                10 = int16       20 = sparse (deprecated)     */
-	int VariableType;       /*  0 = normal
+	int variable_type;       /*  0 = normal
                                 1 = persistent
                                 2 = global
                                 3 = sub-element (field or cell)
@@ -29,36 +24,39 @@ typedef struct
                                 5 = (unknown)
                                 6 = property of opaque class object
                                 7 = (unknown)                                */
-	mxArray* CrossLink;     /* Address of next shared-data variable          */
+	mxArray* crosslink;     /* Address of next shared-data variable          */
 	size_t ndim;            /* Number of dimensions                          */
-	unsigned int RefCount;  /* Number of extra sub-element copies            */
+	unsigned int ref_count;  /* Number of extra sub-element copies            */
 	unsigned int flags;     /*  bit  0 = is scalar double full
                                 bit  2 = is empty double full
                                 bit  4 = is temporary
                                 bit  5 = is sparse
                                 bit  9 = is numeric
                                 bits 24 - 31 = User Bits                     */
-	union mdim_data
+	union m_dims_u
 	{
-		size_t M;           /* Row size for 2D matrices, or                  */
-		size_t* dims;       /* Pointer to dims array for nD > 2 arrays       */
-	} Mdims;
-	size_t N;               /* Product of dims 2:end                         */
-	void* data;               /* Real Data Pointer (or cell/field elements)    */
-	void* imag_data;               /* Imag Data Pointer (or field information)      */
-	union ir_data
+		size_t m;           /* Row size for 2D matrices, or                  */
+		size_t* dims;       /* Pointer to dims array for nD > 2 arrays     */
+	} m_dims;
+	size_t n;                /* Product of dims 2:end                         */
+	void* data;              /* Real Data Pointer (or cell/field elements)    */
+	void* imag_data;         /* Imag Data Pointer (or field information)      */
+	union ir_data_u
 	{
 		mwIndex* ir;        /* Pointer to row values for sparse arrays       */
-		mxClassID ClassID;  /* New User Defined Class ID (classdef)          */
-		char* ClassName;    /* Pointer to Old User Defined Class Name        */
-	} irClassNameID;
-	union jc_data
+		mxClassID class_id;  /* New User Defined Class ID (classdef)          */
+		char* class_name;    /* Pointer to Old User Defined Class Name        */
+	} ir_data;
+	union jc_data_u
 	{
 		mwIndex* jc;        /* Pointer to column values for sparse arrays    */
-		mxClassID ClassID;  /* Old User Defined Class ID                     */
-	} jcClassID;
-	size_t nzmax;           /* Number of elements allocated for sparse       */
-/*  size_t reserved;           Don't believe this! It is not really there!   */
-} mxArrayStruct;
+		mxClassID class_id;  /* Old User Defined Class ID                     */
+	} jc_data;
+	size_t nzmax;            /* Number of elements allocated for sparse        */
+/*   size_t reserved;             Don't believe this! It is not really there!    */
+};
 
-#endif //MATSHARE_EXTERNTYPES_H
+mxArray* msh_GetCrosslink(mxArray* var)
+{
+	return ((InternalMexStruct_t*)var)->crosslink;
+}

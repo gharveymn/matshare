@@ -31,7 +31,9 @@ try
 			'matlabutils.c',...
 			'mshutils.c',...
 			'mshinit.c',...
-			'mshlists.c'
+			'mshlists.c',...
+			'headers/opaque/mshheader.c',...
+			'headers/opaque/mshexterntypes.c'
 			};
 		
 	for i = 1:numel(sources)
@@ -62,6 +64,7 @@ try
 	end
 	
 	fprintf('-Compiling matshare...')
+	mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 -pedantic -Wall"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n%s\n',['-The function is located in ' fullfile(pwd,'bin') '.'])
 	

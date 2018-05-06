@@ -5,11 +5,11 @@
 #include "matlabutils.h"
 #include "mshutils.h"
 
-void InitializeMatshare();
+void InitializeMatshare(void);
 void ProcStartup(void);
 void InitProcLock(void);
 void InitInfoSegment(void);
 void MapInfoSegment(void);
 void GlobalStartup(void);
 
-#endif //MATSHARE_INIT_H
+#endif /* MATSHARE_INIT_H */

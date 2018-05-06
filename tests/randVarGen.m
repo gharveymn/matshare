@@ -58,11 +58,9 @@ function [ret] = randVarGen_(maxDepth, currDepth, maxElements, ignoreUnusables)
 		end
 	else
 		ndims = randi(32);
-		dims = cell(1,ndims);
-		for i = 1:ndims
-			dims{i} = randi(intmax('uint8')) - 1;
-		end
-		dims{randi(ndims)} = 0;
+		dims = randi(intmax('uint8'),1,ndims) - 1;
+		dims(randi(ndims)) = 0;
+		dims = num2cell(dims);
 	end
 
 	if(numel(dims) == 1)

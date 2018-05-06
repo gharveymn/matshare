@@ -35,6 +35,8 @@ if(dosavestate)
 	mkdirifnotexist(savepath)
 end
 
+disp(getmem)
+
 for j = 1:numtests
 	maxElements = maxElementsv(j);
 	for i = 1:numsamples
@@ -96,8 +98,12 @@ for j = 1:numtests
 		
 		
 	end
+	
+	plot(movmean(times,round(numel(times)/10)));
+	
 end
 
-plot(times);
+disp(getmem)
+
 
 fprintf('\n');

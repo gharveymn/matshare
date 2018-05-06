@@ -15,19 +15,18 @@ tic;
 parfor i = 1:numel(funlist)
 	result(i) = feval(funlist{i}, Data);
 end
-toc  %Elapsed time is 2.748853 seconds
+toc  %Elapsed time is 0.462327 seconds
 drawnow
 
 %using shared version
 tic;
-a = MatShare;
-a.data = Data;								%place a copy of data in global memory
+mshshare(Data);								%place a copy of data in shared memory
 parfor i = 1:numel(funlist)
-	sh = MatShare;
-	resultpar(i) = feval(funlist{i}, sh.data);
+	resultpar(i) = feval(funlist{i}, mshfetch);
+	mshdetach;
 end
-a.data = [];                    %The shared memory is now detached from all processes and will be deleted
-toc  %Elapsed time is 1.399766 seconds.
+mshdetach;
+toc  %Elapsed time is 0.056462 seconds.
 
 if(~any(resultpar - result))
 	disp('Result is correct.');

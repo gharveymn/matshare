@@ -5,7 +5,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <fcntl.h>
-#include <errno.h>
 
 #if !defined MSH_WIN && !defined MSH_UNIX
 	#if defined(MATLAB_UNIX)
@@ -66,6 +65,4 @@ void ReadFchmodError_(const char* file_name, int line, int err);
 #define ReadFchmodError(err) ReadFchmodError_(__FILE__ , __LINE__, err)
 #endif
 
-void (*g_matlab_error_callback)(void);
-
-#endif //MATSHARE_UTILS_H
+#endif /* MATSHARE_UTILS_H */

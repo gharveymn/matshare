@@ -59,6 +59,8 @@ mxArray* sps;
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
 
+	plhs[0] = mxCreateNumericArray(0, NULL, mxUINT32_CLASS, mxREAL);
+	
 // 	mxArray* in = mxCreateDoubleMatrix(3,3,mxREAL);
 // 	mxArray* shared = mxCreateSharedDataCopy(in);
 // 	mxArray* in = prhs[0];
@@ -68,10 +70,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 //
 //	mwSize dims[3] = {2,3,2};
 //	mxSetDimensions(out,dims,3);
-	mxArray* x = mxCreateDoubleMatrix(1,1,mxREAL);
-	void* data = mxGetData(x);
-	mxSetData(x, NULL);
-	mxSetData(x, data);
+// 	mxArray* x = mxCreateDoubleMatrix(1,1,mxREAL);
+// 	void* data = mxGetData(x);
+// 	mxSetData(x, NULL);
+// 	mxSetData(x, data);
 // 	mxArray* in2 = prhs[1];
 // 	mxArrayStruct* in_tag2 = (mxArrayStruct*)in2;
 // 	mxArrayStruct* shared_tag = (mxArrayStruct*)shared;
