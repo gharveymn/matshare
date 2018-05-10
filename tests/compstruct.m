@@ -1,4 +1,4 @@
-function [common, d1, d2] = compstruct(s1,s2,prt,pse,tol,n1,n2)
+function [boolret, common, d1, d2] = compstruct(s1,s2,prt,pse,tol,n1,n2)
 % check two structures for differences - i.e. see if structure s1 == structure s2
 % function [common, d1, d2] = compstruct(s1,s2,prt,pse,tol)
 %
@@ -76,7 +76,7 @@ if ~isequal(s1,s2)
 		for ii = 1:numel(fn)
 			% common field - recurse and test
 			for jj = 1:min([numel(d1) numel(d2)])
-				[common(jj).(fn{ii}) d1(jj).(fn{ii}) d2(jj).(fn{ii})] = ...
+				[common(jj).(fn{ii}), d1(jj).(fn{ii}), d2(jj).(fn{ii})] = ...
 					compstruct(s1(jj).(fn{ii}),s2(jj).(fn{ii}), ...
 					prt,pse,tol, ...
 					[n1 '(' num2str(jj) ').' fn{ii}], ...
@@ -212,4 +212,11 @@ end
 if isstruct(d2)
 	% fieldnames
 	if isempty(fieldnames(d2)); d2 = []; end
+end
+
+%% set the boolean return flag
+if(~isempty(d1) || ~isempty(d2))
+	boolret = false;
+else
+	boolret = true;
 end

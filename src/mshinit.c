@@ -1,12 +1,21 @@
 #include "headers/mshinit.h"
+#include "headers/matlabutils.h"
+#include "headers/mshutils.h"
+#include "headers/mshtypes.h"
 
 static bool_t s_is_glob_init;
 
-void InitializeMatshare(void)
+static void msh_ProcStartup(void);
+static void msh_InitProcLock(void);
+static void msh_InitInfoSegment(void);
+static void msh_MapInfoSegment(void);
+static void msh_GlobalStartup(void);
+
+void msh_InitializeMatshare(void)
 {
 	
 	/* set this every time because matlabutils uses a static variable */
-	SetMexErrorCallback(MshOnError);
+	SetMexErrorCallback(msh_OnError);
 	
 	/* this memory should persist if this is not the first time running */
 	if(g_local_info != NULL)
@@ -20,32 +29,32 @@ void InitializeMatshare(void)
 	/* assume not */
 	s_is_glob_init = FALSE;
 	
-	ProcStartup();
+	msh_ProcStartup();
 	
 	if(!g_local_info->shm_info_seg.is_init)
 	{
-		InitInfoSegment();
+		msh_InitInfoSegment();
 	}
 	
 	if(!g_local_info->shm_info_seg.is_mapped)
 	{
-		MapInfoSegment();
+		msh_MapInfoSegment();
 	}
 	
 	/* includes writing to shared memory, but the memory has been aligned so all writes are atomic */
-	GlobalStartup();
+	msh_GlobalStartup();
 
 #ifdef MSH_THREAD_SAFE
 	if(!g_local_info->flags.is_proc_lock_init)
 	{
-		InitProcLock();
+		msh_InitProcLock();
 	}
 #endif
 
 }
 
 
-void ProcStartup(void)
+static void msh_ProcStartup(void)
 {
 	g_local_info = mxCalloc(1, sizeof(GlobalInfo_t));
 	mexMakeMemoryPersistent(g_local_info);
@@ -56,12 +65,12 @@ void ProcStartup(void)
 	g_local_info->this_pid = getpid();
 #endif
 	
-	mexAtExit(MshOnExit);
+	mexAtExit(msh_OnExit);
 	
 }
 
 
-void InitProcLock(void)
+static void msh_InitProcLock(void)
 {
 #ifdef MSH_THREAD_SAFE
 
@@ -100,7 +109,7 @@ void InitProcLock(void)
 }
 
 
-void InitInfoSegment(void)
+static void msh_InitInfoSegment(void)
 {
 	
 	g_local_info->shm_info_seg.seg_sz = sizeof(SharedInfo_t);
@@ -119,7 +128,7 @@ void InitInfoSegment(void)
 
 #else
 	
-	/* Try to open an already created segment so we can get the global InitializeMatshare signal */
+	/* Try to open an already created segment so we can get the global msh_InitializeMatshare signal */
 	strncpy(g_local_info->shm_info_seg.name, MSH_UPDATE_SEGMENT_NAME, MSH_MAX_NAME_LEN*sizeof(char));
 	g_local_info->shm_info_seg.handle = shm_open(g_local_info->shm_info_seg.name, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
 	if(g_local_info->shm_info_seg.handle == -1)
@@ -157,7 +166,7 @@ void InitInfoSegment(void)
 }
 
 
-void MapInfoSegment(void)
+static void msh_MapInfoSegment(void)
 {
 #ifdef MSH_WIN
 	
@@ -186,7 +195,7 @@ void MapInfoSegment(void)
 }
 
 
-void GlobalStartup(void)
+static void msh_GlobalStartup(void)
 {
 	if(s_is_glob_init)
 	{
@@ -211,7 +220,7 @@ void GlobalStartup(void)
 		g_shared_info->user_def.is_thread_safe = FALSE;
 #endif
 		
-		g_shared_info->user_def.will_remove_unused = TRUE;		/** default value **/
+		g_shared_info->user_def.will_gc = TRUE;		/** default value **/
 	
 	}
 	else

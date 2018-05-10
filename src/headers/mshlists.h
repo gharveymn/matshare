@@ -34,7 +34,7 @@ typedef struct SegmentNode_t
 
 SegmentMetadata_t* msh_GetSegmentMetadata(SegmentNode_t* seg_node);
 
-SharedVariableHeader_t* MshGetSegmentData(SegmentNode_t* seg_node);
+SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node);
 
 size_t msh_FindSegmentSize(const mxArray* in_var);
 
@@ -48,7 +48,7 @@ size_t msh_FindSegmentSize(const mxArray* in_var);
  * @param seg_sz The size of the new segment.
  * @return A struct containing information about the segment.
  */
-SegmentNode_t* CreateSegment(SegmentList_t* seg_list, size_t seg_sz);
+SegmentNode_t* msh_CreateSegment(SegmentList_t* seg_list, size_t seg_sz);
 
 
 /**
@@ -59,7 +59,7 @@ SegmentNode_t* CreateSegment(SegmentList_t* seg_list, size_t seg_sz);
  * @param seg_num The segment number of the shared memory segment (used by matshare to identify the memory segment).
  * @return A struct containing information about the segment.
  */
-SegmentNode_t* OpenSegment(SegmentList_t* seg_list, msh_segmentnumber_t seg_num);
+SegmentNode_t* msh_OpenSegment(SegmentList_t* seg_list, msh_segmentnumber_t seg_num);
 
 
 /**
@@ -69,7 +69,7 @@ SegmentNode_t* OpenSegment(SegmentList_t* seg_list, msh_segmentnumber_t seg_num)
  * @note Interacts with but does not modify the shared memory linked list.
  * @param seg_node The segment node containing the segment to close.
  */
-void DetachSegment(SegmentNode_t* seg_node);
+void msh_DetachSegment(SegmentNode_t* seg_node);
 
 
 /**
@@ -80,7 +80,7 @@ void DetachSegment(SegmentNode_t* seg_node);
  * @note Modifies the shared memory linked list.
  * @param seg_node The segment node associated to the segment to be destroyed.
  */
-void DestroySegment(SegmentNode_t* seg_node);
+void msh_DestroySegment(SegmentNode_t* seg_node);
 
 
 /**
@@ -92,7 +92,7 @@ void DestroySegment(SegmentNode_t* seg_node);
  * @param seg_node The segment node associated to the shared data.
  * @return The variable node containing the new MATLAB variable.
  */
-VariableNode_t* CreateVariable(VariableList_t* var_list, SegmentNode_t* seg_node);
+VariableNode_t* msh_CreateVariable(VariableList_t* var_list, SegmentNode_t* seg_node);
 
 
 /**
@@ -101,7 +101,7 @@ VariableNode_t* CreateVariable(VariableList_t* var_list, SegmentNode_t* seg_node
  * @note Interacts with shared memory but does not modify the shared linked list.
  * @param var_node The variable node containing the variable to be destroyed.
  */
-void DestroyVariable(VariableNode_t* var_node);
+void msh_DestroyVariable(VariableNode_t* var_node);
 
 
 /**
@@ -109,7 +109,7 @@ void DestroyVariable(VariableNode_t* var_node);
  *
  * @param var_list The variable list which will be cleared.
  */
-void ClearVariableList(VariableList_t* var_list);
+void msh_ClearVariableList(VariableList_t* var_list);
 
 
 /**
@@ -118,7 +118,7 @@ void ClearVariableList(VariableList_t* var_list);
  * @note May call functions which modify the shared memory linked list.
  * @param seg_list The segment list for which all segments will be detached.
  */
-void DetachSegmentList(SegmentList_t* seg_list);
+void msh_DetachSegmentList(SegmentList_t* seg_list);
 
 
 /**
@@ -127,14 +127,14 @@ void DetachSegmentList(SegmentList_t* seg_list);
  * @note Calls functions which modify the shared memory linked list.
  * @param seg_list The segment list to be cleared.
  */
-void ClearSegmentList(SegmentList_t* seg_list);
+void msh_ClearSegmentList(SegmentList_t* seg_list);
 
 
 /**
  * Updates the local tracking of the shared memory linked list. Must be called
  * before making modifications to shared memory.
  */
-void UpdateSharedSegments(void);
+void msh_UpdateSegmentTracking(void);
 
 
 #endif /* MATSHARE_MSHLISTS_H */

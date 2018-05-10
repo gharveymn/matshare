@@ -1,53 +1,36 @@
 #ifndef MATSHARE_MATSHAREUTILS_H
 #define MATSHARE_MATSHAREUTILS_H
 
-#include <ctype.h>
-#include <sys/stat.h>
-#include "mshtypes.h"
-#include "matshare_.h"
-#include "matlabutils.h"
-#include "mshlists.h"
+#include "mex.h"
+#include "mshbasictypes.h"
 
+typedef enum
+{
+	msh_SHARE = 0,
+	msh_FETCH = 1,
+	msh_DETACH = 2,
+	msh_PARAM = 3,
+	msh_DEEPCOPY = 4,
+	msh_DEBUG = 5, /* unused */
+	msh_OBJ_REGISTER = 6,
+	msh_OBJ_DEREGISTER = 7,
+	msh_INIT = 8, /* unused */
+	msh_CLEAR = 9
+} msh_directive_t;
 
-#define MSH_PARAM_THREADSAFETY "ThreadSafety"
-#define MSH_PARAM_THREADSAFETY_L "threadsafety"
+void msh_OnExit(void);
 
-#define MSH_PARAM_SECURITY "Security"
-#define MSH_PARAM_SECURITY_L "security"
+void msh_OnError(void);
 
-#define MSH_PARAM_COPYONWRITE "CopyOnWrite"
-#define MSH_PARAM_COPYONWRITE_L "copyonwrite"
+void msh_AcquireProcessLock(void);
 
-#define MSH_PARAM_GC "GC"
-#define MSH_PARAM_GC_L "gc"
+void msh_ReleaseProcessLock(void);
 
-#ifdef MSH_WIN
-#define MSH_PARAM_INFO \
-"Current parameters for matshare: \n\
-                                      ThreadSafety: '%s'\n\
-                                      CopyOnWrite:  '%s'\n"
-#else
-#define MSH_PARAM_INFO \
-"Current parameters for matshare: \n\
-                                      ThreadSafety: '%s'\n\
-                                      CopyOnWrite:  '%s'\n\
-                                      Security:     '%o'\n"
-#endif
+msh_directive_t msh_ParseDirective(const mxArray* in);
 
+void msh_UpdateAll(void);
 
-void MshOnExit(void);
-
-void MshOnError(void);
-
-void AcquireProcessLock(void);
-
-void ReleaseProcessLock(void);
-
-msh_directive_t ParseDirective(const mxArray* in);
-
-void UpdateAll(void);
-
-void RemoveUnusedVariables(void);
+void msh_VariableGC(void);
 
 /**
  * Writes the segment name to the name buffer.
@@ -55,8 +38,8 @@ void RemoveUnusedVariables(void);
  * @param name_buffer The destination of the segment name.
  * @param seg_num The segment number used by matshare to identify the segment.
  */
-void WriteSegmentName(char name_buffer[MSH_MAX_NAME_LEN], msh_segmentnumber_t seg_num);
+void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num);
 
-void NullFunction(void);
+void msh_NullFunction(void);
 
 #endif /* MATSHARE_MATSHAREUTILS_H */

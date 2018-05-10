@@ -1,96 +1,106 @@
-function [ret] = randVarGen(maxDepth, maxElements, ignoreUnusables)
-	[ret] = randVarGen_(maxDepth, 1, maxElements, ignoreUnusables);
+function [ret] = randvargen(maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec)
+	[ret] = randvargen_(1, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
 end
 
 
-function [ret] = randVarGen_(maxDepth, currDepth, maxElements, ignoreUnusables)
+function [ret] = randvargen_(currDepth, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec)
 
 	%  Variable Type Key
-	% 	1	mxLOGICAL_CLASS,
-	% 	2	mxCHAR_CLASS,
-	% 	3	mxVOID_CLASS,
-	% 	4	mxDOUBLE_CLASS,
-	% 	5	mxSINGLE_CLASS,
-	% 	6	mxINT8_CLASS,
-	% 	7	mxUINT8_CLASS,
-	% 	8	mxINT16_CLASS,
-	% 	9	mxUINT16_CLASS,
-	% 	10	mxINT32_CLASS,
-	% 	11	mxUINT32_CLASS,
-	% 	12	mxINT64_CLASS,
-	% 	13	mxUINT64_CLASS,
-	% 	14	mxFUNCTION_CLASS,
-	% 	15	mxOPAQUE_CLASS/SPARSES,
-	% 	16	mxOBJECT_CLASS,
-	% 	17	mxCELL_CLASS,
-	% 	18	mxSTRUCT_CLASS
+	%    1    mxCELL_CLASS,
+	%    2    mxSTRUCT_CLASS,
+	% 	3	mxLOGICAL_CLASS,
+	% 	4	mxCHAR_CLASS,
+	% 	5	mxVOID_CLASS,
+	% 	6	mxDOUBLE_CLASS,
+	% 	7	mxSINGLE_CLASS,
+	% 	8	mxINT8_CLASS,
+	% 	9	mxUINT8_CLASS,
+	% 	10	mxINT16_CLASS,
+	% 	11	mxUINT16_CLASS,
+	% 	12	mxINT32_CLASS,
+	% 	13	mxUINT32_CLASS,
+	% 	14	mxINT64_CLASS,
+	% 	15	mxUINT64_CLASS,
+	% 	16	mxFUNCTION_CLASS,
+	% 	17	mxOPAQUE_CLASS/SPARSES,
+	% 	18	mxOBJECT_CLASS,
 
 	if(maxDepth <= currDepth)
 		%dont make another layer
-		vartypegen = randi(16) + 2;
-		%vartypegen = 17;
+		if(typespec > 2)
+			randvartype = typespec;
+		else
+			if(ignoreUnusables)
+				randvartype = randi(13) + 2;
+			else
+				randvartype = randi(16) + 2;
+			end
+		end
 	else
-		vartypegen = randi(2);
-		%vartypegen = 2;
+		if(typespec > 0)
+			randvartype = typespec;
+		else
+			if(ignoreUnusables)
+				randvartype = randi(15);
+			else
+				randvartype = randi(18);
+			end
+		end
 	end
 
-	if(vartypegen > 2)
-		thisMaxElements = maxElements;
+	if(randvartype > 2)
+		thisMaxElements = maxElems;
 	else
 		%max elems for structs
-		thisMaxElements = 16;
+		thisMaxElements = maxChildren;
 	end
-
+	
+	numdims = randi([2,maxDims]);
+	dims = ones(1,numdims);
+	
 	numvarsz = randi(thisMaxElements + 1) - 1;
 	nums = 1:numvarsz;
 	divs = nums(mod(numvarsz, nums) == 0);
 	temp = numvarsz;
-	dims = {};
 	if(numvarsz ~= 0)
-		while(true)
+		for i = 1:numdims
 			randdiv = divs(randi(numel(divs)));
-			dims = [dims {randdiv}];
+			dims(i) = randdiv;
 			temp = temp / randdiv;
 			divs = divs(mod(temp,divs) == 0);
 			if(temp == 1)
 				break;
 			end
 		end
+		if(temp ~= 1)
+			dims(end) = temp;
+		end
 	else
-		ndims = randi(32);
-		dims = randi(intmax('uint8'),1,ndims) - 1;
-		dims(randi(ndims)) = 0;
-		dims = num2cell(dims);
+		dims = randi(intmax,1,numdims) - 1;
+		dims(randi(numdims)) = 0;
 	end
+	
+	makesparse = (rand < 0.5) & (numdims == 2);
 
-	if(numel(dims) == 1)
-		dims = [dims {1}];
-	end
-
-	switch(vartypegen)
+	switch(randvartype)
 		case(1)
-			% 	1	mxCELL_CLASS,
-			ret = cell(dims{:});
+			% 	1	mxCELL_CLASS
+			ret = cell(dims);
 			for k = 1:numel(ret)
-
-				ret{k} = randVarGen_(maxDepth, ...
-					currDepth + 1, ...
-					maxElements, ...
-					ignoreUnusables);
-				
+				ret{k} = randvargen_(currDepth + 1, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
 			end
 		case(2)
 			% 	2	mxSTRUCT_CLASS
 			numPossibleFields = 5;
 			if(numvarsz ~= 0)
 				possibleFields = {'cat',[],'dog',[],'fish',[],'cow',[],'twentyonesavage',[]};
-				ret(dims{:}) = struct(possibleFields{1:2*randi(numPossibleFields)});
+				cdims = num2cell(dims);
+				ret(cdims{:}) = struct(possibleFields{1:2*randi(numPossibleFields)});
 				retFields = fieldnames(ret);
 				for k = 1:numel(ret)
 
 					for j = 1:numel(retFields)
-						ret(k).(retFields{j}) = randVarGen_(maxDepth, currDepth + 1, ...
-							maxElements, ignoreUnusables);
+						ret(k).(retFields{j}) = randvargen_(currDepth + 1, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
 
 					end
 
@@ -99,91 +109,92 @@ function [ret] = randVarGen_(maxDepth, currDepth, maxElements, ignoreUnusables)
 				possibleFields = {'cat',dims,'dog',dims,'fish',dims,'cow',dims,'twentyonesavage',dims};
 				ret = struct(possibleFields{1:2*randi(numPossibleFields)});
 			end
-
 		case(3)
 			% 	3	mxLOGICAL_CLASS,
-			ret = logical(rand(dims{:}) > 0.5);
+			if(makesparse)
+				if(numvarsz == 0)
+					% prevent matlab from allocating too much
+					dims = mod(dims, 100000);
+				end
+				ret = sprand(dims(1),dims(2),rand) > 0.5;
+			else
+				ret = rand(dims) > 0.5;
+			end
 		case(4)
 			% 	4	mxCHAR_CLASS,
-			ret = char(randi(65536,dims{:})-1);
+			ret = char(randi([0,65535],dims));
 		case(5)
-			% 	5	mxVOID_CLASS/SPARSE,
-			%reserved, make a double instead or sparse
-			if(numel(dims) == 2)
-				ret = sparse(logical(rand(dims{:}) > 0.5));
-			else
-				ret = rand(dims{:},'double');
-			end
+			% 	5	mxVOID_CLASS,
+			%reserved, make a double instead
+			ret = rand(dims,'double');
 		case(6)
 			% 	6	mxDOUBLE_CLASS,
-			ret = rand(dims{:},'double');
+			if(makesparse)
+				if(numvarsz == 0)
+					% prevent matlab from allocating too much
+					dims = mod(dims, 100000);
+				end
+				ret = sprand(dims(1),dims(2),rand);
+			else
+				ret = rand(dims,'double');
+			end
 		case(7)
 			% 	7	mxSINGLE_CLASS,
-			ret = rand(dims{:},'single');
+			ret = rand(dims,'single');
 		case(8)
 			% 	8	mxINT8_CLASS,
-			ret = randi(intmax('int8'),dims{:},'int8');
+			ret = randi(intmax('int8'),dims,'int8');
 		case(9)
 			% 	9	mxUINT8_CLASS,
-			ret = randi(intmax('uint8'),dims{:},'uint8');
+			ret = randi(intmax('uint8'),dims,'uint8');
 		case(10)
 			% 	10	mxINT16_CLASS,
-			ret = randi(intmax('int16'),dims{:},'int16');
+			ret = randi(intmax('int16'),dims,'int16');
 		case(11)
 			% 	11	mxUINT16_CLASS,
-			ret = randi(intmax('uint16'),dims{:},'uint16');
+			ret = randi(intmax('uint16'),dims,'uint16');
 		case(12)
 			% 	12	mxINT32_CLASS,
-			ret = randi(intmax('int32'),dims{:},'int32');
+			ret = randi(intmax('int32'),dims,'int32');
 		case(13)
 			% 	13	mxUINT32_CLASS,
-			ret = randi(intmax('uint32'),dims{:},'uint32');
+			ret = randi(intmax('uint32'),dims,'uint32');
 		case(14)
 			% 	14	mxINT64_CLASS,
-			f = @() uint64( randi(intmax('uint32'), dims{:}, 'uint32') );
+			f = @() uint64( randi(intmax('uint32'), dims, 'uint32') );
 			% bitshift and bitor to convert into a proper uint64        
 			ret = int64(bitor( bitshift(f(),32), f() ));
 		case(15)
 			% 	15	mxUINT64_CLASS,
-			f = @() uint64( randi(intmax('uint32'), dims{:}, 'uint32') );
+			f = @() uint64( randi(intmax('uint32'), dims, 'uint32') );
 			% bitshift and bitor to convert into a proper uint64        
 			ret = bitor( bitshift(f(),32), f() );
 		case(16)
 			% 	16	mxFUNCTION_CLASS,
-			if(ignoreUnusables)
-				ret = rand(dims{:},'double');
-			else
-				af1 = @(x) x + 17;
-				af2 = @(x,y,z) x*y*z;
-				sf1 = @simplefunction1;
-				sf2 = @simplefunction2;
+			af1 = @(x) x + 17;
+			af2 = @(x,y,z) x*y*z;
+			sf1 = @simplefunction1;
+			sf2 = @simplefunction2;
 
-				funcs = {af1,af2,sf1,sf2};
-				ret = funcs{randi(numel(funcs))};
-			end
+			funcs = {af1,af2,sf1,sf2};
+			ret = funcs{randi(numel(funcs))};
 		case(17)
 			% 	17	mxOPAQUE_CLASS,
-			% not sure how to generate, generate a sparse array instead
-			if(numel(dims) == 2)
-				if(rand > 0.5)
-					ret = sparse(logical(rand(dims{:}) > 0.5).*rand(dims{:},'double'));
-					if(rand > 0.5)
-						ret = ret + 1i*sparse(logical(rand(dims{:}) > 0.5).*rand(dims{:},'double'));
-					end
-				else
-					ret = sparse(logical(rand(dims{:}) > 0.5));
-				end
+			% not sure how to generate, generate an object array instead
+			if(numvarsz ~= 0)
+				cdims = num2cell(dims);
+				ret = BasicClass(randi(intmax),cdims);
 			else
-				ret = rand(dims{:},'double') +  1i*rand(dims{:},'double');
+				ret = [];
 			end
 		case(18)
 			% 	18	mxOBJECT_CLASS,
-			if(ignoreUnusables)
-				ret = rand(dims{:},'double') + 1i*rand(dims{:},'double');
+			if(numvarsz ~= 0)
+				cdims = num2cell(dims);
+				ret = BasicClass(randi(intmax),cdims);
 			else
-				ret = BasicClass(randi(intmax),dims);
+				ret = [];
 			end
-
 	end
 
 end

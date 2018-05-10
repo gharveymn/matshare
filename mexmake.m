@@ -64,7 +64,7 @@ try
 	end
 	
 	fprintf('-Compiling matshare...')
-	mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 -pedantic -Wall"'}];
+	mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 /Wall -Wextra -Wshadow -Wpedantic"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n%s\n',['-The function is located in ' fullfile(pwd,'bin') '.'])
 	

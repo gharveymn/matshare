@@ -1,6 +1,44 @@
 #ifndef MATSHARE_MSHBASICTYPES_H
 #define MATSHARE_MSHBASICTYPES_H
 
+#if defined(MATLAB_UNIX)
+#  include <sys/mman.h>
+#ifndef MSH_UNIX
+#  define MSH_UNIX
+#endif
+#elif defined(MATLAB_WINDOWS)
+#ifndef MSH_WIN
+#  define MSH_WIN
+#endif
+#elif defined(DEBUG_UNIX)
+#  include <sys/mman.h>
+#  include <sys/stat.h>
+#ifndef MSH_UNIX
+#  define MSH_UNIX
+#endif
+#elif defined(DEBUG_UNIX_ON_WINDOWS)
+#define ftruncate ftruncate64
+#  include "../extlib/mman-win32/sys/mman.h"
+extern int shm_open(const char* name, int oflag, mode_t mode);
+extern int shm_unlink(const char* name);
+extern int lockf(int fildes, int function, off_t size);
+extern int fchmod(int fildes, mode_t mode);
+#  include <sys/stat.h>
+#define F_LOCK 1
+#define F_ULOCK 0
+
+
+#ifndef MSH_UNIX
+#  define MSH_UNIX
+#endif
+#elif defined(DEBUG_WINDOWS)
+#ifndef MSH_WIN
+#  define MSH_WIN
+#endif
+#else
+#  error(No build type specified.)
+#endif
+
 #ifndef FALSE
 #  define FALSE 0
 #endif
@@ -43,9 +81,6 @@ typedef int handle_t;				 /* give fds a uniform identifier */
  * @param curr_sz The size to pad.
  * @return The padded size.
  */
-inline size_t PadToAlign(size_t curr_sz)
-{
-	return curr_sz + (ALIGN_SHIFT - ((curr_sz - 1) & ALIGN_SHIFT));
-}
+size_t PadToAlign(size_t curr_sz);
 
 #endif /* MATSHARE_MSHBASICTYPES_H */

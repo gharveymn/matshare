@@ -1,19 +1,20 @@
 #include "headers/mshutils.h"
+#include "headers/mshlists.h"
+#include "headers/matlabutils.h"
 
-
-void MshOnExit(void)
+void msh_OnExit(void)
 {
 	
 	if(g_local_info->flags.is_proc_lock_init)
 	{
-		AcquireProcessLock();
+		msh_AcquireProcessLock();
 	}
 	
 	if(g_local_info->shm_info_seg.is_mapped)
 	{
 		g_shared_info->num_procs -= 1;
-		UpdateSharedSegments();
-		DetachSegmentList(&g_local_seg_list);
+		msh_UpdateSegmentTracking();
+		msh_DetachSegmentList(&g_local_seg_list);
 	}
 
 #ifdef MSH_WIN
@@ -28,7 +29,7 @@ void MshOnExit(void)
 		/* unmap the shared info segment */
 		if(UnmapViewOfFile((void*)g_local_info->shm_info_seg.shared_memory_ptr) == 0)
 		{
-			ReadMexError("UnmapFileError", "Error unmapping the update file (Error Number %u)", GetLastError());
+			ReadMexErrorWithCode(GetLastError(), "UnmapFileError", "Error unmapping the update file.");
 		}
 		g_local_info->shm_info_seg.is_mapped = FALSE;
 	}
@@ -37,17 +38,17 @@ void MshOnExit(void)
 	{
 		if(CloseHandle(g_local_info->shm_info_seg.handle) == 0)
 		{
-			ReadMexError("CloseHandleError", "Error closing the update file handle (Error Number %u)", GetLastError());
+			ReadMexErrorWithCode(GetLastError(), "CloseHandleError", "Error closing the update file handle.");
 		}
 		g_local_info->shm_info_seg.is_init = FALSE;
 	}
 	
 	if(g_local_info->flags.is_proc_lock_init)
 	{
-		ReleaseProcessLock();
+		msh_ReleaseProcessLock();
 		if(CloseHandle(g_local_info->proc_lock) == 0)
 		{
-			ReadMexError("CloseHandleError", "Error closing the process lock handle (Error Number %u)", GetLastError());
+			ReadMexErrorWithCode(GetLastError(), "CloseHandleError", "Error closing the process lock handle.");
 		}
 		g_local_info->flags.is_proc_lock_init = FALSE;
 	}
@@ -63,7 +64,7 @@ void MshOnExit(void)
 		{
 			if(g_local_info->flags.is_proc_lock_init)
 			{
-				ReleaseProcessLock();
+				msh_ReleaseProcessLock();
 			}
 			ReadMunmapError(errno);
 		}
@@ -78,7 +79,7 @@ void MshOnExit(void)
 			{
 				if(g_local_info->flags.is_proc_lock_init)
 				{
-					ReleaseProcessLock();
+					msh_ReleaseProcessLock();
 				}
 				ReadShmUnlinkError(errno);
 			}
@@ -88,7 +89,7 @@ void MshOnExit(void)
 	
 	if(g_local_info->flags.is_proc_lock_init)
 	{
-		ReleaseProcessLock();
+		msh_ReleaseProcessLock();
 		if(will_remove_info)
 		{
 			if(shm_unlink(MSH_LOCK_NAME) != 0)
@@ -103,7 +104,7 @@ void MshOnExit(void)
 	
 	mxFree(g_local_info);
 	g_local_info = NULL;
-	mexAtExit(NullFunction);
+	mexAtExit(msh_NullFunction);
 	
 	if(mexIsLocked())
 	{
@@ -113,16 +114,16 @@ void MshOnExit(void)
 }
 
 
-void MshOnError(void)
+void msh_OnError(void)
 {
 	if(g_local_info != NULL)
 	{
-		ReleaseProcessLock();
+		msh_ReleaseProcessLock();
 	}
 }
 
 
-void AcquireProcessLock(void)
+void msh_AcquireProcessLock(void)
 {
 #ifdef MSH_THREAD_SAFE
 	/* only request a lock if there is more than one process */
@@ -175,7 +176,7 @@ void AcquireProcessLock(void)
 }
 
 
-void ReleaseProcessLock(void)
+void msh_ReleaseProcessLock(void)
 {
 #ifdef MSH_THREAD_SAFE
 	if(g_local_info->flags.is_proc_locked)
@@ -209,7 +210,7 @@ void ReleaseProcessLock(void)
 }
 
 
-msh_directive_t ParseDirective(const mxArray* in)
+msh_directive_t msh_ParseDirective(const mxArray* in)
 {
 	/* easiest way to deal with implementation defined enum sizes */
 	if(mxGetClassID(in) == mxUINT8_CLASS)
@@ -224,7 +225,7 @@ msh_directive_t ParseDirective(const mxArray* in)
 }
 
 
-void UpdateAll(void)
+void msh_UpdateAll(void)
 {
 
 #ifdef MSH_WIN
@@ -238,11 +239,11 @@ void UpdateAll(void)
 		{
 			if(FlushViewOfFile(g_shared_info, g_local_info->shm_info_seg.seg_sz) == 0)
 			{
-				ReadMexError("FlushFileError", "Error flushing the update file (Error Number %u)", GetLastError());
+				ReadMexErrorWithCode(GetLastError(), "FlushFileError", "Error flushing the update file.");
 			}
 			if(FlushViewOfFile(curr_seg_node->seg_info.shared_memory_ptr, curr_seg_node->seg_info.seg_sz) == 0)
 			{
-				ReadMexError("FlushFileError", "Error flushing the data file (Error Number %u)", GetLastError());
+				ReadMexErrorWithCode(GetLastError(), "FlushFileError", "Error flushing the data file.");
 			}
 
 			curr_seg_node = curr_seg_node->next;
@@ -262,7 +263,7 @@ void UpdateAll(void)
 			{
 				ReadMsyncError(errno);
 			}
-			if(msync(curr_seg_node->seg_info.shared_memory_ptr, curr_seg_node->seg_info.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
+			if(msync((void*)curr_seg_node->seg_info.shared_memory_ptr, curr_seg_node->seg_info.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
 			{
 				ReadMsyncError(errno);
 			}
@@ -274,18 +275,23 @@ void UpdateAll(void)
 }
 
 
+size_t PadToAlign(size_t curr_sz)
+{
+	return curr_sz + (ALIGN_SHIFT - ((curr_sz - 1) & ALIGN_SHIFT));
+}
 
-void WriteSegmentName(char name_buffer[MSH_MAX_NAME_LEN], msh_segmentnumber_t seg_num)
+
+void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num)
 {
 	snprintf(name_buffer, MSH_MAX_NAME_LEN, MSH_SEGMENT_NAME, seg_num);
 }
 
 
-void RemoveUnusedVariables(void)
+void msh_VariableGC(void)
 {
 	VariableNode_t* curr_var_node, * next_var_node;
 	
-	if(!g_shared_info->user_def.will_remove_unused)
+	if(!g_shared_info->user_def.will_gc)
 	{
 		return;
 	}
@@ -299,12 +305,12 @@ void RemoveUnusedVariables(void)
 			if(msh_GetSegmentMetadata(curr_var_node->seg_node)->procs_using == 1)
 			{
 				/* if this is the last process using this variable, destroy the segment completely */
-				DestroySegment(curr_var_node->seg_node);
+				msh_DestroySegment(curr_var_node->seg_node);
 			}
 			else
 			{
 				/* otherwise just take out the variable */
-				DestroyVariable(curr_var_node);
+				msh_DestroyVariable(curr_var_node);
 			}
 		}
 		curr_var_node = next_var_node;
@@ -313,7 +319,7 @@ void RemoveUnusedVariables(void)
 }
 
 
-void NullFunction(void)
+void msh_NullFunction(void)
 {
 	/* does nothing (so we can reset the mexAtExit function, since NULL is undocumented) */
 }

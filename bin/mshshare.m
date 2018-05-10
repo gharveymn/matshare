@@ -1,4 +1,4 @@
-function [data, new, all] = mshshare(in)
+function [data, newvars, allvars] = mshshare(in)
 	% ordered by predicted usage amounts to slightly improve performance
 	switch(nargout)
 		case 0
@@ -6,9 +6,9 @@ function [data, new, all] = mshshare(in)
 		case 1
 			data = matshare_(uint8(0), in);
 		case 3
-			[data, new, all] = matshare_(uint8(0), in);
+			[data, newvars, allvars] = matshare_(uint8(0), in);
 		case 2
-			[data, new] = matshare_(uint8(0), in);
+			[data, newvars] = matshare_(uint8(0), in);
 	end
 end
 

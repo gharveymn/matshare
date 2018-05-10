@@ -2,7 +2,7 @@
 #include "headers/matlabutils.h"
 
 
-extern void WriteSegmentName(char name_buffer[MSH_MAX_NAME_LEN], msh_segmentnumber_t seg_num);
+extern void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num);
 
 /**
  * Used for caching segment information in this file.
@@ -18,7 +18,7 @@ static SegmentInfo_t s_seg_info_cache;
  * @note Modifies the shared memory linked list.
  * @param seg_sz The size of the segment to be opened.
  */
-static void CreateSegment_(size_t seg_sz);
+static void msh_CreateSegmentWorker(size_t seg_sz);
 
 
 /**
@@ -28,7 +28,7 @@ static void CreateSegment_(size_t seg_sz);
  * @note Interacts with but does not modify the shared memory linked list.
  * @param seg_num The segment number of the segment to be opened.
  */
-static void OpenSegment_(msh_segmentnumber_t seg_num);
+static void msh_OpenSegmentWorker(msh_segmentnumber_t seg_num);
 
 
 /**
@@ -38,7 +38,7 @@ static void OpenSegment_(msh_segmentnumber_t seg_num);
  * @param seg_info A struct containing information about a shared memory segment created either by OpenSegment or CreateSegment.
  * @return The newly created segment node.
  */
-static SegmentNode_t* TrackSegment(SegmentList_t* seg_list);
+static SegmentNode_t* msh_TrackSegment(SegmentList_t* seg_list);
 
 
 /**
@@ -48,7 +48,7 @@ static SegmentNode_t* TrackSegment(SegmentList_t* seg_list);
  * @param seg_info A struct containing information about a shared memory segment created either by OpenSegment or CreateSegment.
  * @return The newly allocated segment node.
  */
-static SegmentNode_t* CreateSegmentNode(void);
+static SegmentNode_t* msh_CreateSegmentNode(void);
 
 
 /**
@@ -58,7 +58,7 @@ static SegmentNode_t* CreateSegmentNode(void);
  * @param seg_list The segment list which the segment node will be appended to.
  * @param seg_node The segment node to be appended.
  */
-static void AddSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
+static void msh_AddSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
 
 
 /**
@@ -68,7 +68,7 @@ static void AddSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
  * @param seg_list The segment list which the segment node will be removed from.
  * @param seg_node The segment to be removed.
  */
-static void RemoveSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
+static void msh_RemoveSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
 
 
 /**
@@ -81,7 +81,7 @@ static void RemoveSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node);
  * @param new_var The mxArray to be tracked.
  * @return The new variable node.
  */
-static VariableNode_t* TrackVariable(VariableList_t* var_list, SegmentNode_t* seg_node, mxArray* new_var);
+static VariableNode_t* msh_TrackVariable(VariableList_t* var_list, SegmentNode_t* seg_node, mxArray* new_var);
 
 
 /**
@@ -92,7 +92,7 @@ static VariableNode_t* TrackVariable(VariableList_t* var_list, SegmentNode_t* se
  * @param new_var The mxArray to be tracked.
  * @return The new variable node.
  */
-static VariableNode_t* CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var);
+static VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var);
 
 
 /**
@@ -102,7 +102,7 @@ static VariableNode_t* CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_
  * @param var_list The variable list to which the variable node will be appended.
  * @param var_node The variable node to append.
  */
-static void AddVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
+static void msh_AddVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
 
 
 /**
@@ -112,18 +112,18 @@ static void AddVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
  * @param var_list The variable list from which the variable node will be removed.
  * @param var_node The variable node to removed.
  */
-static void RemoveVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
+static void msh_RemoveVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
 
 
-/** public functions **/
+/** public function definitions **/
 
 
 SegmentMetadata_t* msh_GetSegmentMetadata(SegmentNode_t* seg_node)
 {
-	return seg_node->seg_info.shared_memory_ptr;
+	return (SegmentMetadata_t*)seg_node->seg_info.shared_memory_ptr;
 }
 
-SharedVariableHeader_t* MshGetSegmentData(SegmentNode_t* seg_node)
+SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
 {
 	return (SharedVariableHeader_t*)((byte_t*)seg_node->seg_info.shared_memory_ptr + PadToAlign(sizeof(SegmentMetadata_t)));
 }
@@ -135,22 +135,22 @@ size_t msh_FindSegmentSize(const mxArray* in_var)
 }
 
 
-SegmentNode_t* CreateSegment(SegmentList_t* seg_list, size_t seg_sz)
+SegmentNode_t* msh_CreateSegment(SegmentList_t* seg_list, size_t seg_sz)
 {
 	
-	CreateSegment_(seg_sz);
-	return TrackSegment(seg_list);
+	msh_CreateSegmentWorker(seg_sz);
+	return msh_TrackSegment(seg_list);
 }
 
 
-SegmentNode_t* OpenSegment(SegmentList_t* seg_list, msh_segmentnumber_t seg_num)
+SegmentNode_t* msh_OpenSegment(SegmentList_t* seg_list, msh_segmentnumber_t seg_num)
 {
-	OpenSegment_(seg_num);
-	return TrackSegment(seg_list);
+	msh_OpenSegmentWorker(seg_num);
+	return msh_TrackSegment(seg_list);
 }
 
 
-void DetachSegment(SegmentNode_t* seg_node)
+void msh_DetachSegment(SegmentNode_t* seg_node)
 {
 #ifdef MSH_UNIX
 	bool_t is_last_tracking = FALSE;
@@ -158,7 +158,7 @@ void DetachSegment(SegmentNode_t* seg_node)
 	
 	if(seg_node->var_node != NULL)
 	{
-		DestroyVariable(seg_node->var_node);
+		msh_DestroyVariable(seg_node->var_node);
 	}
 	
 	if(seg_node->seg_info.is_mapped)
@@ -168,12 +168,12 @@ void DetachSegment(SegmentNode_t* seg_node)
 #ifdef MSH_WIN
 		if(UnmapViewOfFile((void*)seg_node->seg_info.shared_memory_ptr) == 0)
 		{
-			ReadMexError("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
+			ReadMexErrorWithCode(GetLastError(), "UnmapFileError", "Error unmapping the data file.");
 		}
 #else
 		/* check if this process will unlink the shared memory */
-		is_last_tracking = (MshGetSegmentMetadata(seg_node)->procs_tracking == 0);
-		if(munmap(seg_node->seg_info.shared_memory_ptr, seg_node->seg_info.seg_sz) != 0)
+		is_last_tracking = (msh_GetSegmentMetadata(seg_node)->procs_tracking == 0);
+		if(munmap((void*)seg_node->seg_info.shared_memory_ptr, seg_node->seg_info.seg_sz) != 0)
 		{
 			ReadMunmapError(errno);
 		}
@@ -187,7 +187,7 @@ void DetachSegment(SegmentNode_t* seg_node)
 #ifdef MSH_WIN
 		if(CloseHandle(seg_node->seg_info.handle) == 0)
 		{
-			ReadMexError("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
+			ReadMexErrorWithCode(GetLastError(), "CloseHandleError", "Error closing the data file handle.");
 		}
 #else
 		if(is_last_tracking)
@@ -202,33 +202,26 @@ void DetachSegment(SegmentNode_t* seg_node)
 	}
 	
 	/* remove tracking for this segment */
-	RemoveSegmentNode(seg_node->parent_seg_list, seg_node);
+	msh_RemoveSegmentNode(seg_node->parent_seg_list, seg_node);
 	
 }
 
 
-void DestroySegment(SegmentNode_t* seg_node)
+void msh_DestroySegment(SegmentNode_t* seg_node)
 {
 #ifdef MSH_UNIX
 	bool_t is_last_tracking = FALSE;
 #endif
 	
-	/* tracked segments must be up to date to get proper linking (will remove later
-	  * when verified that this cannot happen) */
-	if(!MshIsUpdated())
-	{
-		ReadMexError("OutOfDateError", "Could not create a segment because matshare was out of date.");
-	}
-	
 	if(seg_node->var_node != NULL)
 	{
-		DestroyVariable(seg_node->var_node);
+		msh_DestroyVariable(seg_node->var_node);
 	}
 	
 	/* if this segment has already been invalidated, all the shared list information should already be set */
 	if(msh_GetSegmentMetadata(seg_node)->is_invalid)
 	{
-		DetachSegment(seg_node);
+		msh_DetachSegment(seg_node);
 		return;
 	}
 	
@@ -262,12 +255,12 @@ void DestroySegment(SegmentNode_t* seg_node)
 #ifdef MSH_WIN
 		if(UnmapViewOfFile((void*)seg_node->seg_info.shared_memory_ptr) == 0)
 		{
-			ReadMexError("UnmapFileError", "Error unmapping the data file (Error Number %u)", GetLastError());
+			ReadMexErrorWithCode(GetLastError(), "UnmapFileError", "Error unmapping the data file.");
 		}
 #else
 		/* check if this process will unlink the shared memory */
-		is_last_tracking = (MshGetSegmentMetadata(seg_node)->procs_tracking == 0);
-		if(munmap(seg_node->seg_info.shared_memory_ptr, seg_node->seg_info.seg_sz) != 0)
+		is_last_tracking = (msh_GetSegmentMetadata(seg_node)->procs_tracking == 0);
+		if(munmap((void*)seg_node->seg_info.shared_memory_ptr, seg_node->seg_info.seg_sz) != 0)
 		{
 			ReadMunmapError(errno);
 		}
@@ -281,7 +274,7 @@ void DestroySegment(SegmentNode_t* seg_node)
 #ifdef MSH_WIN
 		if(CloseHandle(seg_node->seg_info.handle) == 0)
 		{
-			ReadMexError("CloseHandleError", "Error closing the data file handle (Error Number %u)", GetLastError());
+			ReadMexErrorWithCode(GetLastError(), "CloseHandleError", "Error closing the data file handle.");
 		}
 #else
 		if(is_last_tracking)
@@ -296,28 +289,32 @@ void DestroySegment(SegmentNode_t* seg_node)
 	}
 	
 	/* remove tracking for this (now invalid) segment */
-	RemoveSegmentNode(seg_node->parent_seg_list, seg_node);
+	msh_RemoveSegmentNode(seg_node->parent_seg_list, seg_node);
+	
+	/* update the revision number to tell processes to update their segment lists */
+	g_shared_info->rev_num += 1;
+	g_local_info->rev_num = g_shared_info->rev_num;
 	
 	g_shared_info->num_valid_segments -= 1;
 	
 }
 
 
-VariableNode_t* CreateVariable(VariableList_t* var_list, SegmentNode_t* seg_node)
+VariableNode_t* msh_CreateVariable(VariableList_t* var_list, SegmentNode_t* seg_node)
 {
 	mxArray* new_var;
 	
-	msh_FetchVariable(MshGetSegmentData(seg_node), &new_var);
+	msh_FetchVariable(msh_GetSegmentData(seg_node), &new_var);
 	mexMakeArrayPersistent(new_var);
 	
 	msh_GetSegmentMetadata(seg_node)->is_used = TRUE;
 	msh_GetSegmentMetadata(seg_node)->procs_using += 1;
 	
-	return TrackVariable(var_list, seg_node, new_var);
+	return msh_TrackVariable(var_list, seg_node, new_var);
 }
 
 
-void DestroyVariable(VariableNode_t* var_node)
+void msh_DestroyVariable(VariableNode_t* var_node)
 {
 	/* NULL all of the Matlab pointers */
 	msh_DetachVariable(var_node->var);
@@ -330,13 +327,13 @@ void DestroyVariable(VariableNode_t* var_node)
 	var_node->seg_node->var_node = NULL;
 	
 	/* remove tracking for the destroyed variable */
-	RemoveVariableNode(var_node->parent_var_list, var_node);
+	msh_RemoveVariableNode(var_node->parent_var_list, var_node);
 	
 	mxFree(var_node);
 }
 
 
-void ClearVariableList(VariableList_t* var_list)
+void msh_ClearVariableList(VariableList_t* var_list)
 {
 	VariableNode_t* curr_var_node, * next_var_node;
 	
@@ -344,20 +341,14 @@ void ClearVariableList(VariableList_t* var_list)
 	while(curr_var_node != NULL)
 	{
 		next_var_node = curr_var_node->next;
-		DestroyVariable(curr_var_node);
+		msh_DestroyVariable(curr_var_node);
 		curr_var_node = next_var_node;
 	}
 }
 
 
-void DetachSegmentList(SegmentList_t* seg_list)
+void msh_DetachSegmentList(SegmentList_t* seg_list)
 {
-	/* for debugging; this function should only run if everything is up to date
-	 * otherwise we'll have some invalid segment numbers */
-	if(!MshIsUpdated())
-	{
-		ReadMexError("OutOfDateError", "Could not create a segment because matshare was out of date.");
-	}
 	
 	SegmentNode_t* curr_seg_node, * next_seg_node;
 	curr_seg_node = seg_list->first;
@@ -366,31 +357,31 @@ void DetachSegmentList(SegmentList_t* seg_list)
 		next_seg_node = curr_seg_node->next;
 		if(msh_GetSegmentMetadata(curr_seg_node)->procs_tracking == 1)
 		{
-			DestroySegment(curr_seg_node);
+			msh_DestroySegment(curr_seg_node);
 		}
 		else
 		{
-			DetachSegment(curr_seg_node);
+			msh_DetachSegment(curr_seg_node);
 		}
 		curr_seg_node = next_seg_node;
 	}
 }
 
 
-void ClearSegmentList(SegmentList_t* seg_list)
+void msh_ClearSegmentList(SegmentList_t* seg_list)
 {
 	SegmentNode_t* curr_seg_node, * next_seg_node;
 	curr_seg_node = seg_list->first;
 	while(curr_seg_node != NULL)
 	{
 		next_seg_node = curr_seg_node->next;
-		DestroySegment(curr_seg_node);
+		msh_DestroySegment(curr_seg_node);
 		curr_seg_node = next_seg_node;
 	}
 }
 
 
-void UpdateSharedSegments(void)
+void msh_UpdateSegmentTracking(void)
 {
 	
 	if(MshIsUpdated())
@@ -414,7 +405,7 @@ void UpdateSharedSegments(void)
 		 * Segment should not be hooked into the shared linked list */
 		if(msh_GetSegmentMetadata(curr_seg_node)->is_invalid)
 		{
-			DetachSegment(curr_seg_node);
+			msh_DetachSegment(curr_seg_node);
 		}
 		
 		curr_seg_node = next_seg_node;
@@ -445,8 +436,8 @@ void UpdateSharedSegments(void)
 		
 		if(!is_fetched)
 		{
-			OpenSegment_(curr_seg_num);
-			new_seg_node = CreateSegmentNode();
+			msh_OpenSegmentWorker(curr_seg_num);
+			new_seg_node = msh_CreateSegmentNode();
 			new_seg_node->parent_seg_list = &g_local_seg_list;
 		}
 		
@@ -476,10 +467,10 @@ void UpdateSharedSegments(void)
 }
 
 
-/** static functions **/
+/** static function definitions **/
 
 
-static void CreateSegment_(size_t seg_sz)
+static void msh_CreateSegmentWorker(size_t seg_sz)
 {
 	SegmentMetadata_t* segment_metadata;
 
@@ -492,10 +483,6 @@ static void CreateSegment_(size_t seg_sz)
 	
 	/* tracked segments must be up to date to get proper linking (will remove later
 	 * when verified that this cannot happen) */
-	if(!MshIsUpdated())
-	{
-		ReadMexError("OutOfDateError", "Could not create a segment because matshare was out of date.");
-	}
 	
 	if(g_shared_info->num_valid_segments >= SEG_NUM_MAX)
 	{
@@ -518,7 +505,7 @@ static void CreateSegment_(size_t seg_sz)
 	{
 		/* change the file name */
 		new_seg_num = (new_seg_num == SEG_NUM_MAX)? 0 : new_seg_num + 1;
-		WriteSegmentName(s_seg_info_cache.name, new_seg_num);
+		msh_WriteSegmentName(s_seg_info_cache.name, new_seg_num);
 		SetLastError(0);
 		temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, s_seg_info_cache.name);
 		if(temp_handle == NULL)
@@ -551,7 +538,7 @@ static void CreateSegment_(size_t seg_sz)
 	{
 		/* change the file name */
 		new_seg_num = (new_seg_num == SEG_NUM_MAX)? 0 : new_seg_num + 1;
-		WriteSegmentName(s_seg_info_cache.name, new_seg_num);
+		msh_WriteSegmentName(s_seg_info_cache.name, new_seg_num);
 		temp_handle = shm_open(s_seg_info_cache.name, O_RDWR | O_CREAT | O_EXCL, g_shared_info->security);
 		if(temp_handle == -1)
 		{
@@ -567,7 +554,6 @@ static void CreateSegment_(size_t seg_sz)
 	/* change the map size */
 	if(ftruncate(s_seg_info_cache.handle, s_seg_info_cache.seg_sz) != 0)
 	{
-		ReleaseProcessLock();
 		ReadFtruncateError(errno);
 	}
 	
@@ -575,7 +561,6 @@ static void CreateSegment_(size_t seg_sz)
 	s_seg_info_cache.shared_memory_ptr = mmap(NULL, s_seg_info_cache.seg_sz, PROT_READ | PROT_WRITE, MAP_SHARED, s_seg_info_cache.handle, 0);
 	if(s_seg_info_cache.shared_memory_ptr == MAP_FAILED)
 	{
-		ReleaseProcessLock();
 		ReadMmapError(errno);
 	}
 	s_seg_info_cache.is_mapped = TRUE;
@@ -635,19 +620,19 @@ static void CreateSegment_(size_t seg_sz)
 }
 
 
-static void OpenSegment_(msh_segmentnumber_t seg_num)
+static void msh_OpenSegmentWorker(msh_segmentnumber_t seg_num)
 {
 	SegmentMetadata_t* temp_map;
 	
 	/* update the segment name */
-	WriteSegmentName(s_seg_info_cache.name, seg_num);
+	msh_WriteSegmentName(s_seg_info_cache.name, seg_num);
 
 #ifdef MSH_WIN
 	/* get the new file handle */
 	s_seg_info_cache.handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, s_seg_info_cache.name);
 	if(s_seg_info_cache.handle == NULL)
 	{
-		ReadMexError("OpenFileError", "Error opening the file mapping (Error Number %u)", GetLastError());
+		ReadMexErrorWithCode(GetLastError(), "OpenFileError", "Error opening the file mapping.");
 	}
 	s_seg_info_cache.is_init = TRUE;
 	
@@ -665,9 +650,9 @@ static void OpenSegment_(msh_segmentnumber_t seg_num)
 	}
 	
 	/* unmap the temporary view */
-	if(UnmapViewOfFile((void*)temp_map) == 0)
+	if(UnmapViewOfFile(temp_map) == 0)
 	{
-		ReadMexError("UnmapFileError", "Error unmapping the file (Error Number %u)", GetLastError());
+		ReadMexErrorWithCode(GetLastError(), "UnmapFileError", "Error unmapping the file.");
 	}
 	
 	/* now map the whole thing */
@@ -718,15 +703,15 @@ static void OpenSegment_(msh_segmentnumber_t seg_num)
 }
 
 
-static SegmentNode_t* TrackSegment(SegmentList_t* seg_list)
+static SegmentNode_t* msh_TrackSegment(SegmentList_t* seg_list)
 {
-	SegmentNode_t* new_seg_node = CreateSegmentNode();
-	AddSegmentNode(seg_list, new_seg_node);
+	SegmentNode_t* new_seg_node = msh_CreateSegmentNode();
+	msh_AddSegmentNode(seg_list, new_seg_node);
 	return new_seg_node;
 }
 
 
-static SegmentNode_t* CreateSegmentNode(void)
+static SegmentNode_t* msh_CreateSegmentNode(void)
 {
 	SegmentNode_t* new_seg_node = mxMalloc(sizeof(SegmentNode_t));
 	mexMakeMemoryPersistent(new_seg_node);
@@ -737,11 +722,10 @@ static SegmentNode_t* CreateSegmentNode(void)
 	new_seg_node->next = NULL;
 	
 	return new_seg_node;
-	
 }
 
 
-static void AddSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node)
+static void msh_AddSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 {
 	
 	/* this will be appended to the end so make sure next points to nothing */
@@ -767,12 +751,13 @@ static void AddSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 	/* increment number of segments */
 	seg_list->num_segs += 1;
 	
+	/* set the parent segment list */
 	seg_node->parent_seg_list = seg_list;
 	
 }
 
 
-static void RemoveSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node)
+static void msh_RemoveSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 {
 	
 	/* reset local pointers */
@@ -805,15 +790,15 @@ static void RemoveSegmentNode(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 }
 
 
-static VariableNode_t* TrackVariable(VariableList_t* var_list, SegmentNode_t* seg_node, mxArray* new_var)
+static VariableNode_t* msh_TrackVariable(VariableList_t* var_list, SegmentNode_t* seg_node, mxArray* new_var)
 {
-	VariableNode_t* new_var_node = CreateVariableNode(seg_node, new_var);
-	AddVariableNode(var_list, new_var_node);
+	VariableNode_t* new_var_node = msh_CreateVariableNode(seg_node, new_var);
+	msh_AddVariableNode(var_list, new_var_node);
 	return new_var_node;
 }
 
 
-static VariableNode_t* CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var)
+static VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var)
 {
 	VariableNode_t* new_var_node = mxCalloc(1, sizeof(VariableNode_t));
 	mexMakeMemoryPersistent(new_var_node);
@@ -827,7 +812,7 @@ static VariableNode_t* CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_
 }
 
 
-static void AddVariableNode(VariableList_t* var_list, VariableNode_t* var_node)
+static void msh_AddVariableNode(VariableList_t* var_list, VariableNode_t* var_node)
 {
 	var_node->parent_var_list = var_list;
 	
@@ -854,7 +839,7 @@ static void AddVariableNode(VariableList_t* var_list, VariableNode_t* var_node)
 }
 
 
-static void RemoveVariableNode(VariableList_t* var_list, VariableNode_t* var_node)
+static void msh_RemoveVariableNode(VariableList_t* var_list, VariableNode_t* var_node)
 {
 	/* reset references in prev and next var node */
 	if(var_node->prev != NULL)

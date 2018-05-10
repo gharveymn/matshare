@@ -8,7 +8,7 @@
 /**
  * Matshare headers are defined as an opaque type.
  */
-typedef volatile struct SharedVariableHeader_t SharedVariableHeader_t;
+typedef struct SharedVariableHeader_t SharedVariableHeader_t;
 
 /**
  * Offset Get macros
@@ -77,11 +77,11 @@ SharedVariableHeader_t* msh_GetChildHeader(SharedVariableHeader_t* hdr_ptr, size
 /**
  * Miscellaneous macros using inferences
  */
-bool_t msh_IsComplex(SharedVariableHeader_t* hdr_ptr);
+bool_t msh_GetIsComplex(SharedVariableHeader_t* hdr_ptr);
 mxComplexity msh_GetComplexity(SharedVariableHeader_t* hdr_ptr);
 
 size_t msh_FindSharedSize(const mxArray* in_var);
-size_t msh_CopyVariable(volatile void* dest, const mxArray* in_var);
+size_t msh_CopyVariable(void* dest, const mxArray* in_var);
 void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var);
 void msh_OverwriteData(SharedVariableHeader_t* shm_hdr, const mxArray* in_var, mxArray* rewrite_var);
 bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* comp_var);

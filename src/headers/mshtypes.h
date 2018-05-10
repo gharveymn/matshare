@@ -13,44 +13,6 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 #define MSH_LOCK_NAME "/MSH_LOCK"
 #define MSH_SEGMENT_NAME "/MSH_SEGMENT%0lx"
 
-#if defined(MATLAB_UNIX)
-#  include <sys/mman.h>
-#ifndef MSH_UNIX
-#  define MSH_UNIX
-#endif
-#elif defined(MATLAB_WINDOWS)
-#ifndef MSH_WIN
-#  define MSH_WIN
-#endif
-#elif defined(DEBUG_UNIX)
-#  include <sys/mman.h>
-#  include <sys/stat.h>
-#ifndef MSH_UNIX
-#  define MSH_UNIX
-#endif
-#elif defined(DEBUG_UNIX_ON_WINDOWS)
-#define ftruncate ftruncate64
-#  include "../extlib/mman-win32/sys/mman.h"
-extern int shm_open(const char* name, int oflag, mode_t mode);
-extern int shm_unlink(const char* name);
-extern int lockf(int fildes, int function, off_t size);
-extern int fchmod(int fildes, mode_t mode);
-#  include <sys/stat.h>
-#define F_LOCK 1
-#define F_ULOCK 0
-
-
-#ifndef MSH_UNIX
-#  define MSH_UNIX
-#endif
-#elif defined(DEBUG_WINDOWS)
-#ifndef MSH_WIN
-#  define MSH_WIN
-#endif
-#else
-#  error(No build type specified.)
-#endif
-
 #ifdef MSH_WIN
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
@@ -63,25 +25,11 @@ extern int fchmod(int fildes, mode_t mode);
 
 typedef enum
 {
-	msh_SHARE = 0,
-	msh_FETCH = 1,
-	msh_DETACH = 2,
-	msh_PARAM = 3,
-	msh_DEEPCOPY = 4,
-	msh_DEBUG = 5, /* unused */
-	msh_OBJ_REGISTER = 6,
-	msh_OBJ_DEREGISTER = 7,
-	msh_INIT = 8, /* unused */
-	msh_CLEAR = 9
-} msh_directive_t;
-
-typedef enum
-{
 	msh_SHARETYPE_COPY = 0,               /* always create a new segment */
 	msh_SHARETYPE_OVERWRITE = 1          /* reuse the same segment if the new variable is smaller than or the same size as the old one */
 } msh_sharetype_t;
 
-typedef volatile struct SegmentMetadata_t
+typedef struct SegmentMetadata_t
 {
 	/* use these to link together the memory segments */
 	size_t seg_sz;
@@ -141,7 +89,7 @@ typedef struct SharedInfo_t
 	{
 		msh_sharetype_t sharetype;
 		bool_t is_thread_safe;
-		bool_t will_remove_unused;
+		bool_t will_gc;
 	} user_def;
 } SharedInfo_t;
 

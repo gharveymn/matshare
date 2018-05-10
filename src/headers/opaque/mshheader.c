@@ -42,9 +42,9 @@ struct SharedVariableHeader_t
 	} class_info_pack;
 };
 
-static size_t GetFieldNamesSize(const mxArray* in_var);
+static size_t msh_GetFieldNamesSize(const mxArray* in_var);
 
-static void GetNextFieldName(const char_t** field_str);
+static void msh_GetNextFieldName(const char_t** field_str);
 
 static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz);
 
@@ -253,95 +253,14 @@ SharedVariableHeader_t* msh_GetChildHeader(SharedVariableHeader_t* hdr_ptr, size
 	return (SharedVariableHeader_t*)((byte_t*)hdr_ptr + msh_GetChildOffsets(hdr_ptr)[child_num]);
 }
 
-bool_t msh_IsComplex(SharedVariableHeader_t* hdr_ptr)
+bool_t msh_GetIsComplex(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->data_offsets.imag_data != SIZE_MAX;
 }
 
 mxComplexity msh_GetComplexity(SharedVariableHeader_t* hdr_ptr)
 {
-	return msh_IsComplex(hdr_ptr)? mxCOMPLEX : mxREAL;
-}
-
-static size_t GetFieldNamesSize(const mxArray* in_var)
-{
-	const char_t* field_name;
-	int i, num_fields;
-	size_t cml_sz = 0;
-	
-	/* Go through them */
-	num_fields = mxGetNumberOfFields(in_var);
-	for(i = 0; i < num_fields; i++)
-	{
-		/* This field */
-		field_name = mxGetFieldNameByNumber(in_var, i);
-		cml_sz += strlen(field_name) + 1; /* remember to add the null termination */
-	}
-	
-	return cml_sz;
-}
-
-
-static void GetNextFieldName(const char_t** field_str)
-{
-	*field_str = *field_str + strlen(*field_str) + 1;
-}
-
-
-static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz)
-{
-	uchar_t mxmalloc_sig[MXMALLOC_SIG_LEN];
-	msh_MakeMxMallocSignature(mxmalloc_sig, cpy_sz);
-	
-	memcpy(dest - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
-	if(orig != NULL)
-	{
-		memcpy(dest, orig, cpy_sz);
-	}
-	else
-	{
-		memset(dest, 0, cpy_sz);
-	}
-	return dest;
-}
-
-
-static void msh_MakeMxMallocSignature(uchar_t* sig, size_t seg_size)
-{
-	/*
-	 * MXMALLOC SIGNATURE INFO:
-	 * 	mxMalloc adjusts the size of memory for 32 byte alignment (shifts either 16 or 32 bytes)
-	 * 	it appends the following 16 byte header immediately before data segment
-	 *
-	 * HEADER:
-	 * 		bytes 0-7 - size iterator; rules for each byte are:
-	 * 			byte 0 = (((size+0x1F)/2^4)%2^4)*2^4
-	 * 			byte 1 = (((size+0x1F)/2^8)%2^8)
-	 * 			byte 2 = (((size+0x1F)/2^16)%2^16)
-	 * 			byte n = (((size+0x1F)/2^(2^(2+n)))%2^(2^(2+n)))
-	 *
-	 * 		bytes  8-11 - a signature for the vector check
-	 * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
-	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
-	 */
-	uchar_t i;
-	const uchar_t mxmalloc_sig_template[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
-	
-	memcpy(sig, mxmalloc_sig_template, MXMALLOC_SIG_LEN);
-	size_t multi = 1u << 4u;
-	
-	/* note: (x % 2^n) == (x & (2^n - 1)) */
-	if(seg_size > 0)
-	{
-		sig[0] = (uchar_t)((((seg_size + 0x0F)/multi) & (multi - 1))*multi);
-		
-		/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
-		for(i = 1; i < 4; i++)
-		{
-			multi = (size_t)1u << (1u << (2u + i));
-			sig[i] = (uchar_t)(((seg_size + 0x0F)/multi) & (multi - 1));
-		}
-	}
+	return msh_GetIsComplex(hdr_ptr)? mxCOMPLEX : mxREAL;
 }
 
 
@@ -372,7 +291,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 		obj_tree_sz += (mxGetNumberOfFields(in_var)*mxGetNumberOfElements(in_var))*sizeof(size_t);
 		
 		/* Add space for the field string */
-		obj_tree_sz += GetFieldNamesSize(in_var);
+		obj_tree_sz += msh_GetFieldNamesSize(in_var);
 		
 		/* go through each recursively */
 		for(field_num = 0, count = 0; field_num < mxGetNumberOfFields(in_var); field_num++)          /* each field */
@@ -396,7 +315,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 			obj_tree_sz += PadToAlign(msh_FindSharedSize(mxGetCell(in_var, count)));
 		}
 	}
-	else if(mxIsNumeric(in_var) || mxGetClassID(in_var) == mxLOGICAL_CLASS || mxGetClassID(in_var) == mxCHAR_CLASS)  /* a matrix containing data *//* base case */
+	else if(mxIsNumeric(in_var) || mxGetClassID(in_var) == mxLOGICAL_CLASS || mxGetClassID(in_var) == mxCHAR_CLASS)  /* base case */
 	{
 		
 		if(mxIsSparse(in_var))
@@ -432,14 +351,14 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	}
 	else
 	{
-		ReadMexError("Internal:UnexpectedError", "Tried to clone an unsupported type.");
+		ReadMexError("InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
 	return obj_tree_sz;
 }
 
 
-size_t msh_CopyVariable(volatile void* dest, const mxArray* in_var)
+size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 {
 	size_t curr_off = 0, idx, cpy_sz, count, num_elems;
 	
@@ -490,7 +409,7 @@ size_t msh_CopyVariable(volatile void* dest, const mxArray* in_var)
 		msh_SetFieldNamesOffset(dest, curr_off);
 		
 		/* shift to end of field names */
-		curr_off += GetFieldNamesSize(in_var);
+		curr_off += msh_GetFieldNamesSize(in_var);
 		
 		/* align this object */
 		curr_off = PadToAlign(curr_off);
@@ -662,6 +581,7 @@ size_t msh_CopyVariable(volatile void* dest, const mxArray* in_var)
 	return curr_off;
 }
 
+
 void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 {
 	
@@ -683,7 +603,7 @@ void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 		
 		field_names = mxMalloc(num_fields*sizeof(char_t*));
 		field_name = msh_GetFieldNames(shm_hdr);
-		for(field_num = 0; field_num < num_fields; field_num++, GetNextFieldName(&field_name))
+		for(field_num = 0; field_num < num_fields; field_num++, msh_GetNextFieldName(&field_name))
 		{
 			field_names[field_num] = field_name;
 		}
@@ -711,7 +631,6 @@ void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 			msh_FetchVariable(msh_GetChildHeader(shm_hdr, count), &ret_child);
 			mxSetCell(*ret_var, count, ret_child);
 		}
-		
 	}
 	else /*base case*/
 	{
@@ -742,7 +661,7 @@ void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 			/* set the new data */
 			mxFree(mxGetData(*ret_var));
 			mxSetData(*ret_var, msh_GetData(shm_hdr));
-			if(msh_IsComplex(shm_hdr))
+			if(msh_GetIsComplex(shm_hdr))
 			{
 				mxFree(mxGetImagData(*ret_var));
 				mxSetImagData(*ret_var, msh_GetImagData(shm_hdr));
@@ -776,7 +695,7 @@ void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 			{
 				mxFree(mxGetData(*ret_var));
 				mxSetData(*ret_var, msh_GetData(shm_hdr));
-				if(msh_IsComplex(shm_hdr))
+				if(msh_GetIsComplex(shm_hdr))
 				{
 					mxFree(mxGetImagData(*ret_var));
 					mxSetImagData(*ret_var, msh_GetImagData(shm_hdr));
@@ -785,10 +704,12 @@ void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 			
 		}
 		
+		
 		mxSetDimensions(*ret_var, msh_GetDimensions(shm_hdr), msh_GetNumDims(shm_hdr));
 		
 	}
 }
+
 
 void msh_OverwriteData(SharedVariableHeader_t* shm_hdr, const mxArray* in_var, mxArray* rewrite_var)
 {
@@ -855,7 +776,7 @@ void msh_OverwriteData(SharedVariableHeader_t* shm_hdr, const mxArray* in_var, m
 			memcpy(msh_GetData(shm_hdr), mxGetData(in_var), msh_GetNzmax(shm_hdr)*msh_GetElemSize(shm_hdr));
 			
 			/* if complex get a pointer to the complex data */
-			if(msh_IsComplex(shm_hdr))
+			if(msh_GetIsComplex(shm_hdr))
 			{
 				memcpy(msh_GetImagData(shm_hdr), mxGetImagData(in_var), msh_GetNzmax(shm_hdr)*msh_GetElemSize(shm_hdr));
 			}
@@ -869,7 +790,7 @@ void msh_OverwriteData(SharedVariableHeader_t* shm_hdr, const mxArray* in_var, m
 			memcpy(msh_GetData(shm_hdr), mxGetData(in_var), num_elems*msh_GetElemSize(shm_hdr));
 			
 			/* if complex get a pointer to the complex data */
-			if(msh_IsComplex(shm_hdr))
+			if(msh_GetIsComplex(shm_hdr))
 			{
 				memcpy(msh_GetImagData(shm_hdr), mxGetImagData(in_var), num_elems*msh_GetElemSize(shm_hdr));
 			}
@@ -927,7 +848,7 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* c
 				}
 			}
 			
-			GetNextFieldName(&field_name);
+			msh_GetNextFieldName(&field_name);
 			
 		}
 		
@@ -949,10 +870,10 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* c
 			}
 		}
 	}
-	else     /*base case*/
+	else if(mxIsNumeric(comp_var) || mxGetClassID(comp_var) == mxLOGICAL_CLASS || mxGetClassID(comp_var) == mxCHAR_CLASS)      /*base case*/
 	{
 		
-		if(msh_IsComplex(shm_hdr) != mxIsComplex(comp_var))
+		if(msh_GetIsComplex(shm_hdr) != mxIsComplex(comp_var))
 		{
 			return FALSE;
 		}
@@ -972,6 +893,10 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* c
 			}
 		}
 		
+	}
+	else
+	{
+		ReadMexError("InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
 	return TRUE;
@@ -1068,5 +993,88 @@ void msh_DetachVariable(mxArray* ret_var)
 	else
 	{
 		ReadMexError("InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
+	}
+}
+
+
+static size_t msh_GetFieldNamesSize(const mxArray* in_var)
+{
+	const char_t* field_name;
+	int i, num_fields;
+	size_t cml_sz = 0;
+	
+	/* Go through them */
+	num_fields = mxGetNumberOfFields(in_var);
+	for(i = 0; i < num_fields; i++)
+	{
+		/* This field */
+		field_name = mxGetFieldNameByNumber(in_var, i);
+		cml_sz += strlen(field_name) + 1; /* remember to add the null termination */
+	}
+	
+	return cml_sz;
+}
+
+
+static void msh_GetNextFieldName(const char_t** field_str)
+{
+	*field_str = *field_str + strlen(*field_str) + 1;
+}
+
+
+static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz)
+{
+	uchar_t mxmalloc_sig[MXMALLOC_SIG_LEN];
+	msh_MakeMxMallocSignature(mxmalloc_sig, cpy_sz);
+	
+	memcpy(dest - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
+	if(orig != NULL)
+	{
+		memcpy(dest, orig, cpy_sz);
+	}
+	else
+	{
+		memset(dest, 0, cpy_sz);
+	}
+	return dest;
+}
+
+
+static void msh_MakeMxMallocSignature(uchar_t* sig, size_t seg_size)
+{
+	/*
+	 * MXMALLOC SIGNATURE INFO:
+	 * 	mxMalloc adjusts the size of memory for 32 byte alignment (shifts either 16 or 32 bytes)
+	 * 	it appends the following 16 byte header immediately before data segment
+	 *
+	 * HEADER:
+	 * 		bytes 0-7 - size iterator; rules for each byte are:
+	 * 			byte 0 = (((size+0x1F)/2^4)%2^4)*2^4
+	 * 			byte 1 = (((size+0x1F)/2^8)%2^8)
+	 * 			byte 2 = (((size+0x1F)/2^16)%2^16)
+	 * 			byte n = (((size+0x1F)/2^(2^(2+n)))%2^(2^(2+n)))
+	 *
+	 * 		bytes  8-11 - a signature for the vector check
+	 * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
+	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
+	 */
+	size_t multiplier;
+	uchar_t i;
+	const uchar_t mxmalloc_sig_template[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
+	
+	memcpy(sig, mxmalloc_sig_template, MXMALLOC_SIG_LEN);
+	multiplier = 1u << 4u;
+	
+	/* note: (x % 2^n) == (x & (2^n - 1)) */
+	if(seg_size > 0)
+	{
+		sig[0] = (uchar_t)((((seg_size + 0x0F)/multiplier) & (multiplier - 1))*multiplier);
+		
+		/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
+		for(i = 1; i < 4; i++)
+		{
+			multiplier = (size_t)1u << (1u << (2u + i));
+			sig[i] = (uchar_t)(((seg_size + 0x0F)/multiplier) & (multiplier - 1));
+		}
 	}
 }
