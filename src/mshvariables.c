@@ -61,8 +61,8 @@ VariableNode_t* msh_CreateVariable(VariableList_t* var_list, SegmentNode_t* seg_
 	new_var = msh_FetchVariable(msh_GetSegmentData(seg_node));
 	mexMakeArrayPersistent(new_var);
 	
-	msh_GetSegmentMetadata(seg_node)->is_used = TRUE;
 	msh_AtomicIncrement(&msh_GetSegmentMetadata(seg_node)->procs_using);
+	msh_GetSegmentMetadata(seg_node)->is_used = TRUE;
 	
 	return msh_TrackVariable(var_list, seg_node, new_var);
 }

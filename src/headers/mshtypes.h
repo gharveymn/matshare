@@ -30,7 +30,7 @@ typedef struct SegmentMetadata_t
 
 typedef struct SegmentInfo_t
 {
-	volatile void* shared_memory_ptr;
+	void* shared_memory_ptr;
 	size_t seg_sz;
 	handle_t handle;
 	msh_segmentnumber_t seg_num;

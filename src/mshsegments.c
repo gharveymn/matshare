@@ -97,7 +97,7 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 	{
 		msh_AtomicDecrement(&msh_GetSegmentMetadata(seg_node)->procs_tracking);
 		
-		msh_UnmapSegment((void*)seg_node->seg_info.shared_memory_ptr, seg_node->seg_info.seg_sz);
+		msh_UnmapSegment(seg_node->seg_info.shared_memory_ptr, seg_node->seg_info.seg_sz);
 		seg_node->seg_info.is_mapped = FALSE;
 		
 	}
@@ -294,10 +294,9 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 		}
 	}
 	
-	/* construct a new list of segments, not reusing because it's actually slower */
-	for(new_seg_list.num_segs = 0, curr_seg_num = g_shared_info->first_seg_num;
+	for(new_seg_list.num_segs = 0, curr_seg_num = g_shared_info->last_seg_num;
 	    new_seg_list.num_segs < g_shared_info->num_valid_segments;
-	    new_seg_list.num_segs++, curr_seg_num = msh_GetSegmentMetadata(new_seg_node)->next_seg_num)
+	    new_seg_list.num_segs++, curr_seg_num = msh_GetSegmentMetadata(new_seg_node)->prev_seg_num)
 	{
 		if((new_seg_node = msh_FindSegmentNode(&g_local_seg_list.seg_table, curr_seg_num)) == NULL)
 		{
