@@ -1,7 +1,6 @@
 #ifndef MATSHARE_MATSHAREUTILS_H
 #define MATSHARE_MATSHAREUTILS_H
 
-#include "mex.h"
 #include "mshbasictypes.h"
 
 typedef enum

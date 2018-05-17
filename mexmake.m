@@ -24,16 +24,18 @@ try
 		fprintf('-Compiling in overwrite mode.\n')
 	end
 	
-	[comp,maxsz,endi] = computer;
+	[comp,maxsz,endi] = computer;	
 	
 	sources = {
 			'matshare_.c',...
 			'matlabutils.c',...
 			'mshutils.c',...
 			'mshinit.c',...
-			'mshlists.c',...
+			'mshvariables.c',...
+			'mshsegments.c',...
 			'headers/opaque/mshheader.c',...
-			'headers/opaque/mshexterntypes.c'
+			'headers/opaque/mshexterntypes.c',...
+			'headers/opaque/mshtable.c'
 			};
 		
 	for i = 1:numel(sources)
@@ -60,11 +62,11 @@ try
 			mexflags = [mexflags, {'-R2017b'}];
 		end
 	else
-		mexflags = [mexflags {'-compatibleArrayDims', '-DMATLAB_32BIT'}];
+		mexflags = [mexflags {'-compatibleArrayDims', '-DMSH_32BIT'}];
 	end
 	
 	fprintf('-Compiling matshare...')
-	mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 /Wall -Wextra -Wshadow -Wpedantic"'}];
+	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS -std=c89 /Wall"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n%s\n',['-The function is located in ' fullfile(pwd,'bin') '.'])
 	

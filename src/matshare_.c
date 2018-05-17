@@ -25,7 +25,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		ReadMexError("NotEnoughInputsError", "Minimum input arguments missing; must supply a msh_directive.");
+		ReadMexError(__FILE__, __LINE__, "NotEnoughInputsError", "Minimum input arguments missing; must supply a msh_directive.");
 	}
 	
 	/* get the msh_directive */
@@ -43,21 +43,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	{
 		case msh_SHARE:
 			
-			msh_AcquireProcessLock();
-			{
-				msh_Share(nlhs, plhs, num_in_vars, in_vars);
-			}
-			msh_ReleaseProcessLock();
+			msh_Share(nlhs, plhs, num_in_vars, in_vars);
 			
 			break;
 		
 		case msh_FETCH:
 			
-			msh_AcquireProcessLock();
-			{
-				msh_Fetch(nlhs, plhs, MSH_SHARED_COPY);
-			}
-			msh_ReleaseProcessLock();
+			msh_Fetch(nlhs, plhs, MSH_SHARED_COPY);
 			
 			break;
 		
@@ -67,12 +59,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			if(g_local_info->num_registered_objs == 0)
 			{
 				/* if we deregistered the last object then remove variables that aren't being used elsewhere in this process */
-				msh_AcquireProcessLock();
-				{
-					msh_UpdateSegmentTracking();
-					msh_VariableGC();
-				}
-				msh_ReleaseProcessLock();
+				msh_VariableGC();
 			}
 			
 			break;
@@ -90,11 +77,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		
 		case msh_DEEPCOPY:
 			
-			msh_AcquireProcessLock();
-			{
-				msh_Fetch(nlhs, plhs, MSH_DUPLICATE);
-			}
-			msh_ReleaseProcessLock();
+			msh_Fetch(nlhs, plhs, MSH_DUPLICATE);
 			
 			break;
 		case msh_DEBUG:
@@ -111,15 +94,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		case msh_CLEAR:
 			
-			msh_AcquireProcessLock();
-			{
-				msh_Clear(num_in_vars, in_vars);
-			}
-			msh_ReleaseProcessLock();
+			msh_Clear(num_in_vars, in_vars);
 			
 			break;
 		default:
-			ReadMexError("UnknownDirectiveError", "Unrecognized msh_directive.");
+			ReadMexError(__FILE__, __LINE__, "UnknownDirectiveError", "Unrecognized msh_directive.");
 			break;
 	}
 	
@@ -135,60 +114,64 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 	/* check the inputs */
 	if(num_vars < 1)
 	{
-		ReadMexError("NoVariableError", "No variable supplied to clone.");
+		ReadMexError(__FILE__, __LINE__, "NoVariableError", "No variable supplied to clone.");
 	}
 	
-	msh_UpdateSegmentTracking();
+	if(g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY)
+	{
+		msh_VariableGC();
+	}
 	
 	for(i = 0, in_var = in_vars[i]; i < num_vars; i++, in_var = in_vars[i])
 	{
 		
 		if(!(mxIsNumeric(in_var) || mxIsLogical(in_var) || mxIsChar(in_var) || mxIsStruct(in_var) || mxIsCell(in_var)))
 		{
-			ReadMexError("InvalidTypeError", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+			ReadMexError(__FILE__, __LINE__, "InvalidTypeError", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 		}
 		
-		if(g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY)
+		
+		if(g_shared_info->user_def.sharetype == msh_SHARETYPE_OVERWRITE)
 		{
-			msh_VariableGC();
-		}
-		else if(g_shared_info->user_def.sharetype == msh_SHARETYPE_OVERWRITE)
-		{
-			if(g_local_var_list.num_vars != 0 && (msh_CompareVariableSize(msh_GetSegmentData(g_local_seg_list.last), in_var) == TRUE))
+			if(g_local_seg_list.num_segs != 0 && (msh_CompareVariableSize(msh_GetSegmentData(g_local_seg_list.last), in_var) == TRUE))
 			{
 				/* DON'T INCREMENT THE REVISION NUMBER */
 				/* this is an in-place change, so everyone is still fine */
 				
+				if(g_local_seg_list.last->var_node == NULL)
+				{
+					msh_CreateVariable(&g_local_var_list, g_local_seg_list.last);
+				}
+				
 				/* do the rewrite after checking because the comparison is cheap */
-				msh_OverwriteData(msh_GetSegmentData(g_local_seg_list.last), in_var, g_local_var_list.last->var);
+				msh_OverwriteData(msh_GetSegmentData(g_local_seg_list.last), in_var, g_local_seg_list.last->var_node->var);
 				
 				/* DON'T DO ANYTHING ELSE */
 				continue;
 			}
-			else
-			{
-				msh_ClearSegmentList(&g_local_seg_list);
-			}
-		}
-		else
-		{
-			ReadMexError("UnexpectedError", "Invalid sharetype. The shared memory has been corrupted.");
 		}
 		
 		/* scan input data to get required size and create the segment */
-		new_seg_node = msh_CreateSegment(&g_local_seg_list, msh_FindSegmentSize(in_var));
+		new_seg_node = msh_CreateSegment(msh_FindSegmentSize(in_var));
 		
 		/* copy data to the shared memory */
 		msh_CopyVariable(msh_GetSegmentData(new_seg_node), in_var);
 		
+		/* Add the new segment to the shared list */
+		msh_AddSegmentToSharedList(new_seg_node);
+		
+		/* segment must also be tracked locally, so do that now */
+		msh_AddSegmentToLocalList(&g_local_seg_list, new_seg_node);
+		
+		
 	}
+	
+	msh_UpdateAll();
 	
 	if(nlhs > 0)
 	{
 		msh_Fetch(nlhs, plhs, MSH_SHARED_COPY);
 	}
-	
-	msh_UpdateAll();
 	
 }
 
@@ -198,15 +181,20 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 	
 	VariableNode_t* curr_var_node;
 	SegmentNode_t* curr_seg_node;
+
+#ifndef MSH_32BIT
 	size_t i, num_new_vars = 0;
 	size_t ret_dims[2];
-	
-	msh_UpdateSegmentTracking();
-	
+#else
+	int i, num_new_vars = 0;
+	int ret_dims[2];
+#endif
 	if(g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY)
 	{
 		msh_VariableGC();
 	}
+	
+	msh_UpdateSegmentTracking(&g_local_seg_list);
 	
 	if(nlhs >= 1)
 	{
@@ -226,7 +214,11 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 			}
 			
 			/* return the new variables detected */
+#ifndef MSH_32BIT
 			ret_dims[0] = (size_t)(num_new_vars != 0);
+#else
+			ret_dims[0] = (int)(num_new_vars != 0);
+#endif
 			ret_dims[1] = num_new_vars;
 			plhs[1] = mxCreateCellArray(2, ret_dims);
 			
@@ -249,7 +241,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 				
 				if(nlhs > 3)
 				{
-					ReadMexError("TooManyOutputsError", "Too many outputs; got %d, need between 0 and 4.", nlhs);
+					ReadMexError(__FILE__, __LINE__, "TooManyOutputsError", "Too many outputs; got %d, need between 0 and 4.", nlhs);
 				}
 				
 				/* retrieve all segment variables */
@@ -307,8 +299,9 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 	VariableNode_t* curr_var_node, * next_var_node;
 	mxArray* link;
 	int i;
+	msh_AcquireProcessLock();
 	
-	msh_UpdateSegmentTracking();
+	msh_UpdateSegmentTracking(&g_local_seg_list);
 	
 	if(num_inputs > 0)
 	{
@@ -325,7 +318,9 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 				{
 					if(link == in_vars[i])
 					{
-						msh_DestroySegment(curr_var_node->seg_node);
+						msh_RemoveSegmentFromLocalList(curr_var_node->seg_node->parent_seg_list, curr_var_node->seg_node);
+						msh_RemoveSegmentFromSharedList(curr_var_node->seg_node);
+						msh_DetachSegment(curr_var_node->seg_node);
 						break;
 					}
 					link = msh_GetCrosslink(link);
@@ -335,12 +330,12 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 				curr_var_node = next_var_node;
 			}
 		}
-		
 	}
 	else
 	{
 		msh_ClearSegmentList(&g_local_seg_list);
 	}
+	msh_ReleaseProcessLock();
 }
 
 
@@ -366,7 +361,7 @@ void msh_Param(int num_params, const mxArray** in)
 	
 	if(num_params % 2 != 0)
 	{
-		ReadMexError("InvalidNumArgsError", "The number of parameters input must be a multiple of two.");
+		ReadMexError(__FILE__, __LINE__, "InvalidNumArgsError", "The number of parameters input must be a multiple of two.");
 	}
 	
 	for(i = 0; i < num_params/2; i++)
@@ -376,7 +371,7 @@ void msh_Param(int num_params, const mxArray** in)
 		
 		if(!mxIsChar(param) || !mxIsChar(val))
 		{
-			ReadMexError("InvalidArgumentError", "All parameters and values must be input as character arrays.");
+			ReadMexError(__FILE__, __LINE__, "InvalidArgumentError", "All parameters and values must be input as character arrays.");
 		}
 		
 		ps_len = (int)mxGetNumberOfElements(param);
@@ -384,11 +379,11 @@ void msh_Param(int num_params, const mxArray** in)
 		
 		if(ps_len + 1 > MSH_MAX_NAME_LEN)
 		{
-			ReadMexError("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
+			ReadMexError(__FILE__, __LINE__, "InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
 		else if(vs_len + 1 > MSH_MAX_NAME_LEN)
 		{
-			ReadMexError("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, param_str);
+			ReadMexError(__FILE__, __LINE__, "InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, param_str);
 		}
 		
 		mxGetString(param, param_str, MSH_MAX_NAME_LEN);
@@ -407,7 +402,10 @@ void msh_Param(int num_params, const mxArray** in)
 		if(strcmp(param_str_l, MSH_PARAM_THREADSAFETY_L) == 0)
 		{
 #ifdef MSH_THREAD_SAFE
+			
+			/* note: acquiring the process lock makes going from thread-safe to thread-unsafe a safe operation, but not in the other direction */
 			msh_AcquireProcessLock();
+			
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
 				g_shared_info->user_def.is_thread_safe = TRUE;
@@ -418,12 +416,12 @@ void msh_Param(int num_params, const mxArray** in)
 			}
 			else
 			{
-				ReadMexError("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THREADSAFETY);
+				ReadMexError(__FILE__, __LINE__, "InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THREADSAFETY);
 			}
-			msh_UpdateAll();
+			
 			msh_ReleaseProcessLock();
 #else
-			ReadMexError("InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
+			__ReadMexError__(__FILE__, __LINE__, "InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
 #endif
 		
 		}
@@ -432,7 +430,7 @@ void msh_Param(int num_params, const mxArray** in)
 #ifdef MSH_UNIX
 			if(vs_len < 3 || vs_len > 4)
 			{
-				ReadMexError("InvalidParamValueError", "Too many or too few digits in \"%s\" for parameter \"%s\". Must have either 3 or 4 digits.", val_str, MSH_PARAM_SECURITY);
+				ReadMexError(__FILE__, __LINE__, "InvalidParamValueError", "Too many or too few digits in \"%s\" for parameter \"%s\". Must have either 3 or 4 digits.", val_str, MSH_PARAM_SECURITY);
 			}
 			else
 			{
@@ -461,12 +459,11 @@ void msh_Param(int num_params, const mxArray** in)
 				msh_ReleaseProcessLock();
 			}
 #else
-			ReadMexError("InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
+			ReadMexError(__FILE__, __LINE__, "InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
 #endif
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_COPYONWRITE_L) == 0)
 		{
-			msh_AcquireProcessLock();
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
 				g_shared_info->user_def.sharetype = msh_SHARETYPE_COPY;
@@ -477,13 +474,11 @@ void msh_Param(int num_params, const mxArray** in)
 			}
 			else
 			{
-				ReadMexError("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_COPYONWRITE);
+				ReadMexError(__FILE__, __LINE__, "InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_COPYONWRITE);
 			}
-			msh_ReleaseProcessLock();
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_GC_L) == 0)
 		{
-			msh_AcquireProcessLock();
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
 				g_shared_info->user_def.will_gc = TRUE;
@@ -494,13 +489,12 @@ void msh_Param(int num_params, const mxArray** in)
 			}
 			else
 			{
-				ReadMexError("InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_GC);
+				ReadMexError(__FILE__, __LINE__, "InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_GC);
 			}
-			msh_ReleaseProcessLock();
 		}
 		else
 		{
-			ReadMexError("InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
+			ReadMexError(__FILE__, __LINE__, "InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
 		
 	}

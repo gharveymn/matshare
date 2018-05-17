@@ -4,7 +4,8 @@
 #include "mshtypes.h"
 #include "matlabutils.h"
 #include "mshutils.h"
-#include "mshlists.h"
+#include "mshvariables.h"
+#include "mshsegments.h"
 #include "mshinit.h"
 
 #define MSH_DUPLICATE TRUE

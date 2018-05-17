@@ -1,6 +1,8 @@
 #ifndef MATSHARE_MSHBASICTYPES_H
 #define MATSHARE_MSHBASICTYPES_H
 
+#include "mex.h"
+
 #if defined(MATLAB_UNIX)
 #  include <sys/mman.h>
 #ifndef MSH_UNIX
@@ -55,15 +57,28 @@ extern int fchmod(int fildes, mode_t mode);
 #  define LONG_MAX 2147483647L
 #endif
 
+#ifdef MSH_WIN
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#else
+#  include <unistd.h>
+#  include <semaphore.h>
+#  include <pthread.h>
+#  include <fcntl.h>
+#endif
+
 /** these are basic readability typedefs **/
 typedef char char_t;                     /* characters */
-typedef signed char schar_t;             /* signed 8 bits */
-typedef unsigned char uchar_t;           /* unsigned 8 bits */
-typedef uchar_t byte_t;                  /* reading physical memory */
-typedef schar_t bool_t;                  /* conditionals */
-typedef signed long msh_segmentnumber_t; /* segment number identifiers */
-typedef uchar_t msh_classid_t;             /* for packing mex class ids to prevent compiler from padding SharedVariableHeader_t */
-#ifdef MSH_UNIX
+typedef byte_T byte_t;                  /* reading physical memory */
+typedef int8_T bool_t;                  /* conditionals */
+typedef int32_T alignedbool_t;		/* for word sized alignment */
+typedef int32_T msh_segmentnumber_t; /* segment number identifiers */
+typedef uint32_T msh_sharetype_t;		/* ensure word-size alignment */
+typedef uint8_T msh_classid_t;             /* for packing mex class ids to prevent compiler from padding SharedVariableHeader_t */
+#ifdef MSH_WIN
+typedef HANDLE handle_t;
+typedef DWORD pid_t;
+#else
 typedef int handle_t;				 /* give fds a uniform identifier */
 #endif
 
@@ -82,5 +97,14 @@ typedef int handle_t;				 /* give fds a uniform identifier */
  * @return The padded size.
  */
 size_t PadToAlign(size_t curr_sz);
+
+#ifdef MSH_WIN
+#define msh_AtomicIncrement InterlockedIncrement
+#define msh_AtomicDecrement InterlockedDecrement
+#else
+#define msh_AtomicIncrement(x) __sync_fetch_and_add(x, 1)
+#define msh_AtomicDecrement(x) __sync_fetch_and_sub(x, 1)
+#endif
+
 
 #endif /* MATSHARE_MSHBASICTYPES_H */

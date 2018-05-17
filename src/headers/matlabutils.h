@@ -14,6 +14,11 @@
 #elif defined(DEBUG_UNIX_ON_WINDOWS)
 #  include <sys/stat.h>
 #  define MSH_UNIX
+#  ifdef __GNUC__
+extern char *strerror_r(int errnum, char *buf, size_t buflen);
+#else
+extern int strerror_r(int errnum, char *buf, size_t buflen);
+#endif
 #elif defined(DEBUG_WINDOWS)
 #  define MSH_WIN
 #else
@@ -28,16 +33,11 @@ typedef DWORD errcode_t;
 typedef int errcode_t;
 #endif
 
-void ReadMexError_(const char* file_name, int line, const char* error_id, const char* error_message, ...);
-void ReadMexErrorWithCode_(const char* file_name, int line, errcode_t error_code, const char* error_id, const char* error_message, ...);
+void ReadMexError(const char* file_name, int line, const char* error_id, const char* error_message, ...);
+void ReadMexErrorWithCode(const char* file_name, int line, errcode_t error_code, const char* error_id, const char* error_message, ...);
 void ReadMexWarning(const char* warn_id, const char* warn_message, ...);
 void SetMexErrorCallback(void (*callback_function)(void));
 void NullCallback(void);
-
-/* defined so we don't have write __FILE__, __LINE__ every time */
-#define ReadMexError(error_id, error_message, ...) ReadMexError_(__FILE__ , __LINE__, error_id, error_message , ##__VA_ARGS__)
-#define ReadMexErrorWithCode(error_code, error_id, error_message, ...) ReadMexErrorWithCode_(__FILE__, __LINE__, error_code, error_id, error_message, ##__VA_ARGS__)
-
 
 #ifdef MSH_UNIX
 void ReadFtruncateError_(const char* file_name, int line, int err);

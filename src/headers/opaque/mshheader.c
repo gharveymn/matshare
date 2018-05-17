@@ -48,7 +48,7 @@ static void msh_GetNextFieldName(const char_t** field_str);
 
 static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz);
 
-static void msh_MakeMxMallocSignature(uchar_t* sig, size_t seg_size);
+static void msh_MakeMxMallocSignature(uint8_T* sig, size_t seg_size);
 
 /** offset Get functions **/
 
@@ -351,7 +351,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	}
 	else
 	{
-		ReadMexError("InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+		ReadMexError(__FILE__, __LINE__, "InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
 	return obj_tree_sz;
@@ -582,15 +582,15 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 }
 
 
-void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
+mxArray* msh_FetchVariable(SharedVariableHeader_t* shm_hdr)
 {
+	mxArray* ret_var = NULL;
 	
-	/* for working with shared memory ... */
+	/* for loops */
 	size_t idx, count, num_elems;
-	mxArray* ret_child;
 	
 	/* for structures */
-	int field_num, num_fields;                /* current field */
+	int field_num, num_fields;
 	
 	const char_t** field_names;
 	const char_t* field_name;
@@ -607,7 +607,7 @@ void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 		{
 			field_names[field_num] = field_name;
 		}
-		*ret_var = mxCreateStructArray(msh_GetNumDims(shm_hdr), msh_GetDimensions(shm_hdr), num_fields, field_names);
+		ret_var = mxCreateStructArray(msh_GetNumDims(shm_hdr), msh_GetDimensions(shm_hdr), num_fields, field_names);
 		mxFree((char**)field_names);
 		
 		/* Go through each element */
@@ -615,8 +615,7 @@ void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 		{
 			for(idx = 0; idx < num_elems; idx++, count++)
 			{
-				msh_FetchVariable(msh_GetChildHeader(shm_hdr, count), &ret_child);
-				mxSetFieldByNumber(*ret_var, idx, field_num, ret_child);
+				mxSetFieldByNumber(ret_var, idx, field_num, msh_FetchVariable(msh_GetChildHeader(shm_hdr, count)));
 			}
 		}
 	}
@@ -624,12 +623,11 @@ void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 	{
 		num_elems = msh_GetNumElems(shm_hdr);
 		
-		*ret_var = mxCreateCellArray(msh_GetNumDims(shm_hdr), msh_GetDimensions(shm_hdr));
+		ret_var = mxCreateCellArray(msh_GetNumDims(shm_hdr), msh_GetDimensions(shm_hdr));
 		
 		for(count = 0; count < num_elems; count++)
 		{
-			msh_FetchVariable(msh_GetChildHeader(shm_hdr, count), &ret_child);
-			mxSetCell(*ret_var, count, ret_child);
+			mxSetCell(ret_var, count, msh_FetchVariable(msh_GetChildHeader(shm_hdr, count)));
 		}
 	}
 	else /*base case*/
@@ -640,34 +638,34 @@ void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 			
 			if(msh_GetClassId(shm_hdr) == mxDOUBLE_CLASS)
 			{
-				*ret_var = mxCreateSparse(0, 0, 1, msh_GetComplexity(shm_hdr));
+				ret_var = mxCreateSparse(0, 0, 1, msh_GetComplexity(shm_hdr));
 			}
 			else if(msh_GetClassId(shm_hdr) == mxLOGICAL_CLASS)
 			{
-				*ret_var = mxCreateSparseLogicalMatrix(0, 0, 1);
+				ret_var = mxCreateSparseLogicalMatrix(0, 0, 1);
 			}
 			else
 			{
-				ReadMexError("UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'double' or 'logical'.");
+				ReadMexError(__FILE__, __LINE__, "UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'double' or 'logical'.");
 			}
 			
 			/* free the pointers relating to sparse */
-			mxFree(mxGetIr(*ret_var));
-			mxSetIr(*ret_var, msh_GetIr(shm_hdr));
+			mxFree(mxGetIr(ret_var));
+			mxSetIr(ret_var, msh_GetIr(shm_hdr));
 			
-			mxFree(mxGetJc(*ret_var));
-			mxSetJc(*ret_var, msh_GetJc(shm_hdr));
+			mxFree(mxGetJc(ret_var));
+			mxSetJc(ret_var, msh_GetJc(shm_hdr));
 			
 			/* set the new data */
-			mxFree(mxGetData(*ret_var));
-			mxSetData(*ret_var, msh_GetData(shm_hdr));
+			mxFree(mxGetData(ret_var));
+			mxSetData(ret_var, msh_GetData(shm_hdr));
 			if(msh_GetIsComplex(shm_hdr))
 			{
-				mxFree(mxGetImagData(*ret_var));
-				mxSetImagData(*ret_var, msh_GetImagData(shm_hdr));
+				mxFree(mxGetImagData(ret_var));
+				mxSetImagData(ret_var, msh_GetImagData(shm_hdr));
 			}
 			
-			mxSetNzmax(*ret_var, msh_GetNzmax(shm_hdr));
+			mxSetNzmax(ret_var, msh_GetNzmax(shm_hdr));
 			
 		}
 		else
@@ -675,39 +673,42 @@ void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var)
 			
 			if(msh_GetIsNumeric(shm_hdr))
 			{
-				*ret_var = mxCreateNumericArray(0, NULL, msh_GetClassId(shm_hdr), msh_GetComplexity(shm_hdr));
+				ret_var = mxCreateNumericArray(0, NULL, msh_GetClassId(shm_hdr), msh_GetComplexity(shm_hdr));
 			}
 			else if(msh_GetClassId(shm_hdr) == mxLOGICAL_CLASS)
 			{
-				*ret_var = mxCreateLogicalArray(0, NULL);
+				ret_var = mxCreateLogicalArray(0, NULL);
 			}
 			else if(msh_GetClassId(shm_hdr) == mxCHAR_CLASS)
 			{
-				*ret_var = mxCreateCharArray(0, NULL);
+				ret_var = mxCreateCharArray(0, NULL);
 			}
 			else
 			{
-				ReadMexError("UnrecognizedTypeError", "The fetched array was of class not of type 'numeric', 'logical', or 'char'.");
+				ReadMexError(__FILE__, __LINE__, "UnrecognizedTypeError", "The fetched array was of class not of type 'numeric', 'logical', or 'char'.");
 			}
 			
 			/* there is no data if it is empty */
 			if(!msh_GetIsEmpty(shm_hdr))
 			{
-				mxFree(mxGetData(*ret_var));
-				mxSetData(*ret_var, msh_GetData(shm_hdr));
+				mxFree(mxGetData(ret_var));
+				mxSetData(ret_var, msh_GetData(shm_hdr));
 				if(msh_GetIsComplex(shm_hdr))
 				{
-					mxFree(mxGetImagData(*ret_var));
-					mxSetImagData(*ret_var, msh_GetImagData(shm_hdr));
+					mxFree(mxGetImagData(ret_var));
+					mxSetImagData(ret_var, msh_GetImagData(shm_hdr));
 				}
 			}
 			
 		}
 		
 		
-		mxSetDimensions(*ret_var, msh_GetDimensions(shm_hdr), msh_GetNumDims(shm_hdr));
+		mxSetDimensions(ret_var, msh_GetDimensions(shm_hdr), msh_GetNumDims(shm_hdr));
 		
 	}
+	
+	return ret_var;
+	
 }
 
 
@@ -717,25 +718,6 @@ void msh_OverwriteData(SharedVariableHeader_t* shm_hdr, const mxArray* in_var, m
 	
 	/* for structures */
 	int field_num, num_fields;                /* current field */
-	
-	/* new_num_dims is guaranteed to be smaller than current num_dims by msh_CompareVariableSize */
-	const mwSize* new_dims = mxGetDimensions(in_var);
-	mwSize new_num_dims = mxGetNumberOfDimensions(in_var);
-	
-	if(memcmp(msh_GetDimensions(shm_hdr), new_dims, new_num_dims * sizeof(mwSize)) != 0)
-	{
-		memcpy(msh_GetDimensions(shm_hdr), new_dims, new_num_dims * sizeof(mwSize));
-		msh_SetNumDims(shm_hdr, new_num_dims);
-		
-		/* begin hack (set the dimensions in all crosslinks) */
-		mxArray* curr_var = rewrite_var;
-		do
-		{
-			mxSetDimensions(curr_var, new_dims, new_num_dims);
-			curr_var = msh_GetCrosslink(curr_var);
-		} while(curr_var != NULL && curr_var != rewrite_var);
-		/* end hack */
-	}
 	
 	/* Structure case */
 	if(msh_GetClassId(shm_hdr) == mxSTRUCT_CLASS)
@@ -812,8 +794,10 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* c
 	
 	const char_t* field_name;
 	
-	/* note: we would have increase shm size if num_dims needs to increase */
-	if(mxGetClassID(comp_var) != msh_GetClassId(shm_hdr) || mxGetNumberOfDimensions(comp_var) > msh_GetNumDims(shm_hdr))
+	/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
+	if(mxGetClassID(comp_var) != msh_GetClassId(shm_hdr) ||
+	   mxGetNumberOfDimensions(comp_var) != msh_GetNumDims(shm_hdr) ||
+	   memcmp(mxGetDimensions(comp_var), msh_GetDimensions(shm_hdr), msh_GetNumDims(shm_hdr) * sizeof(mwSize)) != 0)
 	{
 		return FALSE;
 	}
@@ -896,7 +880,7 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* c
 	}
 	else
 	{
-		ReadMexError("InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+		ReadMexError(__FILE__, __LINE__, "InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
 	return TRUE;
@@ -992,7 +976,7 @@ void msh_DetachVariable(mxArray* ret_var)
 	}
 	else
 	{
-		ReadMexError("InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
+		ReadMexError(__FILE__, __LINE__, "InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
 	}
 }
 
@@ -1024,7 +1008,7 @@ static void msh_GetNextFieldName(const char_t** field_str)
 
 static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz)
 {
-	uchar_t mxmalloc_sig[MXMALLOC_SIG_LEN];
+	uint8_T mxmalloc_sig[MXMALLOC_SIG_LEN];
 	msh_MakeMxMallocSignature(mxmalloc_sig, cpy_sz);
 	
 	memcpy(dest - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
@@ -1040,7 +1024,7 @@ static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz)
 }
 
 
-static void msh_MakeMxMallocSignature(uchar_t* sig, size_t seg_size)
+static void msh_MakeMxMallocSignature(uint8_T* sig, size_t seg_size)
 {
 	/*
 	 * MXMALLOC SIGNATURE INFO:
@@ -1059,22 +1043,23 @@ static void msh_MakeMxMallocSignature(uchar_t* sig, size_t seg_size)
 	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
 	 */
 	size_t multiplier;
-	uchar_t i;
-	const uchar_t mxmalloc_sig_template[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0};
+	uint8_T i;
+	/* const uint8_T mxmalloc_sig_template[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0}; */
+#define MXMALLOC_SIG_TEMPLATE "\x10\x00\x00\x00\x00\x00\x00\x00\xCE\xFA\xED\xFE\x20\x00\x20\x00"
 	
-	memcpy(sig, mxmalloc_sig_template, MXMALLOC_SIG_LEN);
+	memcpy(sig, MXMALLOC_SIG_TEMPLATE, MXMALLOC_SIG_LEN * sizeof(char_t));
 	multiplier = 1u << 4u;
 	
 	/* note: (x % 2^n) == (x & (2^n - 1)) */
 	if(seg_size > 0)
 	{
-		sig[0] = (uchar_t)((((seg_size + 0x0F)/multiplier) & (multiplier - 1))*multiplier);
+		sig[0] = (uint8_T)((((seg_size + 0x0F)/multiplier) & (multiplier - 1))*multiplier);
 		
 		/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
 		for(i = 1; i < 4; i++)
 		{
 			multiplier = (size_t)1u << (1u << (2u + i));
-			sig[i] = (uchar_t)(((seg_size + 0x0F)/multiplier) & (multiplier - 1));
+			sig[i] = (uint8_T)(((seg_size + 0x0F)/multiplier) & (multiplier - 1));
 		}
 	}
 }

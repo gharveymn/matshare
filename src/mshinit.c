@@ -2,6 +2,7 @@
 #include "headers/matlabutils.h"
 #include "headers/mshutils.h"
 #include "headers/mshtypes.h"
+#include "headers/mshsegments.h"
 
 static bool_t s_is_glob_init;
 
@@ -58,7 +59,9 @@ static void msh_ProcStartup(void)
 {
 	g_local_info = mxCalloc(1, sizeof(GlobalInfo_t));
 	mexMakeMemoryPersistent(g_local_info);
-
+	
+	msh_InitializeTable(&g_local_info->seg_list.seg_table);
+	
 #ifdef MSH_WIN
 	g_local_info->this_pid = GetCurrentProcessId();
 #else
@@ -83,7 +86,7 @@ static void msh_InitProcLock(void)
 	g_local_info->proc_lock = CreateMutex(&g_local_info->lock_sec, FALSE, MSH_LOCK_NAME);
 	if(g_local_info->proc_lock == NULL)
 	{
-		ReadMexError("Internal:InitMutexError", "Failed to create the mutex (Error number: %u).", GetLastError());
+		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "Internal:InitMutexError", "Failed to create the mutex.");
 	}
 
 #else
@@ -93,12 +96,6 @@ static void msh_InitProcLock(void)
 	{
 		ReadShmOpenError(errno);
 	}
-	
-//	g_local_info->proc_lock = sem_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, g_shared_info->security, 1);
-//	if(g_local_info->proc_lock == SEM_FAILED)
-//	{
-//		readSemError(errno);
-//	}
 
 #endif
 	
@@ -111,16 +108,15 @@ static void msh_InitProcLock(void)
 
 static void msh_InitInfoSegment(void)
 {
-	
 	g_local_info->shm_info_seg.seg_sz = sizeof(SharedInfo_t);
 
 #ifdef MSH_WIN
 	
 	SetLastError(0);
-	g_local_info->shm_info_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)g_local_info->shm_info_seg.seg_sz, MSH_UPDATE_SEGMENT_NAME);
+	g_local_info->shm_info_seg.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)g_local_info->shm_info_seg.seg_sz, MSH_SHARED_INFO_SEGMENT_NAME);
 	if(g_local_info->shm_info_seg.handle == NULL)
 	{
-		ReadMexError("CreateUpdateSegError", "Could not create or open the update memory segment (Error number: %u).", GetLastError());
+		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CreateUpdateSegError", "Could not create or open the update memory segment.");
 	}
 	g_local_info->shm_info_seg.is_init = TRUE;
 	
@@ -129,8 +125,8 @@ static void msh_InitInfoSegment(void)
 #else
 	
 	/* Try to open an already created segment so we can get the global msh_InitializeMatshare signal */
-	strncpy(g_local_info->shm_info_seg.name, MSH_UPDATE_SEGMENT_NAME, MSH_MAX_NAME_LEN*sizeof(char));
-	g_local_info->shm_info_seg.handle = shm_open(g_local_info->shm_info_seg.name, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+	
+	g_local_info->shm_info_seg.handle = shm_open(MSH_SHARED_INFO_SEGMENT_NAME, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
 	if(g_local_info->shm_info_seg.handle == -1)
 	{
 		/* then the segment has already been initialized */
@@ -138,7 +134,7 @@ static void msh_InitInfoSegment(void)
 		
 		if(errno == EEXIST)
 		{
-			g_local_info->shm_info_seg.handle = shm_open(g_local_info->shm_info_seg.name, O_RDWR, S_IRUSR | S_IWUSR);
+			g_local_info->shm_info_seg.handle = shm_open(MSH_SHARED_INFO_SEGMENT_NAME, O_RDWR, S_IRUSR | S_IWUSR);
 			if(g_local_info->shm_info_seg.handle == -1)
 			{
 				ReadShmOpenError(errno);
@@ -173,7 +169,7 @@ static void msh_MapInfoSegment(void)
 	g_local_info->shm_info_seg.shared_memory_ptr = MapViewOfFile(g_local_info->shm_info_seg.handle, FILE_MAP_ALL_ACCESS, 0, 0, g_local_info->shm_info_seg.seg_sz);
 	if(g_shared_info == NULL)
 	{
-		ReadMexError("MapUpdateSegError", "Could not map the update memory segment (Error number %u)", GetLastError());
+		ReadMexError(__FILE__, __LINE__, "MapUpdateSegError", "Could not map the update memory segment (Error number %u)", GetLastError());
 	}
 	
 	/* lock this virtual mapping to physical memory to make sure it doesn't get written to the pagefile */
@@ -225,6 +221,6 @@ static void msh_GlobalStartup(void)
 	}
 	else
 	{
-		g_shared_info->num_procs += 1;
+		msh_AtomicIncrement(&g_shared_info->num_procs);
 	}
 }

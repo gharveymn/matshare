@@ -82,7 +82,7 @@ mxComplexity msh_GetComplexity(SharedVariableHeader_t* hdr_ptr);
 
 size_t msh_FindSharedSize(const mxArray* in_var);
 size_t msh_CopyVariable(void* dest, const mxArray* in_var);
-void msh_FetchVariable(SharedVariableHeader_t* shm_hdr, mxArray** ret_var);
+mxArray* msh_FetchVariable(SharedVariableHeader_t* shm_hdr);
 void msh_OverwriteData(SharedVariableHeader_t* shm_hdr, const mxArray* in_var, mxArray* rewrite_var);
 bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* comp_var);
 void msh_DetachVariable(mxArray* ret_var);

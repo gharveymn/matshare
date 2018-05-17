@@ -1,25 +1,7 @@
-#ifndef MATSHARE_MSHLISTS_H
-#define MATSHARE_MSHLISTS_H
+#ifndef MATSHARE_MSHSEGMENTS_H
+#define MATSHARE_MSHSEGMENTS_H
 
 #include "mshtypes.h"
-
-typedef struct VariableNode_t
-{
-	struct VariableList_t* parent_var_list;
-	struct VariableNode_t* next; /* next variable that is currently fetched and being used */
-	struct VariableNode_t* prev;
-	mxArray* var;
-	struct SegmentNode_t* seg_node;
-} VariableNode_t;
-
-typedef struct SegmentNode_t
-{
-	struct SegmentList_t* parent_seg_list;
-	struct SegmentNode_t* next;
-	struct SegmentNode_t* prev;
-	VariableNode_t* var_node;
-	struct SegmentInfo_t seg_info;
-} SegmentNode_t;
 
 /**
  * Note: matshare links segments in shared memory by assigning each segment a "segment number."
@@ -30,7 +12,7 @@ typedef struct SegmentNode_t
  *       However, not all functions here require this condition. Functions which interact with
  *       shared memory indicate such in their documentation.
  */
-
+ 
 
 SegmentMetadata_t* msh_GetSegmentMetadata(SegmentNode_t* seg_node);
 
@@ -48,7 +30,7 @@ size_t msh_FindSegmentSize(const mxArray* in_var);
  * @param seg_sz The size of the new segment.
  * @return A struct containing information about the segment.
  */
-SegmentNode_t* msh_CreateSegment(SegmentList_t* seg_list, size_t seg_sz);
+SegmentNode_t* msh_CreateSegment(size_t seg_sz);
 
 
 /**
@@ -59,7 +41,7 @@ SegmentNode_t* msh_CreateSegment(SegmentList_t* seg_list, size_t seg_sz);
  * @param seg_num The segment number of the shared memory segment (used by matshare to identify the memory segment).
  * @return A struct containing information about the segment.
  */
-SegmentNode_t* msh_OpenSegment(SegmentList_t* seg_list, msh_segmentnumber_t seg_num);
+SegmentNode_t* msh_OpenSegment(msh_segmentnumber_t seg_num);
 
 
 /**
@@ -72,44 +54,9 @@ SegmentNode_t* msh_OpenSegment(SegmentList_t* seg_list, msh_segmentnumber_t seg_
 void msh_DetachSegment(SegmentNode_t* seg_node);
 
 
-/**
- * Destroys the memory segment associated with the specified segment node. Also
- * removes the segment from the shared segment linked list and marks the segment
- * for deletion by other processes.
- *
- * @note Modifies the shared memory linked list.
- * @param seg_node The segment node associated to the segment to be destroyed.
- */
-void msh_DestroySegment(SegmentNode_t* seg_node);
+void msh_AddSegmentToSharedList(SegmentNode_t* seg_node);
 
-
-/**
- * Creates a new MATLAB variable from the specified shared segment, stores
- * it in a variable node, and adds the variable node to the specified list.
- *
- * @note Completely local.
- * @param var_list The list which will track the variable.
- * @param seg_node The segment node associated to the shared data.
- * @return The variable node containing the new MATLAB variable.
- */
-VariableNode_t* msh_CreateVariable(VariableList_t* var_list, SegmentNode_t* seg_node);
-
-
-/**
- * Detaches and destroys the variable contained in the specified variable node.
- *
- * @note Interacts with shared memory but does not modify the shared linked list.
- * @param var_node The variable node containing the variable to be destroyed.
- */
-void msh_DestroyVariable(VariableNode_t* var_node);
-
-
-/**
- * Destroys all variables in the specified variable list.
- *
- * @param var_list The variable list which will be cleared.
- */
-void msh_ClearVariableList(VariableList_t* var_list);
+void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node);
 
 
 /**
@@ -134,7 +81,31 @@ void msh_ClearSegmentList(SegmentList_t* seg_list);
  * Updates the local tracking of the shared memory linked list. Must be called
  * before making modifications to shared memory.
  */
-void msh_UpdateSegmentTracking(void);
+void msh_UpdateSegmentTracking(SegmentList_t* seg_list);
+
+/**
+ * Add a segment node to the specified segment list.
+ *
+ * @note Completely local.
+ * @param seg_list The segment list which the segment node will be appended to.
+ * @param seg_node The segment node to be appended.
+ */
+void msh_AddSegmentToLocalList(SegmentList_t* seg_list, SegmentNode_t* seg_node);
 
 
-#endif /* MATSHARE_MSHLISTS_H */
+/**
+ * Removes a segment node from the specified segment list.
+ *
+ * @note Completely local.
+ * @param seg_list The segment list which the segment node will be removed from.
+ * @param seg_node The segment to be removed.
+ */
+void msh_RemoveSegmentFromLocalList(SegmentList_t* seg_list, SegmentNode_t* seg_node);
+
+void msh_InitializeTable(SegmentTable_t* seg_table);
+void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, uint32_T num_segs);
+void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node);
+void msh_DestroyTable(SegmentTable_t* seg_table);
+SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, msh_segmentnumber_t seg_num);
+
+#endif /* MATSHARE_MSHSEGMENTS_H */

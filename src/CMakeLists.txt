@@ -12,7 +12,7 @@ SET(SOURCE_FILES
 		mshinit.c headers/mshinit.h
 		mshutils.c headers/mshutils.h
 		headers/mshtypes.h
-		headers/mshexterntypes.h mshlists.c headers/mshlists.h headers/mshheader.h headers/opaque/mshheader.c headers/mshbasictypes.h headers/opaque/mshexterntypes.c)
+		headers/mshexterntypes.h mshvariables.c headers/mshvariables.h headers/mshheader.h headers/opaque/mshheader.c headers/mshbasictypes.h headers/opaque/mshexterntypes.c mshsegments.c headers/mshsegments.h headers/opaque/mshtable.c)
 
 IF(UXWIN)
 	SET(SOURCE_FILES
@@ -23,8 +23,16 @@ IF(UXWIN)
 			headers/mshtypes.h
 			extlib/mman-win32/sys/mman.h
 			headers/mshexterntypes.h
-			mshutils.c headers/mshutils.h mshlists.c headers/mshlists.h headers/mshheader.h headers/opaque/mshheader.c headers/mshbasictypes.h headers/opaque/mshexterntypes.c)
+			mshutils.c headers/mshutils.h
+			mshvariables.c headers/mshvariables.h
+			headers/mshheader.h headers/opaque/mshheader.c
+			headers/mshbasictypes.h
+			headers/opaque/mshexterntypes.c
+			mshsegments.c headers/mshsegments.h h
+			eaders/opaque/mshtable.c)
 ENDIF(UXWIN)
+
+SET_SOURCE_FILES_PROPERTIES(${SOURCE_FILES} PROPERTIES LANGUAGE C)
 
 ADD_LIBRARY(${MEX_FILE_NAME} SHARED ${SOURCE_FILES} ${CMAKE_SOURCE_DIR}/Matlabdef.def)
 
