@@ -86,7 +86,14 @@ typedef int handle_t;				 /* give fds a uniform identifier */
 
 #define ALIGN_SIZE (size_t)0x20u    /* The pointer alignment size; ensure this is a multiple of 32 for AVX alignment */
 #define ALIGN_SHIFT (size_t)0x1Fu /* (ALIGN_SIZE-1) micro-optimization */
-#define MXMALLOC_SIG_LEN 0x10u      /* length of the mxMalloc signature */
+
+#ifdef MSH_32BIT
+#  define MXMALLOC_SIG_TEMPLATE "\x08\x00\x00\x00\xED\xFE\x20\x08"
+#  define MXMALLOC_SIG_LEN 0x08u        /* length of the mxMalloc signature */
+#else
+#  define MXMALLOC_SIG_TEMPLATE "\x10\x00\x00\x00\x00\x00\x00\x00\xCE\xFA\xED\xFE\x20\x00\x10\x00"
+#  define MXMALLOC_SIG_LEN 0x10u      /* length of the mxMalloc signature */
+#endif
 
 
 /**

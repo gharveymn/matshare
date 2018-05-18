@@ -382,13 +382,13 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache)
 	
 	/* NOTE: seg_sz must have been initialized before calling this */
 	
-#ifndef MSH_32BIT
+#ifdef MSH_32BIT
+	lo_sz = (DWORD)seg_info_cache->seg_sz;
+	hi_sz = (DWORD)0;
+#else
 	/* split the 64-bit size */
 	lo_sz = (DWORD)(seg_info_cache->seg_sz & 0xFFFFFFFFL);
 	hi_sz = (DWORD)((seg_info_cache->seg_sz >> 32u) & 0xFFFFFFFFL);
-#else
-	lo_sz = (DWORD)seg_info_cache->seg_sz;
-	hi_sz = (DWORD)0;
 #endif
 	
 	/* the targeted segment number is not guaranteed to be available, so keep retrying */

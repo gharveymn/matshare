@@ -182,13 +182,14 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 	VariableNode_t* curr_var_node;
 	SegmentNode_t* curr_seg_node;
 
-#ifndef MSH_32BIT
-	size_t i, num_new_vars = 0;
-	size_t ret_dims[2];
-#else
+#ifdef MSH_32BIT
 	int i, num_new_vars = 0;
 	int ret_dims[2];
+#else
+	size_t i, num_new_vars = 0;
+	size_t ret_dims[2];
 #endif
+	
 	if(g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY)
 	{
 		msh_VariableGC();
@@ -214,10 +215,10 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 			}
 			
 			/* return the new variables detected */
-#ifndef MSH_32BIT
-			ret_dims[0] = (size_t)(num_new_vars != 0);
-#else
+#ifdef MSH_32BIT
 			ret_dims[0] = (int)(num_new_vars != 0);
+#else
+			ret_dims[0] = (size_t)(num_new_vars != 0);
 #endif
 			ret_dims[1] = num_new_vars;
 			plhs[1] = mxCreateCellArray(2, ret_dims);

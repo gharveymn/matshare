@@ -1042,24 +1042,27 @@ static void msh_MakeMxMallocSignature(uint8_T* sig, size_t seg_size)
 	 * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
 	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
 	 */
-	size_t multiplier;
-	uint8_T i;
-	/* const uint8_T mxmalloc_sig_template[MXMALLOC_SIG_LEN] = {16, 0, 0, 0, 0, 0, 0, 0, 206, 250, 237, 254, 32, 0, 32, 0}; */
-#define MXMALLOC_SIG_TEMPLATE "\x10\x00\x00\x00\x00\x00\x00\x00\xCE\xFA\xED\xFE\x20\x00\x20\x00"
+	
+	int i;
+	size_t multiplier = 16;
+	
+	const int max_filled = 4;
+	const size_t magic_num1 = MXMALLOC_SIG_LEN;
+	const size_t magic_num2 = magic_num1 - 1;
+	const size_t magic_num3 = 256/magic_num1 - 1;
 	
 	memcpy(sig, MXMALLOC_SIG_TEMPLATE, MXMALLOC_SIG_LEN * sizeof(char_t));
-	multiplier = 16;
 	
 	/* note: (x % 2^n) == (x & (2^n - 1)) */
 	if(seg_size > 0)
 	{
-		sig[0] = (uint8_T)((((seg_size + 0x0F)/multiplier) & (multiplier - 1))*multiplier);
+		sig[0] = (uint8_T)((((seg_size + magic_num2)/magic_num1) & magic_num3) * magic_num1);
 		
-		/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
-		for(i = 1; i < 4; i++)
+		/* note: this only does bytes 1 to 3 because of 64 bit precision limit (maybe implement byte 4 in the future?)*/
+		for(i = 1; i < max_filled; i++)
 		{
 			multiplier ^= 2;
-			sig[i] = (uint8_T)(((seg_size + 0x0F)/multiplier) & (multiplier - 1));
+			sig[i] = (uint8_T)(((seg_size + magic_num2)/multiplier) & (multiplier - 1));
 		}
 	}
 }
