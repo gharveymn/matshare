@@ -43,12 +43,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	{
 		case msh_SHARE:
 			
+			msh_VariableGC();
 			msh_Share(nlhs, plhs, num_in_vars, in_vars);
 			
 			break;
 		
 		case msh_FETCH:
 			
+			msh_VariableGC();
 			msh_Fetch(nlhs, plhs, MSH_SHARED_COPY);
 			
 			break;
@@ -77,6 +79,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		
 		case msh_DEEPCOPY:
 			
+			msh_VariableGC();
 			msh_Fetch(nlhs, plhs, MSH_DUPLICATE);
 			
 			break;
@@ -98,7 +101,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			break;
 		default:
-			ReadMexError(__FILE__, __LINE__, "UnknownDirectiveError", "Unrecognized msh_directive.");
+			ReadMexError(__FILE__, __LINE__, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
 			break;
 	}
 	
@@ -115,11 +118,6 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 	if(num_vars < 1)
 	{
 		ReadMexError(__FILE__, __LINE__, "NoVariableError", "No variable supplied to clone.");
-	}
-	
-	if(g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY)
-	{
-		msh_VariableGC();
 	}
 	
 	for(i = 0, in_var = in_vars[i]; i < num_vars; i++, in_var = in_vars[i])
@@ -163,7 +161,6 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		/* segment must also be tracked locally, so do that now */
 		msh_AddSegmentToLocalList(&g_local_seg_list, new_seg_node);
 		
-		
 	}
 	
 	msh_UpdateAll();
@@ -190,11 +187,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 	size_t ret_dims[2];
 #endif
 	
-	if(g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY)
-	{
-		msh_VariableGC();
-	}
-	
+	/* TODO: only run the full update if nlhs >= 2, but just find the latest segment otherwise */
 	msh_UpdateSegmentTracking(&g_local_seg_list);
 	
 	if(nlhs >= 1)
@@ -349,14 +342,16 @@ void msh_Param(int num_params, const mxArray** in)
 	if(num_params == 0)
 	{
 #ifdef MSH_WIN
-		mexPrintf(MSH_PARAM_INFO, g_shared_info->user_def.is_thread_safe? "true" : "false",
+		mexPrintf(MSH_PARAM_INFO,
+				g_shared_info->user_def.is_thread_safe? "true" : "false",
 				g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY? "true" : "false",
 				g_shared_info->user_def.will_gc? "true" : "false");
 #else
-		mexPrintf(MSH_PARAM_INFO, g_shared_info->user_def.is_thread_safe? "true" : "false",
-		g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY? "true" : "false",
-		g_shared_info->user_def.will_gc? "true" : "false",
-		g_shared_info->security);
+		mexPrintf(MSH_PARAM_INFO,
+				g_shared_info->user_def.is_thread_safe? "true" : "false",
+				g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY? "true" : "false",
+				g_shared_info->user_def.will_gc? "true" : "false",
+				g_shared_info->security);
 #endif
 	}
 	
@@ -463,19 +458,19 @@ void msh_Param(int num_params, const mxArray** in)
 			ReadMexError(__FILE__, __LINE__, "InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
 #endif
 		}
-		else if(strcmp(param_str_l, MSH_PARAM_COPYONWRITE_L) == 0)
+		else if(strcmp(param_str_l, MSH_PARAM_SHARETYPE_L) == 0)
 		{
-			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
+			if(strncmp(val_str_l, "copy", 4) == 0)
 			{
 				g_shared_info->user_def.sharetype = msh_SHARETYPE_COPY;
 			}
-			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
+			else if(strcmp(val_str_l, "overwrite") == 0)
 			{
 				g_shared_info->user_def.sharetype = msh_SHARETYPE_OVERWRITE;
 			}
 			else
 			{
-				ReadMexError(__FILE__, __LINE__, "InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_COPYONWRITE);
+				ReadMexError(__FILE__, __LINE__, "InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_SHARETYPE);
 			}
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_GC_L) == 0)
@@ -500,6 +495,3 @@ void msh_Param(int num_params, const mxArray** in)
 		
 	}
 }
-
-
-

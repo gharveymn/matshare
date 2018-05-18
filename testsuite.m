@@ -1,6 +1,10 @@
 %% TESTSUITE
 %  Runs an automated suite of tests
 
+addpath('tests');
+addpath('tests/parallel');
+addpath('scripts');
+
 %% Type classes
 mxUNKNOWN_CLASS  = 0;
 mxCELL_CLASS     = 1;
@@ -23,7 +27,7 @@ mxOPAQUE_CLASS   = 17;
 mxOBJECT_CLASS   = 18;
 
 %% Parallel pool startup
-poolstartup;
+mshpoolstartup;
 observerpid = workerpids{1};
 
 % test essential variables
@@ -35,10 +39,18 @@ testparresultverify;
 % parallel function calls
 testparrandfunccalls;
 
-% test again
+mshparam('gc', 'on', 'sharetype', 'copy');
+
+% test essential variables
 testparessential;
 
-fprintf('Test successful.\n\n');
+% test parallel results
+testparresultverify;
+
+% parallel function calls
+testparrandfunccalls;
+
+fprintf('Test suite ran successfully.\n\n');
 
 
 

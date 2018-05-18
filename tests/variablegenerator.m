@@ -1,9 +1,9 @@
-function [ret] = randvargen(maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec)
-	[ret] = randvargen_(1, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
+function [ret] = variablegenerator(maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec)
+	[ret] = variablegenerator_(1, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
 end
 
 
-function [ret] = randvargen_(currDepth, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec)
+function [ret] = variablegenerator_(currDepth, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec)
 
 	%  Variable Type Key
 	%    1    mxCELL_CLASS,
@@ -87,7 +87,7 @@ function [ret] = randvargen_(currDepth, maxDepth, maxElems, maxDims, maxChildren
 			% 	1	mxCELL_CLASS
 			ret = cell(dims);
 			for k = 1:numel(ret)
-				ret{k} = randvargen_(currDepth + 1, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
+				ret{k} = variablegenerator_(currDepth + 1, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
 			end
 		case(2)
 			% 	2	mxSTRUCT_CLASS
@@ -100,7 +100,7 @@ function [ret] = randvargen_(currDepth, maxDepth, maxElems, maxDims, maxChildren
 				for k = 1:numel(ret)
 
 					for j = 1:numel(retFields)
-						ret(k).(retFields{j}) = randvargen_(currDepth + 1, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
+						ret(k).(retFields{j}) = variablegenerator_(currDepth + 1, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
 
 					end
 

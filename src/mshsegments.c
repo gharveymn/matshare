@@ -151,13 +151,13 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 	g_shared_info->last_seg_num = seg_node->seg_info.seg_num;
 	
 	/* update number of vars in shared memory */
-	g_shared_info->num_valid_segments += 1;
+	msh_AtomicIncrement(&g_shared_info->num_valid_segments);
+	
+	/* sign the update with this process */
+	g_shared_info->update_pid = g_local_info->this_pid;
 	
 	/* update the revision number to indicate other processes to retrieve new segments */
-	g_shared_info->rev_num += 1;
-	g_local_info->rev_num = g_shared_info->rev_num;
-	
-	g_shared_info->update_pid = g_local_info->this_pid;
+	msh_AtomicIncrement(&g_shared_info->rev_num);
 	
 	msh_ReleaseProcessLock();
 	
@@ -172,6 +172,7 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 #endif
 	
 	handle_t temp_segment_handle;
+	SegmentNode_t* temp_seg_node;
 	SegmentMetadata_t* temp_segment_metadata,* segment_metadata;
 	
 	msh_AcquireProcessLock();
@@ -197,7 +198,10 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 		temp_segment_handle = msh_OpenSegmentHandle(segment_metadata->prev_seg_num);
 		temp_segment_metadata = msh_MapSegment(temp_segment_handle, sizeof(SegmentMetadata_t));
 		
-		temp_segment_metadata->next_seg_num = segment_metadata->next_seg_num;
+		if(!temp_segment_metadata->is_invalid)
+		{
+			temp_segment_metadata->next_seg_num = segment_metadata->next_seg_num;
+		}
 		
 		msh_UnmapSegment(temp_segment_metadata, sizeof(SegmentMetadata_t));
 		msh_CloseSegmentHandle(temp_segment_handle);
@@ -213,19 +217,18 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 		temp_segment_handle = msh_OpenSegmentHandle(segment_metadata->next_seg_num);
 		temp_segment_metadata = msh_MapSegment(temp_segment_handle, sizeof(SegmentMetadata_t));
 		
-		temp_segment_metadata->prev_seg_num = segment_metadata->prev_seg_num;
+		if(!temp_segment_metadata->is_invalid)
+		{
+			temp_segment_metadata->prev_seg_num = segment_metadata->prev_seg_num;
+		}
 		
 		msh_UnmapSegment(temp_segment_metadata, sizeof(SegmentMetadata_t));
 		msh_CloseSegmentHandle(temp_segment_handle);
 	}
 	
-	/* update the revision number to tell processes to update their segment lists */
-	g_shared_info->rev_num += 1;
-	g_local_info->rev_num = g_shared_info->rev_num;
-	
-	g_shared_info->update_pid = g_local_info->this_pid;
-	
-	g_shared_info->num_valid_segments -= 1;
+	/* reset these to reduce confusion when debugging */
+	segment_metadata->next_seg_num = -1;
+	segment_metadata->prev_seg_num = -1;
 
 #ifdef MSH_UNIX
 	msh_WriteSegmentName(segment_name, seg_node->seg_info.seg_num);
@@ -234,6 +237,15 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 		ReadShmUnlinkError(errno);
 	}
 #endif
+	
+	/* sign the update with this process */
+	g_shared_info->update_pid = g_local_info->this_pid;
+	
+	/* update number of vars in shared memory */
+	msh_AtomicDecrement(&g_shared_info->num_valid_segments);
+	
+	/* update the revision number to tell processes to update their segment lists */
+	msh_AtomicIncrement(&g_shared_info->rev_num);
 	
 	msh_ReleaseProcessLock();
 	

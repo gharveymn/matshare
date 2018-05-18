@@ -1,13 +1,15 @@
-function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, observerpid)
+function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, observerpid, isparallel)
 %	thispid = feature('getpid');
 	allvars = {};
-	rng('shuffle');
+	if(isparallel)
+		rng(feature('getpid'));
+	end
 %	lents = 0
 	
 	for i = 1:num_samples
 		try
 			
-			tv = randvargen(maxDepth, maxElements, maxDims, maxChildren, false, typespec);
+			tv = variablegenerator(maxDepth, maxElements, maxDims, maxChildren, false, typespec);
 			ri1 = ceil(4*rand);
 			ri2 = ceil(4*rand);
 			
@@ -65,12 +67,12 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 			end
 			
 			if(mod(bounds.chpar_copy.iter,i) == 0)
-				mshparam('CopyOnWrite','true');
+				mshparam('sharetype', 'copy');
 				bounds.chpar_copy.iter = randi(bounds.chpar_copy.bound);
 			end
 			
 			if(mod(bounds.chpar_over.iter,i) == 0)
-				mshparam('CopyOnWrite','false');
+				mshparam('sharetype','overwrite');
 				bounds.chpar_over.iter = randi(bounds.chpar_over.bound);
 			end
 			

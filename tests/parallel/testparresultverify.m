@@ -68,7 +68,7 @@ for i = 1:num_maxDepth_tests
 						fprintf([repmat('\b',1,lents) timestr]);
 						lents = numel(timestr);
 						
-						tv = randvargen(maxDepth, maxElements, maxDims, maxChildren, true, typespec);
+						tv = variablegenerator(maxDepth, maxElements, maxDims, maxChildren, true, typespec);
 						testparvarresult(tv, numworkers);
 						
 						
@@ -81,4 +81,4 @@ for i = 1:num_maxDepth_tests
 end
 mshclear
 mshdetach
-fprintf('successful.\n\n');
+fprintf('Test successful.\n\n');

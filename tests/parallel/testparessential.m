@@ -15,4 +15,4 @@ fprintf('Testing essential variables... ');
 for i = 1:10
 	testparvarresult(tv{i}, numworkers);
 end
-fprintf('successful.\n\n');
+fprintf('Test successful.\n\n');

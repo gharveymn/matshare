@@ -17,8 +17,8 @@
 #define MSH_PARAM_SECURITY "Security"
 #define MSH_PARAM_SECURITY_L "security"
 
-#define MSH_PARAM_COPYONWRITE "CopyOnWrite"
-#define MSH_PARAM_COPYONWRITE_L "copyonwrite"
+#define MSH_PARAM_SHARETYPE "Sharetype"
+#define MSH_PARAM_SHARETYPE_L "sharetype"
 
 #define MSH_PARAM_GC "GC"
 #define MSH_PARAM_GC_L "gc"

@@ -266,7 +266,7 @@ void msh_VariableGC(void)
 {
 	VariableNode_t* curr_var_node, * next_var_node;
 	
-	if(!g_shared_info->user_def.will_gc)
+	if(!g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY || !g_shared_info->user_def.will_gc)
 	{
 		return;
 	}
