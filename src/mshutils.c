@@ -238,7 +238,7 @@ void msh_UpdateAll(void)
 			{
 				ReadMsyncError(errno);
 			}
-			if(msync((void*)curr_seg_node->seg_info.shared_memory_ptr, curr_seg_node->seg_info.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
+			if(msync(curr_seg_node->seg_info.shared_memory_ptr, curr_seg_node->seg_info.seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
 			{
 				ReadMsyncError(errno);
 			}

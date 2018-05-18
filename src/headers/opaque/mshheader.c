@@ -1048,7 +1048,7 @@ static void msh_MakeMxMallocSignature(uint8_T* sig, size_t seg_size)
 #define MXMALLOC_SIG_TEMPLATE "\x10\x00\x00\x00\x00\x00\x00\x00\xCE\xFA\xED\xFE\x20\x00\x20\x00"
 	
 	memcpy(sig, MXMALLOC_SIG_TEMPLATE, MXMALLOC_SIG_LEN * sizeof(char_t));
-	multiplier = 1u << 4u;
+	multiplier = 16;
 	
 	/* note: (x % 2^n) == (x & (2^n - 1)) */
 	if(seg_size > 0)
@@ -1058,7 +1058,7 @@ static void msh_MakeMxMallocSignature(uint8_T* sig, size_t seg_size)
 		/* note: this only does bits 1 to 3 because of 64 bit precision limit (maybe implement bit 4 in the future?)*/
 		for(i = 1; i < 4; i++)
 		{
-			multiplier = (size_t)1u << (1u << (2u + i));
+			multiplier ^= 2;
 			sig[i] = (uint8_T)(((seg_size + 0x0F)/multiplier) & (multiplier - 1));
 		}
 	}

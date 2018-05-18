@@ -58,19 +58,28 @@ mxArray* sps;
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
+	int bytes, i, hdr_sz, sizehdr_sz;
+	uint8_T* mem;
 	
-	int bytes = (int)*(double*)mxGetData(prhs[0]);
-	mexPrintf("%i",bytes);
-	uint8_T* mem = mxMalloc(bytes);
-	int i;
-	for(i=16;i>0;i--)
+	if(nrhs == 0)
+	{
+		return;
+	}
+	
+	bytes = (int)*(double*)mxGetData(prhs[0]);
+	mem = mxMalloc(bytes);
+	hdr_sz = 16;
+	sizehdr_sz = 8;
+	
+	/* mexPrintf("%i",bytes);
+	for(i=hdr_sz;i>0;i--)
 	{
 		mexPrintf("%X\n",*(mem-i));
 	}
-	plhs[0] = mxCreateNumericMatrix(1, 8, mxUINT8_CLASS, mxREAL);
-	memcpy(mxGetData(plhs[0]), mem - 16, 8);
-	plhs[1] = mxCreateDoubleScalar((double)((size_t)mem));
-	plhs[2] = mxCreateDoubleScalar((double)((size_t)(mem+bytes)));
+	 */
+	
+	plhs[0] = mxCreateNumericMatrix(1, sizehdr_sz, mxUINT8_CLASS, mxREAL);
+	memcpy(mxGetData(plhs[0]), mem - hdr_sz, sizehdr_sz);
 	mxFree(mem);
 
 }
