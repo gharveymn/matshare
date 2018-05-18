@@ -151,13 +151,13 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 	g_shared_info->last_seg_num = seg_node->seg_info.seg_num;
 	
 	/* update number of vars in shared memory */
-	msh_AtomicIncrement(&g_shared_info->num_valid_segments);
+	g_shared_info->num_valid_segments += 1;
 	
 	/* sign the update with this process */
 	g_shared_info->update_pid = g_local_info->this_pid;
 	
 	/* update the revision number to indicate other processes to retrieve new segments */
-	msh_AtomicIncrement(&g_shared_info->rev_num);
+	g_shared_info->rev_num += 1;
 	
 	msh_ReleaseProcessLock();
 	
@@ -242,10 +242,10 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	g_shared_info->update_pid = g_local_info->this_pid;
 	
 	/* update number of vars in shared memory */
-	msh_AtomicDecrement(&g_shared_info->num_valid_segments);
+	g_shared_info->num_valid_segments -= 1;
 	
 	/* update the revision number to tell processes to update their segment lists */
-	msh_AtomicIncrement(&g_shared_info->rev_num);
+	g_shared_info->rev_num += 1;
 	
 	msh_ReleaseProcessLock();
 	

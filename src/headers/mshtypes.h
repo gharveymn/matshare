@@ -95,15 +95,15 @@ typedef volatile struct SharedInfo_t
 		msh_sharetype_t sharetype;
 		alignedbool_t is_thread_safe;
 		alignedbool_t will_gc;
+#ifdef MSH_UNIX
+		mode_t security;
+#endif
 	} user_def;
-	uint32_T num_valid_segments;
 	msh_segmentnumber_t first_seg_num;     /* the first segment number in the list */
 	msh_segmentnumber_t last_seg_num;      /* the last segment number in the list */
-	pid_t update_pid;
-#ifdef MSH_UNIX
-	mode_t security;
-#endif
+	uint32_T num_valid_segments;
 	long num_procs;
+	pid_t update_pid;
 } SharedInfo_t;
 
 
