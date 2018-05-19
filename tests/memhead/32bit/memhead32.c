@@ -69,8 +69,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	bytes = (int)*(double*)mxGetData(prhs[0]);
 	mem = mxMalloc(bytes);
 	hdr_sz = 8;
-	sizehdr_sz = 4;
+	sizehdr_sz = 8;
 	
+    mexPrintf("%i", sizeof(size_t));
 	/* mexPrintf("%i",bytes);
 	for(i=hdr_sz;i>0;i--)
 	{

@@ -54,6 +54,7 @@ try
 	end
 	
 	if(maxsz > 2^31-1)
+		% R2018a
 		if(verLessThan('matlab','9.4'))
 			mexflags = [mexflags {'-largeArrayDims'}];
 		else
@@ -63,6 +64,11 @@ try
 		end
 	else
 		mexflags = [mexflags {'-compatibleArrayDims', '-DMSH_32BIT'}];
+	end
+	
+	% R2011b
+	if(verLessThan('matlab', '7.13'))
+		mexflags = [mexflags {'-DMSH_NO_AVX_SUPPORT'}];
 	end
 	
 	fprintf('-Compiling matshare...')

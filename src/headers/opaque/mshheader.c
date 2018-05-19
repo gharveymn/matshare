@@ -48,7 +48,15 @@ static void msh_GetNextFieldName(const char_t** field_str);
 
 static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz);
 
-static void msh_MakeMxMallocSignature(uint8_T* sig, size_t seg_size);
+static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t seg_sz);
+
+/**
+ *
+ * @note Pads to a multiple of the size of the header, so 64 bit is 16 byte padded, 32 bit is 8 byte padded.
+ * @param seg_sz
+ * @return
+ */
+static size_t FindPaddedSegmentSize(size_t seg_sz);
 
 /** offset Get functions **/
 
@@ -271,7 +279,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	 * want to use SharedVariableHeader_t for anything other than the actual segment. */
 
 	/* adds the total size of the aligned data */
-#define AddDataSize(obj_sz_, data_sz_) (obj_sz_) = PadToAlign((obj_sz_) + MXMALLOC_SIG_LEN) + (data_sz_);
+#define AddDataSize(obj_sz_, data_sz_) (obj_sz_) = PadToAlignData((obj_sz_) + MXMALLOC_SIG_LEN) + (data_sz_);
 	
 	/* counters */
 	size_t idx, count, obj_tree_sz = 0;
@@ -293,13 +301,16 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 		/* Add space for the field string */
 		obj_tree_sz += msh_GetFieldNamesSize(in_var);
 		
+		/* make sure the structure is aligned so we don't have slow access */
+		obj_tree_sz = PadToAlignData(obj_tree_sz);
+		
 		/* go through each recursively */
 		for(field_num = 0, count = 0; field_num < mxGetNumberOfFields(in_var); field_num++)          /* each field */
 		{
 			for(idx = 0; idx < mxGetNumberOfElements(in_var); idx++, count++)                         /* each element */
 			{
 				/* call recursivley */
-				obj_tree_sz += PadToAlign(msh_FindSharedSize(mxGetFieldByNumber(in_var, idx, field_num)));
+				obj_tree_sz += PadToAlignData(msh_FindSharedSize(mxGetFieldByNumber(in_var, idx, field_num)));
 			}
 		}
 	}
@@ -309,10 +320,13 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 		/* add size of storing the offsets */
 		obj_tree_sz += mxGetNumberOfElements(in_var)*sizeof(size_t);
 		
+		/* make sure the structure is aligned so we don't have slow access */
+		obj_tree_sz = PadToAlignData(obj_tree_sz);
+		
 		/* go through each recursively */
 		for(count = 0; count < mxGetNumberOfElements(in_var); count++)
 		{
-			obj_tree_sz += PadToAlign(msh_FindSharedSize(mxGetCell(in_var, count)));
+			obj_tree_sz += PadToAlignData(msh_FindSharedSize(mxGetCell(in_var, count)));
 		}
 	}
 	else if(mxIsNumeric(in_var) || mxGetClassID(in_var) == mxLOGICAL_CLASS || mxGetClassID(in_var) == mxCHAR_CLASS)  /* base case */
@@ -412,7 +426,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 		curr_off += msh_GetFieldNamesSize(in_var);
 		
 		/* align this object */
-		curr_off = PadToAlign(curr_off);
+		curr_off = PadToAlignData(curr_off);
 		
 		/* copy the children recursively */
 		field_name_dest = msh_GetFieldNames(dest);
@@ -430,7 +444,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				msh_GetChildOffsets(dest)[count] = curr_off;
 				
 				/* And fill it */
-				curr_off += PadToAlign(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetFieldByNumber(in_var, idx, field_num)));
+				curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetFieldByNumber(in_var, idx, field_num)));
 				
 			}
 			
@@ -447,7 +461,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 		curr_off += num_elems*sizeof(size_t);
 		
 		/* align this object */
-		curr_off = PadToAlign(curr_off);
+		curr_off = PadToAlignData(curr_off);
 		
 		/* recurse for each cell element */
 		for(count = 0; count < num_elems; count++)
@@ -456,7 +470,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			msh_GetChildOffsets(dest)[count] = curr_off;
 			
 			/* And fill it */
-			curr_off += PadToAlign(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetCell(in_var, count)));
+			curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetCell(in_var, count)));
 		}
 		
 	}
@@ -474,7 +488,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			/** begin copy data **/
 			
 			/* make room for the mxMalloc signature */
-			curr_off = PadToAlign(curr_off + MXMALLOC_SIG_LEN);
+			curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
 			
 			/* set the offset of the data */
 			msh_SetDataOffset(dest, curr_off);
@@ -490,7 +504,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			if(mxIsComplex(in_var))
 			{
 				/* make room for the mxMalloc signature */
-				curr_off = PadToAlign(curr_off + MXMALLOC_SIG_LEN);
+				curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
 				
 				/* set the offset of the imaginary data */
 				msh_SetImagDataOffset(dest, curr_off);
@@ -507,7 +521,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			/** begin copy ir **/
 			
 			/* make room for the mxMalloc signature */
-			curr_off = PadToAlign(curr_off + MXMALLOC_SIG_LEN);
+			curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
 			
 			/* set the offset of ir */
 			msh_SetIrOffset(dest, curr_off);
@@ -522,7 +536,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			/** begin copy jc **/
 			
 			/* make room for the mxMalloc signature */
-			curr_off = PadToAlign(curr_off + MXMALLOC_SIG_LEN);
+			curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
 			
 			/* set the offset of jc */
 			msh_SetJcOffset(dest, curr_off);
@@ -544,7 +558,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				/** begin copy data **/
 				
 				/* make room for the mxMalloc signature */
-				curr_off = PadToAlign(curr_off + MXMALLOC_SIG_LEN);
+				curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
 				
 				/* set the offset of the data */
 				msh_SetDataOffset(dest, curr_off);
@@ -560,7 +574,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				if(mxIsComplex(in_var))
 				{
 					/* make room for the mxMalloc signature */
-					curr_off = PadToAlign(curr_off + MXMALLOC_SIG_LEN);
+					curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
 					
 					/* set the offset of the imaginary data */
 					msh_SetImagDataOffset(dest, curr_off);
@@ -1008,10 +1022,7 @@ static void msh_GetNextFieldName(const char_t** field_str)
 
 static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz)
 {
-	uint8_T mxmalloc_sig[MXMALLOC_SIG_LEN];
-	msh_MakeMxMallocSignature(mxmalloc_sig, cpy_sz);
-	
-	memcpy(dest - MXMALLOC_SIG_LEN, mxmalloc_sig, MXMALLOC_SIG_LEN);
+	msh_MakeDataSignature((AllocationHeader_t*)(dest - MXMALLOC_SIG_LEN), cpy_sz);
 	if(orig != NULL)
 	{
 		memcpy(dest, orig, cpy_sz);
@@ -1024,7 +1035,7 @@ static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz)
 }
 
 
-static void msh_MakeMxMallocSignature(uint8_T* sig, size_t seg_size)
+static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t seg_sz)
 {
 	/*
 	 * MXMALLOC SIGNATURE INFO:
@@ -1032,37 +1043,24 @@ static void msh_MakeMxMallocSignature(uint8_T* sig, size_t seg_size)
 	 * 	it appends the following 16 byte header immediately before data segment
 	 *
 	 * HEADER:
-	 * 		bytes 0-7 - size iterator; rules for each byte are:
-	 * 			byte 0 = (((size+0x1F)/2^4)%2^4)*2^4
-	 * 			byte 1 = (((size+0x1F)/2^8)%2^8)
-	 * 			byte 2 = (((size+0x1F)/2^16)%2^16)
-	 * 			byte n = (((size+0x1F)/2^(2^(2+n)))%2^(2^(2+n)))
-	 *
+	 * 		bytes 0-7   - the 16 byte aligned size of the segment
 	 * 		bytes  8-11 - a signature for the vector check
 	 * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
 	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
 	 */
 	
-	int i;
-	size_t multiplier = 16;
-	
-	const int max_filled = 4;
-	const size_t magic_num1 = MXMALLOC_SIG_LEN;
-	const size_t magic_num2 = magic_num1 - 1;
-	const size_t magic_num3 = 256/magic_num1 - 1;
-	
-	memcpy(sig, MXMALLOC_SIG_TEMPLATE, MXMALLOC_SIG_LEN * sizeof(char_t));
-	
-	/* note: (x % 2^n) == (x & (2^n - 1)) */
-	if(seg_size > 0)
+	if(seg_sz > 0)
 	{
-		sig[0] = (uint8_T)((((seg_size + magic_num2)/magic_num1) & magic_num3) * magic_num1);
-		
-		/* note: this only does bytes 1 to 3 because of 64 bit precision limit (maybe implement byte 4 in the future?)*/
-		for(i = 1; i < max_filled; i++)
-		{
-			multiplier ^= 2;
-			sig[i] = (uint8_T)(((seg_size + magic_num2)/multiplier) & (multiplier - 1));
-		}
+		alloc_hdr->aligned_size = FindPaddedSegmentSize(seg_sz);
 	}
+	alloc_hdr->check = MXMALLOC_MAGIC_CHECK;
+	alloc_hdr->alignment = MXMALLOC_ALIGNMENT;
+	alloc_hdr->offset = MXMALLOC_SIG_LEN;
+	
+}
+
+
+static size_t FindPaddedSegmentSize(size_t seg_sz)
+{
+	return seg_sz + (MXMALLOC_SIG_LEN_SHIFT - ((seg_sz - 1) & MXMALLOC_SIG_LEN_SHIFT));
 }

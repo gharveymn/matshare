@@ -173,7 +173,7 @@ static void msh_MapInfoSegment(void)
 	}
 	
 	/* lock this virtual mapping to physical memory to make sure it doesn't get written to the pagefile */
-	VirtualLock((void*)g_local_info->shm_info_seg.shared_memory_ptr, g_local_info->shm_info_seg.seg_sz);
+	VirtualLock(g_local_info->shm_info_seg.shared_memory_ptr, g_local_info->shm_info_seg.seg_sz);
 
 #else
 	

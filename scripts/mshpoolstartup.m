@@ -3,7 +3,7 @@ usrver=ver;
 if(all(ismember('Parallel Computing Toolbox',installedToolboxes)))
 	if(verLessThan('matlab','8.2'))
 		if(~matlabpool('size'))
-			pp = matlabpool('open', 'local');
+			matlabpool('open', 'local');
 		end
 		numworkers = matlabpool('size');
 	else

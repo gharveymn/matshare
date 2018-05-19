@@ -84,15 +84,39 @@ typedef int handle_t;				 /* give fds a uniform identifier */
 
 #define SEG_NUM_MAX LONG_MAX      /* the maximum segment number */
 
-#define ALIGN_SIZE (size_t)0x20u    /* The pointer alignment size; ensure this is a multiple of 32 for AVX alignment */
-#define ALIGN_SHIFT (size_t)0x1Fu /* (ALIGN_SIZE-1) micro-optimization */
-
 #ifdef MSH_32BIT
-#  define MXMALLOC_SIG_TEMPLATE "\x08\x00\x00\x00\xED\xFE\x20\x08"
-#  define MXMALLOC_SIG_LEN 0x08u        /* length of the mxMalloc signature */
+#  define MXMALLOC_MAGIC_CHECK 0xFEED
+#  define MXMALLOC_SIG_LEN 0x08
+#  define MXMALLOC_SIG_LEN_SHIFT 0x07
+
+typedef struct AllocationHeader_t
+{
+	uint32_T aligned_size;
+	uint16_T check;
+	uint8_T alignment;
+	uint8_T offset;
+} AllocationHeader_t;
+
 #else
-#  define MXMALLOC_SIG_TEMPLATE "\x10\x00\x00\x00\x00\x00\x00\x00\xCE\xFA\xED\xFE\x20\x00\x10\x00"
-#  define MXMALLOC_SIG_LEN 0x10u      /* length of the mxMalloc signature */
+#  define MXMALLOC_MAGIC_CHECK 0xFEEDFACE
+#  define MXMALLOC_SIG_LEN 0x10
+#  define MXMALLOC_SIG_LEN_SHIFT 0x0F
+
+typedef struct AllocationHeader_t
+{
+	uint64_T aligned_size;
+	uint32_T check;
+	uint16_T alignment;
+	uint16_T offset;
+} AllocationHeader_t;
+#endif
+
+#ifdef MSH_NO_AVX_SUPPORT
+#  define MXMALLOC_ALIGNMENT 0x10
+#  define MXMALLOC_ALIGNMENT_SHIFT (size_t)0x0F
+#else
+#  define MXMALLOC_ALIGNMENT 0x20
+#  define MXMALLOC_ALIGNMENT_SHIFT (size_t)0x1F
 #endif
 
 
@@ -103,7 +127,7 @@ typedef int handle_t;				 /* give fds a uniform identifier */
  * @param curr_sz The size to pad.
  * @return The padded size.
  */
-size_t PadToAlign(size_t curr_sz);
+size_t PadToAlignData(size_t curr_sz);
 
 #ifdef MSH_WIN
 #define msh_AtomicIncrement InterlockedIncrement

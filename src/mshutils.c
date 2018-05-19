@@ -19,10 +19,10 @@ void msh_OnExit(void)
 	if(g_local_info->shm_info_seg.is_mapped)
 	{
 		/* unlock this set of pages */
-		VirtualUnlock((void*)g_local_info->shm_info_seg.shared_memory_ptr, g_local_info->shm_info_seg.seg_sz);
+		VirtualUnlock(g_local_info->shm_info_seg.shared_memory_ptr, g_local_info->shm_info_seg.seg_sz);
 		
 		/* unmap the shared info segment */
-		if(UnmapViewOfFile((void*)g_local_info->shm_info_seg.shared_memory_ptr) == 0)
+		if(UnmapViewOfFile(g_local_info->shm_info_seg.shared_memory_ptr) == 0)
 		{
 			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "UnmapFileError", "Error unmapping the update file.");
 		}
@@ -250,9 +250,9 @@ void msh_UpdateAll(void)
 }
 
 
-size_t PadToAlign(size_t curr_sz)
+size_t PadToAlignData(size_t curr_sz)
 {
-	return curr_sz + (ALIGN_SHIFT - ((curr_sz - 1) & ALIGN_SHIFT));
+	return curr_sz + (MXMALLOC_ALIGNMENT_SHIFT - ((curr_sz - 1) & MXMALLOC_ALIGNMENT_SHIFT));
 }
 
 

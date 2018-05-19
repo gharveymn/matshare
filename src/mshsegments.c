@@ -57,13 +57,13 @@ SegmentMetadata_t* msh_GetSegmentMetadata(SegmentNode_t* seg_node)
 
 SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
 {
-	return (SharedVariableHeader_t*)((byte_t*)seg_node->seg_info.shared_memory_ptr + PadToAlign(sizeof(SegmentMetadata_t)));
+	return (SharedVariableHeader_t*)((byte_t*)seg_node->seg_info.shared_memory_ptr + PadToAlignData(sizeof(SegmentMetadata_t)));
 }
 
 
 size_t msh_FindSegmentSize(const mxArray* in_var)
 {
-	return msh_FindSharedSize(in_var) + PadToAlign(sizeof(SegmentMetadata_t));
+	return msh_FindSharedSize(in_var) + PadToAlignData(sizeof(SegmentMetadata_t));
 }
 
 
