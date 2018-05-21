@@ -130,11 +130,27 @@ typedef struct AllocationHeader_t
 size_t PadToAlignData(size_t curr_sz);
 
 #ifdef MSH_WIN
-#define msh_AtomicIncrement InterlockedIncrement
-#define msh_AtomicDecrement InterlockedDecrement
+#  define msh_AtomicIncrement InterlockedIncrement
+#  define msh_AtomicDecrement InterlockedDecrement
 #else
-#define msh_AtomicIncrement(x) __sync_fetch_and_add(x, 1)
-#define msh_AtomicDecrement(x) __sync_fetch_and_sub(x, 1)
+#  ifdef __GCC__
+#    define msh_AtomicIncrement(x) __sync_fetch_and_add(x, 1)
+#    define msh_AtomicDecrement(x) __sync_fetch_and_sub(x, 1)
+#  else
+
+#    warning(This function will be somewhat slower when not compiling with gcc. Consider compiling with gcc.)
+
+#    define msh_AtomicIncrement(x) \
+AcquireProcessLock();
+x += 1;
+ReleaseProcessLock()
+
+#    define msh_AtomicDecrement(x) \
+AcquireProcessLock();
+x -= 1;
+ReleaseProcessLock()
+
+#  endif
 #endif
 
 

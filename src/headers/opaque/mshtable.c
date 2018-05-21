@@ -125,7 +125,6 @@ static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs)
 	
 	msh_DestroyTable(seg_table);
 	
-	
 	*seg_table = new_table;
 	
 }

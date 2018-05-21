@@ -99,6 +99,32 @@ void msh_ClearVariableList(VariableList_t* var_list)
 }
 
 
+void msh_CleanVariableList(VariableList_t* var_list)
+{
+	VariableNode_t* curr_var_node, * next_var_node;
+	
+	for(curr_var_node = var_list->first; curr_var_node != NULL; curr_var_node = next_var_node)
+	{
+		next_var_node = curr_var_node->next;
+		if(msh_GetCrosslink(curr_var_node->var) == NULL && msh_GetSegmentMetadata(curr_var_node->seg_node)->is_used)
+		{
+			if(msh_GetSegmentMetadata(curr_var_node->seg_node)->procs_using == 1)
+			{
+				/* if this is the last process using this variable, destroy the segment completely */
+				msh_RemoveSegmentFromLocalList(curr_var_node->seg_node->parent_seg_list, curr_var_node->seg_node);
+				msh_RemoveSegmentFromSharedList(curr_var_node->seg_node);
+				msh_DetachSegment(curr_var_node->seg_node);
+			}
+			else
+			{
+				/* otherwise just take out the variable */
+				msh_DestroyVariable(curr_var_node);
+			}
+		}
+	}
+}
+
+
 /** static function definitions **/
 
 

@@ -108,4 +108,8 @@ void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_no
 void msh_DestroyTable(SegmentTable_t* seg_table);
 SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, msh_segmentnumber_t seg_num);
 
+void msh_CleanSegmentList(SegmentList_t* seg_list);
+
+void msh_UpdateLatestSegment(SegmentList_t* seg_list);
+
 #endif /* MATSHARE_MSHSEGMENTS_H */

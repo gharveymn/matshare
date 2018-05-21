@@ -139,6 +139,6 @@ extern GlobalInfo_t* g_local_info;
 #define g_local_seg_list (g_local_info->seg_list)
 #define g_shared_info ((SharedInfo_t*)g_local_info->shm_info_seg.shared_memory_ptr)
 
-#define MshIsUpdated() (g_local_info->rev_num == g_shared_info->rev_num)
+#define msh_IsUpdated() (g_local_info->rev_num == g_shared_info->rev_num)
 
 #endif /* MATSHARE_MSH_TYPES_H */

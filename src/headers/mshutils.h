@@ -29,7 +29,6 @@ msh_directive_t msh_ParseDirective(const mxArray* in);
 
 void msh_UpdateAll(void);
 
-void msh_VariableGC(void);
 
 /**
  * Writes the segment name to the name buffer.

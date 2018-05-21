@@ -39,18 +39,18 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	msh_InitializeMatshare();
 	
+	msh_CleanSegmentList(&g_local_seg_list);
+	
 	switch(msh_directive)
 	{
 		case msh_SHARE:
 			
-			msh_VariableGC();
 			msh_Share(nlhs, plhs, num_in_vars, in_vars);
 			
 			break;
 		
 		case msh_FETCH:
 			
-			msh_VariableGC();
 			msh_Fetch(nlhs, plhs, MSH_SHARED_COPY);
 			
 			break;
@@ -61,7 +61,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			if(g_local_info->num_registered_objs == 0)
 			{
 				/* if we deregistered the last object then remove variables that aren't being used elsewhere in this process */
-				msh_VariableGC();
+				msh_CleanVariableList(&g_local_var_list);
 			}
 			
 			break;
@@ -79,7 +79,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		
 		case msh_DEEPCOPY:
 			
-			msh_VariableGC();
 			msh_Fetch(nlhs, plhs, MSH_DUPLICATE);
 			
 			break;
@@ -195,6 +194,9 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 		if(nlhs >= 2)
 		{
 			
+			/* perform a full update */
+			msh_UpdateSegmentTracking(&g_local_seg_list);
+			
 			for(i = 0, curr_seg_node = g_local_seg_list.first;
 					i < g_local_seg_list.num_segs;
 					i++, curr_seg_node = curr_seg_node->next)
@@ -260,6 +262,10 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 		}
 		else
 		{
+			
+			/* only update the latest segment */
+			msh_UpdateLatestSegment(&g_local_seg_list);
+			
 			if(g_local_seg_list.last != NULL && g_local_seg_list.last->var_node == NULL)
 			{
 				msh_CreateVariable(&g_local_var_list, g_local_seg_list.last);

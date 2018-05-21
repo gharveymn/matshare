@@ -32,5 +32,7 @@ void msh_DestroyVariable(VariableNode_t* var_node);
  */
 void msh_ClearVariableList(VariableList_t* var_list);
 
+void msh_CleanVariableList(VariableList_t* var_list);
+
 
 #endif /* MATSHARE_MSHLISTS_H */

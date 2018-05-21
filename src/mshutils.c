@@ -262,37 +262,6 @@ void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num)
 }
 
 
-void msh_VariableGC(void)
-{
-	VariableNode_t* curr_var_node, * next_var_node;
-	
-	if(!g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY || !g_shared_info->user_def.will_gc)
-	{
-		return;
-	}
-	
-	for(curr_var_node = g_local_var_list.first; curr_var_node != NULL; curr_var_node = next_var_node)
-	{
-		next_var_node = curr_var_node->next;
-		if(msh_GetCrosslink(curr_var_node->var) == NULL && msh_GetSegmentMetadata(curr_var_node->seg_node)->is_used)
-		{
-			if(msh_GetSegmentMetadata(curr_var_node->seg_node)->procs_using == 1)
-			{
-				/* if this is the last process using this variable, destroy the segment completely */
-				msh_RemoveSegmentFromLocalList(curr_var_node->seg_node->parent_seg_list, curr_var_node->seg_node);
-				msh_RemoveSegmentFromSharedList(curr_var_node->seg_node);
-				msh_DetachSegment(curr_var_node->seg_node);
-			}
-			else
-			{
-				/* otherwise just take out the variable */
-				msh_DestroyVariable(curr_var_node);
-			}
-		}
-	}
-}
-
-
 void msh_NullFunction(void)
 {
 	/* does nothing (so we can reset the mexAtExit function, since NULL is undocumented) */

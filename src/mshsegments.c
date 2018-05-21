@@ -116,7 +116,8 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 {
 	handle_t temp_segment_handle;
-	SegmentMetadata_t* temp_segment_metadata,* segment_metadata;
+	SegmentNode_t* temp_seg_node;
+	SegmentMetadata_t* temp_segment_metadata,* segment_metadata = msh_GetSegmentMetadata(seg_node);
 	
 	msh_AcquireProcessLock();
 	
@@ -125,8 +126,6 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 		msh_ClearSegmentList(&g_local_seg_list);
 	}
 	
-	segment_metadata = msh_GetSegmentMetadata(seg_node);
-	
 	/* check whether to set this as the first segment number */
 	if(g_shared_info->num_valid_segments == 0)
 	{
@@ -134,14 +133,21 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 	}
 	else
 	{
-		/* make a temporary mapping to modify the metadata */
-		temp_segment_handle = msh_OpenSegmentHandle(g_shared_info->last_seg_num);
-		temp_segment_metadata = msh_MapSegment(temp_segment_handle, sizeof(SegmentMetadata_t));
-		
-		temp_segment_metadata->next_seg_num = seg_node->seg_info.seg_num;
-		
-		msh_UnmapSegment(temp_segment_metadata, sizeof(SegmentMetadata_t));
-		msh_CloseSegmentHandle(temp_segment_handle);
+		if((temp_seg_node = msh_FindSegmentNode(&g_local_seg_list.seg_table, g_shared_info->last_seg_num)) != NULL)
+		{
+			msh_GetSegmentMetadata(temp_seg_node)->next_seg_num = seg_node->seg_info.seg_num;
+		}
+		else
+		{
+			/* make a temporary mapping to modify the metadata */
+			temp_segment_handle = msh_OpenSegmentHandle(g_shared_info->last_seg_num);
+			temp_segment_metadata = msh_MapSegment(temp_segment_handle, sizeof(SegmentMetadata_t));
+			
+			temp_segment_metadata->next_seg_num = seg_node->seg_info.seg_num;
+			
+			msh_UnmapSegment(temp_segment_metadata, sizeof(SegmentMetadata_t));
+			msh_CloseSegmentHandle(temp_segment_handle);
+		}
 	}
 	
 	/* set reference to previous back of list */
@@ -173,11 +179,9 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	
 	handle_t temp_segment_handle;
 	SegmentNode_t* temp_seg_node;
-	SegmentMetadata_t* temp_segment_metadata,* segment_metadata;
+	SegmentMetadata_t* temp_segment_metadata,* segment_metadata = msh_GetSegmentMetadata(seg_node);
 	
 	msh_AcquireProcessLock();
-	
-	segment_metadata = msh_GetSegmentMetadata(seg_node);
 	
 	if(segment_metadata->is_invalid == TRUE)
 	{
@@ -194,17 +198,21 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	}
 	else
 	{
-		/* make a temporary mapping to modify the metadata */
-		temp_segment_handle = msh_OpenSegmentHandle(segment_metadata->prev_seg_num);
-		temp_segment_metadata = msh_MapSegment(temp_segment_handle, sizeof(SegmentMetadata_t));
-		
-		if(!temp_segment_metadata->is_invalid)
+		if((temp_seg_node = msh_FindSegmentNode(&g_local_seg_list.seg_table, segment_metadata->prev_seg_num)) != NULL)
 		{
-			temp_segment_metadata->next_seg_num = segment_metadata->next_seg_num;
+			msh_GetSegmentMetadata(temp_seg_node)->next_seg_num = segment_metadata->next_seg_num;
 		}
-		
-		msh_UnmapSegment(temp_segment_metadata, sizeof(SegmentMetadata_t));
-		msh_CloseSegmentHandle(temp_segment_handle);
+		else
+		{
+			/* make a temporary mapping to modify the metadata */
+			temp_segment_handle = msh_OpenSegmentHandle(segment_metadata->prev_seg_num);
+			temp_segment_metadata = msh_MapSegment(temp_segment_handle, sizeof(SegmentMetadata_t));
+			
+			temp_segment_metadata->next_seg_num = segment_metadata->next_seg_num;
+			
+			msh_UnmapSegment(temp_segment_metadata, sizeof(SegmentMetadata_t));
+			msh_CloseSegmentHandle(temp_segment_handle);
+		}
 	}
 	
 	if(seg_node->seg_info.seg_num == g_shared_info->last_seg_num)
@@ -213,17 +221,21 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	}
 	else
 	{
-		/* make a temporary mapping to modify the metadata */
-		temp_segment_handle = msh_OpenSegmentHandle(segment_metadata->next_seg_num);
-		temp_segment_metadata = msh_MapSegment(temp_segment_handle, sizeof(SegmentMetadata_t));
-		
-		if(!temp_segment_metadata->is_invalid)
+		if((temp_seg_node = msh_FindSegmentNode(&g_local_seg_list.seg_table, segment_metadata->next_seg_num)) != NULL)
 		{
-			temp_segment_metadata->prev_seg_num = segment_metadata->prev_seg_num;
+			msh_GetSegmentMetadata(temp_seg_node)->prev_seg_num = segment_metadata->prev_seg_num;
 		}
-		
-		msh_UnmapSegment(temp_segment_metadata, sizeof(SegmentMetadata_t));
-		msh_CloseSegmentHandle(temp_segment_handle);
+		else
+		{
+			/* make a temporary mapping to modify the metadata */
+			temp_segment_handle = msh_OpenSegmentHandle(segment_metadata->next_seg_num);
+			temp_segment_metadata = msh_MapSegment(temp_segment_handle, sizeof(SegmentMetadata_t));
+			
+			temp_segment_metadata->prev_seg_num = segment_metadata->prev_seg_num;
+			
+			msh_UnmapSegment(temp_segment_metadata, sizeof(SegmentMetadata_t));
+			msh_CloseSegmentHandle(temp_segment_handle);
+		}
 	}
 	
 	/* reset these to reduce confusion when debugging */
@@ -289,7 +301,7 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 	SegmentNode_t* curr_seg_node, * prev_seg_node, * new_seg_node = NULL;
 	SegmentList_t new_seg_list = {NULL, NULL, 0};
 	
-	if(MshIsUpdated())
+	if(msh_IsUpdated())
 	{
 		/* don't do anything if this is true */
 		return;
@@ -359,7 +371,156 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 		seg_list->last = NULL;
 	}
 	
+}
+
+
+void msh_UpdateLatestSegment(SegmentList_t* seg_list)
+{
+	SegmentNode_t* latest_seg_node;
+	if(g_shared_info->last_seg_num != -1 && !msh_IsUpdated())
+	{
+		msh_AcquireProcessLock();
+		
+		/* double check volatile condition */
+		if(g_shared_info->last_seg_num != -1)
+		{
+			if((latest_seg_node = msh_FindSegmentNode(&seg_list->seg_table, g_shared_info->last_seg_num)) != NULL)
+			{
+				msh_ReleaseProcessLock();
+				
+				/* place the segment at the end of the list */
+				msh_RemoveSegmentFromLocalList(seg_list, latest_seg_node);
+				msh_AddSegmentToLocalList(seg_list, latest_seg_node);
+			}
+			else
+			{
+				latest_seg_node = msh_OpenSegment(g_shared_info->last_seg_num);
+				msh_ReleaseProcessLock();
+				
+				msh_AddSegmentToLocalList(seg_list, latest_seg_node);
+			}
+		}
+		else
+		{
+			msh_ReleaseProcessLock();
+		}
+	}
+}
+
+
+void msh_AddSegmentToLocalList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
+{
 	
+	/* this will be appended to the end so make sure next points to nothing */
+	seg_node->next = NULL;
+	
+	/* always points to the end */
+	seg_node->prev = seg_list->last;
+	
+	/* set new refs */
+	if(seg_list->num_segs == 0)
+	{
+		seg_list->first = seg_node;
+	}
+	else
+	{
+		/* set list pointer */
+		seg_list->last->next = seg_node;
+	}
+	
+	/* place this variable at the last of the list */
+	seg_list->last = seg_node;
+	
+	/* increment number of segments */
+	seg_list->num_segs += 1;
+	
+	/* set the parent segment list */
+	seg_node->parent_seg_list = seg_list;
+	
+	msh_AddSegmentToTable(&seg_list->seg_table, seg_node, seg_list->num_segs);
+	
+}
+
+
+void msh_RemoveSegmentFromLocalList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
+{
+	
+	msh_RemoveSegmentFromTable(&seg_list->seg_table, seg_node);
+	
+	/* reset local pointers */
+	if(seg_node->prev != NULL)
+	{
+		seg_node->prev->next = seg_node->next;
+	}
+	
+	if(seg_node->next != NULL)
+	{
+		seg_node->next->prev = seg_node->prev;
+	}
+	
+	/* fix pointers to the front and back */
+	if(seg_list->first == seg_node)
+	{
+		seg_list->first = seg_node->next;
+	}
+	
+	if(seg_list->last == seg_node)
+	{
+		seg_list->last = seg_node->prev;
+	}
+	
+	/* decrement the number of segments now in case we crash when doing the unmapping */
+	seg_list->num_segs -= 1;
+	
+}
+
+
+void msh_CleanSegmentList(SegmentList_t* seg_list)
+{
+	SegmentNode_t* curr_seg_node, * next_seg_node;
+	SegmentMetadata_t* curr_seg_metadata;
+	
+	if(g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY && g_shared_info->user_def.will_gc && g_local_info->num_registered_objs == 0)
+	{
+		for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
+		{
+			next_seg_node = curr_seg_node->next;
+			curr_seg_metadata = msh_GetSegmentMetadata(curr_seg_node);
+			if(curr_seg_metadata->is_invalid)
+			{
+				msh_RemoveSegmentFromLocalList(curr_seg_node->parent_seg_list, curr_seg_node);
+				msh_DetachSegment(curr_seg_node);
+			}
+			else if(curr_seg_node->var_node != NULL && msh_GetCrosslink(curr_seg_node->var_node->var) == NULL && curr_seg_metadata->is_used)
+			{
+				if(curr_seg_metadata->procs_using == 1)
+				{
+					/* if this is the last process using this variable, destroy the segment completely */
+					msh_RemoveSegmentFromLocalList(curr_seg_node->parent_seg_list, curr_seg_node);
+					msh_RemoveSegmentFromSharedList(curr_seg_node);
+					msh_DetachSegment(curr_seg_node);
+				}
+				else
+				{
+					/* otherwise just take out the variable */
+					msh_DestroyVariable(curr_seg_node->var_node);
+				}
+			}
+		}
+	}
+	else
+	{
+		for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
+		{
+			next_seg_node = curr_seg_node->next;
+			curr_seg_metadata = msh_GetSegmentMetadata(curr_seg_node);
+			if(curr_seg_metadata->is_invalid)
+			{
+				msh_RemoveSegmentFromLocalList(curr_seg_node->parent_seg_list, curr_seg_node);
+				msh_DetachSegment(curr_seg_node);
+			}
+		}
+	}
 	
 }
 
@@ -492,7 +653,6 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache)
 	/* refer to nothing since this is the end of the list */
 	segment_metadata->next_seg_num = -1;
 	
-	
 }
 
 
@@ -519,8 +679,7 @@ static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache)
 	
 	/* tell everyone else that another process is tracking this */
 	msh_AtomicIncrement(&((SegmentMetadata_t*)seg_info_cache->shared_memory_ptr)->procs_tracking);
-
-
+	
 }
 
 
@@ -623,72 +782,6 @@ static SegmentNode_t* msh_CreateSegmentNode(SegmentInfo_t* seg_info_cache)
 	new_seg_node->next = NULL;
 	
 	return new_seg_node;
-}
-
-void msh_AddSegmentToLocalList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
-{
-	
-	/* this will be appended to the end so make sure next points to nothing */
-	seg_node->next = NULL;
-	
-	/* always points to the end */
-	seg_node->prev = seg_list->last;
-	
-	/* set new refs */
-	if(seg_list->num_segs == 0)
-	{
-		seg_list->first = seg_node;
-	}
-	else
-	{
-		/* set list pointer */
-		seg_list->last->next = seg_node;
-	}
-	
-	/* place this variable at the last of the list */
-	seg_list->last = seg_node;
-	
-	/* increment number of segments */
-	seg_list->num_segs += 1;
-	
-	/* set the parent segment list */
-	seg_node->parent_seg_list = seg_list;
-	
-	msh_AddSegmentToTable(&seg_list->seg_table, seg_node, seg_list->num_segs);
-	
-}
-
-
-void msh_RemoveSegmentFromLocalList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
-{
-	
-	msh_RemoveSegmentFromTable(&seg_list->seg_table, seg_node);
-	
-	/* reset local pointers */
-	if(seg_node->prev != NULL)
-	{
-		seg_node->prev->next = seg_node->next;
-	}
-	
-	if(seg_node->next != NULL)
-	{
-		seg_node->next->prev = seg_node->prev;
-	}
-	
-	/* fix pointers to the front and back */
-	if(seg_list->first == seg_node)
-	{
-		seg_list->first = seg_node->next;
-	}
-	
-	if(seg_list->last == seg_node)
-	{
-		seg_list->last = seg_node->prev;
-	}
-	
-	/* decrement the number of segments now in case we crash when doing the unmapping */
-	seg_list->num_segs -= 1;
-	
 }
 
 

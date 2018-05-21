@@ -2,7 +2,8 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 %	thispid = feature('getpid');
 	allvars = {};
 	if(isparallel)
-		rng(feature('getpid'));
+		% only do this if in parallel so we have consistent results otherwise
+		rns = RandStream('mt19937ar', 'Seed', feature('getpid'));
 	end
 %	lents = 0
 	
@@ -10,8 +11,8 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 		try
 			
 			tv = variablegenerator(maxDepth, maxElements, maxDims, maxChildren, false, typespec);
-			ri1 = ceil(4*rand);
-			ri2 = ceil(4*rand);
+			ri1 = ceil(4*rand(rns));
+			ri2 = ceil(4*rand(rns));
 			
 			switch(ri1)
 				case 1
@@ -42,48 +43,48 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 					clridx = sort(randi(numel(allvars),[2,1]));
 					mshclear(allvars{clridx(1):clridx(2)});
 				end
-				bounds.mshclear.iter = randi(bounds.mshclear.bound);
+				bounds.mshclear.iter = randi(rns, bounds.mshclear.bound);
 			end
 			
 			
 			if(mod(bounds.mshdetach.iter, i) == 0)
 				mshdetach;
-				bounds.mshdetach.iter = randi(bounds.mshdetach.bound);
+				bounds.mshdetach.iter = randi(rns, bounds.mshdetach.bound);
 			end
 			
 			if(mod(bounds.clear_data.iter,i) == 0)
 				data = [];
-				bounds.clear_data.iter = randi(bounds.clear_data.bound);
+				bounds.clear_data.iter = randi(rns, bounds.clear_data.bound);
 			end
 			
 			if(mod(bounds.clear_new.iter,i) == 0)
 				newvars = [];
-				bounds.clear_new.iter = randi(bounds.clear_new.bound);
+				bounds.clear_new.iter = randi(rns, bounds.clear_new.bound);
 			end
 			
 			if(mod(bounds.clear_all.iter,i) == 0)
 				allvars = [];
-				bounds.clear_all.iter = randi(bounds.clear_all.bound);
+				bounds.clear_all.iter = randi(rns, bounds.clear_all.bound);
 			end
 			
 			if(mod(bounds.chpar_copy.iter,i) == 0)
 				mshparam('sharetype', 'copy');
-				bounds.chpar_copy.iter = randi(bounds.chpar_copy.bound);
+				bounds.chpar_copy.iter = randi(rns, bounds.chpar_copy.bound);
 			end
 			
 			if(mod(bounds.chpar_over.iter,i) == 0)
 				mshparam('sharetype','overwrite');
-				bounds.chpar_over.iter = randi(bounds.chpar_over.bound);
+				bounds.chpar_over.iter = randi(rns, bounds.chpar_over.bound);
 			end
 			
 			if(mod(bounds.chpar_gc_on.iter,i) == 0)
 				mshparam('GC','on');
-				bounds.chpar_gc_on.iter = randi(bounds.chpar_gc_on.bound);
+				bounds.chpar_gc_on.iter = randi(rns, bounds.chpar_gc_on.bound);
 			end
 			
 			if(mod(bounds.chpar_gc_off.iter,i) == 0)
 				mshparam('GC','off');
-				bounds.chpar_gc_off.iter = randi(bounds.chpar_gc_off.bound);
+				bounds.chpar_gc_off.iter = randi(rns, bounds.chpar_gc_off.bound);
 			end
 			
 		catch mexcept
