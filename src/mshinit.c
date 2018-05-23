@@ -91,7 +91,7 @@ static void msh_InitProcLock(void)
 
 #else
 	
-	g_local_info->proc_lock = shm_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, g_shared_info->security);
+	g_local_info->proc_lock = shm_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, g_shared_info->user_def.security);
 	if(g_local_info->proc_lock == -1)
 	{
 		ReadShmOpenError(errno);
@@ -201,7 +201,7 @@ static void msh_GlobalStartup(void)
 		g_shared_info->rev_num = 0;
 		/* g_shared_info->update_pid = g_local_info->this_pid; */
 #ifdef MSH_UNIX
-		g_shared_info->security = S_IRUSR | S_IWUSR; /** default value **/
+		g_shared_info->user_def.security = S_IRUSR | S_IWUSR; /** default value **/
 #endif
 
 #ifdef MSH_SHARETYPE_COPY

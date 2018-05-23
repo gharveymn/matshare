@@ -603,7 +603,7 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache)
 		/* change the file name */
 		seg_info_cache->seg_num = (seg_info_cache->seg_num == SEG_NUM_MAX)? 0 : seg_info_cache->seg_num + 1;
 		msh_WriteSegmentName(segment_name, seg_info_cache->seg_num);
-		temp_handle = shm_open(segment_name, O_RDWR | O_CREAT | O_EXCL, g_shared_info->security);
+		temp_handle = shm_open(segment_name, O_RDWR | O_CREAT | O_EXCL, g_shared_info->user_def.security);
 		if(temp_handle == -1)
 		{
 			if(errno != EEXIST)
@@ -701,7 +701,7 @@ static handle_t msh_OpenSegmentHandle(msh_segmentnumber_t seg_num)
 		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "OpenFileError", "Error opening the file mapping.");
 	}
 #else
-	ret_handle = shm_open(segment_name, O_RDWR, g_shared_info->security);
+	ret_handle = shm_open(segment_name, O_RDWR, g_shared_info->user_def.security);
 	if(ret_handle == -1)
 	{
 		ReadShmOpenError(errno);
@@ -774,7 +774,7 @@ static SegmentNode_t* msh_CreateSegmentNode(SegmentInfo_t* seg_info_cache)
 	SegmentNode_t* new_seg_node = mxMalloc(sizeof(SegmentNode_t));
 	mexMakeMemoryPersistent(new_seg_node);
 	
-	memcpy(&new_seg_node->seg_info, seg_info_cache, sizeof(SegmentInfo_t));
+	new_seg_node->seg_info = *seg_info_cache;
 	new_seg_node->var_node = NULL;
 	new_seg_node->parent_seg_list = NULL;
 	new_seg_node->hash_next = NULL;

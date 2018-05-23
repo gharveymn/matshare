@@ -1,6 +1,7 @@
 #include "headers/matshare_.h"
 #include <ctype.h>
 #ifdef MSH_UNIX
+#include <string.h>
 #include <sys/stat.h>
 #endif
 
@@ -186,9 +187,6 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 	size_t ret_dims[2];
 #endif
 	
-	/* TODO: only run the full update if nlhs >= 2, but just find the latest segment otherwise */
-	msh_UpdateSegmentTracking(&g_local_seg_list);
-	
 	if(nlhs >= 1)
 	{
 		if(nlhs >= 2)
@@ -357,7 +355,7 @@ void msh_Param(int num_params, const mxArray** in)
 				g_shared_info->user_def.is_thread_safe? "true" : "false",
 				g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY? "true" : "false",
 				g_shared_info->user_def.will_gc? "true" : "false",
-				g_shared_info->security);
+				g_shared_info->user_def.security);
 #endif
 	}
 	
@@ -437,22 +435,22 @@ void msh_Param(int num_params, const mxArray** in)
 			else
 			{
 				msh_AcquireProcessLock();
-				g_shared_info->security = (mode_t)strtol(val_str_l, NULL, 8);
-				if(fchmod(g_local_info->shm_info_seg.handle, g_shared_info->security) != 0)
+				g_shared_info->user_def.security = (mode_t)strtol(val_str_l, NULL, 8);
+				if(fchmod(g_local_info->shm_info_seg.handle, g_shared_info->user_def.security) != 0)
 				{
 					ReadFchmodError(errno);
 				}
 				SegmentNode_t* curr_seg_node = g_local_seg_list.first;
 				while(curr_seg_node != NULL)
 				{
-					if(fchmod(curr_seg_node->seg_info.handle, g_shared_info->security) != 0)
+					if(fchmod(curr_seg_node->seg_info.handle, g_shared_info->user_def.security) != 0)
 					{
 						ReadFchmodError(errno);
 					}
 					curr_seg_node = curr_seg_node->next;
 				}
 #ifdef MSH_THREAD_SAFE
-				if(fchmod(g_local_info->proc_lock, g_shared_info->security) != 0)
+				if(fchmod(g_local_info->proc_lock, g_shared_info->user_def.security) != 0)
 				{
 					ReadFchmodError(errno);
 				}

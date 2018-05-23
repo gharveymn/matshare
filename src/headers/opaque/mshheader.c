@@ -1,6 +1,9 @@
 #include "../mshheader.h"
 #include "../matlabutils.h"
 #include "../mshexterntypes.h"
+#ifdef MSH_UNIX
+#include <string.h>
+#endif
 
 /**
  * Close emulation of the structure of mxArray:

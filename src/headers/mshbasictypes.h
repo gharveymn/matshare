@@ -65,6 +65,7 @@ extern int fchmod(int fildes, mode_t mode);
 #  include <semaphore.h>
 #  include <pthread.h>
 #  include <fcntl.h>
+#  include <errno.h>
 #endif
 
 /** these are basic readability typedefs **/
@@ -133,22 +134,16 @@ size_t PadToAlignData(size_t curr_sz);
 #  define msh_AtomicIncrement InterlockedIncrement
 #  define msh_AtomicDecrement InterlockedDecrement
 #else
-#  ifdef __GCC__
+#  ifdef __GNUC__
 #    define msh_AtomicIncrement(x) __sync_fetch_and_add(x, 1)
 #    define msh_AtomicDecrement(x) __sync_fetch_and_sub(x, 1)
 #  else
 
 #    warning(This function will be somewhat slower when not compiling with gcc. Consider compiling with gcc.)
 
-#    define msh_AtomicIncrement(x) \
-AcquireProcessLock();
-x += 1;
-ReleaseProcessLock()
+#    define msh_AtomicIncrement(x) (msh_AcquireProcessLock(); (x) += 1; msh_ReleaseProcessLock();)
 
-#    define msh_AtomicDecrement(x) \
-AcquireProcessLock();
-x -= 1;
-ReleaseProcessLock()
+#    define msh_AtomicDecrement(x) (msh_AcquireProcessLock(); (x) -= 1; msh_ReleaseProcessLock();)
 
 #  endif
 #endif
