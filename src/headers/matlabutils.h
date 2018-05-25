@@ -39,21 +39,4 @@ void ReadMexWarning(const char* warn_id, const char* warn_message, ...);
 void SetMexErrorCallback(void (*callback_function)(void));
 void NullCallback(void);
 
-#ifdef MSH_UNIX
-void ReadFtruncateError_(const char* file_name, int line, int err);
-void ReadShmOpenError_(const char* file_name, int line, int err);
-void ReadShmUnlinkError_(const char* file_name, int line, int err);
-void ReadMmapError_(const char* file_name, int line, int err);
-void ReadMunmapError_(const char* file_name, int line, int err);
-void ReadMsyncError_(const char* file_name, int line, int err);
-void ReadFchmodError_(const char* file_name, int line, int err);
-#define ReadFtruncateError(err) ReadFtruncateError_(__FILE__ , __LINE__, err)
-#define ReadShmOpenError(err) ReadShmOpenError_(__FILE__ , __LINE__, err)
-#define ReadShmUnlinkError(err) ReadShmUnlinkError_(__FILE__ , __LINE__, err)
-#define ReadMmapError(err) ReadMmapError_(__FILE__ , __LINE__, err)
-#define ReadMunmapError(err) ReadMunmapError_(__FILE__ , __LINE__, err)
-#define ReadMsyncError(err) ReadMsyncError_(__FILE__ , __LINE__, err)
-#define ReadFchmodError(err) ReadFchmodError_(__FILE__ , __LINE__, err)
-#endif
-
 #endif /* MATSHARE_UTILS_H */

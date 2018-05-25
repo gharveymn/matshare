@@ -106,7 +106,7 @@ void msh_CleanVariableList(VariableList_t* var_list)
 	for(curr_var_node = var_list->first; curr_var_node != NULL; curr_var_node = next_var_node)
 	{
 		next_var_node = curr_var_node->next;
-		if(msh_GetCrosslink(curr_var_node->var) == NULL && msh_GetSegmentMetadata(curr_var_node->seg_node)->is_used)
+		if(msh_GetCrosslink(curr_var_node->var) == NULL)
 		{
 			if(msh_GetSegmentMetadata(curr_var_node->seg_node)->procs_using == 1)
 			{

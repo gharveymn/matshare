@@ -144,6 +144,9 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 				/* do the rewrite after checking because the comparison is cheap */
 				msh_OverwriteData(msh_GetSegmentData(g_local_seg_list.last), in_var, g_local_seg_list.last->var_node->var);
 				
+				/* only need to update because we have overwritten an established segment */
+				msh_UpdateAll();
+				
 				/* DON'T DO ANYTHING ELSE */
 				continue;
 			}
@@ -162,8 +165,6 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		msh_AddSegmentToLocalList(&g_local_seg_list, new_seg_node);
 		
 	}
-	
-	msh_UpdateAll();
 	
 	if(nlhs > 0)
 	{
@@ -342,6 +343,7 @@ void msh_Param(int num_params, const mxArray** in)
 	int i, j, ps_len, vs_len;
 	char param_str[MSH_MAX_NAME_LEN] = {0}, val_str[MSH_MAX_NAME_LEN] = {0}, param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
 	const mxArray* param, * val;
+	SegmentNode_t* curr_seg_node;
 	
 	if(num_params == 0)
 	{
@@ -438,21 +440,19 @@ void msh_Param(int num_params, const mxArray** in)
 				g_shared_info->user_def.security = (mode_t)strtol(val_str_l, NULL, 8);
 				if(fchmod(g_local_info->shm_info_seg.handle, g_shared_info->user_def.security) != 0)
 				{
-					ReadFchmodError(errno);
+					ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ChmodError", "There was an error modifying permissions for the shared info segment.");
 				}
-				SegmentNode_t* curr_seg_node = g_local_seg_list.first;
-				while(curr_seg_node != NULL)
+				for(curr_seg_node = g_local_seg_list.first; curr_seg_node != NULL; curr_seg_node = curr_seg_node->next)
 				{
 					if(fchmod(curr_seg_node->seg_info.handle, g_shared_info->user_def.security) != 0)
 					{
-						ReadFchmodError(errno);
+						ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ChmodError", "There was an error modifying permissions for the data segment.");
 					}
-					curr_seg_node = curr_seg_node->next;
 				}
 #ifdef MSH_THREAD_SAFE
 				if(fchmod(g_local_info->proc_lock, g_shared_info->user_def.security) != 0)
 				{
-					ReadFchmodError(errno);
+					ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ChmodError", "There was an error modifying permissions for the process lock.");
 				}
 #endif
 				msh_UpdateAll();

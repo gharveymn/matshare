@@ -32,6 +32,31 @@ void msh_InitializeMatshare(void)
 	
 	msh_ProcStartup();
 	
+	if(!g_local_info->flags.is_proc_lock_init)
+	{
+		msh_InitProcLock();
+	}
+
+	/* manually acquire the process lock to because the usual function requires input from the info segment */
+#ifdef MSH_WIN
+	DWORD ret = WaitForSingleObject(g_local_info->proc_lock, INFINITE);
+			if(ret == WAIT_ABANDONED)
+			{
+				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "WaitProcLockAbandonedError", "One of the processes failed while using the lock. Cannot safely continue.");
+			}
+			else if(ret == WAIT_FAILED)
+			{
+				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "WaitProcLockFailedError", "The wait for process lock failed.");
+			}
+#else
+	
+	if(lockf(g_local_info->proc_lock, F_LOCK, 0) != 0)
+	{
+		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "WaitProcLockFailedError", "The wait for process lock failed.");
+	}
+#endif
+	g_local_info->flags.proc_lock_level = 1;
+	
 	if(!g_local_info->shm_info_seg.is_init)
 	{
 		msh_InitInfoSegment();
@@ -42,15 +67,27 @@ void msh_InitializeMatshare(void)
 		msh_MapInfoSegment();
 	}
 	
-	/* includes writing to shared memory, but the memory has been aligned so all writes are atomic */
-	msh_GlobalStartup();
-
-#ifdef MSH_THREAD_SAFE
 	if(!g_local_info->flags.is_proc_lock_init)
 	{
 		msh_InitProcLock();
 	}
+	
+	/* includes writing to shared memory, but the memory has been aligned so all writes are atomic */
+	msh_GlobalStartup();
+
+	/* manually release the process lock */
+#ifdef MSH_WIN
+	if(ReleaseMutex(g_local_info->proc_lock) == 0)
+			{
+				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "ReleaseMutexError", "The process lock release failed.");
+			}
+#else
+	if(lockf(g_local_info->proc_lock, F_ULOCK, 0) != 0)
+	{
+		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ULockfBadFileError", "The fildes argument is not a valid open file descriptor.");
+	}
 #endif
+	g_local_info->flags.proc_lock_level = 0;
 
 }
 
@@ -91,10 +128,11 @@ static void msh_InitProcLock(void)
 
 #else
 	
-	g_local_info->proc_lock = shm_open(MSH_LOCK_NAME, O_RDWR | O_CREAT, g_shared_info->user_def.security);
+	/* set */
+	g_local_info->proc_lock = shm_open(MSH_LOCK_NAME, O_WRONLY | O_CREAT, MSH_DEFAULT_PERMISSIONS);
 	if(g_local_info->proc_lock == -1)
 	{
-		ReadShmOpenError(errno);
+		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CreateError", "There was an error opening the process lock.");
 	}
 
 #endif
@@ -125,8 +163,7 @@ static void msh_InitInfoSegment(void)
 #else
 	
 	/* Try to open an already created segment so we can get the global msh_InitializeMatshare signal */
-	
-	g_local_info->shm_info_seg.handle = shm_open(MSH_SHARED_INFO_SEGMENT_NAME, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+	g_local_info->shm_info_seg.handle = shm_open(MSH_SHARED_INFO_SEGMENT_NAME, O_RDWR | O_CREAT | O_EXCL, MSH_DEFAULT_PERMISSIONS);
 	if(g_local_info->shm_info_seg.handle == -1)
 	{
 		/* then the segment has already been initialized */
@@ -134,15 +171,15 @@ static void msh_InitInfoSegment(void)
 		
 		if(errno == EEXIST)
 		{
-			g_local_info->shm_info_seg.handle = shm_open(MSH_SHARED_INFO_SEGMENT_NAME, O_RDWR, S_IRUSR | S_IWUSR);
+			g_local_info->shm_info_seg.handle = shm_open(MSH_SHARED_INFO_SEGMENT_NAME, O_RDWR, 0);
 			if(g_local_info->shm_info_seg.handle == -1)
 			{
-				ReadShmOpenError(errno);
+				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "OpenError", "There was an error opening the shared info segment.");
 			}
 		}
 		else
 		{
-			ReadShmOpenError(errno);
+			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CreateError", "There was an error creating the shared info segment.");
 		}
 	}
 	else
@@ -153,7 +190,7 @@ static void msh_InitInfoSegment(void)
 	
 	if(ftruncate(g_local_info->shm_info_seg.handle, g_local_info->shm_info_seg.seg_sz) != 0)
 	{
-		ReadFtruncateError(errno);
+		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "TruncateError", "There was an error truncating the shared info segment.");
 	}
 
 
@@ -181,8 +218,11 @@ static void msh_MapInfoSegment(void)
 	g_local_info->shm_info_seg.shared_memory_ptr = mmap(NULL, g_local_info->shm_info_seg.seg_sz, PROT_READ|PROT_WRITE, MAP_SHARED, g_local_info->shm_info_seg.handle, 0);
 	if(g_shared_info == MAP_FAILED)
 	{
-		ReadMmapError(errno);
+		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "MmapError", "There was an error mapping the shared info segment.");
 	}
+	
+	/* lock the segment to physical memory so it doesn't get paged out */
+	mlock(g_local_info->shm_info_seg.shared_memory_ptr, g_local_info->shm_info_seg.seg_sz);
 
 #endif
 	
@@ -195,13 +235,13 @@ static void msh_GlobalStartup(void)
 {
 	if(s_is_glob_init)
 	{
+		g_shared_info->update_pid = g_local_info->this_pid;
 		g_shared_info->num_procs = 1;
 		g_shared_info->last_seg_num = -1;
 		g_shared_info->first_seg_num = -1;
 		g_shared_info->rev_num = 0;
-		/* g_shared_info->update_pid = g_local_info->this_pid; */
 #ifdef MSH_UNIX
-		g_shared_info->user_def.security = S_IRUSR | S_IWUSR; /** default value **/
+		g_shared_info->user_def.security = MSH_DEFAULT_PERMISSIONS; /** default value **/
 #endif
 
 #ifdef MSH_SHARETYPE_COPY

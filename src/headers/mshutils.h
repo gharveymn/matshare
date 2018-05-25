@@ -21,9 +21,9 @@ void msh_OnExit(void);
 
 void msh_OnError(void);
 
-void msh_AcquireProcessLock(void);
+int msh_AcquireProcessLock(void);
 
-void msh_ReleaseProcessLock(void);
+int msh_ReleaseProcessLock(void);
 
 msh_directive_t msh_ParseDirective(const mxArray* in);
 

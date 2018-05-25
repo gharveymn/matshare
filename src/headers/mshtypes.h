@@ -99,6 +99,7 @@ typedef volatile struct SharedInfo_t
 		mode_t security;
 #endif
 	} user_def;
+	alignedbool_t priority_flag;           /* set to TRUE if this process needs the process lock with priority */
 	msh_segmentnumber_t first_seg_num;     /* the first segment number in the list */
 	msh_segmentnumber_t last_seg_num;      /* the last segment number in the list */
 	uint32_T num_valid_segments;

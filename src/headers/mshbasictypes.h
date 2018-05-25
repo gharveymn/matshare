@@ -85,6 +85,10 @@ typedef int handle_t;				 /* give fds a uniform identifier */
 
 #define SEG_NUM_MAX LONG_MAX      /* the maximum segment number */
 
+#ifdef MSH_UNIX
+#define MSH_DEFAULT_PERMISSIONS (S_IRUSR | S_IWUSR)
+#endif
+
 #ifdef MSH_32BIT
 #  define MXMALLOC_MAGIC_CHECK 0xFEED
 #  define MXMALLOC_SIG_LEN 0x08
@@ -135,16 +139,10 @@ size_t PadToAlignData(size_t curr_sz);
 #  define msh_AtomicDecrement InterlockedDecrement
 #else
 #  ifdef __GNUC__
-#    define msh_AtomicIncrement(x) __sync_fetch_and_add(x, 1)
-#    define msh_AtomicDecrement(x) __sync_fetch_and_sub(x, 1)
+#    define msh_AtomicIncrement(x) __sync_add_and_fetch(x, 1)
+#    define msh_AtomicDecrement(x) __sync_sub_and_fetch(x, 1)
 #  else
-
-#    warning(This function will be somewhat slower when not compiling with gcc. Consider compiling with gcc.)
-
-#    define msh_AtomicIncrement(x) (msh_AcquireProcessLock(); (x) += 1; msh_ReleaseProcessLock();)
-
-#    define msh_AtomicDecrement(x) (msh_AcquireProcessLock(); (x) -= 1; msh_ReleaseProcessLock();)
-
+#    error(This function requires compilation with GCC on linux.)
 #  endif
 #endif
 

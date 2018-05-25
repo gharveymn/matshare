@@ -1,11 +1,37 @@
 function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, observerpid, isparallel)
-%	thispid = feature('getpid');
+thispid = feature('getpid');
 	allvars = {};
 	if(isparallel)
 		% only do this if in parallel so we have consistent results otherwise
-		rns = RandStream('mt19937ar', 'Seed', feature('getpid'));
+		rns = RandStream('mt19937ar', 'Seed', thispid);
+	else
+		rns = RandStream('mt19937ar');
 	end
 %	lents = 0
+
+	% bound of clearing of data
+	bounds.clear_data.iter = randi(rns, bounds.clear_data.bound);
+
+	bounds.clear_new.iter = randi(rns, bounds.clear_new.bound);
+
+	bounds.clear_all.iter = randi(rns, bounds.clear_all.bound);
+
+	% bound of random call to mshclear
+	bounds.mshclear.iter = randi(rns, bounds.mshclear.bound);
+
+	bounds.mshdetach.iter = randi(rns, bounds.mshdetach.bound);
+
+	% bound of random call to mshparam to set to copy-on-write
+	bounds.chpar_copy.iter = randi(rns, bounds.chpar_copy.bound);
+
+	% bound of random call to mshparam to set to overwrite
+	bounds.chpar_over.iter = randi(rns, bounds.chpar_over.bound);
+
+	% bound of random call to mshparam to set gc on
+	bounds.chpar_gc_on.iter = randi(rns, bounds.chpar_gc_on.bound);
+
+	% bound of random call of mshparam to set gc off
+	bounds.chpar_gc_off.iter = randi(rns, bounds.chpar_gc_off.bound);
 	
 	for i = 1:num_samples
 		try
