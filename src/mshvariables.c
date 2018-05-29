@@ -27,30 +27,10 @@ static VariableNode_t* msh_TrackVariable(VariableList_t* var_list, SegmentNode_t
 static VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var);
 
 
-/**
- * Adds a new variable node to the specified variable list.
- *
- * @note Completely local.
- * @param var_list The variable list to which the variable node will be appended.
- * @param var_node The variable node to append.
- */
-static void msh_AddVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
-
-
-/**
- * Removes a new variable node from the specified variable list.
- *
- * @note Completely local.
- * @param var_list The variable list from which the variable node will be removed.
- * @param var_node The variable node to removed.
- */
-static void msh_RemoveVariableNode(VariableList_t* var_list, VariableNode_t* var_node);
-
-
 /** public function definitions **/
 
 
-VariableNode_t* msh_CreateVariable(VariableList_t* var_list, SegmentNode_t* seg_node)
+VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 {
 	mxArray* new_var;
 	if(seg_node->var_node != NULL)
@@ -64,24 +44,33 @@ VariableNode_t* msh_CreateVariable(VariableList_t* var_list, SegmentNode_t* seg_
 	msh_AtomicIncrement(&msh_GetSegmentMetadata(seg_node)->procs_using);
 	msh_GetSegmentMetadata(seg_node)->is_used = TRUE;
 	
-	return msh_TrackVariable(var_list, seg_node, new_var);
+	return msh_CreateVariableNode(seg_node, new_var);
 }
 
 
 void msh_DestroyVariable(VariableNode_t* var_node)
 {
-	/* NULL all of the Matlab pointers */
+	/* detach all of the Matlab pointers */
 	msh_DetachVariable(var_node->var);
 	mxDestroyArray(var_node->var);
 	
-	/* decrement number of processes using this variable */
-	msh_AtomicDecrement(&msh_GetSegmentMetadata(var_node->seg_node)->procs_using);
-	
-	/* tell the segment to stop tracking this variable */
+	/* remove tracking for this variable */
 	var_node->seg_node->var_node = NULL;
 	
-	/* remove tracking for the destroyed variable */
-	msh_RemoveVariableNode(var_node->parent_var_list, var_node);
+	/* decrement number of processes using this variable; if this is the last variable then GC */
+	if(msh_AtomicDecrement(&msh_GetSegmentMetadata(var_node->seg_node)->procs_using) == 0 &&
+	   g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY &&
+	   g_shared_info->user_def.will_gc &&
+	   g_local_info->num_registered_objs == 0)
+	{
+		msh_RemoveSegmentFromList(var_node->seg_node);
+		msh_RemoveSegmentFromSharedList(var_node->seg_node);
+		msh_DetachSegment(var_node->seg_node);
+	}
+	
+	/* destroy the rest */
+	mxFree(var_node);
+	
 }
 
 
@@ -93,6 +82,7 @@ void msh_ClearVariableList(VariableList_t* var_list)
 	while(curr_var_node != NULL)
 	{
 		next_var_node = curr_var_node->next;
+		msh_RemoveVariableFromList(curr_var_node);
 		msh_DestroyVariable(curr_var_node);
 		curr_var_node = next_var_node;
 	}
@@ -108,32 +98,14 @@ void msh_CleanVariableList(VariableList_t* var_list)
 		next_var_node = curr_var_node->next;
 		if(msh_GetCrosslink(curr_var_node->var) == NULL)
 		{
-			if(msh_GetSegmentMetadata(curr_var_node->seg_node)->procs_using == 1)
-			{
-				/* if this is the last process using this variable, destroy the segment completely */
-				msh_RemoveSegmentFromLocalList(curr_var_node->seg_node->parent_seg_list, curr_var_node->seg_node);
-				msh_RemoveSegmentFromSharedList(curr_var_node->seg_node);
-				msh_DetachSegment(curr_var_node->seg_node);
-			}
-			else
-			{
-				/* otherwise just take out the variable */
-				msh_DestroyVariable(curr_var_node);
-			}
+			msh_RemoveVariableFromList(curr_var_node);
+			msh_DestroyVariable(curr_var_node);
 		}
 	}
 }
 
 
 /** static function definitions **/
-
-
-static VariableNode_t* msh_TrackVariable(VariableList_t* var_list, SegmentNode_t* seg_node, mxArray* new_var)
-{
-	VariableNode_t* new_var_node = msh_CreateVariableNode(seg_node, new_var);
-	msh_AddVariableNode(var_list, new_var_node);
-	return new_var_node;
-}
 
 
 static VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var)
@@ -150,7 +122,7 @@ static VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* 
 }
 
 
-static void msh_AddVariableNode(VariableList_t* var_list, VariableNode_t* var_node)
+void msh_AddVariableToList(VariableList_t* var_list, VariableNode_t* var_node)
 {
 	var_node->parent_var_list = var_list;
 	
@@ -177,7 +149,7 @@ static void msh_AddVariableNode(VariableList_t* var_list, VariableNode_t* var_no
 }
 
 
-static void msh_RemoveVariableNode(VariableList_t* var_list, VariableNode_t* var_node)
+void msh_RemoveVariableFromList(VariableNode_t* var_node)
 {
 	/* reset references in prev and next var node */
 	if(var_node->prev != NULL)
@@ -190,19 +162,20 @@ static void msh_RemoveVariableNode(VariableList_t* var_list, VariableNode_t* var
 		var_node->next->prev = var_node->prev;
 	}
 	
-	if(var_list->first == var_node)
+	if(var_node->parent_var_list->first == var_node)
 	{
-		var_list->first = var_node->next;
+		var_node->parent_var_list->first = var_node->next;
 	}
 	
-	if(var_list->last == var_node)
+	if(var_node->parent_var_list->last == var_node)
 	{
-		var_list->last = var_node->prev;
+		var_node->parent_var_list->last = var_node->prev;
 	}
+	
+	var_node->next = NULL;
+	var_node->prev = NULL;
 	
 	/* decrement number of variables in the list */
-	var_list->num_vars -= 1;
-	
-	mxFree(var_node);
+	var_node->parent_var_list->num_vars -= 1;
 	
 }

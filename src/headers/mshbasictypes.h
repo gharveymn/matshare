@@ -60,12 +60,17 @@ extern int fchmod(int fildes, mode_t mode);
 #ifdef MSH_WIN
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
+
+#  define MSH_INVALID_HANDLE INVALID_HANDLE_VALUE
 #else
 #  include <unistd.h>
 #  include <semaphore.h>
 #  include <pthread.h>
 #  include <fcntl.h>
 #  include <errno.h>
+
+#  define MSH_DEFAULT_PERMISSIONS (S_IRUSR | S_IWUSR)
+#  define MSH_INVALID_HANDLE (-1)
 #endif
 
 /** these are basic readability typedefs **/
@@ -83,11 +88,8 @@ typedef DWORD pid_t;
 typedef int handle_t;				 /* give fds a uniform identifier */
 #endif
 
-#define SEG_NUM_MAX LONG_MAX      /* the maximum segment number */
-
-#ifdef MSH_UNIX
-#define MSH_DEFAULT_PERMISSIONS (S_IRUSR | S_IWUSR)
-#endif
+#define MSH_SEG_NUM_MAX LONG_MAX      /* the maximum segment number */
+#define MSH_INVALID_SEG_NUM (-1L)
 
 #ifdef MSH_32BIT
 #  define MXMALLOC_MAGIC_CHECK 0xFEED
@@ -133,18 +135,6 @@ typedef struct AllocationHeader_t
  * @return The padded size.
  */
 size_t PadToAlignData(size_t curr_sz);
-
-#ifdef MSH_WIN
-#  define msh_AtomicIncrement InterlockedIncrement
-#  define msh_AtomicDecrement InterlockedDecrement
-#else
-#  ifdef __GNUC__
-#    define msh_AtomicIncrement(x) __sync_add_and_fetch(x, 1)
-#    define msh_AtomicDecrement(x) __sync_sub_and_fetch(x, 1)
-#  else
-#    error(This function requires compilation with GCC on linux.)
-#  endif
-#endif
 
 
 #endif /* MATSHARE_MSHBASICTYPES_H */

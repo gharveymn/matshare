@@ -13,7 +13,7 @@
  * @param seg_node The segment node associated to the shared data.
  * @return The variable node containing the new MATLAB variable.
  */
-VariableNode_t* msh_CreateVariable(VariableList_t* var_list, struct SegmentNode_t* seg_node);
+VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node);
 
 
 /**
@@ -23,6 +23,26 @@ VariableNode_t* msh_CreateVariable(VariableList_t* var_list, struct SegmentNode_
  * @param var_node The variable node containing the variable to be destroyed.
  */
 void msh_DestroyVariable(VariableNode_t* var_node);
+
+
+/**
+ * Adds a new variable node to the specified variable list.
+ *
+ * @note Completely local.
+ * @param var_list The variable list to which the variable node will be appended.
+ * @param var_node The variable node to append.
+ */
+void msh_AddVariableToList(VariableList_t* var_list, VariableNode_t* var_node);
+
+
+/**
+ * Removes a new variable node from the specified variable list.
+ *
+ * @note Completely local.
+ * @param var_list The variable list from which the variable node will be removed.
+ * @param var_node The variable node to removed.
+ */
+void msh_RemoveVariableFromList(VariableNode_t* var_node);
 
 
 /**

@@ -62,7 +62,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			if(g_local_info->num_registered_objs == 0)
 			{
 				/* if we deregistered the last object then remove variables that aren't being used elsewhere in this process */
-				msh_CleanVariableList(&g_local_var_list);
+				msh_CleanSegmentList(&g_local_seg_list);
 			}
 			
 			break;
@@ -138,7 +138,7 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 				
 				if(g_local_seg_list.last->var_node == NULL)
 				{
-					msh_CreateVariable(&g_local_var_list, g_local_seg_list.last);
+					msh_AddVariableToList(&g_local_var_list, msh_CreateVariable(g_local_seg_list.last));
 				}
 				
 				/* do the rewrite after checking because the comparison is cheap */
@@ -153,16 +153,16 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		}
 		
 		/* scan input data to get required size and create the segment */
-		new_seg_node = msh_CreateSegment(msh_FindSegmentSize(in_var));
+		new_seg_node = msh_CreateSegment(msh_FindSharedSize(in_var));
 		
 		/* copy data to the shared memory */
 		msh_CopyVariable(msh_GetSegmentData(new_seg_node), in_var);
 		
+		/* segment must also be tracked locally, so do that now */
+		msh_AddSegmentToList(&g_local_seg_list, new_seg_node);
+		
 		/* Add the new segment to the shared list */
 		msh_AddSegmentToSharedList(new_seg_node);
-		
-		/* segment must also be tracked locally, so do that now */
-		msh_AddSegmentToLocalList(&g_local_seg_list, new_seg_node);
 		
 	}
 	
@@ -203,7 +203,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 				if(curr_seg_node->var_node == NULL)
 				{
 					/* create the variable node if it hasnt been created yet */
-					msh_CreateVariable(&g_local_var_list, curr_seg_node);
+					msh_AddVariableToList(&g_local_var_list, msh_CreateVariable(curr_seg_node));
 					num_new_vars += 1;
 				}
 			}
@@ -267,7 +267,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 			
 			if(g_local_seg_list.last != NULL && g_local_seg_list.last->var_node == NULL)
 			{
-				msh_CreateVariable(&g_local_var_list, g_local_seg_list.last);
+				msh_AddVariableToList(&g_local_var_list, msh_CreateVariable(g_local_seg_list.last));
 			}
 		}
 		
@@ -317,7 +317,7 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 				{
 					if(link == in_vars[i])
 					{
-						msh_RemoveSegmentFromLocalList(curr_var_node->seg_node->parent_seg_list, curr_var_node->seg_node);
+						msh_RemoveSegmentFromList(curr_var_node->seg_node);
 						msh_RemoveSegmentFromSharedList(curr_var_node->seg_node);
 						msh_DetachSegment(curr_var_node->seg_node);
 						break;
@@ -332,7 +332,7 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 	}
 	else
 	{
-		msh_ClearSegmentList(&g_local_seg_list);
+		msh_ClearSharedSegments(&g_local_seg_list);
 	}
 	msh_ReleaseProcessLock();
 }
@@ -343,7 +343,9 @@ void msh_Param(int num_params, const mxArray** in)
 	int i, j, ps_len, vs_len;
 	char param_str[MSH_MAX_NAME_LEN] = {0}, val_str[MSH_MAX_NAME_LEN] = {0}, param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
 	const mxArray* param, * val;
+#ifdef MSH_UNIX
 	SegmentNode_t* curr_seg_node;
+#endif
 	
 	if(num_params == 0)
 	{
@@ -410,6 +412,10 @@ void msh_Param(int num_params, const mxArray** in)
 			
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
+				while(msh_AtomicCompareSwap(&g_shared_info->user_def.is_thread_safe,))
+				{
+					continue;
+				}
 				g_shared_info->user_def.is_thread_safe = TRUE;
 			}
 			if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)

@@ -1,36 +1,36 @@
 %% Define random call test parameters
 
 % bound of clearing of data
-bounds.clear_data.bound = 20;
+bounds.clear_data.bound = 50;
 bounds.clear_data.iter = randi(bounds.clear_data.bound);
 
-bounds.clear_new.bound = 20;
+bounds.clear_new.bound = 50;
 bounds.clear_new.iter = randi(bounds.clear_new.bound);
 
-bounds.clear_all.bound = 20;
+bounds.clear_all.bound = 50;
 bounds.clear_all.iter = randi(bounds.clear_all.bound);
 
 % bound of random call to mshclear
-bounds.mshclear.bound = 20;
+bounds.mshclear.bound = 200;
 bounds.mshclear.iter = randi(bounds.mshclear.bound);
 
-bounds.mshdetach.bound = 20;
+bounds.mshdetach.bound = 200;
 bounds.mshdetach.iter = randi(bounds.mshdetach.bound);
 
 % bound of random call to mshparam to set to copy-on-write
-bounds.chpar_copy.bound = 20;
+bounds.chpar_copy.bound = 50;
 bounds.chpar_copy.iter = randi(bounds.chpar_copy.bound);
 
 % bound of random call to mshparam to set to overwrite
-bounds.chpar_over.bound = 20;
+bounds.chpar_over.bound = 50;
 bounds.chpar_over.iter = randi(bounds.chpar_over.bound);
 
 % bound of random call to mshparam to set gc on
-bounds.chpar_gc_on.bound = 20;
+bounds.chpar_gc_on.bound = 30;
 bounds.chpar_gc_on.iter = randi(bounds.chpar_gc_on.bound);
 
 % bound of random call of mshparam to set gc off
-bounds.chpar_gc_off.bound = 20;
+bounds.chpar_gc_off.bound = 30;
 bounds.chpar_gc_off.iter = randi(bounds.chpar_gc_off.bound);
 
 % max depth of structs and cells
@@ -69,7 +69,7 @@ num_samples = 1000;
 count = 1;
 total_num_tests = num_maxDepth_tests*num_maxElements_tests*num_maxDims_tests*num_maxChildren_tests*num_typespec_tests;
 
-res = cell(1,numworkers);
+res = cell(total_num_tests,numworkers);
 
 %% random call combination test
 lents = 0;

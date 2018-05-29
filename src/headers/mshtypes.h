@@ -10,7 +10,6 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 
 #define MSH_MAX_NAME_LEN 64
 #define MSH_SHARED_INFO_SEGMENT_NAME "/MSH_SHARED_INFO_SEGMENT"
-#define MSH_LOCK_NAME "/MSH_LOCK"
 #define MSH_SEGMENT_NAME "/MSH_SEGMENT%0lx"
 
 #define msh_SHARETYPE_COPY 0
@@ -19,8 +18,7 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 typedef struct SegmentMetadata_t
 {
 	/* use these to link together the memory segments */
-	size_t seg_sz;							/* segment size---this won't change so it's not volatile */
-	volatile alignedbool_t is_used;                    /* ensures that this memory segment has been referenced at least once before removing */
+	size_t data_sz;							/* segment size---this won't change so it's not volatile */
 	volatile alignedbool_t is_invalid;                    /* set to TRUE if this segment is to be freed by all processes */
 	volatile msh_segmentnumber_t prev_seg_num;
 	volatile msh_segmentnumber_t next_seg_num;
@@ -30,13 +28,11 @@ typedef struct SegmentMetadata_t
 
 typedef struct SegmentInfo_t
 {
-	void* shared_memory_ptr;
-	size_t seg_sz;
+	void* raw_ptr;
+	SegmentMetadata_t* metadata;
+	size_t total_segment_siz;
 	handle_t handle;
 	msh_segmentnumber_t seg_num;
-	alignedbool_t is_init;
-	alignedbool_t is_mapped;
-	alignedbool_t is_local_invalid;
 } SegmentInfo_t;
 
 typedef struct VariableNode_t VariableNode_t;
@@ -64,6 +60,7 @@ struct SegmentNode_t
 	SegmentInfo_t seg_info;
 };
 
+
 struct VariableList_t
 {
 	VariableNode_t* first;
@@ -86,10 +83,10 @@ struct SegmentList_t
 };
 
 /* structure of shared info about the shared segments */
-typedef volatile struct SharedInfo_t
+typedef struct SharedInfo_t
 {
-	size_t rev_num;
-	struct user_def_tag
+	volatile size_t rev_num;
+	volatile struct user_def_tag
 	{
 		/* these are aligned for lockless assignment */
 		msh_sharetype_t sharetype;
@@ -99,12 +96,11 @@ typedef volatile struct SharedInfo_t
 		mode_t security;
 #endif
 	} user_def;
-	alignedbool_t priority_flag;           /* set to TRUE if this process needs the process lock with priority */
-	msh_segmentnumber_t first_seg_num;     /* the first segment number in the list */
-	msh_segmentnumber_t last_seg_num;      /* the last segment number in the list */
-	uint32_T num_valid_segments;
-	long num_procs;
-	pid_t update_pid;
+	volatile msh_segmentnumber_t first_seg_num;     /* the first segment number in the list */
+	volatile msh_segmentnumber_t last_seg_num;      /* the last segment number in the list */
+	volatile uint32_T num_valid_segments;
+	volatile long num_procs;
+	volatile pid_t update_pid;
 } SharedInfo_t;
 
 
@@ -112,33 +108,36 @@ typedef struct GlobalInfo_t
 {
 	struct VariableList_t var_list;
 	struct SegmentList_t seg_list;
-	SegmentInfo_t shm_info_seg;
 	
 	size_t rev_num;
 	size_t num_registered_objs;
 	
+	struct shared_info_tag
+	{
+		SharedInfo_t* ptr;
+		handle_t handle;
+		alignedbool_t has_detached;
+#ifdef MSH_UNIX
+		alignedbool_t will_unlink;
+#endif
+	} shared_info;
+	
 #ifdef MSH_THREAD_SAFE
 #  ifdef MSH_WIN
-	SECURITY_ATTRIBUTES lock_sec;
+	OVERLAPPED overlapped;      /* yeah I don't know either */
 #  endif
-	handle_t proc_lock;
+	uint32_T lock_level;
 #endif
 	
 	pid_t this_pid;
-	
-	struct flags_tag
-	{
-		alignedbool_t is_proc_lock_init;
-		alignedbool_t proc_lock_level;
-	} flags;
-	
 } GlobalInfo_t;
 
 
 extern GlobalInfo_t* g_local_info;
 #define g_local_var_list (g_local_info->var_list)
 #define g_local_seg_list (g_local_info->seg_list)
-#define g_shared_info ((SharedInfo_t*)g_local_info->shm_info_seg.shared_memory_ptr)
+#define g_shared_info (g_local_info->shared_info.ptr)
+#define g_process_lock (g_local_info->shared_info.handle)
 
 #define msh_IsUpdated() (g_local_info->rev_num == g_shared_info->rev_num)
 

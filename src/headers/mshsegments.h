@@ -18,7 +18,7 @@ SegmentMetadata_t* msh_GetSegmentMetadata(SegmentNode_t* seg_node);
 
 SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node);
 
-size_t msh_FindSegmentSize(const mxArray* in_var);
+size_t msh_FindSegmentSize(size_t data_sz);
 
 /**
  * Creates a new shared memory segment with the specified size and hooks it into
@@ -74,7 +74,7 @@ void msh_DetachSegmentList(SegmentList_t* seg_list);
  * @note Calls functions which modify the shared memory linked list.
  * @param seg_list The segment list to be cleared.
  */
-void msh_ClearSegmentList(SegmentList_t* seg_list);
+void msh_ClearSharedSegments(SegmentList_t* seg_list);
 
 
 /**
@@ -90,7 +90,11 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list);
  * @param seg_list The segment list which the segment node will be appended to.
  * @param seg_node The segment node to be appended.
  */
-void msh_AddSegmentToLocalList(SegmentList_t* seg_list, SegmentNode_t* seg_node);
+void msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_node);
+
+
+
+void msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node);
 
 
 /**
@@ -100,7 +104,7 @@ void msh_AddSegmentToLocalList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
  * @param seg_list The segment list which the segment node will be removed from.
  * @param seg_node The segment to be removed.
  */
-void msh_RemoveSegmentFromLocalList(SegmentList_t* seg_list, SegmentNode_t* seg_node);
+void msh_RemoveSegmentFromList(SegmentNode_t* seg_node);
 
 void msh_InitializeTable(SegmentTable_t* seg_table);
 void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, uint32_T num_segs);
@@ -111,5 +115,16 @@ SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, msh_segmentnumber_
 void msh_CleanSegmentList(SegmentList_t* seg_list);
 
 void msh_UpdateLatestSegment(SegmentList_t* seg_list);
+
+handle_t msh_OpenSegmentHandle(char_t* segment_name);
+
+void* msh_MapSegment(handle_t segment_handle, size_t map_sz);
+
+void msh_UnmapSegment(void* segment_pointer, size_t map_sz);
+
+void msh_CloseSegmentHandle(handle_t segment_handle);
+
+void msh_LockMemory(void* ptr, size_t sz);
+void msh_UnlockMemory(void* ptr, size_t sz);
 
 #endif /* MATSHARE_MSHSEGMENTS_H */

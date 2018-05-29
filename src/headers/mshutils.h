@@ -29,6 +29,9 @@ msh_directive_t msh_ParseDirective(const mxArray* in);
 
 void msh_UpdateAll(void);
 
+long msh_AtomicIncrement(volatile long* val_ptr);
+long msh_AtomicDecrement(volatile long* val_ptr);
+long msh_AtomicCompareSwap(volatile long* val_ptr, long compare_value, long swap_value);
 
 /**
  * Writes the segment name to the name buffer.
