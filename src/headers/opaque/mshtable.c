@@ -20,6 +20,11 @@ void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, u
 	SegmentNode_t* curr_seg_node;
 	uint32_T seg_hash;
 	
+	if(seg_table->table == NULL)
+	{
+		msh_InitializeTable(seg_table);
+	}
+	
 	if(num_segs >= seg_table->table_sz)
 	{
 		msh_ResizeTable(seg_table, num_segs);
@@ -41,8 +46,6 @@ void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, u
 		}
 		curr_seg_node->hash_next = seg_node;
 	}
-	
-	
 	
 }
 
@@ -76,21 +79,27 @@ void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_no
 
 void msh_DestroyTable(SegmentTable_t* seg_table)
 {
-	mxFree(seg_table->table);
-	
-	seg_table->table = NULL;
-	seg_table->table_sz = 0;
+	if(seg_table->table != NULL)
+	{
+		mxFree(seg_table->table);
+		seg_table->table = NULL;
+		seg_table->table_sz = 0;
+	}
 }
 
 
 SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, msh_segmentnumber_t seg_num)
 {
 	SegmentNode_t* curr_seg_node;
-	for(curr_seg_node = seg_table->table[msh_FindSegmentHash(seg_table, seg_num)]; curr_seg_node != NULL; curr_seg_node = curr_seg_node->hash_next)
+	
+	if(seg_table->table != NULL)
 	{
-		if(curr_seg_node->seg_info.seg_num == seg_num)
+		for(curr_seg_node = seg_table->table[msh_FindSegmentHash(seg_table, seg_num)]; curr_seg_node != NULL; curr_seg_node = curr_seg_node->hash_next)
 		{
-			return curr_seg_node;
+			if(curr_seg_node->seg_info.seg_num == seg_num)
+			{
+				return curr_seg_node;
+			}
 		}
 	}
 	return NULL;
@@ -103,7 +112,7 @@ static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs)
 	SegmentTable_t new_table;
 	uint32_T curr_seg_hash;
 	
-	if(seg_table->table_sz >= (1 << 31))
+	if(seg_table->table_sz >= ((uint32_T)1 << 31))
 	{
 		/* dont do anything if we approach the max size for some reason */
 		return;

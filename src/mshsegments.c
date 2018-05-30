@@ -10,7 +10,7 @@
  * @note Modifies the shared memory linked list.
  * @param seg_sz The size of the segment to be opened.
  */
-static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache);
+static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_size);
 
 
 /**
@@ -20,7 +20,7 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache);
  * @note Interacts with but does not modify the shared memory linked list.
  * @param seg_num The segment number of the segment to be opened.
  */
-static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache);
+static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache, msh_segmentnumber_t seg_num);
 
 
 /**
@@ -46,20 +46,26 @@ SegmentMetadata_t* msh_GetSegmentMetadata(SegmentNode_t* seg_node)
 
 SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
 {
+	/* The raw pointer is only mapped if it is actually needed.
+	 * This improves performance of functions only needing the
+	 * metadata without effecting performance of other functions. */
+	if(seg_node->seg_info.raw_ptr == NULL)
+	{
+		seg_node->seg_info.raw_ptr = msh_MapMemory(seg_node->seg_info.handle, seg_node->seg_info.total_segment_size);
+	}
 	return (SharedVariableHeader_t*)((byte_t*)seg_node->seg_info.raw_ptr + PadToAlignData(sizeof(SegmentMetadata_t)));
 }
 
-size_t msh_FindSegmentSize(size_t data_sz)
+size_t msh_FindSegmentSize(size_t data_size)
 {
-	return PadToAlignData(sizeof(SegmentMetadata_t)) + data_sz;
+	return PadToAlignData(sizeof(SegmentMetadata_t)) + data_size;
 }
 
-SegmentNode_t* msh_CreateSegment(size_t data_sz)
+SegmentNode_t* msh_CreateSegment(size_t data_size)
 {
 	SegmentInfo_t seg_info_cache;
 	msh_InitializeSegmentInfo(&seg_info_cache);
-	seg_info_cache.total_segment_siz = msh_FindSegmentSize(data_sz);
-	msh_CreateSegmentWorker(&seg_info_cache);
+	msh_CreateSegmentWorker(&seg_info_cache, data_size);
 	return msh_CreateSegmentNode(&seg_info_cache);
 }
 
@@ -68,8 +74,7 @@ SegmentNode_t* msh_OpenSegment(msh_segmentnumber_t seg_num)
 {
 	SegmentInfo_t seg_info_cache;
 	msh_InitializeSegmentInfo(&seg_info_cache);
-	seg_info_cache.seg_num = seg_num;
-	msh_OpenSegmentWorker(&seg_info_cache);
+	msh_OpenSegmentWorker(&seg_info_cache, seg_num);
 	return msh_CreateSegmentNode(&seg_info_cache);
 }
 
@@ -84,7 +89,10 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 	if(seg_node->var_node != NULL)
 	{
 		msh_RemoveVariableFromList(seg_node->var_node);
-		msh_DestroyVariable(seg_node->var_node);
+		if(msh_DestroyVariable(seg_node->var_node))
+		{
+			return;
+		}
 	}
 	
 	if(seg_node->seg_info.metadata != NULL)
@@ -96,7 +104,8 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 			msh_RemoveSegmentFromSharedList(seg_node);
 			
 #ifdef MSH_UNIX
-			/* check again since the segment may have been tracked before the removal (this is fine) */
+			/* check again since the segment may have been tracked before the removal (this is fine
+			 * but we want to block from reusing the same name until all segments are gone) */
 			if(msh_GetSegmentMetadata(seg_node)->procs_tracking == 0)
 			{
 				msh_WriteSegmentName(segment_name, seg_node->seg_info.seg_num);
@@ -108,20 +117,20 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 #endif
 		}
 		
-		msh_UnmapSegment(seg_node->seg_info.metadata, sizeof(SegmentMetadata_t));
+		msh_UnmapMemory(seg_node->seg_info.metadata, sizeof(SegmentMetadata_t));
 		seg_node->seg_info.metadata = NULL;
 		
 	}
 	
 	if(seg_node->seg_info.raw_ptr != NULL)
 	{
-		msh_UnmapSegment(seg_node->seg_info.raw_ptr, seg_node->seg_info.total_segment_siz);
+		msh_UnmapMemory(seg_node->seg_info.raw_ptr, seg_node->seg_info.total_segment_size);
 		seg_node->seg_info.raw_ptr = NULL;
 	}
 	
 	if(seg_node->seg_info.handle != MSH_INVALID_HANDLE)
 	{
-		msh_CloseSegmentHandle(seg_node->seg_info.handle);
+		msh_CloseSharedMemory(seg_node->seg_info.handle);
 		seg_node->seg_info.handle = MSH_INVALID_HANDLE;
 	}
 	
@@ -137,7 +146,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 	
 	msh_AcquireProcessLock();
 	
-	if(g_shared_info->user_def.sharetype == msh_SHARETYPE_OVERWRITE)
+	if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_OVERWRITE)
 	{
 		msh_ClearSharedSegments(seg_node->parent_seg_list);
 	}
@@ -168,7 +177,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 	g_shared_info->num_valid_segments += 1;
 	
 	/* sign the update with this process */
-	g_shared_info->update_pid = g_local_info->this_pid;
+	g_shared_info->update_pid = g_local_info.this_pid;
 	
 	/* update the revision number to indicate other processes to retrieve new segments */
 	g_shared_info->rev_num += 1;
@@ -207,13 +216,24 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	}
 	else
 	{
-		if((prev_seg_node = msh_FindSegmentNode(&seg_node->parent_seg_list->seg_table, segment_metadata->prev_seg_num)) == NULL)
+		if(seg_node->parent_seg_list == NULL)
 		{
-			/* track the new segment since the mxMalloc should be cheaper than upmapping and closing the handle */
+			/* this probably won't happen, but for robustness this will remain */
 			prev_seg_node = msh_OpenSegment(segment_metadata->prev_seg_num);
-			msh_AddSegmentToList(seg_node->parent_seg_list, prev_seg_node);
+			msh_GetSegmentMetadata(prev_seg_node)->next_seg_num = segment_metadata->next_seg_num;
+			msh_DetachSegment(prev_seg_node);
 		}
-		msh_GetSegmentMetadata(prev_seg_node)->next_seg_num = segment_metadata->next_seg_num;
+		else
+		{
+			if((prev_seg_node = msh_FindSegmentNode(&seg_node->parent_seg_list->seg_table, segment_metadata->prev_seg_num)) == NULL)
+			{
+				/* track the new segment since the mxMalloc should be cheaper than upmapping and closing the handle */
+				prev_seg_node = msh_OpenSegment(segment_metadata->prev_seg_num);
+				msh_AddSegmentToList(seg_node->parent_seg_list, prev_seg_node);
+			}
+			msh_GetSegmentMetadata(prev_seg_node)->next_seg_num = segment_metadata->next_seg_num;
+		}
+		
 	}
 	
 	if(seg_node->seg_info.seg_num == g_shared_info->last_seg_num)
@@ -222,13 +242,23 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	}
 	else
 	{
-		if((next_seg_node = msh_FindSegmentNode(&seg_node->parent_seg_list->seg_table, segment_metadata->next_seg_num)) == NULL)
+		if(seg_node->parent_seg_list == NULL)
 		{
-			/* track the new segment since the mxMalloc should be cheaper than upmapping and closing the handle */
+			/* this probably won't happen, but for robustness this will remain */
 			next_seg_node = msh_OpenSegment(segment_metadata->next_seg_num);
-			msh_AddSegmentToList(seg_node->parent_seg_list, next_seg_node);
+			msh_GetSegmentMetadata(next_seg_node)->prev_seg_num = segment_metadata->prev_seg_num;
+			msh_DetachSegment(next_seg_node);
 		}
-		msh_GetSegmentMetadata(next_seg_node)->prev_seg_num = segment_metadata->prev_seg_num;
+		else
+		{
+			if((next_seg_node = msh_FindSegmentNode(&seg_node->parent_seg_list->seg_table, segment_metadata->next_seg_num)) == NULL)
+			{
+				/* track the new segment since the mxMalloc should be cheaper than upmapping and closing the handle */
+				next_seg_node = msh_OpenSegment(segment_metadata->next_seg_num);
+				msh_AddSegmentToList(seg_node->parent_seg_list, next_seg_node);
+			}
+			msh_GetSegmentMetadata(next_seg_node)->prev_seg_num = segment_metadata->prev_seg_num;
+		}
 	}
 	
 	/* reset these to reduce confusion when debugging */
@@ -236,7 +266,7 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	segment_metadata->prev_seg_num = MSH_INVALID_SEG_NUM;
 	
 	/* sign the update with this process */
-	g_shared_info->update_pid = g_local_info->this_pid;
+	g_shared_info->update_pid = g_local_info.this_pid;
 	
 	/* update number of vars in shared memory */
 	g_shared_info->num_valid_segments -= 1;
@@ -270,8 +300,8 @@ void msh_ClearSharedSegments(SegmentList_t* seg_list)
 			curr_seg_node = msh_OpenSegment(g_shared_info->first_seg_num);
 			msh_AddSegmentToList(seg_list, curr_seg_node);
 		}
-		msh_RemoveSegmentFromList(curr_seg_node);
 		msh_RemoveSegmentFromSharedList(curr_seg_node);
+		msh_RemoveSegmentFromList(curr_seg_node);
 		msh_DetachSegment(curr_seg_node);
 	}
 }
@@ -281,7 +311,7 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 {
 	
 	msh_segmentnumber_t curr_seg_num;
-	SegmentNode_t* curr_seg_node,* new_seg_node,* new_front = NULL;
+	SegmentNode_t* curr_seg_node,* next_seg_node, * new_seg_node,* new_front = NULL;
 	
 	if(msh_IsUpdated())
 	{
@@ -291,9 +321,9 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 	
 	msh_AcquireProcessLock();
 	
-	for(curr_seg_num = g_shared_info->last_seg_num;
+	for(curr_seg_num = g_shared_info->first_seg_num;
 	    curr_seg_num != MSH_INVALID_SEG_NUM;
-	    curr_seg_num = msh_GetSegmentMetadata(new_seg_node)->prev_seg_num)
+	    curr_seg_num = msh_GetSegmentMetadata(new_seg_node)->next_seg_num)
 	{
 		if((new_seg_node = msh_FindSegmentNode(&seg_list->seg_table, curr_seg_num)) == NULL)
 		{
@@ -314,13 +344,14 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 	}
 	
 	/* set this process as up to date */
-	g_local_info->rev_num = g_shared_info->rev_num;
+	g_local_info.rev_num = g_shared_info->rev_num;
 	
 	msh_ReleaseProcessLock();
 	
 	/* detach the nodes that aren't in newly linked*/
-	for(curr_seg_node = seg_list->first; curr_seg_node != new_front; curr_seg_node = curr_seg_node->next)
+	for(curr_seg_node = seg_list->first; curr_seg_node != new_front; curr_seg_node = next_seg_node)
 	{
+		next_seg_node = curr_seg_node->next;
 		msh_RemoveSegmentFromList(curr_seg_node);
 		msh_DetachSegment(curr_seg_node);
 	}
@@ -435,6 +466,11 @@ void msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node)
 void msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
 {
 	
+	if(seg_node->parent_seg_list == NULL)
+	{
+		return;
+	}
+	
 	msh_RemoveSegmentFromTable(&seg_node->parent_seg_list->seg_table, seg_node);
 	
 	/* reset local pointers */
@@ -461,9 +497,10 @@ void msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
 	
 	seg_node->parent_seg_list->num_segs -= 1;
 	
-	/* reset list information, but don't remove the parent since it may be used later */
+	
 	seg_node->next = NULL;
 	seg_node->prev = NULL;
+	seg_node->parent_seg_list = NULL;
 	
 }
 
@@ -473,7 +510,7 @@ void msh_CleanSegmentList(SegmentList_t* seg_list)
 	SegmentNode_t* curr_seg_node, * next_seg_node;
 	SegmentMetadata_t* curr_seg_metadata;
 	
-	if(g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY && g_shared_info->user_def.will_gc && g_local_info->num_registered_objs == 0)
+	if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY && g_shared_info->user_defined.will_gc && g_local_info.num_registered_objs == 0)
 	{
 		for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
 		{
@@ -511,17 +548,13 @@ void msh_CleanSegmentList(SegmentList_t* seg_list)
 /** static function definitions **/
 
 
-static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache)
+static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_size)
 {
-#ifdef MSH_WIN
-	DWORD hi_sz, lo_sz;
-#endif
-	
-	handle_t temp_handle;
 	char_t segment_name[MSH_MAX_NAME_LEN];
 	
-	/* tracked segments must be up to date to get proper linking (will remove later
-	 * when verified that this cannot happen) */
+	/* set the segment size */
+	seg_info_cache->total_segment_size = msh_FindSegmentSize(data_size);
+	
 	if(g_shared_info->num_valid_segments >= MSH_SEG_NUM_MAX)
 	{
 		ReadMexError(__FILE__, __LINE__, "TooManyVariablesError", "Could not share the variable. Too many variables are currently being shared.");
@@ -530,17 +563,6 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache)
 	/* create a unique new segment */
 	seg_info_cache->seg_num = g_shared_info->last_seg_num;
 	
-
-#ifdef MSH_WIN
-
-#ifdef MSH_32BIT
-	lo_sz = (DWORD)total_segment_size;
-	hi_sz = (DWORD)0;
-#else
-	/* split the 64-bit size */
-	lo_sz = (DWORD)(seg_info_cache->total_segment_siz & 0xFFFFFFFFL);
-	hi_sz = (DWORD)((seg_info_cache->total_segment_siz >> 32u) & 0xFFFFFFFFL);
-#endif
 	
 	/* the targeted segment number is not guaranteed to be available, so keep retrying */
 	do
@@ -548,57 +570,14 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache)
 		/* change the file name */
 		seg_info_cache->seg_num = (seg_info_cache->seg_num == MSH_SEG_NUM_MAX)? 0 : seg_info_cache->seg_num + 1;
 		msh_WriteSegmentName(segment_name, seg_info_cache->seg_num);
-		
-		SetLastError(0);
-		temp_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, segment_name);
-		if(temp_handle == NULL)
-		{
-			ReadMexError(__FILE__, __LINE__, "CreateFileError", "Error creating the file mapping (Error Number %u).", GetLastError());
-		}
-		else if(GetLastError() == ERROR_ALREADY_EXISTS)
-		{
-			if(CloseHandle(temp_handle) == 0)
-			{
-				ReadMexError(__FILE__, __LINE__, "CloseHandleError", "Error closing the file handle (Error Number %u).", GetLastError());
-			}
-		}
-	} while(GetLastError() == ERROR_ALREADY_EXISTS);
-	seg_info_cache->handle = temp_handle;
-
-#else
-	
-	/* find an available shared memory file name */
-	do
-	{
-		/* change the file name */
-		seg_info_cache->seg_num = (seg_info_cache->seg_num == MSH_SEG_NUM_MAX)? 0 : seg_info_cache->seg_num + 1;
-		msh_WriteSegmentName(segment_name, seg_info_cache->seg_num);
-		
-		/* errno is not set unless the function fails, so reset it each time */
-		errno = 0;
-		temp_handle = shm_open(segment_name, O_RDWR | O_CREAT | O_EXCL, g_shared_info->user_def.security);
-		if(temp_handle == -1 && errno != EEXIST)
-		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CreateError", "There was an error creating the segment");
-		}
-	} while(errno == EEXIST);
-	seg_info_cache->handle = temp_handle;
-	
-	/* set the segment size */
-	if(ftruncate(seg_info_cache->handle, total_segment_size) != 0)
-	{
-		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "TruncateError", "There was an error truncating the segment");
-	}
-
-#endif
-
+	} while((seg_info_cache->handle = msh_CreateSharedMemory(segment_name, seg_info_cache->total_segment_size)) == MSH_INVALID_HANDLE);
 	
 	
 	/* map the metadata */
-	seg_info_cache->metadata = msh_MapSegment(seg_info_cache->handle, sizeof(SegmentMetadata_t));
+	seg_info_cache->metadata = msh_MapMemory(seg_info_cache->handle, sizeof(SegmentMetadata_t));
 	
 	/* set the size of the segment */
-	seg_info_cache->metadata->data_sz = seg_info_cache->total_segment_siz;
+	seg_info_cache->metadata->data_size = data_size;
 	
 	/* number of processes with variables instantiated using this segment */
 	seg_info_cache->metadata->procs_using = 0;
@@ -606,46 +585,99 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache)
 	/* number of processes with a handle on this segment */
 	seg_info_cache->metadata->procs_tracking = 1;
 	
-	/* make sure that this segment has been used at least once before freeing it */
-	seg_info_cache->metadata->is_used = FALSE;
-	
 	/* indicates if the segment should be deleted by all processes */
 	seg_info_cache->metadata->is_invalid = FALSE;
 	
 	/* refer to nothing since this is the end of the list */
 	seg_info_cache->metadata->next_seg_num = MSH_INVALID_SEG_NUM;
 	
-	/* map the data */
-	seg_info_cache->raw_ptr = msh_MapSegment(seg_info_cache->handle, seg_info_cache->metadata->data_sz);
-	
 }
 
 
-static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache)
+static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache, msh_segmentnumber_t seg_num)
 {
 	char_t segment_name[MSH_MAX_NAME_LEN];
+	
+	/* set the segment number */
+	seg_info_cache->seg_num = seg_num;
 	
 	/* write the segment name */
 	msh_WriteSegmentName(segment_name, seg_info_cache->seg_num);
 	
 	/* open the handle */
-	seg_info_cache->handle = msh_OpenSegmentHandle(segment_name);
+	seg_info_cache->handle = msh_OpenSharedMemory(segment_name);
 	
 	/* map the metadata */
-	seg_info_cache->metadata = msh_MapSegment(seg_info_cache->handle, sizeof(SegmentMetadata_t));
+	seg_info_cache->metadata = msh_MapMemory(seg_info_cache->handle, sizeof(SegmentMetadata_t));
 	
 	/* tell everyone else that another process is tracking this */
 	msh_AtomicIncrement(&seg_info_cache->metadata->procs_tracking);
 	
 	/* get the segment size */
-	seg_info_cache->total_segment_siz = msh_FindSegmentSize(seg_info_cache->metadata->data_sz);
-	
-	seg_info_cache->raw_ptr = msh_MapSegment(seg_info_cache->handle, seg_info_cache->total_segment_siz);
+	seg_info_cache->total_segment_size = msh_FindSegmentSize(seg_info_cache->metadata->data_size);
 	
 }
 
 
-handle_t msh_OpenSegmentHandle(char_t* segment_name)
+handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size)
+{
+	
+	handle_t ret_handle;
+	
+#ifdef MSH_WIN
+
+#  ifdef MSH_32BIT
+	DWORD lo_sz = (DWORD)segment_size;
+	DWORD hi_sz = (DWORD)0;
+#  else
+	/* split the 64-bit size */
+	DWORD lo_sz = (DWORD)(segment_size & 0xFFFFFFFFL);
+	DWORD hi_sz = (DWORD)((segment_size >> 32u) & 0xFFFFFFFFL);
+#  endif
+	
+	SetLastError(0);
+	ret_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, segment_name);
+	if(ret_handle == NULL)
+	{
+		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CreateFileError", "Error creating the file mapping.");
+	}
+	else if(GetLastError() == ERROR_ALREADY_EXISTS)
+	{
+		if(CloseHandle(ret_handle) == 0)
+		{
+			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CloseHandleError", "Error closing the file handle.");
+		}
+		return MSH_INVALID_HANDLE;
+	}
+
+#else
+	
+	/* errno is not set unless the function fails, so reset it each time */
+	errno = 0;
+	ret_handle = shm_open(segment_name, O_RDWR | O_CREAT | O_EXCL, g_shared_info->user_defined.security);
+	if(ret_handle == -1)
+	{
+		if(errno != EEXIST)
+		{
+			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CreateError", "There was an error creating the segment");
+		}
+		return MSH_INVALID_HANDLE;
+	}
+	
+	/* set the segment size */
+	if(ftruncate(ret_handle, segment_size) != 0)
+	{
+		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "TruncateError", "There was an error truncating the segment");
+	}
+
+#endif
+
+	return ret_handle;
+
+}
+
+
+handle_t msh_OpenSharedMemory(char_t* segment_name)
 {
 	
 	handle_t ret_handle;
@@ -658,7 +690,7 @@ handle_t msh_OpenSegmentHandle(char_t* segment_name)
 		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "OpenFileError", "Error opening the file mapping.");
 	}
 #else
-	ret_handle = shm_open(segment_name, O_RDWR, g_shared_info->user_def.security);
+	ret_handle = shm_open(segment_name, O_RDWR, g_shared_info->user_defined.security);
 	if(ret_handle == -1)
 	{
 		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "OpenError", "There was an error opening the segment");
@@ -670,24 +702,22 @@ handle_t msh_OpenSegmentHandle(char_t* segment_name)
 }
 
 
-void* msh_MapSegment(handle_t segment_handle, size_t map_sz)
+void* msh_MapMemory(handle_t segment_handle, size_t map_sz)
 {
 	
 	void* seg_ptr;
 	
 #ifdef MSH_WIN
-	/* get the new file handle */
-	/* map the metadata to get the size of the segment */
 	seg_ptr = MapViewOfFile(segment_handle, FILE_MAP_ALL_ACCESS, 0, 0, map_sz);
 	if(seg_ptr == NULL)
 	{
-		ReadMexError(__FILE__, __LINE__, "MappingError", "Could not fetch the memory segment (Error number: %d).", GetLastError());
+		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "MemoryMappingError", "There was an error memory mapping the segment");
 	}
 #else
 	seg_ptr = mmap(NULL, map_sz, PROT_READ | PROT_WRITE, MAP_SHARED, segment_handle, 0);
 	if(seg_ptr == MAP_FAILED)
 	{
-		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "MmapError", "There was an error memory mapping the segment");
+		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "MemoryMappingError", "There was an error memory mapping the segment");
 	}
 #endif
 
@@ -695,7 +725,7 @@ void* msh_MapSegment(handle_t segment_handle, size_t map_sz)
 
 }
 
-void msh_UnmapSegment(void* segment_pointer, size_t map_sz)
+void msh_UnmapMemory(void* segment_pointer, size_t map_sz)
 {
 #ifdef MSH_WIN
 	if(UnmapViewOfFile(segment_pointer) == 0)
@@ -710,7 +740,7 @@ void msh_UnmapSegment(void* segment_pointer, size_t map_sz)
 #endif
 }
 
-void msh_CloseSegmentHandle(handle_t segment_handle)
+void msh_CloseSharedMemory(handle_t segment_handle)
 {
 #ifdef MSH_WIN
 	if(CloseHandle(segment_handle) == 0)
@@ -773,7 +803,7 @@ static void msh_InitializeSegmentInfo(SegmentInfo_t* seg_info)
 {
 	seg_info->raw_ptr = NULL;
 	seg_info->metadata = NULL;
-	seg_info->total_segment_siz = 0;
+	seg_info->total_segment_size = 0;
 	seg_info->handle = MSH_INVALID_HANDLE;
 	seg_info->seg_num = -1;
 }

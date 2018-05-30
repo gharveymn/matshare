@@ -18,7 +18,7 @@ SegmentMetadata_t* msh_GetSegmentMetadata(SegmentNode_t* seg_node);
 
 SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node);
 
-size_t msh_FindSegmentSize(size_t data_sz);
+size_t msh_FindSegmentSize(size_t data_size);
 
 /**
  * Creates a new shared memory segment with the specified size and hooks it into
@@ -27,10 +27,10 @@ size_t msh_FindSegmentSize(size_t data_sz);
  *
  * @note Modifies the shared memory linked list.
  * @param seg_list The list which will track the segment.
- * @param seg_sz The size of the new segment.
+ * @param data_size The size of the new segment.
  * @return A struct containing information about the segment.
  */
-SegmentNode_t* msh_CreateSegment(size_t seg_sz);
+SegmentNode_t* msh_CreateSegment(size_t data_size);
 
 
 /**
@@ -116,13 +116,14 @@ void msh_CleanSegmentList(SegmentList_t* seg_list);
 
 void msh_UpdateLatestSegment(SegmentList_t* seg_list);
 
-handle_t msh_OpenSegmentHandle(char_t* segment_name);
+handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size);
+handle_t msh_OpenSharedMemory(char_t* segment_name);
 
-void* msh_MapSegment(handle_t segment_handle, size_t map_sz);
+void* msh_MapMemory(handle_t segment_handle, size_t map_sz);
 
-void msh_UnmapSegment(void* segment_pointer, size_t map_sz);
+void msh_UnmapMemory(void* segment_pointer, size_t map_sz);
 
-void msh_CloseSegmentHandle(handle_t segment_handle);
+void msh_CloseSharedMemory(handle_t segment_handle);
 
 void msh_LockMemory(void* ptr, size_t sz);
 void msh_UnlockMemory(void* ptr, size_t sz);

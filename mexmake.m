@@ -12,16 +12,18 @@ try
 	
 	if(ThreadSafety)
 		fprintf('-Thread safety is enabled.\n')
-		mexflags = [mexflags {'-DMSH_THREAD_SAFE'}];
+		mexflags = [mexflags {'-DMSH_THREAD_SAFETY=TRUE'}];
 	else
 		fprintf('-Thread safety is disabled.\n')
+		mexflags = [mexflags {'-DMSH_THREAD_SAFETY=FALSE'}];
 	end
 	
 	if(CopyOnWrite)
 		fprintf('-Compiling in copy-on-write mode.\n')
-		mexflags = [mexflags {'-DMSH_SHARETYPE_COPY'}];
+		mexflags = [mexflags {'-DMSH_SHARETYPE=msh_SHARETYPE_COPY'}];
 	else
 		fprintf('-Compiling in overwrite mode.\n')
+		mexflags = [mexflags {'-DMSH_SHARETYPE=msh_SHARETYPE_OVERWRITE'}];
 	end
 	
 	[comp,maxsz,endi] = computer;	
@@ -72,7 +74,7 @@ try
 	end
 	
 	fprintf('-Compiling matshare...')
-	mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 -Wall"'}];
+	%mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 -Wall"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n%s\n',['-The function is located in ' fullfile(pwd,'bin') '.'])
 	

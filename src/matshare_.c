@@ -5,7 +5,26 @@
 #include <sys/stat.h>
 #endif
 
-GlobalInfo_t* g_local_info = NULL;
+GlobalInfo_t g_local_info =
+						{
+							0,                      /* rev_num */
+							0,                      /* num_registered_objs */
+#if MSH_THREAD_SAFETY==TRUE
+							0,                      /* lock_level */
+#endif
+							0,                      /* this_pid */
+							NULL,                   /* shared_info_wrapper.ptr */
+							MSH_INVALID_HANDLE,     /* shared_info_wrapper.handle */
+#ifdef MSH_WIN
+							MSH_INVALID_HANDLE,     /* process_lock */
+#endif
+							0,                      /* has_detached */
+							0,                      /* is_mex_locked */
+							0                       /* is_initialized */
+						};
+
+VariableList_t g_local_var_list = {0};
+SegmentList_t g_local_seg_list = {0};
 
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
@@ -33,7 +52,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	msh_directive = msh_ParseDirective(in_directive);
 	
 	/* Don't initialize if we are detaching and matshare has not been initialized for this process yet */
-	if(msh_directive == msh_DETACH && g_local_info == NULL)
+	if(msh_directive == msh_DETACH && !g_local_info.is_initialized)
 	{
 		return;
 	}
@@ -58,8 +77,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		
 		case msh_OBJ_DEREGISTER:
 			/* deregister an object tracking this function */
-			g_local_info->num_registered_objs -= 1;
-			if(g_local_info->num_registered_objs == 0)
+			g_local_info.num_registered_objs -= 1;
+			if(g_local_info.num_registered_objs == 0)
 			{
 				/* if we deregistered the last object then remove variables that aren't being used elsewhere in this process */
 				msh_CleanSegmentList(&g_local_seg_list);
@@ -89,7 +108,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		case msh_OBJ_REGISTER:
 			
 			/* tell matshare to register a new object */
-			g_local_info->num_registered_objs += 1;
+			g_local_info.num_registered_objs += 1;
 			
 			break;
 		case msh_INIT:
@@ -129,20 +148,13 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		}
 		
 		
-		if(g_shared_info->user_def.sharetype == msh_SHARETYPE_OVERWRITE)
+		if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_OVERWRITE)
 		{
 			if(g_local_seg_list.num_segs != 0 && (msh_CompareVariableSize(msh_GetSegmentData(g_local_seg_list.last), in_var) == TRUE))
 			{
-				/* DON'T INCREMENT THE REVISION NUMBER */
-				/* this is an in-place change, so everyone is still fine */
-				
-				if(g_local_seg_list.last->var_node == NULL)
-				{
-					msh_AddVariableToList(&g_local_var_list, msh_CreateVariable(g_local_seg_list.last));
-				}
-				
+				/* this is an in-place change */
 				/* do the rewrite after checking because the comparison is cheap */
-				msh_OverwriteData(msh_GetSegmentData(g_local_seg_list.last), in_var, g_local_seg_list.last->var_node->var);
+				msh_OverwriteData(msh_GetSegmentData(g_local_seg_list.last), in_var);
 				
 				/* only need to update because we have overwritten an established segment */
 				msh_UpdateAll();
@@ -317,8 +329,8 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 				{
 					if(link == in_vars[i])
 					{
-						msh_RemoveSegmentFromList(curr_var_node->seg_node);
 						msh_RemoveSegmentFromSharedList(curr_var_node->seg_node);
+						msh_RemoveSegmentFromList(curr_var_node->seg_node);
 						msh_DetachSegment(curr_var_node->seg_node);
 						break;
 					}
@@ -340,6 +352,7 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 
 void msh_Param(int num_params, const mxArray** in)
 {
+	LockCheck_t new_lock_check = {0}, compare_lock_check = {0};
 	int i, j, ps_len, vs_len;
 	char param_str[MSH_MAX_NAME_LEN] = {0}, val_str[MSH_MAX_NAME_LEN] = {0}, param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
 	const mxArray* param, * val;
@@ -351,15 +364,15 @@ void msh_Param(int num_params, const mxArray** in)
 	{
 #ifdef MSH_WIN
 		mexPrintf(MSH_PARAM_INFO,
-				g_shared_info->user_def.is_thread_safe? "true" : "false",
-				g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY? "true" : "false",
-				g_shared_info->user_def.will_gc? "true" : "false");
+				g_shared_info->user_defined.thread_safety.values.is_thread_safe? "true" : "false",
+				g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY? "true" : "false",
+				g_shared_info->user_defined.will_gc? "true" : "false");
 #else
 		mexPrintf(MSH_PARAM_INFO,
-				g_shared_info->user_def.is_thread_safe? "true" : "false",
-				g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY? "true" : "false",
-				g_shared_info->user_def.will_gc? "true" : "false",
-				g_shared_info->user_def.security);
+				g_shared_info->user_defined.thread_safety.values.is_thread_safe? "true" : "false",
+				g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY? "true" : "false",
+				g_shared_info->user_defined.will_gc? "true" : "false",
+				g_shared_info->user_defined.security);
 #endif
 	}
 	
@@ -405,31 +418,34 @@ void msh_Param(int num_params, const mxArray** in)
 		
 		if(strcmp(param_str_l, MSH_PARAM_THREADSAFETY_L) == 0)
 		{
-#ifdef MSH_THREAD_SAFE
-			
-			/* note: acquiring the process lock makes going from thread-safe to thread-unsafe a safe operation, but not in the other direction */
-			msh_AcquireProcessLock();
+#if MSH_THREAD_SAFETY==TRUE
 			
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
-				while(msh_AtomicCompareSwap(&g_shared_info->user_def.is_thread_safe,))
+				compare_lock_check.values.virtual_lock_count = 0;
+				new_lock_check.values.virtual_lock_count = 0;
+				new_lock_check.values.is_thread_safe = TRUE;
+				do
 				{
-					continue;
-				}
-				g_shared_info->user_def.is_thread_safe = TRUE;
+					compare_lock_check.values.is_thread_safe = g_shared_info->user_defined.thread_safety.values.is_thread_safe;
+				} while(msh_AtomicCompareSwap(&g_shared_info->user_defined.thread_safety.span, compare_lock_check.span, new_lock_check.span) != compare_lock_check.span);
 			}
 			if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
-				g_shared_info->user_def.is_thread_safe = FALSE;
+				compare_lock_check.values.virtual_lock_count = 0;
+				new_lock_check.values.virtual_lock_count = 0;
+				new_lock_check.values.is_thread_safe = FALSE;
+				do
+				{
+					compare_lock_check.values.is_thread_safe = g_shared_info->user_defined.thread_safety.values.is_thread_safe;
+				} while(msh_AtomicCompareSwap(&g_shared_info->user_defined.thread_safety.span, compare_lock_check.span, new_lock_check.span) != compare_lock_check.span);
 			}
 			else
 			{
 				ReadMexError(__FILE__, __LINE__, "InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THREADSAFETY);
 			}
-			
-			msh_ReleaseProcessLock();
 #else
-			__ReadMexError__(__FILE__, __LINE__, "InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
+			ReadMexError(__FILE__, __LINE__, "InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
 #endif
 		
 		}
@@ -443,24 +459,18 @@ void msh_Param(int num_params, const mxArray** in)
 			else
 			{
 				msh_AcquireProcessLock();
-				g_shared_info->user_def.security = (mode_t)strtol(val_str_l, NULL, 8);
-				if(fchmod(g_local_info->shm_info_seg.handle, g_shared_info->user_def.security) != 0)
+				g_shared_info->user_defined.security = (mode_t)strtol(val_str_l, NULL, 8);
+				if(fchmod(g_local_info.shared_info_wrapper.handle, g_shared_info->user_defined.security) != 0)
 				{
 					ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ChmodError", "There was an error modifying permissions for the shared info segment.");
 				}
 				for(curr_seg_node = g_local_seg_list.first; curr_seg_node != NULL; curr_seg_node = curr_seg_node->next)
 				{
-					if(fchmod(curr_seg_node->seg_info.handle, g_shared_info->user_def.security) != 0)
+					if(fchmod(curr_seg_node->seg_info.handle, g_shared_info->user_defined.security) != 0)
 					{
 						ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ChmodError", "There was an error modifying permissions for the data segment.");
 					}
 				}
-#ifdef MSH_THREAD_SAFE
-				if(fchmod(g_local_info->proc_lock, g_shared_info->user_def.security) != 0)
-				{
-					ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ChmodError", "There was an error modifying permissions for the process lock.");
-				}
-#endif
 				msh_UpdateAll();
 				msh_ReleaseProcessLock();
 			}
@@ -472,11 +482,11 @@ void msh_Param(int num_params, const mxArray** in)
 		{
 			if(strncmp(val_str_l, "copy", 4) == 0)
 			{
-				g_shared_info->user_def.sharetype = msh_SHARETYPE_COPY;
+				g_shared_info->user_defined.sharetype = msh_SHARETYPE_COPY;
 			}
 			else if(strcmp(val_str_l, "overwrite") == 0)
 			{
-				g_shared_info->user_def.sharetype = msh_SHARETYPE_OVERWRITE;
+				g_shared_info->user_defined.sharetype = msh_SHARETYPE_OVERWRITE;
 			}
 			else
 			{
@@ -487,11 +497,11 @@ void msh_Param(int num_params, const mxArray** in)
 		{
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
-				g_shared_info->user_def.will_gc = TRUE;
+				g_shared_info->user_defined.will_gc = TRUE;
 			}
 			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
-				g_shared_info->user_def.will_gc = FALSE;
+				g_shared_info->user_defined.will_gc = FALSE;
 			}
 			else
 			{

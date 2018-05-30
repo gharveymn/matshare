@@ -3,135 +3,82 @@
 #include "headers/mshsegments.h"
 #include "headers/matlabutils.h"
 
+static LockCheck_t new_lock_check, old_lock_check;
+
 void msh_OnExit(void)
 {
+
+#ifdef MSH_UNIX
+	SharedInfoCheck_t new_check, old_check;
+#endif
+	
+	g_local_info.is_initialized = FALSE;
 	
 	msh_DetachSegmentList(&g_local_seg_list);
+	msh_DestroyTable(&g_local_seg_list.seg_table);
 	
-	if(g_local_info->shared_info.handle != MSH_INVALID_HANDLE)
+	if(g_local_info.shared_info_wrapper.ptr != NULL)
 	{
-		if(g_local_info->shared_info.ptr != NULL)
+	
+#ifdef MSH_WIN
+		if(!g_local_info.has_detached)
 		{
-		
-#ifdef MSH_UNIX
-			if(!g_local_info->shared_info.has_detached)
-			{
-				g_local_info->shared_info.will_unlink = (msh_AtomicDecrement(&g_shared_info->num_procs) == 0);
-				g_local_info->shared_info.has_detached = TRUE;
-			}
-			
-			if(g_local_info->shared_info.will_unlink)
-			{
-				if(shm_unlink(MSH_SHARED_INFO_SEGMENT_NAME) != 0)
-				{
-					ReadMexErrorWithCode(__FILE__, __LINE__, errno, "UnlinkError", "There was an error unlinking the shared info segment.");
-				}
-			}
-#else
 			msh_AtomicDecrement(&g_shared_info->num_procs);
-			g_local_info->shared_info.has_detached = TRUE;
-#endif
-			msh_UnlockMemory(g_local_info->shared_info.ptr, sizeof(SharedInfo_t));
-			msh_UnmapSegment(g_local_info->shared_info.ptr, sizeof(SharedInfo_t));
-			g_local_info->shared_info.ptr = NULL;
+			g_local_info.has_detached = TRUE;
 		}
+#else
+		if(!g_local_info.has_detached)
+		{
+			do
+			{
+				old_check.span = g_shared_info->shared_info_check.span;
+				new_check.span = old_check.span;
+				new_check.values.num_procs -= 1;
+				new_check.values.will_unlink = (uint16_T)(new_check.values.num_procs == 0);
+			} while(msh_AtomicCompareSwap(&g_shared_info->shared_info_check.span, old_check.span, new_check.span) != old_check.span);
+			g_local_info.has_detached = TRUE;
+		}
+		
+		if(new_check.values.will_unlink)
+		{
+			if(shm_unlink(MSH_SHARED_INFO_SEGMENT_NAME) != 0)
+			{
+				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "UnlinkError", "There was an error unlinking the shared info segment.");
+			}
+		}
+#endif
+		msh_UnlockMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
+		msh_UnmapMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
+		g_local_info.shared_info_wrapper.ptr = NULL;
+	}
+	
+	if(g_local_info.shared_info_wrapper.handle != MSH_INVALID_HANDLE)
+	{
+		msh_CloseSharedMemory(g_local_info.shared_info_wrapper.handle);
+		g_local_info.shared_info_wrapper.handle = MSH_INVALID_HANDLE;
 	}
 
 #ifdef MSH_WIN
-	
-	if(g_local_info->shared_info.ptr != NULL)
+	if(g_local_info.process_lock != MSH_INVALID_HANDLE)
 	{
-		/* unlock this set of pages */
-		VirtualUnlock((void*)g_local_info->shared_info.ptr, sizeof(SharedInfo_t));
-		
-		/* unmap the shared info segment */
-		if(UnmapViewOfFile((void*)g_local_info->shared_info.ptr) == 0)
+		if(CloseHandle(g_local_info.process_lock) == 0)
 		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "UnmapFileError", "Error unmapping the update file.");
+			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CloseHandleError", "Error closing the process lock handle.");
 		}
-		g_local_info->shared_info.ptr = NULL;
-		g_local_info->shm_info_seg.is_metadata_mapped = FALSE;
+		g_local_info.process_lock = MSH_INVALID_HANDLE;
 	}
-	
-	if(g_local_info->shm_info_seg.has_handle)
-	{
-		if(CloseHandle(g_local_info->shm_info_seg.handle) == 0)
-		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CloseHandleError", "Error closing the update file handle.");
-		}
-		g_local_info->shm_info_seg.has_handle = FALSE;
-	}
-
-#else
-
-
-	/* we want to make sure we are locked while reading this to ensure sequential creation/deletion of segments */
-	if(g_local_info->flags.is_proc_lock_init)
-	{
-		if(g_local_info->flags.proc_lock_level == 0)
-		{
-			if(lockf(g_local_info->proc_lock, F_LOCK, 0) != 0)
-			{
-				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "WaitProcLockFailedError", "The wait for process lock failed.");
-			}
-			g_local_info->flags.proc_lock_level = 1;
-		}
-	}
-	
-	/* If this is the last process */
-	if(g_local_info->shm_info_seg.is_metadata_mapped && (msh_AtomicDecrement(&g_shared_info->num_procs) == 0))
-	{
-		if(shm_unlink(MSH_SHARED_INFO_SEGMENT_NAME) != 0)
-		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "UnlinkError", "There was an error unlinking the shared info segment.");
-		}
-	}
-	
-	if(g_local_info->flags.is_proc_lock_init)
-	{
-		/* manually unlock */
-		if(lockf(g_local_info->proc_lock, F_ULOCK, 0) != 0)
-		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ULockfBadFileError", "The fildes argument is not a valid open file descriptor.");
-		}
-		g_local_info->flags.proc_lock_level = 0;
-	}
-
-
-	if(g_local_info->shm_info_seg.is_metadata_mapped)
-	{
-		/* unlock this set of pages */
-		munlock(g_local_info->shm_info_seg.shared_memory_ptr, g_local_info->shm_info_seg.total_seg_sz);
-		
-		if(munmap((void*)g_shared_info, g_local_info->shm_info_seg.total_seg_sz) != 0)
-		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "MunmapError", "There was an error unmapping the shared info segment.");
-		}
-		g_local_info->shm_info_seg.is_metadata_mapped = FALSE;
-		
-	}
-	
-	if(g_local_info->shm_info_seg.has_handle)
-	{
-		if(close(g_local_info->shm_info_seg.handle) == -1)
-		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CloseHandleError", "Error closing the data file handle.");
-		}
-		g_local_info->shm_info_seg.has_handle = FALSE;
-	}
-
 #endif
-
-	msh_DestroyTable(&g_local_info->seg_list.seg_table);
 	
-	mxFree(g_local_info);
-	g_local_info = NULL;
-	mexAtExit(msh_NullFunction);
-	
-	if(mexIsLocked())
+	if(g_local_info.is_mex_locked)
 	{
+		if(!mexIsLocked())
+		{
+			ReadMexError(__FILE__, __LINE__, "MexUnlockedError", "Matshare tried to unlock its file when it was already unlocked.");
+		}
 		mexUnlock();
+		g_local_info.is_mex_locked = FALSE;
 	}
+	mexAtExit(msh_NullFunction);
 	
 }
 
@@ -139,34 +86,49 @@ void msh_OnExit(void)
 void msh_OnError(void)
 {
 	SetMexErrorCallback(NULL);
-	if(g_local_info != NULL)
+
+#if MSH_THREAD_SAFETY==TRUE
+	/* set the process lock at a level where it can be released if needed */
+	if(g_local_info.lock_level > 1)
 	{
-		/* set the process lock at a level where it can be released if needed */
-		if(g_local_info->lock_level > 1)
-		{
-			g_local_info->lock_level = 1;
-		}
-		msh_ReleaseProcessLock();
+		g_local_info.lock_level = 1;
 	}
+	msh_ReleaseProcessLock();
+#endif
+
 }
 
 
-int msh_AcquireProcessLock(void)
+void msh_AcquireProcessLock(void)
 {
+
+#if MSH_THREAD_SAFETY==TRUE
+
+#ifdef MSH_WIN
+	DWORD status;
+#endif
 	
-	int did_operation = FALSE;
-	
-#ifdef MSH_THREAD_SAFE
-	/* only request a lock if there is more than one process */
-	if(g_shared_info->user_def.is_thread_safe)
+	do
 	{
-		if(g_local_info->lock_level == 0)
+		old_lock_check.span = g_shared_info->user_defined.thread_safety.span;
+		new_lock_check.span = old_lock_check.span;
+		new_lock_check.values.virtual_lock_count += 1;
+	} while(msh_AtomicCompareSwap(&g_shared_info->user_defined.thread_safety.span, old_lock_check.span, new_lock_check.span) != old_lock_check.span);
+	
+	if(g_shared_info->user_defined.thread_safety.values.is_thread_safe)
+	{
+		if(g_local_info.lock_level == 0)
 		{
 		
 #ifdef MSH_WIN
-			if(LockFileEx(g_process_lock, LOCKFILE_EXCLUSIVE_LOCK, 0, sizeof(SharedInfo_t), 0, &g_local_info->overlapped) == 0)
+			status = WaitForSingleObject(g_process_lock, INFINITE);
+			if(status == WAIT_ABANDONED)
 			{
-				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "ProcessLockError", "Failed to acquire the process lock.");
+				ReadMexError(__FILE__, __LINE__, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
+			}
+			else if(status == WAIT_FAILED)
+			{
+				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "ProcessLockError",  "Failed to lock acquire the process lock.");
 			}
 #else
 			
@@ -175,31 +137,33 @@ int msh_AcquireProcessLock(void)
 				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ProcessLockError",  "Failed to lock acquire the process lock.");
 			}
 #endif
-			did_operation = TRUE;
 		}
 		
-		g_local_info->lock_level += 1;
+		g_local_info.lock_level += 1;
 		
 	}
 #endif
 
-	return did_operation;
-	
 }
 
 
-int msh_ReleaseProcessLock(void)
+void msh_ReleaseProcessLock(void)
 {
+#if MSH_THREAD_SAFETY==TRUE
 	
-	int did_operation = FALSE;
-	
-#ifdef MSH_THREAD_SAFE
-	if(g_local_info->lock_level > 0)
+	do
 	{
-		if(g_local_info->lock_level == 1)
+		old_lock_check.span = g_shared_info->user_defined.thread_safety.span;
+		new_lock_check.span = old_lock_check.span;
+		new_lock_check.values.virtual_lock_count -= 1;
+	} while(msh_AtomicCompareSwap(&g_shared_info->user_defined.thread_safety.span, old_lock_check.span, new_lock_check.span) != old_lock_check.span);
+	
+	if(g_local_info.lock_level > 0)
+	{
+		if(g_local_info.lock_level == 1)
 		{
 #ifdef MSH_WIN
-			if(UnlockFileEx(g_process_lock, 0, sizeof(SharedInfo_t), 0, &g_local_info->overlapped) == 0)
+			if(ReleaseMutex(g_process_lock) == 0)
 			{
 				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "ProcessUnlockError", "Failed to release the process lock.");
 			}
@@ -209,15 +173,12 @@ int msh_ReleaseProcessLock(void)
 				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #endif
-			did_operation = TRUE;
 		}
 		
-		g_local_info->lock_level -= 1;
+		g_local_info.lock_level -= 1;
 		
 	}
 #endif
-	
-	return did_operation;
 
 }
 
@@ -243,7 +204,7 @@ void msh_UpdateAll(void)
 #ifdef MSH_WIN
 	/* only flush the memory when there is more than one process
 	 * this appears to only write to pagefile.sys, but it's difficult to find information
-	if(FlushViewOfFile(g_shared_info, g_local_info->shm_info_seg.total_seg_sz) == 0)
+	if(FlushViewOfFile(g_shared_info, g_local_info.shm_info_seg.total_seg_sz) == 0)
 	{
 		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "FlushFileError", "Error flushing the update file.");
 	}
@@ -258,8 +219,10 @@ void msh_UpdateAll(void)
 	*/
 #else
 	
+	SegmentNode_t* curr_seg_node;
+	
 	/* I _believe_ that this is unnecessary since I locked the segment to physical memory earlier, so there shouldn't be any caches right?
-	if(msync((void*)g_shared_info, g_local_info->shm_info_seg.total_seg_sz, MS_SYNC) != 0)
+	if(msync((void*)g_shared_info, g_local_info.shm_info_seg.total_seg_sz, MS_SYNC) != 0)
 	{
 		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "MsyncError", "There was an error with syncing the shared info segment.");
 	}
@@ -268,7 +231,7 @@ void msh_UpdateAll(void)
 	for(curr_seg_node = g_local_seg_list.first; curr_seg_node != NULL; curr_seg_node = curr_seg_node->next)
 	{
 		/* flushes any possible local caches to the shared memory */
-		if(msync(curr_seg_node->seg_info.shared_memory_ptr, curr_seg_node->seg_info.total_seg_sz, MS_SYNC | MS_INVALIDATE) != 0)
+		if(msync(curr_seg_node->seg_info.raw_ptr, curr_seg_node->seg_info.total_segment_size, MS_SYNC | MS_INVALIDATE) != 0)
 		{
 			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "MsyncMatlabcError", "There was an error with syncing a shared data segment.");
 		}
@@ -293,6 +256,17 @@ void msh_NullFunction(void)
 {
 	/* does nothing (so we can reset the mexAtExit function, since NULL is undocumented) */
 }
+
+
+pid_t msh_GetPid(void)
+{
+#ifdef MSH_WIN
+	return GetCurrentProcessId();
+#else
+	return getpid();
+#endif
+}
+
 
 long msh_AtomicIncrement(volatile long* val_ptr)
 {

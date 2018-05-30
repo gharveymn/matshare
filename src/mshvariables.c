@@ -3,18 +3,6 @@
 #include "headers/matlabutils.h"
 #include "headers/mshutils.h"
 
-/**
- * Tracks the mxArray by encapsulating it in a variable node, adding it to the variable list
- * specified and associating it to the segment node specified.
- *
- * @note Completely local.
- * @param var_list The variable list which will track the variable node containing the mxArray.
- * @param seg_node The segment which holds the mxArray data.
- * @param new_var The mxArray to be tracked.
- * @return The new variable node.
- */
-static VariableNode_t* msh_TrackVariable(VariableList_t* var_list, SegmentNode_t* seg_node, mxArray* new_var);
-
 
 /**
  * Creates a new variable node for the specified mxArray and segment node.
@@ -42,14 +30,16 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 	mexMakeArrayPersistent(new_var);
 	
 	msh_AtomicIncrement(&msh_GetSegmentMetadata(seg_node)->procs_using);
-	msh_GetSegmentMetadata(seg_node)->is_used = TRUE;
 	
 	return msh_CreateVariableNode(seg_node, new_var);
 }
 
 
-void msh_DestroyVariable(VariableNode_t* var_node)
+bool_t msh_DestroyVariable(VariableNode_t* var_node)
 {
+	
+	bool_t did_destroy_segment = FALSE;
+	
 	/* detach all of the Matlab pointers */
 	msh_DetachVariable(var_node->var);
 	mxDestroyArray(var_node->var);
@@ -59,17 +49,20 @@ void msh_DestroyVariable(VariableNode_t* var_node)
 	
 	/* decrement number of processes using this variable; if this is the last variable then GC */
 	if(msh_AtomicDecrement(&msh_GetSegmentMetadata(var_node->seg_node)->procs_using) == 0 &&
-	   g_shared_info->user_def.sharetype == msh_SHARETYPE_COPY &&
-	   g_shared_info->user_def.will_gc &&
-	   g_local_info->num_registered_objs == 0)
+	   g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY &&
+	   g_shared_info->user_defined.will_gc &&
+	   g_local_info.num_registered_objs == 0)
 	{
-		msh_RemoveSegmentFromList(var_node->seg_node);
 		msh_RemoveSegmentFromSharedList(var_node->seg_node);
+		msh_RemoveSegmentFromList(var_node->seg_node);
 		msh_DetachSegment(var_node->seg_node);
+		did_destroy_segment = TRUE;
 	}
 	
 	/* destroy the rest */
 	mxFree(var_node);
+	
+	return did_destroy_segment;
 	
 }
 

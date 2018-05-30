@@ -21,9 +21,9 @@ void msh_OnExit(void);
 
 void msh_OnError(void);
 
-int msh_AcquireProcessLock(void);
+void msh_AcquireProcessLock(void);
 
-int msh_ReleaseProcessLock(void);
+void msh_ReleaseProcessLock(void);
 
 msh_directive_t msh_ParseDirective(const mxArray* in);
 
@@ -42,5 +42,7 @@ long msh_AtomicCompareSwap(volatile long* val_ptr, long compare_value, long swap
 void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num);
 
 void msh_NullFunction(void);
+
+pid_t msh_GetPid(void);
 
 #endif /* MATSHARE_MATSHAREUTILS_H */

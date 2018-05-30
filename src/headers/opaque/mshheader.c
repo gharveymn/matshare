@@ -410,7 +410,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 	curr_off += cpy_sz;
 	
 	/* Structure case */
-	if(msh_GetClassId(dest) == mxSTRUCT_CLASS)
+	if(mxGetClassID(in_var) == mxSTRUCT_CLASS)
 	{
 		
 		num_elems = msh_GetNumElems(dest);
@@ -454,7 +454,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 		}
 		
 	}
-	else if(msh_GetClassId(dest) == mxCELL_CLASS) /* Cell case */
+	else if(mxGetClassID(in_var) == mxCELL_CLASS) /* Cell case */
 	{
 		
 		num_elems = msh_GetNumElems(dest);
@@ -599,7 +599,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 }
 
 
-mxArray* msh_FetchVariable(SharedVariableHeader_t* shm_hdr)
+mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 {
 	mxArray* ret_var = NULL;
 	
@@ -612,19 +612,21 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shm_hdr)
 	const char_t** field_names;
 	const char_t* field_name;
 	
+	mxClassID shared_class_id = msh_GetClassId(shared_header);
+	
 	/* Structure case */
-	if(msh_GetClassId(shm_hdr) == mxSTRUCT_CLASS)
+	if(shared_class_id == mxSTRUCT_CLASS)
 	{
-		num_elems = msh_GetNumElems(shm_hdr);
-		num_fields = msh_GetNumFields(shm_hdr);
+		num_elems = msh_GetNumElems(shared_header);
+		num_fields = msh_GetNumFields(shared_header);
 		
 		field_names = mxMalloc(num_fields*sizeof(char_t*));
-		field_name = msh_GetFieldNames(shm_hdr);
+		field_name = msh_GetFieldNames(shared_header);
 		for(field_num = 0; field_num < num_fields; field_num++, msh_GetNextFieldName(&field_name))
 		{
 			field_names[field_num] = field_name;
 		}
-		ret_var = mxCreateStructArray(msh_GetNumDims(shm_hdr), msh_GetDimensions(shm_hdr), num_fields, field_names);
+		ret_var = mxCreateStructArray(msh_GetNumDims(shared_header), msh_GetDimensions(shared_header), num_fields, field_names);
 		mxFree((char**)field_names);
 		
 		/* Go through each element */
@@ -632,32 +634,32 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shm_hdr)
 		{
 			for(idx = 0; idx < num_elems; idx++, count++)
 			{
-				mxSetFieldByNumber(ret_var, idx, field_num, msh_FetchVariable(msh_GetChildHeader(shm_hdr, count)));
+				mxSetFieldByNumber(ret_var, idx, field_num, msh_FetchVariable(msh_GetChildHeader(shared_header, count)));
 			}
 		}
 	}
-	else if(msh_GetClassId(shm_hdr) == mxCELL_CLASS) /* Cell case */
+	else if(shared_class_id == mxCELL_CLASS) /* Cell case */
 	{
-		num_elems = msh_GetNumElems(shm_hdr);
+		num_elems = msh_GetNumElems(shared_header);
 		
-		ret_var = mxCreateCellArray(msh_GetNumDims(shm_hdr), msh_GetDimensions(shm_hdr));
+		ret_var = mxCreateCellArray(msh_GetNumDims(shared_header), msh_GetDimensions(shared_header));
 		
 		for(count = 0; count < num_elems; count++)
 		{
-			mxSetCell(ret_var, count, msh_FetchVariable(msh_GetChildHeader(shm_hdr, count)));
+			mxSetCell(ret_var, count, msh_FetchVariable(msh_GetChildHeader(shared_header, count)));
 		}
 	}
 	else /*base case*/
 	{
 		
-		if(msh_GetIsSparse(shm_hdr))
+		if(msh_GetIsSparse(shared_header))
 		{
 			
-			if(msh_GetClassId(shm_hdr) == mxDOUBLE_CLASS)
+			if(shared_class_id == mxDOUBLE_CLASS)
 			{
-				ret_var = mxCreateSparse(0, 0, 1, msh_GetComplexity(shm_hdr));
+				ret_var = mxCreateSparse(0, 0, 1, msh_GetComplexity(shared_header));
 			}
-			else if(msh_GetClassId(shm_hdr) == mxLOGICAL_CLASS)
+			else if(shared_class_id == mxLOGICAL_CLASS)
 			{
 				ret_var = mxCreateSparseLogicalMatrix(0, 0, 1);
 			}
@@ -668,35 +670,35 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shm_hdr)
 			
 			/* free the pointers relating to sparse */
 			mxFree(mxGetIr(ret_var));
-			mxSetIr(ret_var, msh_GetIr(shm_hdr));
+			mxSetIr(ret_var, msh_GetIr(shared_header));
 			
 			mxFree(mxGetJc(ret_var));
-			mxSetJc(ret_var, msh_GetJc(shm_hdr));
+			mxSetJc(ret_var, msh_GetJc(shared_header));
 			
 			/* set the new data */
 			mxFree(mxGetData(ret_var));
-			mxSetData(ret_var, msh_GetData(shm_hdr));
-			if(msh_GetIsComplex(shm_hdr))
+			mxSetData(ret_var, msh_GetData(shared_header));
+			if(msh_GetIsComplex(shared_header))
 			{
 				mxFree(mxGetImagData(ret_var));
-				mxSetImagData(ret_var, msh_GetImagData(shm_hdr));
+				mxSetImagData(ret_var, msh_GetImagData(shared_header));
 			}
 			
-			mxSetNzmax(ret_var, msh_GetNzmax(shm_hdr));
+			mxSetNzmax(ret_var, msh_GetNzmax(shared_header));
 			
 		}
 		else
 		{
 			
-			if(msh_GetIsNumeric(shm_hdr))
+			if(msh_GetIsNumeric(shared_header))
 			{
-				ret_var = mxCreateNumericArray(0, NULL, msh_GetClassId(shm_hdr), msh_GetComplexity(shm_hdr));
+				ret_var = mxCreateNumericArray(0, NULL, shared_class_id, msh_GetComplexity(shared_header));
 			}
-			else if(msh_GetClassId(shm_hdr) == mxLOGICAL_CLASS)
+			else if(shared_class_id == mxLOGICAL_CLASS)
 			{
 				ret_var = mxCreateLogicalArray(0, NULL);
 			}
-			else if(msh_GetClassId(shm_hdr) == mxCHAR_CLASS)
+			else if(shared_class_id == mxCHAR_CLASS)
 			{
 				ret_var = mxCreateCharArray(0, NULL);
 			}
@@ -706,21 +708,21 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shm_hdr)
 			}
 			
 			/* there is no data if it is empty */
-			if(!msh_GetIsEmpty(shm_hdr))
+			if(!msh_GetIsEmpty(shared_header))
 			{
 				mxFree(mxGetData(ret_var));
-				mxSetData(ret_var, msh_GetData(shm_hdr));
-				if(msh_GetIsComplex(shm_hdr))
+				mxSetData(ret_var, msh_GetData(shared_header));
+				if(msh_GetIsComplex(shared_header))
 				{
 					mxFree(mxGetImagData(ret_var));
-					mxSetImagData(ret_var, msh_GetImagData(shm_hdr));
+					mxSetImagData(ret_var, msh_GetImagData(shared_header));
 				}
 			}
 			
 		}
 		
 		
-		mxSetDimensions(ret_var, msh_GetDimensions(shm_hdr), msh_GetNumDims(shm_hdr));
+		mxSetDimensions(ret_var, msh_GetDimensions(shared_header), msh_GetNumDims(shared_header));
 		
 	}
 	
@@ -729,18 +731,20 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shm_hdr)
 }
 
 
-void msh_OverwriteData(SharedVariableHeader_t* shm_hdr, const mxArray* in_var, mxArray* rewrite_var)
+void msh_OverwriteData(SharedVariableHeader_t* shared_header, const mxArray* in_var)
 {
 	size_t idx, count, num_elems;
 	
 	/* for structures */
 	int field_num, num_fields;                /* current field */
 	
+	mxClassID shared_class_id = msh_GetClassId(shared_header);
+	
 	/* Structure case */
-	if(msh_GetClassId(shm_hdr) == mxSTRUCT_CLASS)
+	if(shared_class_id == mxSTRUCT_CLASS)
 	{
-		num_elems = msh_GetNumElems(shm_hdr);
-		num_fields = msh_GetNumFields(shm_hdr);
+		num_elems = msh_GetNumElems(shared_header);
+		num_fields = msh_GetNumFields(shared_header);
 		
 		/* Go through each element */
 		for(field_num = 0, count = 0; field_num < num_fields; field_num++)     /* each field */
@@ -748,50 +752,50 @@ void msh_OverwriteData(SharedVariableHeader_t* shm_hdr, const mxArray* in_var, m
 			for(idx = 0; idx < num_elems; idx++, count++)
 			{
 				/* And fill it */
-				msh_OverwriteData(msh_GetChildHeader(shm_hdr, count), mxGetFieldByNumber(in_var, idx, field_num), mxGetFieldByNumber(rewrite_var, idx, field_num));
+				msh_OverwriteData(msh_GetChildHeader(shared_header, count), mxGetFieldByNumber(in_var, idx, field_num));
 			}
 		}
 	}
-	else if(msh_GetClassId(shm_hdr) == mxCELL_CLASS) /* Cell case */
+	else if(shared_class_id == mxCELL_CLASS) /* Cell case */
 	{
-		num_elems = msh_GetNumElems(shm_hdr);
+		num_elems = msh_GetNumElems(shared_header);
 		
 		for(count = 0; count < num_elems; count++)
 		{
 			/* And fill it */
-			msh_OverwriteData(msh_GetChildHeader(shm_hdr, count), mxGetCell(in_var, count), mxGetCell(rewrite_var, count));
+			msh_OverwriteData(msh_GetChildHeader(shared_header, count), mxGetCell(in_var, count));
 		}
 	}
 	else     /*base case*/
 	{
 		
 		/* if sparse get a list of the elements */
-		if(msh_GetIsSparse(shm_hdr))
+		if(msh_GetIsSparse(shared_header))
 		{
-			memcpy(msh_GetIr(shm_hdr), mxGetIr(in_var), msh_GetNzmax(shm_hdr)*sizeof(mwIndex));
-			memcpy(msh_GetJc(shm_hdr), mxGetJc(in_var), (msh_GetDimensions(shm_hdr)[1] + 1)*sizeof(mwIndex));
+			memcpy(msh_GetIr(shared_header), mxGetIr(in_var), msh_GetNzmax(shared_header)*sizeof(mwIndex));
+			memcpy(msh_GetJc(shared_header), mxGetJc(in_var), (msh_GetDimensions(shared_header)[1] + 1)*sizeof(mwIndex));
 			
 			/* rewrite real data */
-			memcpy(msh_GetData(shm_hdr), mxGetData(in_var), msh_GetNzmax(shm_hdr)*msh_GetElemSize(shm_hdr));
+			memcpy(msh_GetData(shared_header), mxGetData(in_var), msh_GetNzmax(shared_header)*msh_GetElemSize(shared_header));
 			
 			/* if complex get a pointer to the complex data */
-			if(msh_GetIsComplex(shm_hdr))
+			if(msh_GetIsComplex(shared_header))
 			{
-				memcpy(msh_GetImagData(shm_hdr), mxGetImagData(in_var), msh_GetNzmax(shm_hdr)*msh_GetElemSize(shm_hdr));
+				memcpy(msh_GetImagData(shared_header), mxGetImagData(in_var), msh_GetNzmax(shared_header)*msh_GetElemSize(shared_header));
 			}
 		}
-		else if(!msh_GetIsEmpty(shm_hdr))
+		else if(!msh_GetIsEmpty(shared_header))
 		{
 			
-			num_elems = msh_GetNumElems(shm_hdr);
+			num_elems = msh_GetNumElems(shared_header);
 			
 			/* rewrite real data */
-			memcpy(msh_GetData(shm_hdr), mxGetData(in_var), num_elems*msh_GetElemSize(shm_hdr));
+			memcpy(msh_GetData(shared_header), mxGetData(in_var), num_elems*msh_GetElemSize(shared_header));
 			
 			/* if complex get a pointer to the complex data */
-			if(msh_GetIsComplex(shm_hdr))
+			if(msh_GetIsComplex(shared_header))
 			{
-				memcpy(msh_GetImagData(shm_hdr), mxGetImagData(in_var), num_elems*msh_GetElemSize(shm_hdr));
+				memcpy(msh_GetImagData(shared_header), mxGetImagData(in_var), num_elems*msh_GetElemSize(shared_header));
 			}
 		}
 		
@@ -800,7 +804,7 @@ void msh_OverwriteData(SharedVariableHeader_t* shm_hdr, const mxArray* in_var, m
 }
 
 
-bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* comp_var)
+bool_t msh_CompareVariableSize(SharedVariableHeader_t* shared_header, const mxArray* comp_var)
 {
 	
 	/* for working with shared memory ... */
@@ -811,28 +815,30 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* c
 	
 	const char_t* field_name;
 	
+	mxClassID shared_class_id = msh_GetClassId(shared_header);
+	
 	/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
-	if(mxGetClassID(comp_var) != msh_GetClassId(shm_hdr) ||
-	   mxGetNumberOfDimensions(comp_var) != msh_GetNumDims(shm_hdr) ||
-	   memcmp(mxGetDimensions(comp_var), msh_GetDimensions(shm_hdr), msh_GetNumDims(shm_hdr) * sizeof(mwSize)) != 0)
+	if(mxGetClassID(comp_var) != shared_class_id ||
+	   mxGetNumberOfDimensions(comp_var) != msh_GetNumDims(shared_header) ||
+	   memcmp(mxGetDimensions(comp_var), msh_GetDimensions(shared_header), msh_GetNumDims(shared_header) * sizeof(mwSize)) != 0)
 	{
 		return FALSE;
 	}
 	
 	/* Structure case */
-	if(msh_GetClassId(shm_hdr) == mxSTRUCT_CLASS)
+	if(shared_class_id == mxSTRUCT_CLASS)
 	{
 		
-		num_elems = msh_GetNumElems(shm_hdr);
-		num_fields = msh_GetNumFields(shm_hdr);
+		num_elems = msh_GetNumElems(shared_header);
+		num_fields = msh_GetNumFields(shared_header);
 		
-		if(msh_GetNumFields(shm_hdr) != mxGetNumberOfFields(comp_var) || num_elems != mxGetNumberOfElements(comp_var))
+		if(msh_GetNumFields(shared_header) != mxGetNumberOfFields(comp_var) || num_elems != mxGetNumberOfElements(comp_var))
 		{
 			return FALSE;
 		}
 		
 		/* Go through each element */
-		field_name = msh_GetFieldNames(shm_hdr);
+		field_name = msh_GetFieldNames(shared_header);
 		for(field_num = 0, count = 0; field_num < num_fields; field_num++)     /* each field */
 		{
 			
@@ -843,7 +849,7 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* c
 			
 			for(idx = 0; idx < num_elems; idx++, count++)
 			{
-				if(!msh_CompareVariableSize(msh_GetChildHeader(shm_hdr, count), mxGetFieldByNumber(comp_var, idx, field_num)))
+				if(!msh_CompareVariableSize(msh_GetChildHeader(shared_header, count), mxGetFieldByNumber(comp_var, idx, field_num)))
 				{
 					return FALSE;
 				}
@@ -854,9 +860,9 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* c
 		}
 		
 	}
-	else if(msh_GetClassId(shm_hdr) == mxCELL_CLASS) /* Cell case */
+	else if(shared_class_id == mxCELL_CLASS) /* Cell case */
 	{
-		num_elems = msh_GetNumElems(shm_hdr);
+		num_elems = msh_GetNumElems(shared_header);
 		
 		if(num_elems != mxGetNumberOfElements(comp_var))
 		{
@@ -865,7 +871,7 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* c
 		
 		for(count = 0; count < num_elems; count++)
 		{
-			if(!msh_CompareVariableSize(msh_GetChildHeader(shm_hdr, count), mxGetCell(comp_var, count)))
+			if(!msh_CompareVariableSize(msh_GetChildHeader(shared_header, count), mxGetCell(comp_var, count)))
 			{
 				return FALSE;
 			}
@@ -874,21 +880,21 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shm_hdr, const mxArray* c
 	else if(mxIsNumeric(comp_var) || mxGetClassID(comp_var) == mxLOGICAL_CLASS || mxGetClassID(comp_var) == mxCHAR_CLASS)      /*base case*/
 	{
 		
-		if(msh_GetIsComplex(shm_hdr) != mxIsComplex(comp_var))
+		if(msh_GetIsComplex(shared_header) != mxIsComplex(comp_var))
 		{
 			return FALSE;
 		}
 		
-		if(msh_GetIsSparse(shm_hdr))
+		if(msh_GetIsSparse(shared_header))
 		{
-			if(msh_GetNzmax(shm_hdr) != mxGetNzmax(comp_var) || msh_GetDimensions(shm_hdr)[1] != mxGetN(comp_var) || !mxIsSparse(comp_var))
+			if(msh_GetNzmax(shared_header) != mxGetNzmax(comp_var) || msh_GetDimensions(shared_header)[1] != mxGetN(comp_var) || !mxIsSparse(comp_var))
 			{
 				return FALSE;
 			}
 		}
 		else
 		{
-			if(msh_GetNumElems(shm_hdr) != mxGetNumberOfElements(comp_var) || mxIsSparse(comp_var))
+			if(msh_GetNumElems(shared_header) != mxGetNumberOfElements(comp_var) || mxIsSparse(comp_var))
 			{
 				return FALSE;
 			}

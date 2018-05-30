@@ -22,7 +22,7 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node);
  * @note Interacts with shared memory but does not modify the shared linked list.
  * @param var_node The variable node containing the variable to be destroyed.
  */
-void msh_DestroyVariable(VariableNode_t* var_node);
+bool_t msh_DestroyVariable(VariableNode_t* var_node);
 
 
 /**
