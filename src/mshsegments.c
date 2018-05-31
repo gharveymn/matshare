@@ -39,11 +39,6 @@ static void msh_InitializeSegmentInfo(SegmentInfo_t* seg_info);
 
 /** public function definitions **/
 
-SegmentMetadata_t* msh_GetSegmentMetadata(SegmentNode_t* seg_node)
-{
-	return seg_node->seg_info.metadata;
-}
-
 SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
 {
 	/* The raw pointer is only mapped if it is actually needed.
@@ -98,24 +93,30 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 	if(seg_node->seg_info.metadata != NULL)
 	{
 		/* lockfree */
+#ifdef MSH_WIN
 		if(msh_AtomicDecrement(&msh_GetSegmentMetadata(seg_node)->procs_tracking) == 0)
 		{
 			/* this is nilpotent, so if it's already been removed it's ok */
 			msh_RemoveSegmentFromSharedList(seg_node);
-			
-#ifdef MSH_UNIX
-			/* check again since the segment may have been tracked before the removal (this is fine
-			 * but we want to block from reusing the same name until all segments are gone) */
-			if(msh_GetSegmentMetadata(seg_node)->procs_tracking == 0)
-			{
-				msh_WriteSegmentName(segment_name, seg_node->seg_info.seg_num);
-				if(shm_unlink(segment_name) != 0)
-				{
-					ReadMexErrorWithCode(__FILE__, __LINE__, errno, "UnlinkError", "There was an error unlinking the segment");
-				}
-			}
-#endif
 		}
+#else
+
+		if(msh_GetCounterCount(&msh_GetSegmentMetadata(seg_node)->procs_tracking) == 1)
+		{
+			/* this is nilpotent, so if it's already been removed it's ok */
+			msh_RemoveSegmentFromSharedList(seg_node);
+		}
+
+		if(msh_DecrementCounter(&msh_GetSegmentMetadata(seg_node)->procs_tracking, TRUE))
+		{
+			msh_WriteSegmentName(segment_name, seg_node->seg_info.seg_num);
+			if(shm_unlink(segment_name) != 0)
+			{
+				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "UnlinkError", "There was an error unlinking the segment");
+			}
+			msh_SetCounterPost(&msh_GetSegmentMetadata(seg_node)->procs_tracking, TRUE);
+		}
+#endif
 		
 		msh_UnmapMemory(seg_node->seg_info.metadata, sizeof(SegmentMetadata_t));
 		seg_node->seg_info.metadata = NULL;
@@ -200,7 +201,7 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	
 	msh_AcquireProcessLock();
 	
-	/* double check volatile condition */
+	/* double check volatile flag */
 	if(segment_metadata->is_invalid == TRUE)
 	{
 		msh_ReleaseProcessLock();
@@ -366,7 +367,7 @@ void msh_UpdateLatestSegment(SegmentList_t* seg_list)
 	{
 		msh_AcquireProcessLock();
 		
-		/* double check volatile condition */
+		/* double check volatile flag */
 		if(g_shared_info->last_seg_num != MSH_INVALID_SEG_NUM)
 		{
 			if((latest_seg_node = msh_FindSegmentNode(&seg_list->seg_table, g_shared_info->last_seg_num)) == NULL)
@@ -583,7 +584,11 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_s
 	seg_info_cache->metadata->procs_using = 0;
 	
 	/* number of processes with a handle on this segment */
-	seg_info_cache->metadata->procs_tracking = 1;
+#ifdef MSH_WIN
+	msh_AtomicIncrement(&seg_info_cache->metadata->procs_tracking);
+#else
+	msh_IncrementCounter(&seg_info_cache->metadata->procs_tracking);
+#endif
 	
 	/* indicates if the segment should be deleted by all processes */
 	seg_info_cache->metadata->is_invalid = FALSE;
@@ -611,7 +616,26 @@ static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache, msh_segmentnumb
 	seg_info_cache->metadata = msh_MapMemory(seg_info_cache->handle, sizeof(SegmentMetadata_t));
 	
 	/* tell everyone else that another process is tracking this */
+#ifdef MSH_WIN
 	msh_AtomicIncrement(&seg_info_cache->metadata->procs_tracking);
+#else
+	msh_IncrementCounter(&seg_info_cache->metadata->procs_tracking);
+	
+	/* check if the segment is being unlinked */
+	if(msh_GetCounterFlag(&seg_info_cache->metadata->procs_tracking))
+	{
+		while(!msh_GetCounterPost(&seg_info_cache->metadata->procs_tracking));
+		
+		msh_UnmapMemory(seg_info_cache->metadata, sizeof(SegmentMetadata_t));
+		seg_info_cache->metadata = NULL;
+		
+		msh_CloseSharedMemory(seg_info_cache->handle);
+		seg_info_cache->handle = MSH_INVALID_HANDLE;
+		
+		msh_OpenSegmentWorker(seg_info_cache, seg_num);
+		
+	}
+#endif
 	
 	/* get the segment size */
 	seg_info_cache->total_segment_size = msh_FindSegmentSize(seg_info_cache->metadata->data_size);

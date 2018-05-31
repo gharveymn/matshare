@@ -13,8 +13,7 @@
  *       shared memory indicate such in their documentation.
  */
  
-
-SegmentMetadata_t* msh_GetSegmentMetadata(SegmentNode_t* seg_node);
+#define msh_GetSegmentMetadata(seg_node) ((seg_node)->seg_info.metadata)
 
 SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node);
 

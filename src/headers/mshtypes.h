@@ -19,6 +19,17 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 #define msh_SHARETYPE_COPY 0
 #define msh_SHARETYPE_OVERWRITE 1
 
+typedef volatile union
+{
+	long span;
+	struct values_tag
+	{
+		unsigned long count : 30;
+		unsigned long flag : 1;
+		unsigned long post : 1;
+	} values;
+} LockFreeCounter_t;
+
 typedef struct SegmentMetadata_t
 {
 	/* use these to link together the memory segments */
@@ -27,7 +38,12 @@ typedef struct SegmentMetadata_t
 	volatile msh_segmentnumber_t prev_seg_num;
 	volatile msh_segmentnumber_t next_seg_num;
 	volatile long procs_using;             /* number of processes using this variable */
-	volatile long procs_tracking;          /* number of processes tracking this memory segment */
+#ifdef MSH_WIN
+	volatile long procs_tracking;
+#else
+	LockFreeCounter_t procs_tracking;
+#endif
+
 } SegmentMetadata_t;
 
 typedef struct SegmentInfo_t
@@ -86,27 +102,9 @@ struct SegmentList_t
 	uint32_T num_segs;
 };
 
-#ifdef MSH_UNIX
-typedef volatile union SharedInfoCheck_t
-{
-	long span;			/* ensures the union has the size of a long so we can do atomic swaps */
-	struct values_tag
-	{
-		uint16_T num_procs;
-		uint16_T will_unlink;
-	} values;
-} SharedInfoCheck_t;
-#endif
-
-typedef volatile union LockCheck_t
-{
-	long span;			/* ensures the union has the size of a long so we can do atomic swaps */
-	struct values_tag
-	{
-		uint16_T virtual_lock_count;
-		uint16_T is_thread_safe;
-	} values;
-} LockCheck_t;
+/**
+ * TODO: funcs: set to true/false if count == 0, increment count, decrement count
+ */
 
 /* structure of shared info about the shared segments */
 typedef volatile struct SharedInfo_t
@@ -116,7 +114,7 @@ typedef volatile struct SharedInfo_t
 	{
 		/* these are aligned for lockless assignment */
 		msh_sharetype_t sharetype;
-		LockCheck_t thread_safety;
+		LockFreeCounter_t lock_counter;
 		alignedbool_t will_gc;
 #ifdef MSH_UNIX
 		mode_t security;
@@ -129,7 +127,7 @@ typedef volatile struct SharedInfo_t
 #ifdef MSH_WIN
 	long num_procs;
 #else
-	SharedInfoCheck_t shared_info_check;
+	LockFreeCounter_t num_procs;
 #endif
 	pid_t update_pid;
 } SharedInfo_t;
@@ -156,7 +154,6 @@ typedef struct GlobalInfo_t
 	handle_t process_lock;
 #endif
 	
-	bool_t has_detached;
 	bool_t is_mex_locked;
 	bool_t is_initialized;
 	

@@ -1,7 +1,7 @@
 #ifndef MATSHARE_MATSHAREUTILS_H
 #define MATSHARE_MATSHAREUTILS_H
 
-#include "mshbasictypes.h"
+#include "mshtypes.h"
 
 typedef enum
 {
@@ -28,6 +28,15 @@ void msh_ReleaseProcessLock(void);
 msh_directive_t msh_ParseDirective(const mxArray* in);
 
 void msh_UpdateAll(void);
+
+unsigned long msh_GetCounterCount(LockFreeCounter_t* counter);
+unsigned long msh_GetCounterFlag(LockFreeCounter_t* counter);
+unsigned long msh_GetCounterPost(LockFreeCounter_t* counter);
+LockFreeCounter_t msh_IncrementCounter(LockFreeCounter_t* counter);
+bool_t msh_DecrementCounter(LockFreeCounter_t* counter, bool_t set_flag);
+void msh_SetCounterFlag(LockFreeCounter_t* counter, unsigned long val);
+void msh_SetCounterPost(LockFreeCounter_t* counter, unsigned long val);
+void msh_WaitSetCounter(LockFreeCounter_t* counter, unsigned long val);
 
 long msh_AtomicIncrement(volatile long* val_ptr);
 long msh_AtomicDecrement(volatile long* val_ptr);

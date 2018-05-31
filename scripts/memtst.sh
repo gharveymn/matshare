@@ -1,1 +1,1 @@
-matlab -nojvm -nosplash -r "cd /home/gene/workspace/c/matshare/;ap;testrandvars;exit;" -D"valgrind --error-limit=no --num-callers=100 --tool=memcheck --leak-check=full --log-file=/home/gene/workspace/c/matshare/res/mem.log --show-leak-kinds=all"
+matlab -nosplash -r "cd ~/workspace/c/matshare/;ap;testsuite;exit;" -D"valgrind --trace-children=yes --error-limit=no --num-callers=100 --tool=memcheck --leak-check=full --log-file=$HOME/matshare_memcheck.log --show-leak-kinds=all"

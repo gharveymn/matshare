@@ -2,15 +2,10 @@
 #include "headers/mshvariables.h"
 #include "headers/mshsegments.h"
 #include "headers/matlabutils.h"
-
-static LockCheck_t new_lock_check, old_lock_check;
+#include "headers/mshtypes.h"
 
 void msh_OnExit(void)
 {
-
-#ifdef MSH_UNIX
-	SharedInfoCheck_t new_check, old_check;
-#endif
 	
 	g_local_info.is_initialized = FALSE;
 	
@@ -21,30 +16,17 @@ void msh_OnExit(void)
 	{
 	
 #ifdef MSH_WIN
-		if(!g_local_info.has_detached)
-		{
-			msh_AtomicDecrement(&g_shared_info->num_procs);
-			g_local_info.has_detached = TRUE;
-		}
+		msh_AtomicDecrement(&g_shared_info->num_procs);
 #else
-		if(!g_local_info.has_detached)
-		{
-			do
-			{
-				old_check.span = g_shared_info->shared_info_check.span;
-				new_check.span = old_check.span;
-				new_check.values.num_procs -= 1;
-				new_check.values.will_unlink = (uint16_T)(new_check.values.num_procs == 0);
-			} while(msh_AtomicCompareSwap(&g_shared_info->shared_info_check.span, old_check.span, new_check.span) != old_check.span);
-			g_local_info.has_detached = TRUE;
-		}
 		
-		if(new_check.values.will_unlink)
+		/* this will set the unlink flag to TRUE if it hits zero atomically, and only return true if this process did the operation */
+		if(msh_DecrementCounter(&g_shared_info->num_procs, TRUE))
 		{
 			if(shm_unlink(MSH_SHARED_INFO_SEGMENT_NAME) != 0)
 			{
-				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "UnlinkError", "There was an error unlinking the shared info segment.");
+				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "UnlinkError", "There was an error unlinking the shared info segment. This is a critical error, please restart.");
 			}
+			msh_SetCounterPost(&g_shared_info->num_procs, TRUE);
 		}
 #endif
 		msh_UnlockMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
@@ -108,14 +90,9 @@ void msh_AcquireProcessLock(void)
 	DWORD status;
 #endif
 	
-	do
-	{
-		old_lock_check.span = g_shared_info->user_defined.thread_safety.span;
-		new_lock_check.span = old_lock_check.span;
-		new_lock_check.values.virtual_lock_count += 1;
-	} while(msh_AtomicCompareSwap(&g_shared_info->user_defined.thread_safety.span, old_lock_check.span, new_lock_check.span) != old_lock_check.span);
+	msh_IncrementCounter(&g_shared_info->user_defined.lock_counter);
 	
-	if(g_shared_info->user_defined.thread_safety.values.is_thread_safe)
+	if(msh_GetCounterFlag(&g_shared_info->user_defined.lock_counter))
 	{
 		if(g_local_info.lock_level == 0)
 		{
@@ -151,12 +128,7 @@ void msh_ReleaseProcessLock(void)
 {
 #if MSH_THREAD_SAFETY==TRUE
 	
-	do
-	{
-		old_lock_check.span = g_shared_info->user_defined.thread_safety.span;
-		new_lock_check.span = old_lock_check.span;
-		new_lock_check.values.virtual_lock_count -= 1;
-	} while(msh_AtomicCompareSwap(&g_shared_info->user_defined.thread_safety.span, old_lock_check.span, new_lock_check.span) != old_lock_check.span);
+	msh_DecrementCounter(&g_shared_info->user_defined.lock_counter, FALSE);
 	
 	if(g_local_info.lock_level > 0)
 	{
@@ -265,6 +237,89 @@ pid_t msh_GetPid(void)
 #else
 	return getpid();
 #endif
+}
+
+/* returns the state of the flag after the operation */
+LockFreeCounter_t msh_IncrementCounter(LockFreeCounter_t* counter)
+{
+	LockFreeCounter_t old_counter, new_counter;
+	do
+	{
+		old_counter.span = counter->span;
+		new_counter.span = old_counter.span;
+		new_counter.values.count += 1;
+	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+	
+	return new_counter;
+}
+
+/* returns whether the decrement changed the flag to TRUE */
+bool_t msh_DecrementCounter(LockFreeCounter_t* counter, bool_t set_flag)
+{
+	LockFreeCounter_t old_counter, new_counter;
+	do
+	{
+		old_counter.span = counter->span;
+		new_counter.span = old_counter.span;
+		new_counter.values.count -= 1;
+		if(set_flag && old_counter.values.flag == FALSE)
+		{
+			new_counter.values.flag = (unsigned long)(new_counter.values.count == 0);
+		}
+	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+	
+	return (old_counter.values.flag != new_counter.values.flag);
+}
+
+
+void msh_SetCounterFlag(LockFreeCounter_t* counter, unsigned long val)
+{
+	LockFreeCounter_t old_counter, new_counter;
+	do
+	{
+		old_counter.span = counter->span;
+		new_counter.span = old_counter.span;
+		new_counter.values.flag = val;
+	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+}
+
+
+void msh_SetCounterPost(LockFreeCounter_t* counter, unsigned long val)
+{
+	LockFreeCounter_t old_counter, new_counter;
+	do
+	{
+		old_counter.span = counter->span;
+		new_counter.span = old_counter.span;
+		new_counter.values.post = val;
+	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+}
+
+unsigned long msh_GetCounterCount(LockFreeCounter_t* counter)
+{
+	return counter->values.count;
+}
+
+unsigned long msh_GetCounterFlag(LockFreeCounter_t* counter)
+{
+	return counter->values.flag;
+}
+
+unsigned long msh_GetCounterPost(LockFreeCounter_t* counter)
+{
+	return counter->values.post;
+}
+
+void msh_WaitSetCounter(LockFreeCounter_t* counter, unsigned long val)
+{
+	LockFreeCounter_t old_counter, new_counter;
+	old_counter.values.count = 0;
+	new_counter.values.count = 0;
+	new_counter.values.flag = val;
+	do
+	{
+		old_counter.values.flag = counter->values.flag;
+	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 }
 
 

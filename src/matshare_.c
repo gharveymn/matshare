@@ -5,20 +5,20 @@
 #include <sys/stat.h>
 #endif
 
-GlobalInfo_t g_local_info =
-						{
+GlobalInfo_t g_local_info = {
 							0,                      /* rev_num */
 							0,                      /* num_registered_objs */
 #if MSH_THREAD_SAFETY==TRUE
 							0,                      /* lock_level */
 #endif
 							0,                      /* this_pid */
-							NULL,                   /* shared_info_wrapper.ptr */
-							MSH_INVALID_HANDLE,     /* shared_info_wrapper.handle */
+							{
+								NULL,                    /* ptr */
+								MSH_INVALID_HANDLE       /* handle */
+							},     					/* shared_info_wrapper */
 #ifdef MSH_WIN
 							MSH_INVALID_HANDLE,     /* process_lock */
 #endif
-							0,                      /* has_detached */
 							0,                      /* is_mex_locked */
 							0                       /* is_initialized */
 						};
@@ -352,7 +352,6 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 
 void msh_Param(int num_params, const mxArray** in)
 {
-	LockCheck_t new_lock_check = {0}, compare_lock_check = {0};
 	int i, j, ps_len, vs_len;
 	char param_str[MSH_MAX_NAME_LEN] = {0}, val_str[MSH_MAX_NAME_LEN] = {0}, param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
 	const mxArray* param, * val;
@@ -369,7 +368,7 @@ void msh_Param(int num_params, const mxArray** in)
 				g_shared_info->user_defined.will_gc? "true" : "false");
 #else
 		mexPrintf(MSH_PARAM_INFO,
-				g_shared_info->user_defined.thread_safety.values.is_thread_safe? "true" : "false",
+				msh_GetCounterFlag(&g_shared_info->user_defined.lock_counter)? "true" : "false",
 				g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY? "true" : "false",
 				g_shared_info->user_defined.will_gc? "true" : "false",
 				g_shared_info->user_defined.security);
@@ -422,23 +421,11 @@ void msh_Param(int num_params, const mxArray** in)
 			
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
-				compare_lock_check.values.virtual_lock_count = 0;
-				new_lock_check.values.virtual_lock_count = 0;
-				new_lock_check.values.is_thread_safe = TRUE;
-				do
-				{
-					compare_lock_check.values.is_thread_safe = g_shared_info->user_defined.thread_safety.values.is_thread_safe;
-				} while(msh_AtomicCompareSwap(&g_shared_info->user_defined.thread_safety.span, compare_lock_check.span, new_lock_check.span) != compare_lock_check.span);
+				msh_WaitSetCounter(&g_shared_info->user_defined.lock_counter, TRUE);
 			}
 			if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
-				compare_lock_check.values.virtual_lock_count = 0;
-				new_lock_check.values.virtual_lock_count = 0;
-				new_lock_check.values.is_thread_safe = FALSE;
-				do
-				{
-					compare_lock_check.values.is_thread_safe = g_shared_info->user_defined.thread_safety.values.is_thread_safe;
-				} while(msh_AtomicCompareSwap(&g_shared_info->user_defined.thread_safety.span, compare_lock_check.span, new_lock_check.span) != compare_lock_check.span);
+				msh_WaitSetCounter(&g_shared_info->user_defined.lock_counter, FALSE);
 			}
 			else
 			{

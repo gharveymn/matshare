@@ -55,7 +55,7 @@ static void msh_InitializeSharedInfo(void)
 {
 
 #ifdef MSH_UNIX
-	SharedInfoCheck_t new_check = {0}, old_check = {0};
+	LockFreeCounter_t ret_num_procs;
 #endif
 	
 	if(g_local_info.shared_info_wrapper.handle == MSH_INVALID_HANDLE)
@@ -84,8 +84,6 @@ static void msh_InitializeSharedInfo(void)
 	if(g_local_info.shared_info_wrapper.ptr == NULL)
 	{
 		
-		g_local_info.has_detached = FALSE;
-		
 		g_local_info.shared_info_wrapper.ptr = msh_MapMemory(g_local_info.shared_info_wrapper.handle, sizeof(SharedInfo_t));
 
 #ifdef MSH_WIN
@@ -99,17 +97,17 @@ static void msh_InitializeSharedInfo(void)
 			g_shared_info->is_initialized = TRUE;
 		}
 #else
-		do
-		{
-			old_check.span = g_shared_info->shared_info_check.span;
-			new_check.span = old_check.span;
-			new_check.values.num_procs += 1;
-		} while(msh_AtomicCompareSwap(&g_shared_info->shared_info_check.span, old_check.span, new_check.span) != old_check.span);
+		ret_num_procs = msh_IncrementCounter(&g_shared_info->num_procs);
 		
-		if(new_check.values.will_unlink)
+		/* flag is set if the shared info segment is being unlinked */
+		if(msh_GetCounterFlag(&g_shared_info->num_procs))
 		{
+			
+			/* busy wait for the unlinking operation to complete */
+			while(!msh_GetCounterPost(&g_shared_info->num_procs));
+			
 			/* close whatever we just opened and get the new shared memory */
-			msh_UnmapMemory(g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
+			msh_UnmapMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
 			g_local_info.shared_info_wrapper.ptr = NULL;
 			
 			msh_CloseSharedMemory(g_local_info.shared_info_wrapper.handle);
@@ -120,13 +118,13 @@ static void msh_InitializeSharedInfo(void)
 			return;
 		}
 		
-		if(old_check.values.num_procs == 0)
+		if(ret_num_procs.values.count == 1)
 		{
 			g_shared_info->last_seg_num = MSH_INVALID_SEG_NUM;
 			g_shared_info->first_seg_num = MSH_INVALID_SEG_NUM;
 			g_shared_info->user_defined.security = MSH_DEFAULT_PERMISSIONS;                          /** default value **/
 			g_shared_info->user_defined.sharetype = MSH_SHARETYPE;                                   /** default value **/
-			g_shared_info->user_defined.thread_safety.values.is_thread_safe = MSH_THREAD_SAFETY;     /** default value **/
+			msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_THREAD_SAFETY);     /** default value **/
 			g_shared_info->user_defined.will_gc = TRUE;		                  				    /** default value **/
 			g_shared_info->is_initialized = TRUE;
 		}
