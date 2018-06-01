@@ -155,9 +155,17 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 				/* this is an in-place change */
 				/* do the rewrite after checking because the comparison is cheap */
 				msh_OverwriteData(msh_GetSegmentData(g_local_seg_list.last), in_var);
-				
+
+#ifdef MSH_UNIX
 				/* only need to update because we have overwritten an established segment */
-				msh_UpdateAll();
+				if(&g_local_seg_list.last->seg_info.raw_ptr != NULL)
+				{
+					if(msync(g_local_seg_list.last->seg_info.raw_ptr, g_local_seg_list.last->seg_info.total_segment_size, MS_SYNC | MS_INVALIDATE) != 0)
+					{
+						ReadMexErrorWithCode(__FILE__, __LINE__, errno, "MsyncMatlabcError", "There was an error with syncing a shared data segment.");
+					}
+				}
+#endif
 				
 				/* DON'T DO ANYTHING ELSE */
 				continue;
@@ -458,7 +466,6 @@ void msh_Param(int num_params, const mxArray** in)
 						ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ChmodError", "There was an error modifying permissions for the data segment.");
 					}
 				}
-				msh_UpdateAll();
 				msh_ReleaseProcessLock();
 			}
 #else

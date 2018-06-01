@@ -170,48 +170,6 @@ msh_directive_t msh_ParseDirective(const mxArray* in)
 }
 
 
-void msh_UpdateAll(void)
-{
-	/* SegmentNode_t* curr_seg_node; */
-#ifdef MSH_WIN
-	/* only flush the memory when there is more than one process
-	 * this appears to only write to pagefile.sys, but it's difficult to find information
-	if(FlushViewOfFile(g_shared_info, g_local_info.shm_info_seg.total_seg_sz) == 0)
-	{
-		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "FlushFileError", "Error flushing the update file.");
-	}
-	
-	for(curr_seg_node = g_local_seg_list.first; curr_seg_node != NULL; curr_seg_node = curr_seg_node->next)
-	{
-		if(FlushViewOfFile(curr_seg_node->seg_info.shared_memory_ptr, curr_seg_node->seg_info.total_seg_sz) == 0)
-		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "FlushFileError", "Error flushing the data file.");
-		}
-	}
-	*/
-#else
-	
-	SegmentNode_t* curr_seg_node;
-	
-	/* I _believe_ that this is unnecessary since I locked the segment to physical memory earlier, so there shouldn't be any caches right?
-	if(msync((void*)g_shared_info, g_local_info.shm_info_seg.total_seg_sz, MS_SYNC) != 0)
-	{
-		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "MsyncError", "There was an error with syncing the shared info segment.");
-	}
-	 */
-	
-	for(curr_seg_node = g_local_seg_list.first; curr_seg_node != NULL; curr_seg_node = curr_seg_node->next)
-	{
-		/* flushes any possible local caches to the shared memory */
-		if(msync(curr_seg_node->seg_info.raw_ptr, curr_seg_node->seg_info.total_segment_size, MS_SYNC | MS_INVALIDATE) != 0)
-		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "MsyncMatlabcError", "There was an error with syncing a shared data segment.");
-		}
-	}
-#endif
-}
-
-
 size_t PadToAlignData(size_t curr_sz)
 {
 	return curr_sz + (MXMALLOC_ALIGNMENT_SHIFT - ((curr_sz - 1) & MXMALLOC_ALIGNMENT_SHIFT));

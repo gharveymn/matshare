@@ -13,21 +13,21 @@ observerpid = workerpids{1};
 testparessential;
 
 % test parallel results
-%testparresultverify;
+testparresultverify;
 
 % parallel function calls
-%testparrandfunccalls;
+testparrandfunccalls;
 
-%mshparam('gc', 'on', 'sharetype', 'copy');
+mshparam('gc', 'on', 'sharetype', 'copy');
 
 % test essential variables
-%testparessential;
+testparessential;
 
 % test parallel results
-%testparresultverify;
+testparresultverify;
 
 % parallel function calls
-%testparrandfunccalls;
+testparrandfunccalls;
 
 fprintf('Test suite ran successfully.\n\n');
 
