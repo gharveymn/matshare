@@ -12,8 +12,13 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 #define MSH_SHARED_INFO_SEGMENT_NAME "/MSH_SHARED_INFO_SEGMENT"
 #define MSH_SEGMENT_NAME "/MSH_SEGMENT%0lx"
 
+#define MSH_CONFIG_FOLDER_NAME "matshare"
 #ifdef MSH_WIN
 #  define MSH_LOCK_NAME "/MSH_LOCK"
+#  define MSH_CONFIG_FILE_NAME "mshconfig"
+#else
+#  define HOME_CONFIG_FOLDER ".config"
+#  define MSH_CONFIG_FILE_NAME ".mshconfig"
 #endif
 
 #define msh_SHARETYPE_COPY 0
@@ -135,11 +140,7 @@ typedef struct GlobalInfo_t
 {
 	size_t rev_num;
 	size_t num_registered_objs;
-	
-#if MSH_THREAD_SAFETY==TRUE
 	uint32_T lock_level;
-#endif
-	
 	pid_t this_pid;
 	
 	struct shared_info_wrapper_tag

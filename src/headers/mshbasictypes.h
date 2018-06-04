@@ -12,29 +12,12 @@
 #ifndef MSH_WIN
 #  define MSH_WIN
 #endif
-#elif defined(DEBUG_UNIX)
+#elif defined(DEBUG_UNIX) || defined(DEBUG_UNIX_ON_WINDOWS)
 #  include <sys/mman.h>
 #  include <sys/stat.h>
-#ifndef MSH_UNIX
-#  define MSH_UNIX
-#endif
-#elif defined(DEBUG_UNIX_ON_WINDOWS)
-#define ftruncate ftruncate64
-#  include "../extlib/mman-win32/sys/mman.h"
-extern int shm_open(const char* name, int oflag, mode_t mode);
-extern int shm_unlink(const char* name);
-extern int lockf(int fildes, int function, off_t size);
-extern int fchmod(int fildes, mode_t mode);
-#  include <sys/stat.h>
-#define F_LOCK 1
-#define F_ULOCK 0
-#ifndef O_CLOEXEC
-#define O_CLOEXEC	02000000	/* set close_on_exec */
-#endif
-
-#ifndef MSH_UNIX
-#  define MSH_UNIX
-#endif
+#  ifndef MSH_UNIX
+#    define MSH_UNIX
+#  endif
 #elif defined(DEBUG_WINDOWS)
 #ifndef MSH_WIN
 #  define MSH_WIN

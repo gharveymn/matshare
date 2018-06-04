@@ -1,3 +1,4 @@
+#include <string.h>
 #include "headers/mshutils.h"
 #include "headers/mshvariables.h"
 #include "headers/mshsegments.h"
@@ -75,22 +76,17 @@ void msh_OnError(void)
 {
 	SetMexErrorCallback(NULL);
 
-#if MSH_THREAD_SAFETY==TRUE
 	/* set the process lock at a level where it can be released if needed */
 	while(g_local_info.lock_level > 0)
 	{
 		msh_ReleaseProcessLock();
 	}
-#endif
 
 }
 
 
 void msh_AcquireProcessLock(void)
 {
-
-#if MSH_THREAD_SAFETY==TRUE
-
 #ifdef MSH_WIN
 	DWORD status;
 #endif
@@ -127,15 +123,11 @@ void msh_AcquireProcessLock(void)
 		g_local_info.lock_level += 1;
 		
 	}
-#endif
-
 }
 
 
 void msh_ReleaseProcessLock(void)
 {
-#if MSH_THREAD_SAFETY==TRUE
-	
 	msh_DecrementCounter(&g_shared_info->user_defined.lock_counter, FALSE);
 	
 	if(g_local_info.lock_level > 0)
@@ -158,7 +150,6 @@ void msh_ReleaseProcessLock(void)
 		g_local_info.lock_level -= 1;
 		
 	}
-#endif
 
 }
 
@@ -198,33 +189,28 @@ void msh_NullFunction(void)
 
 void msh_WriteConfiguration(void)
 {
-	char_t* config_folder;
 	char_t* config_path;
 	
 	handle_t config_handle;
 	UserConfig_t local_config = g_shared_info->user_defined, saved_config;
 	local_config.lock_counter.values.count = 0;				/* reset the lock_counter so that it counter values don't roll over */
 	local_config.lock_counter.values.post = TRUE;
-
-#ifdef MSH_WIN
-	config_folder = getenv("LOCALAPPDATA");
-#else
-	config_folder = getenv("HOME");
-#endif
-
+	
+	config_path = msh_GetConfigurationPath();
 
 #ifdef MSH_WIN
 	DWORD bytes_wr;
 	
-	if((config_handle = CreateFile(MSH_CONFIG_FILE_NAME, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
+	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
 	{
-		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CreateFileError", "Error opening the config file.");
+		mxFree(config_path);
+		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "OpenFileError", "Error opening the config file.");
 	}
 	else
 	{
-		
 		if(ReadFile(config_handle, &saved_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 		{
+			mxFree(config_path);
 			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "ReadFileError", "Error reading from the config file.");
 		}
 		
@@ -232,31 +218,97 @@ void msh_WriteConfiguration(void)
 		{
 			if(WriteFile(config_handle, &local_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
+				mxFree(config_path);
 				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(CloseHandle(config_handle) == 0)
 		{
+			mxFree(config_path);
 			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #else
-	if((config_handle = open(MSH_CONFIG_FILE_NAME, O_RDWR | O_CREAT | O_CLOEXEC)))
+	if((config_handle = open(config_path, O_RDWR | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
+	{
+		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "OpenFileError", "Error opening the config file.");
+	}
+	else
+	{
+		if(read(config_handle, &saved_config, sizeof(UserConfig_t)) == -1)
+		{
+			mxFree(config_path);
+			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ReadFileError", "Error reading from the config file.");
+		}
+		
+		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
+		{
+			if(write(config_handle, &local_config, sizeof(UserConfig_t)) == -1)
+			{
+				mxFree(config_path);
+				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "WriteFileError", "Error writing to the config file.");
+			}
+		}
+		
+		if(close(config_handle) == -1)
+		{
+			mxFree(config_path);
+			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CloseHandleError", "Error closing the config file handle.");
+		}
+	}
 #endif
+	
+	mxFree(config_path);
 }
 
 
 char_t* msh_GetConfigurationPath(void)
 {
-	char_t* config_folder;
+	char_t* user_config_folder;
 	char_t* config_path;
 	
 #ifdef MSH_WIN
-	config_folder = getenv("LOCALAPPDATA");
+	user_config_folder = getenv("LOCALAPPDATA");
+	config_path = mxCalloc(strlen(user_config_folder) + 2 + strlen(MSH_CONFIG_FOLDER_NAME) + 2 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
+	sprintf(config_path, "%s\\%s", user_config_folder, MSH_CONFIG_FOLDER_NAME);
+	if(CreateDirectory(config_path, NULL) == 0)
+	{
+		if(GetLastError() != ERROR_ALREADY_EXISTS)
+		{
+			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CreateDirectoryError", "There was an error creating the directory for the matshare config file.");
+		}
+	}
+	
+	sprintf(config_path, "%s\\%s\\%s", user_config_folder, MSH_CONFIG_FOLDER_NAME, MSH_CONFIG_FILE_NAME);
+	
 #else
-	config_folder = getenv("HOME");
+	user_config_folder = getenv("HOME");
+	config_path = mxCalloc(strlen(user_config_folder) + 1 + strlen(HOME_CONFIG_FOLDER) + 1 + strlen(MSH_CONFIG_FOLDER_NAME) + 1 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
+	sprintf(config_path, "%s/%s", user_config_folder, HOME_CONFIG_FOLDER);
+	if(mkdir(config_path, S_IRUSR | S_IWUSR) == 0)
+	{
+		if(errno != EEXIST)
+		{
+			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CreateDirectoryError", "There was an error creating the user config directory.");
+		}
+	}
+	
+	sprintf(config_path, "%s/%s/%s", user_config_folder, HOME_CONFIG_FOLDER, MSH_CONFIG_FOLDER_NAME);
+	if(mkdir(config_path, S_IRUSR | S_IWUSR) == 0)
+	{
+		if(errno != EEXIST)
+		{
+			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CreateDirectoryError", "There was an error creating the directory for the matshare config file.");
+		}
+	}
+	
+	sprintf(config_path, "%s/%s/%s/%s", user_config_folder, HOME_CONFIG_FOLDER, MSH_CONFIG_FOLDER_NAME, MSH_CONFIG_FILE_NAME);
+	
 #endif
+	
+	return config_path;
+	
 }
 
 
@@ -278,12 +330,6 @@ LockFreeCounter_t msh_IncrementCounter(LockFreeCounter_t* counter)
 		new_counter.span = old_counter.span;
 		new_counter.values.count += 1;
 	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
-	
-	if(new_counter.values.flag == 0)
-	{
-		ReadMexError(__FILE__, __LINE__, "asdfError", "asdf");
-	}
-	
 	return new_counter;
 }
 
@@ -344,13 +390,17 @@ unsigned long msh_GetCounterPost(LockFreeCounter_t* counter)
 
 void msh_WaitSetCounter(LockFreeCounter_t* counter, unsigned long val)
 {
+	msh_SetCounterPost(counter, FALSE);
 	old_counter.values.count = 0;
+	old_counter.values.post = FALSE;
 	new_counter.values.count = 0;
 	new_counter.values.flag = val;
+	new_counter.values.post = TRUE;
 	do
 	{
 		old_counter.values.flag = counter->values.flag;
 	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+	/* this also sets post to TRUE */
 }
 
 

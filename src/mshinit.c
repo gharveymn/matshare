@@ -1,3 +1,4 @@
+#include <string.h>
 #include "headers/mshinit.h"
 #include "headers/matlabutils.h"
 #include "headers/mshutils.h"
@@ -126,10 +127,7 @@ static void msh_InitializeSharedInfo(void)
 		{
 			g_shared_info->last_seg_num = MSH_INVALID_SEG_NUM;
 			g_shared_info->first_seg_num = MSH_INVALID_SEG_NUM;
-			g_shared_info->user_defined.security = MSH_DEFAULT_PERMISSIONS;                          /** default value **/
-			g_shared_info->user_defined.sharetype = MSH_SHARETYPE;                                   /** default value **/
-			msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_THREAD_SAFETY);        /** default value **/
-			g_shared_info->user_defined.will_gc = TRUE;		                  				    /** default value **/
+			msh_InitializeConfiguration();
 			g_shared_info->is_initialized = TRUE;
 		}
 #endif
@@ -146,12 +144,16 @@ void msh_InitializeConfiguration(void)
 {
 	
 	handle_t config_handle;
+	char_t* config_path;
+	
+	config_path = msh_GetConfigurationPath();
 	
 #ifdef MSH_WIN
 	DWORD bytes_wr;
 	
-	if((config_handle = CreateFile(MSH_CONFIG_FILE_NAME, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
+	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
 	{
+		mxFree(config_path);
 		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CreateFileError", "Error opening the config file.");
 	}
 	else
@@ -160,30 +162,82 @@ void msh_InitializeConfiguration(void)
 		{
 			if(ReadFile(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
+				mxFree(config_path);
 				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "ReadFileError", "Error reading from the config file.");
 			}
 		}
 		else
 		{
 			/* this is a new file */
-			g_shared_info->user_defined.sharetype = MSH_SHARETYPE;                                   /** default value **/
-			msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_THREAD_SAFETY);       /** default value **/
-			msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);       			  /** counter is in post state **/
+			g_shared_info->user_defined.sharetype = MSH_SHARETYPE;                                 /** default value **/
+			msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_THREAD_SAFETY);      /** default value **/
+			msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);       		  /** counter is in post state **/
 			g_shared_info->user_defined.will_gc = TRUE;		                  				  /** default value **/
 			
 			if(WriteFile(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
+				mxFree(config_path);
 				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(CloseHandle(config_handle) == 0)
 		{
+			mxFree(config_path);
 			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #else
-
+	if((config_handle = open(config_path, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
+	{
+		if(errno != EEXIST)
+		{
+			mxFree(config_path);
+			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CreateFileError", "Error creating the config file.");
+		}
+		else
+		{
+			/* the config file is already created, open it instead */
+			if((config_handle = open(config_path, O_RDONLY | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
+			{
+				mxFree(config_path);
+				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "OpenFileError", "Error opening the config file.");
+			}
+			else
+			{
+				if(read(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t)) == -1)
+				{
+					mxFree(config_path);
+					ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ReadFileError", "Error reading from the config file.");
+				}
+			}
+		}
+	}
+	else
+	{
+		
+		/* this is a new file */
+		g_shared_info->user_defined.sharetype = MSH_SHARETYPE;                                 /** default value **/
+		g_shared_info->user_defined.security = MSH_DEFAULT_PERMISSIONS;                          /** default value **/
+		msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_THREAD_SAFETY);      /** default value **/
+		msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);       		  /** counter is in post state **/
+		g_shared_info->user_defined.will_gc = TRUE;		                  				  /** default value **/
+		
+		if(write(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t)) == -1)
+		{
+			mxFree(config_path);
+			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "WriteFileError", "Error writing to the config file.");
+		}
+	}
+	
+	if(close(config_handle) == -1)
+	{
+		mxFree(config_path);
+		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CloseHandleError", "Error closing the config file handle.");
+	}
+	
 #endif
 
+	mxFree(config_path);
+	
 }

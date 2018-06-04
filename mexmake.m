@@ -45,17 +45,8 @@ try
 	end
 	
 	if(ispc)
-		config_path = fullfile(getenv('LOCALAPPDATA'), 'matshare');
-		mkdirifnotexist(config_path);
-		config_file = fullfile(config_path, '\.mshconfig');
-		mexflags = [mexflags,{['-DMSH_CONFIG_FILE_NAME=\"' replace(config_file,'\','\\') '\"']}];
 		mexflags = [mexflags,{'-DMATLAB_WINDOWS'}];
-		
-	else		
-		config_path = fullfile(getenv('HOME'), '.config', 'matshare');
-		mkdirifnotexist(config_path);
-		config_file = fullfile(config_path, '.mshconfig');
-		mexflags = [mexflags,{['-DMSH_CONFIG_FILE_NAME="' config_file '"']}];
+	else
 		mexflags = [mexflags,{'-DMATLAB_UNIX','-lrt'}];
 	end
 	

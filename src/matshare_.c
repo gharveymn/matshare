@@ -8,9 +8,7 @@
 GlobalInfo_t g_local_info = {
 							0,                      /* rev_num */
 							0,                      /* num_registered_objs */
-#if MSH_THREAD_SAFETY==TRUE
 							0,                      /* lock_level */
-#endif
 							0,                      /* this_pid */
 							{
 								NULL,                    /* ptr */
@@ -423,28 +421,18 @@ void msh_Config(int num_params, const mxArray** in)
 		
 		if(strcmp(param_str_l, MSH_PARAM_THREADSAFETY_L) == 0)
 		{
-#if MSH_THREAD_SAFETY==TRUE
-			
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
-				msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, FALSE);
 				msh_WaitSetCounter(&g_shared_info->user_defined.lock_counter, TRUE);
-				msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);
 			}
-			if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
+			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
-				msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, FALSE);
 				msh_WaitSetCounter(&g_shared_info->user_defined.lock_counter, FALSE);
-				msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);
 			}
 			else
 			{
 				ReadMexError(__FILE__, __LINE__, "InvalidParamValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THREADSAFETY);
 			}
-#else
-			ReadMexError(__FILE__, __LINE__, "InvalidParamError", "Cannot change the state of thread safety for matshare compiled with thread safety turned off.");
-#endif
-		
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_SECURITY_L) == 0)
 		{
