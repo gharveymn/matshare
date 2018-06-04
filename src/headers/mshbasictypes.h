@@ -13,15 +13,13 @@
 #  define MSH_WIN
 #endif
 #elif defined(DEBUG_UNIX) || defined(DEBUG_UNIX_ON_WINDOWS)
-#  include <sys/mman.h>
-#  include <sys/stat.h>
 #  ifndef MSH_UNIX
 #    define MSH_UNIX
 #  endif
 #elif defined(DEBUG_WINDOWS)
-#ifndef MSH_WIN
-#  define MSH_WIN
-#endif
+#  ifndef MSH_WIN
+#    define MSH_WIN
+#  endif
 #else
 #  error(No build type specified.)
 #endif
@@ -48,11 +46,10 @@
 
 #  define MSH_INVALID_HANDLE INVALID_HANDLE_VALUE
 #else
-#  include <unistd.h>
-#  include <semaphore.h>
-#  include <pthread.h>
 #  include <fcntl.h>
 #  include <errno.h>
+#  include <sys/mman.h>
+#  include <sys/stat.h>
 
 #  define MSH_DEFAULT_PERMISSIONS (S_IRUSR | S_IWUSR)
 #  define MSH_INVALID_HANDLE (-1)

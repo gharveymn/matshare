@@ -1,9 +1,14 @@
 #include <string.h>
+
 #include "headers/mshutils.h"
 #include "headers/mshvariables.h"
 #include "headers/mshsegments.h"
 #include "headers/matlabutils.h"
 #include "headers/mshtypes.h"
+
+#ifdef MSH_UNIX
+#  include <unistd.h>
+#endif
 
 static LockFreeCounter_t old_counter, new_counter;
 
@@ -286,7 +291,7 @@ char_t* msh_GetConfigurationPath(void)
 	user_config_folder = getenv("HOME");
 	config_path = mxCalloc(strlen(user_config_folder) + 1 + strlen(HOME_CONFIG_FOLDER) + 1 + strlen(MSH_CONFIG_FOLDER_NAME) + 1 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
 	sprintf(config_path, "%s/%s", user_config_folder, HOME_CONFIG_FOLDER);
-	if(mkdir(config_path, S_IRUSR | S_IWUSR) == 0)
+	if(mkdir(config_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) == 0)
 	{
 		if(errno != EEXIST)
 		{
@@ -295,7 +300,7 @@ char_t* msh_GetConfigurationPath(void)
 	}
 	
 	sprintf(config_path, "%s/%s/%s", user_config_folder, HOME_CONFIG_FOLDER, MSH_CONFIG_FOLDER_NAME);
-	if(mkdir(config_path, S_IRUSR | S_IWUSR) == 0)
+	if(mkdir(config_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) == 0)
 	{
 		if(errno != EEXIST)
 		{

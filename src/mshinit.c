@@ -1,9 +1,14 @@
 #include <string.h>
+
 #include "headers/mshinit.h"
 #include "headers/matlabutils.h"
 #include "headers/mshutils.h"
 #include "headers/mshtypes.h"
 #include "headers/mshsegments.h"
+
+#ifdef MSH_UNIX
+#  include <unistd.h>
+#endif
 
 static void msh_InitializeSharedInfo(void);
 static void msh_InitializeConfiguration(void);

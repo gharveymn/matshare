@@ -1,4 +1,4 @@
-addpath('params/verify');
+addpath(fullfile(mfilefolder(mfilename), '..', 'params', 'verify'));
 
 verifyparams;
 

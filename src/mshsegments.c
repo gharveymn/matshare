@@ -3,6 +3,10 @@
 #include "headers/matlabutils.h"
 #include "headers/mshutils.h"
 
+#ifdef MSH_UNIX
+#  include <unistd.h>
+#endif
+
 /**
  * Does the actual segment creation operation. Write information on the segment
  * to seg_info_cache to be used immediately after.
