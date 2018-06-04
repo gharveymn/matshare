@@ -71,9 +71,9 @@ void msh_DetachSegmentList(SegmentList_t* seg_list);
  * Destroys all segments in the specified segment list.
  *
  * @note Calls functions which modify the shared memory linked list.
- * @param seg_list The segment list to be cleared.
+ * @param segment_cache_list The segment list to be cleared.
  */
-void msh_ClearSharedSegments(SegmentList_t* seg_list);
+void msh_ClearSharedSegments(SegmentList_t* segment_cache_list);
 
 
 /**

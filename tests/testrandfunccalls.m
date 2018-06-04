@@ -17,19 +17,19 @@ bounds.mshclear.iter = randi(bounds.mshclear.bound);
 bounds.mshdetach.bound = 20;
 bounds.mshdetach.iter = randi(bounds.mshdetach.bound);
 
-% bound of random call to mshparam to set to copy-on-write
+% bound of random call to mshconfig to set to copy-on-write
 bounds.chpar_copy.bound = 20;
 bounds.chpar_copy.iter = randi(bounds.chpar_copy.bound);
 
-% bound of random call to mshparam to set to overwrite
+% bound of random call to mshconfig to set to overwrite
 bounds.chpar_over.bound = 20;
 bounds.chpar_over.iter = randi(bounds.chpar_over.bound);
 
-% bound of random call to mshparam to set gc on
+% bound of random call to mshconfig to set gc on
 bounds.chpar_gc_on.bound = 20;
 bounds.chpar_gc_on.iter = randi(bounds.chpar_gc_on.bound);
 
-% bound of random call of mshparam to set gc off
+% bound of random call of mshconfig to set gc off
 bounds.chpar_gc_off.bound = 20;
 bounds.chpar_gc_off.iter = randi(bounds.chpar_gc_off.bound);
 
@@ -75,7 +75,7 @@ fprintf('Running tests with random combinations of commands...\n');
 for i = 1:num_maxDepth_tests
 	maxDepth = maxDepthV(i);
 	for j = 1:num_maxElements_tests
-		maxElements = maxElementsV(j);		
+		maxElements = maxElementsV(j);
 		for k = 1:num_maxDims_tests
 			maxDims = maxDimsV(k);
 			for l = 1:num_maxChildren_tests

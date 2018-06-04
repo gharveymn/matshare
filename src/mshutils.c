@@ -4,6 +4,8 @@
 #include "headers/matlabutils.h"
 #include "headers/mshtypes.h"
 
+static LockFreeCounter_t old_counter, new_counter;
+
 void msh_OnExit(void)
 {
 	
@@ -16,12 +18,16 @@ void msh_OnExit(void)
 	{
 	
 #ifdef MSH_WIN
-		msh_AtomicDecrement(&g_shared_info->num_procs);
+		if(msh_AtomicDecrement(&g_shared_info->num_procs) == 0)
+		{
+			msh_WriteConfiguration();
+		}
 #else
 		
 		/* this will set the unlink flag to TRUE if it hits zero atomically, and only return true if this process did the operation */
 		if(msh_DecrementCounter(&g_shared_info->num_procs, TRUE))
 		{
+			msh_WriteConfiguration();
 			if(shm_unlink(MSH_SHARED_INFO_SEGMENT_NAME) != 0)
 			{
 				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "UnlinkError", "There was an error unlinking the shared info segment. This is a critical error, please restart.");
@@ -71,11 +77,10 @@ void msh_OnError(void)
 
 #if MSH_THREAD_SAFETY==TRUE
 	/* set the process lock at a level where it can be released if needed */
-	if(g_local_info.lock_level > 1)
+	while(g_local_info.lock_level > 0)
 	{
-		g_local_info.lock_level = 1;
+		msh_ReleaseProcessLock();
 	}
-	msh_ReleaseProcessLock();
 #endif
 
 }
@@ -89,6 +94,9 @@ void msh_AcquireProcessLock(void)
 #ifdef MSH_WIN
 	DWORD status;
 #endif
+	
+	/* blocks until lock flag operation is finished */
+	while(!msh_GetCounterPost(&g_shared_info->user_defined.lock_counter));
 	
 	msh_IncrementCounter(&g_shared_info->user_defined.lock_counter);
 	
@@ -188,6 +196,70 @@ void msh_NullFunction(void)
 }
 
 
+void msh_WriteConfiguration(void)
+{
+	char_t* config_folder;
+	char_t* config_path;
+	
+	handle_t config_handle;
+	UserConfig_t local_config = g_shared_info->user_defined, saved_config;
+	local_config.lock_counter.values.count = 0;				/* reset the lock_counter so that it counter values don't roll over */
+	local_config.lock_counter.values.post = TRUE;
+
+#ifdef MSH_WIN
+	config_folder = getenv("LOCALAPPDATA");
+#else
+	config_folder = getenv("HOME");
+#endif
+
+
+#ifdef MSH_WIN
+	DWORD bytes_wr;
+	
+	if((config_handle = CreateFile(MSH_CONFIG_FILE_NAME, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
+	{
+		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CreateFileError", "Error opening the config file.");
+	}
+	else
+	{
+		
+		if(ReadFile(config_handle, &saved_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
+		{
+			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "ReadFileError", "Error reading from the config file.");
+		}
+		
+		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
+		{
+			if(WriteFile(config_handle, &local_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
+			{
+				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "WriteFileError", "Error writing to the config file.");
+			}
+		}
+		
+		if(CloseHandle(config_handle) == 0)
+		{
+			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
+		}
+	}
+#else
+	if((config_handle = open(MSH_CONFIG_FILE_NAME, O_RDWR | O_CREAT | O_CLOEXEC)))
+#endif
+}
+
+
+char_t* msh_GetConfigurationPath(void)
+{
+	char_t* config_folder;
+	char_t* config_path;
+	
+#ifdef MSH_WIN
+	config_folder = getenv("LOCALAPPDATA");
+#else
+	config_folder = getenv("HOME");
+#endif
+}
+
+
 pid_t msh_GetPid(void)
 {
 #ifdef MSH_WIN
@@ -200,7 +272,6 @@ pid_t msh_GetPid(void)
 /* returns the state of the flag after the operation */
 LockFreeCounter_t msh_IncrementCounter(LockFreeCounter_t* counter)
 {
-	LockFreeCounter_t old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
@@ -208,13 +279,17 @@ LockFreeCounter_t msh_IncrementCounter(LockFreeCounter_t* counter)
 		new_counter.values.count += 1;
 	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 	
+	if(new_counter.values.flag == 0)
+	{
+		ReadMexError(__FILE__, __LINE__, "asdfError", "asdf");
+	}
+	
 	return new_counter;
 }
 
 /* returns whether the decrement changed the flag to TRUE */
 bool_t msh_DecrementCounter(LockFreeCounter_t* counter, bool_t set_flag)
 {
-	LockFreeCounter_t old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
@@ -232,19 +307,18 @@ bool_t msh_DecrementCounter(LockFreeCounter_t* counter, bool_t set_flag)
 
 void msh_SetCounterFlag(LockFreeCounter_t* counter, unsigned long val)
 {
-	LockFreeCounter_t old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
 		new_counter.span = old_counter.span;
 		new_counter.values.flag = val;
 	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+	
 }
 
 
 void msh_SetCounterPost(LockFreeCounter_t* counter, unsigned long val)
 {
-	LockFreeCounter_t old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
@@ -270,7 +344,6 @@ unsigned long msh_GetCounterPost(LockFreeCounter_t* counter)
 
 void msh_WaitSetCounter(LockFreeCounter_t* counter, unsigned long val)
 {
-	LockFreeCounter_t old_counter, new_counter;
 	old_counter.values.count = 0;
 	new_counter.values.count = 0;
 	new_counter.values.flag = val;

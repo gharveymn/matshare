@@ -28,7 +28,9 @@ extern int fchmod(int fildes, mode_t mode);
 #  include <sys/stat.h>
 #define F_LOCK 1
 #define F_ULOCK 0
-
+#ifndef O_CLOEXEC
+#define O_CLOEXEC	02000000	/* set close_on_exec */
+#endif
 
 #ifndef MSH_UNIX
 #  define MSH_UNIX

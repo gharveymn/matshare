@@ -44,7 +44,7 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars);
 
 void msh_Clear(int num_inputs, const mxArray** in_vars);
 
-void msh_Param(int num_params, const mxArray** in);
+void msh_Config(int num_params, const mxArray** in);
 
 
 

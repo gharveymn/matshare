@@ -1,12 +1,4 @@
-function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, observerpid, isparallel)
-	thispid = feature('getpid');
-	if(isparallel)
-		% only do this if in parallel so we have consistent results otherwise
-		rns = RandStream('mt19937ar', 'Seed', mod(now*10^10, thispid));
-	else
-		rns = RandStream('mt19937ar');
-	end
-%	lents = 0
+function sample_num = testprecompwkr(rns, maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, tv, sample_num)
 
 	allvars = {};
 
@@ -39,18 +31,15 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 	
 	for i = 1:num_samples
 		try
-			
-			tv = variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, false, typespec);
-			
 			switch(ri1(i))
 				case 1
-					mshshare(tv);
+					mshshare(tv{sample_num});
 				case 2
-					data = mshshare(tv);
+					data = mshshare(tv{sample_num});
 				case 3
-					[data, newvars] = mshshare(tv);
+					[data, newvars] = mshshare(tv{sample_num});
 				case 4
-					[data, newvars, allvars] = mshshare(tv);
+					[data, newvars, allvars] = mshshare(tv{sample_num});
 			end
 			
 			switch(ri2(i))
@@ -120,7 +109,7 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 				rethrow(mexcept);
 			end
 		end
-		
+		sample_num = sample_num + 1;
 	end
 	
 end

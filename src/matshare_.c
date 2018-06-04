@@ -93,7 +93,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		
 		case msh_PARAM:
 			
-			msh_Param(num_in_vars, in_vars);
+			msh_Config(num_in_vars, in_vars);
 			
 			break;
 		
@@ -315,38 +315,36 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 void msh_Clear(int num_inputs, const mxArray** in_vars)
 {
 	
-	VariableNode_t* curr_var_node, * next_var_node;
+	VariableNode_t* curr_var_node;
 	mxArray* link;
-	int i;
+	bool_t found_variable;
+	int input_num;
 	msh_AcquireProcessLock();
-	
-	msh_UpdateSegmentTracking(&g_local_seg_list);
 	
 	if(num_inputs > 0)
 	{
-		for(i = 0; i < num_inputs; i++)
+		
+		msh_UpdateSegmentTracking(&g_local_seg_list);
+		
+		for(input_num = 0; input_num < num_inputs; input_num++)
 		{
-			curr_var_node = g_local_var_list.first;
-			while(curr_var_node != NULL)
+			for(curr_var_node = g_local_var_list.first, found_variable = FALSE; curr_var_node != NULL && !found_variable; curr_var_node = curr_var_node->next)
 			{
-				next_var_node = curr_var_node->next;
-				
 				/* begin hack */
 				link = curr_var_node->var;
 				do
 				{
-					if(link == in_vars[i])
+					if(link == in_vars[input_num])
 					{
 						msh_RemoveSegmentFromSharedList(curr_var_node->seg_node);
 						msh_RemoveSegmentFromList(curr_var_node->seg_node);
 						msh_DetachSegment(curr_var_node->seg_node);
+						found_variable = TRUE;
 						break;
 					}
 					link = msh_GetCrosslink(link);
 				} while(link != NULL && link != curr_var_node->var);
 				/* end hack */
-				
-				curr_var_node = next_var_node;
 			}
 		}
 	}
@@ -358,7 +356,7 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 }
 
 
-void msh_Param(int num_params, const mxArray** in)
+void msh_Config(int num_params, const mxArray** in)
 {
 	int i, j, ps_len, vs_len;
 	char param_str[MSH_MAX_NAME_LEN] = {0}, val_str[MSH_MAX_NAME_LEN] = {0}, param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
@@ -371,7 +369,7 @@ void msh_Param(int num_params, const mxArray** in)
 	{
 #ifdef MSH_WIN
 		mexPrintf(MSH_PARAM_INFO,
-				g_shared_info->user_defined.thread_safety.values.is_thread_safe? "true" : "false",
+				msh_GetCounterFlag(&g_shared_info->user_defined.lock_counter)? "true" : "false",
 				g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY? "true" : "false",
 				g_shared_info->user_defined.will_gc? "true" : "false");
 #else
@@ -429,11 +427,15 @@ void msh_Param(int num_params, const mxArray** in)
 			
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
+				msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, FALSE);
 				msh_WaitSetCounter(&g_shared_info->user_defined.lock_counter, TRUE);
+				msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);
 			}
 			if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
+				msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, FALSE);
 				msh_WaitSetCounter(&g_shared_info->user_defined.lock_counter, FALSE);
+				msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);
 			}
 			else
 			{
@@ -506,6 +508,6 @@ void msh_Param(int num_params, const mxArray** in)
 		{
 			ReadMexError(__FILE__, __LINE__, "InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
-		
 	}
+	
 }

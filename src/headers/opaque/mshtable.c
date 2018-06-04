@@ -20,11 +20,6 @@ void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, u
 	SegmentNode_t* curr_seg_node;
 	uint32_T seg_hash;
 	
-	if(seg_table->table == NULL)
-	{
-		msh_InitializeTable(seg_table);
-	}
-	
 	if(num_segs >= seg_table->table_sz)
 	{
 		msh_ResizeTable(seg_table, num_segs);
@@ -92,14 +87,11 @@ SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, msh_segmentnumber_
 {
 	SegmentNode_t* curr_seg_node;
 	
-	if(seg_table->table != NULL)
+	for(curr_seg_node = seg_table->table[msh_FindSegmentHash(seg_table, seg_num)]; curr_seg_node != NULL; curr_seg_node = curr_seg_node->hash_next)
 	{
-		for(curr_seg_node = seg_table->table[msh_FindSegmentHash(seg_table, seg_num)]; curr_seg_node != NULL; curr_seg_node = curr_seg_node->hash_next)
+		if(curr_seg_node->seg_info.seg_num == seg_num)
 		{
-			if(curr_seg_node->seg_info.seg_num == seg_num)
-			{
-				return curr_seg_node;
-			}
+			return curr_seg_node;
 		}
 	}
 	return NULL;

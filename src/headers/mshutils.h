@@ -27,6 +27,8 @@ void msh_ReleaseProcessLock(void);
 
 msh_directive_t msh_ParseDirective(const mxArray* in);
 
+void msh_WriteConfiguration(void);
+
 unsigned long msh_GetCounterCount(LockFreeCounter_t* counter);
 unsigned long msh_GetCounterFlag(LockFreeCounter_t* counter);
 unsigned long msh_GetCounterPost(LockFreeCounter_t* counter);

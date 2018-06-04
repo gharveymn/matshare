@@ -2,7 +2,7 @@
 `matshare` is a function for process shared memory in MATLAB. This is partially based on the work done by Joshua Dillon for [`sharedmatrix`](https://www.mathworks.com/matlabcentral/fileexchange/28572-sharedmatrix) (which was broken by a recent release), and my main goals here were to provide a higher amount of robustness and to make working with shared memory as simple as possible. Among the features of `matshare` are automatic initialization, which allows one to omit explicit initialization and the worry of double initialization, and thread safety among different processes as well as threads created inside a process. However, one of the restrictions of `matshare` is that the function allows for exactly one variable in shared memory at a time, although this is easy to resolve since structs and cell arrays may be shared.
 
 ## Usage
-To compile `matshare` simply run INSTALL.m. Run ‘./tests/testmulti.m’ to verify that everything is working correctly. There are several ways to use `matshare` depending on your needs, and some methods give better performance than others. In the interest of performance, both the automatic initialization and thread safety features may be disabled by editing OPTIONS.m (thread safety can also be turned off after compilation using `mshparam`).
+To compile `matshare` simply run INSTALL.m. Run ‘./tests/testmulti.m’ to verify that everything is working correctly. There are several ways to use `matshare` depending on your needs, and some methods give better performance than others. In the interest of performance, both the automatic initialization and thread safety features may be disabled by editing OPTIONS.m (thread safety can also be turned off after compilation using `mshconfig`).
 
 
  The easiest way to use `matshare` is with objects. The class MatShare.m allows one to treat shared variables as if they were normal variables. To use this, create an object and use the ‘s_data’ property to read and write to shared memory. For example,
@@ -63,11 +63,11 @@ ans =
 Note that you must call `mshdetach` before calling `mshinit` again in the same process, otherwise MATLAB will crash.
 
 
-Another feature of `matshare` is the ability to set access rights to the shared memory. So if you have another user on the computer who wants access to a large variable, you can do with `mshparam` (available only on Linux). Default access rights are set to 0600, but one can change this with 
+Another feature of `matshare` is the ability to set access rights to the shared memory. So if you have another user on the computer who wants access to a large variable, you can do with `mshconfig` (available only on Linux). Default access rights are set to 0600, but one can change this with 
 ```matlab
->> mshparam(‘Security’, ’0777’);
+>> mshconfig(‘Security’, ’0777’);
 ```
 Note that this will reset after calling mshdetach in all processes. You may also use this function to turn off the thread safety features temporarily with 
 ```matlab
->> mshparam(‘ThreadSafety’, ’disable’);
+>> mshconfig(‘ThreadSafety’, ’disable’);
 ```

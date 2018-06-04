@@ -18,7 +18,7 @@ testparresultverify;
 % parallel function calls
 testparrandfunccalls;
 
-mshparam('gc', 'on', 'sharetype', 'copy');
+mshconfig('gc', 'on', 'sharetype', 'copy');
 
 % test essential variables
 testparessential;

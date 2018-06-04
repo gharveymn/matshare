@@ -102,24 +102,22 @@ struct SegmentList_t
 	uint32_T num_segs;
 };
 
-/**
- * TODO: funcs: set to true/false if count == 0, increment count, decrement count
- */
+typedef struct UserConfig_t
+{
+	/* these are aligned for lockless assignment */
+	LockFreeCounter_t lock_counter;
+	msh_sharetype_t sharetype;
+	alignedbool_t will_gc;
+#ifdef MSH_UNIX
+	mode_t security;
+#endif
+} UserConfig_t;
 
 /* structure of shared info about the shared segments */
 typedef volatile struct SharedInfo_t
 {
 	size_t rev_num;
-	struct user_def_tag
-	{
-		/* these are aligned for lockless assignment */
-		msh_sharetype_t sharetype;
-		LockFreeCounter_t lock_counter;
-		alignedbool_t will_gc;
-#ifdef MSH_UNIX
-		mode_t security;
-#endif
-	} user_defined;
+	UserConfig_t user_defined;
 	msh_segmentnumber_t first_seg_num;     /* the first segment number in the list */
 	msh_segmentnumber_t last_seg_num;      /* the last segment number in the list */
 	uint32_T num_valid_segments;

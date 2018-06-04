@@ -65,3 +65,4 @@ bld/
 /bin/matshare_.mexw64.pdb
 /CppProperties.json
 /bin/MatShare.m
+/tests/precompiled/res

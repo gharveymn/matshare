@@ -69,15 +69,12 @@ bool_t msh_DestroyVariable(VariableNode_t* var_node)
 
 void msh_ClearVariableList(VariableList_t* var_list)
 {
-	VariableNode_t* curr_var_node, * next_var_node;
-	
-	curr_var_node = var_list->first;
-	while(curr_var_node != NULL)
+	VariableNode_t* curr_var_node;
+	while(var_list->first != NULL)
 	{
-		next_var_node = curr_var_node->next;
+		curr_var_node = var_list->first;
 		msh_RemoveVariableFromList(curr_var_node);
 		msh_DestroyVariable(curr_var_node);
-		curr_var_node = next_var_node;
 	}
 }
 
