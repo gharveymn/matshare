@@ -13,12 +13,11 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 #define MSH_SEGMENT_NAME "/MSH_SEGMENT%0lx"
 
 #define MSH_CONFIG_FOLDER_NAME "matshare"
+#define MSH_CONFIG_FILE_NAME "mshconfig"
 #ifdef MSH_WIN
 #  define MSH_LOCK_NAME "/MSH_LOCK"
-#  define MSH_CONFIG_FILE_NAME "mshconfig"
 #else
 #  define HOME_CONFIG_FOLDER ".config"
-#  define MSH_CONFIG_FILE_NAME ".mshconfig"
 #endif
 
 #define msh_SHARETYPE_COPY 0
