@@ -97,11 +97,9 @@ function [ret] = variablegenerator_(currDepth, rns, maxDepth, maxElems, maxDims,
 				cdims = num2cell(dims);
 				ret(cdims{:}) = struct(possibleFields{1:2*randi(rns, numPossibleFields)});
 				retFields = fieldnames(ret);
-				for k = 1:numel(ret)
-
-					for j = 1:numel(retFields)
-						ret(k).(retFields{j}) = variablegenerator_(currDepth + 1, rns, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
-
+				for k = 1:numel(retFields)
+					for j = 1:numel(ret)
+						ret(j).(retFields{k}) = variablegenerator_(currDepth + 1, rns, maxDepth, maxElems, maxDims, maxChildren, ignoreUnusables, typespec);
 					end
 
 				end

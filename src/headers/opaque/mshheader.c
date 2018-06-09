@@ -368,7 +368,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	}
 	else
 	{
-		ReadMexError(__FILE__, __LINE__, "InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
 	return obj_tree_sz;
@@ -665,7 +665,7 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			}
 			else
 			{
-				ReadMexError(__FILE__, __LINE__, "UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'double' or 'logical'.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER | ERROR_SEVERITY_INTERNAL, 0, "UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'double' or 'logical'.");
 			}
 			
 			/* free the pointers relating to sparse */
@@ -704,7 +704,7 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			}
 			else
 			{
-				ReadMexError(__FILE__, __LINE__, "UnrecognizedTypeError", "The fetched array was of class not of type 'numeric', 'logical', or 'char'.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_INTERNAL | ERROR_SEVERITY_CORRUPTION, 0, "UnrecognizedTypeError", "The fetched array was of class not of type 'numeric', 'logical', or 'char'.");
 			}
 			
 			/* there is no data if it is empty */
@@ -903,7 +903,7 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shared_header, const mxAr
 	}
 	else
 	{
-		ReadMexError(__FILE__, __LINE__, "InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
 	return TRUE;
@@ -999,7 +999,7 @@ void msh_DetachVariable(mxArray* ret_var)
 	}
 	else
 	{
-		ReadMexError(__FILE__, __LINE__, "InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
+		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_INTERNAL | ERROR_SEVERITY_CORRUPTION, 0, "InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
 	}
 }
 
@@ -1054,14 +1054,11 @@ static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t seg_sz)
 	 * HEADER:
 	 * 		bytes 0-7   - the 16 byte aligned size of the segment
 	 * 		bytes  8-11 - a signature for the vector check
-	 * 		bytes 12-13 - the alignment (should be 32 bytes for new MATLAB)
+	 * 		bytes 12-13 - the alignment (should be 32 bytes for newer MATLAB)
 	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
 	 */
 	
-	if(seg_sz > 0)
-	{
-		alloc_hdr->aligned_size = FindPaddedSegmentSize(seg_sz);
-	}
+	alloc_hdr->aligned_size = (seg_sz > 0)? FindPaddedSegmentSize(seg_sz) : 0;
 	alloc_hdr->check = MXMALLOC_MAGIC_CHECK;
 	alloc_hdr->alignment = MXMALLOC_ALIGNMENT;
 	alloc_hdr->offset = MXMALLOC_SIG_LEN;

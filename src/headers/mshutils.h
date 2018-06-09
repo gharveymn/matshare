@@ -3,19 +3,13 @@
 
 #include "mshtypes.h"
 
-typedef enum
-{
-	msh_SHARE = 0,
-	msh_FETCH = 1,
-	msh_DETACH = 2,
-	msh_PARAM = 3,
-	msh_DEEPCOPY = 4,
-	msh_DEBUG = 5, /* unused */
-	msh_OBJ_REGISTER = 6,
-	msh_OBJ_DEREGISTER = 7,
-	msh_INIT = 8, /* unused */
-	msh_CLEAR = 9
-} msh_directive_t;
+/* for lcc compatibility --- requires Windows XP+ */
+#ifdef MSH_WIN
+#  ifndef InterlockedCompareExchange
+/*LONG __cdecl InterlockedCompareExchange(_Inout_ LONG volatile *Destination, _In_ LONG Exchange, _In_ LONG Comparand);*/
+LONG STDCALL InterlockedCompareExchange(LPLONG, LONG, LONG);
+#  endif
+#endif
 
 void msh_OnExit(void);
 
@@ -25,23 +19,24 @@ void msh_AcquireProcessLock(void);
 
 void msh_ReleaseProcessLock(void);
 
-msh_directive_t msh_ParseDirective(const mxArray* in);
-
 void msh_WriteConfiguration(void);
 char_t* msh_GetConfigurationPath();
+void msh_SetDefaultConfiguration(void);
 
-unsigned long msh_GetCounterCount(LockFreeCounter_t* counter);
-unsigned long msh_GetCounterFlag(LockFreeCounter_t* counter);
-unsigned long msh_GetCounterPost(LockFreeCounter_t* counter);
-LockFreeCounter_t msh_IncrementCounter(LockFreeCounter_t* counter);
-bool_t msh_DecrementCounter(LockFreeCounter_t* counter, bool_t set_flag);
-void msh_SetCounterFlag(LockFreeCounter_t* counter, unsigned long val);
-void msh_SetCounterPost(LockFreeCounter_t* counter, unsigned long val);
-void msh_WaitSetCounter(LockFreeCounter_t* counter, unsigned long val);
+unsigned long msh_GetCounterCount(volatile LockFreeCounter_t* counter);
+unsigned long msh_GetCounterFlag(volatile LockFreeCounter_t* counter);
+unsigned long msh_GetCounterPost(volatile LockFreeCounter_t* counter);
+LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter);
+bool_t msh_DecrementCounter(volatile LockFreeCounter_t* counter, bool_t set_flag);
+void msh_SetCounterFlag(volatile LockFreeCounter_t* counter, unsigned long val);
+void msh_SetCounterPost(volatile LockFreeCounter_t* counter, unsigned long val);
+void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val);
 
-long msh_AtomicIncrement(volatile long* val_ptr);
-long msh_AtomicDecrement(volatile long* val_ptr);
-long msh_AtomicCompareSwap(volatile long* val_ptr, long compare_value, long swap_value);
+bool_t msh_AtomicAddSizeWithMax(volatile size_t* value_pointer, size_t add_value, size_t max_value);
+size_t msh_AtomicSubtractSize(volatile size_t* value_pointer, size_t subtract_value);
+long msh_AtomicIncrement(volatile long* value_pointer);
+long msh_AtomicDecrement(volatile long* value_pointer);
+long msh_AtomicCompareSwap(volatile long* value_pointer, long compare_value, long swap_value);
 
 /**
  * Writes the segment name to the name buffer.

@@ -2,6 +2,7 @@
 #define MATSHARE_MSHBASICTYPES_H
 
 #include "mex.h"
+#include <stddef.h>
 
 #if defined(MATLAB_UNIX)
 #  include <sys/mman.h>
@@ -72,21 +73,9 @@ typedef int handle_t;				 /* give fds a uniform identifier */
 
 #define MSH_SEG_NUM_MAX LONG_MAX      /* the maximum segment number */
 #define MSH_INVALID_SEG_NUM (-1L)
+#define MSH_MAX_TOTAL_SIZE SIZE_MAX
 
-#ifdef MSH_32BIT
-#  define MXMALLOC_MAGIC_CHECK 0xFEED
-#  define MXMALLOC_SIG_LEN 0x08
-#  define MXMALLOC_SIG_LEN_SHIFT 0x07
-
-typedef struct AllocationHeader_t
-{
-	uint32_T aligned_size;
-	uint16_T check;
-	uint8_T alignment;
-	uint8_T offset;
-} AllocationHeader_t;
-
-#else
+#if MSH_BITNESS==64
 #  define MXMALLOC_MAGIC_CHECK 0xFEEDFACE
 #  define MXMALLOC_SIG_LEN 0x10
 #  define MXMALLOC_SIG_LEN_SHIFT 0x0F
@@ -98,14 +87,28 @@ typedef struct AllocationHeader_t
 	uint16_T alignment;
 	uint16_T offset;
 } AllocationHeader_t;
+#elif MSH_BITNESS==32
+#  define MXMALLOC_MAGIC_CHECK 0xFEED
+#  define MXMALLOC_SIG_LEN 0x08
+#  define MXMALLOC_SIG_LEN_SHIFT 0x07
+
+typedef struct AllocationHeader_t
+{
+	uint32_T aligned_size;
+	uint16_T check;
+	uint8_T alignment;
+	uint8_T offset;
+} AllocationHeader_t;
+#else
+#  error(matshare is only supported in 64-bit and 32-bit variants.)
 #endif
 
-#ifdef MSH_NO_AVX_SUPPORT
-#  define MXMALLOC_ALIGNMENT 0x10
-#  define MXMALLOC_ALIGNMENT_SHIFT (size_t)0x0F
-#else
+#ifdef MSH_AVX_SUPPORT
 #  define MXMALLOC_ALIGNMENT 0x20
 #  define MXMALLOC_ALIGNMENT_SHIFT (size_t)0x1F
+#else
+#  define MXMALLOC_ALIGNMENT 0x10
+#  define MXMALLOC_ALIGNMENT_SHIFT (size_t)0x0F
 #endif
 
 

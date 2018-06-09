@@ -59,17 +59,20 @@ try
 				'which are integral to this function'])
 			mexflags = [mexflags, {'-R2017b'}];
 		end
+		mexflags = [mexflags, {'-DMSH_BITNESS=64', '-DMSH_MAX_SHARED_SIZE=0xFFFFFFFF'}];
 	else
-		mexflags = [mexflags {'-compatibleArrayDims', '-DMSH_32BIT'}];
+		mexflags = [mexflags {'-compatibleArrayDims', '-DMSH_BITNESS=32', '-DMSH_MAX_SHARED_SIZE=0xFFFFFFFF'}];
 	end
 	
 	% R2011b
-	if(verLessThan('matlab', '7.13'))
-		mexflags = [mexflags {'-DMSH_NO_AVX_SUPPORT'}];
-	end
+	if(~verLessThan('matlab', '7.13'))
+		mexflags = [mexflags {'-DMSH_AVX_SUPPORT'}];
+    end
+    
+    mexflags = [mexflags {'-DMSH_MAX_SHARED_SEGMENTS=512'}];
 	
 	fprintf('-Compiling matshare...')
-	mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 -Wall"'}];
+	%mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 -Wall"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n%s\n',['-The function is located in ' fullfile(pwd,'bin') '.'])
 	

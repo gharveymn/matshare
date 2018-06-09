@@ -1,12 +1,11 @@
-#include <string.h>
-
+#include "headers/mshtypes.h"
 #include "headers/mshutils.h"
 #include "headers/mshvariables.h"
 #include "headers/mshsegments.h"
 #include "headers/matlabutils.h"
-#include "headers/mshtypes.h"
 
 #ifdef MSH_UNIX
+#  include <string.h>
 #  include <unistd.h>
 #endif
 
@@ -36,7 +35,7 @@ void msh_OnExit(void)
 			msh_WriteConfiguration();
 			if(shm_unlink(MSH_SHARED_INFO_SEGMENT_NAME) != 0)
 			{
-				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "UnlinkError", "There was an error unlinking the shared info segment. This is a critical error, please restart.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "UnlinkError", "There was an error unlinking the shared info segment. This is a critical error, please restart.");
 			}
 			msh_SetCounterPost(&g_shared_info->num_procs, TRUE);
 		}
@@ -57,7 +56,7 @@ void msh_OnExit(void)
 	{
 		if(CloseHandle(g_local_info.process_lock) == 0)
 		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CloseHandleError", "Error closing the process lock handle.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the process lock handle.");
 		}
 		g_local_info.process_lock = MSH_INVALID_HANDLE;
 	}
@@ -67,7 +66,7 @@ void msh_OnExit(void)
 	{
 		if(!mexIsLocked())
 		{
-			ReadMexError(__FILE__, __LINE__, "MexUnlockedError", "Matshare tried to unlock its file when it was already unlocked.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_CORRUPTION | ERROR_SEVERITY_INTERNAL, 0, "MexUnlockedError", "Matshare tried to unlock its file when it was already unlocked.");
 		}
 		mexUnlock();
 		g_local_info.is_mex_locked = FALSE;
@@ -110,17 +109,17 @@ void msh_AcquireProcessLock(void)
 			status = WaitForSingleObject(g_process_lock, INFINITE);
 			if(status == WAIT_ABANDONED)
 			{
-				ReadMexError(__FILE__, __LINE__, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM | ERROR_SEVERITY_FATAL, 0, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
 			}
 			else if(status == WAIT_FAILED)
 			{
-				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "ProcessLockError",  "Failed to lock acquire the process lock.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "ProcessLockError",  "Failed to lock acquire the process lock.");
 			}
 #else
 			
 			if(lockf(g_process_lock, F_LOCK, sizeof(SharedInfo_t)) != 0)
 			{
-				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ProcessLockError",  "Failed to lock acquire the process lock.");
+				ReadMexError(__FILE__, __LINE__, errno, "ProcessLockError",  "Failed to lock acquire the process lock.");
 			}
 #endif
 		}
@@ -142,12 +141,12 @@ void msh_ReleaseProcessLock(void)
 #ifdef MSH_WIN
 			if(ReleaseMutex(g_process_lock) == 0)
 			{
-				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "ProcessUnlockError", "Failed to release the process lock.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #else
 			if(lockf(g_process_lock, F_ULOCK, sizeof(SharedInfo_t)) != 0)
 			{
-				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ProcessUnlockError", "Failed to release the process lock.");
+				ReadMexError(__FILE__, __LINE__, errno, "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #endif
 		}
@@ -157,22 +156,6 @@ void msh_ReleaseProcessLock(void)
 	}
 
 }
-
-
-msh_directive_t msh_ParseDirective(const mxArray* in)
-{
-	/* easiest way to deal with implementation defined enum sizes */
-	if(mxGetClassID(in) == mxUINT8_CLASS)
-	{
-		return (msh_directive_t)*((uint8_T*)(mxGetData(in)));
-	}
-	else
-	{
-		ReadMexError(__FILE__, __LINE__, "InvalidDirectiveError", "Directive must be type 'uint8'.");
-	}
-	return msh_DEBUG;
-}
-
 
 size_t PadToAlignData(size_t curr_sz)
 {
@@ -194,7 +177,13 @@ void msh_NullFunction(void)
 
 void msh_WriteConfiguration(void)
 {
+
+#ifdef MSH_WIN
+	DWORD bytes_wr;
+#endif
+	
 	char_t* config_path;
+
 	
 	handle_t config_handle;
 	UserConfig_t local_config = g_shared_info->user_defined, saved_config;
@@ -204,19 +193,18 @@ void msh_WriteConfiguration(void)
 	config_path = msh_GetConfigurationPath();
 
 #ifdef MSH_WIN
-	DWORD bytes_wr;
 	
-	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
+	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
 	{
 		mxFree(config_path);
-		ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "OpenFileError", "Error opening the config file.");
+		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "OpenFileError", "Error opening the config file.");
 	}
 	else
 	{
 		if(ReadFile(config_handle, &saved_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 		{
 			mxFree(config_path);
-			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "ReadFileError", "Error reading from the config file.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "ReadFileError", "Error reading from the config file.");
 		}
 		
 		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
@@ -224,27 +212,27 @@ void msh_WriteConfiguration(void)
 			if(WriteFile(config_handle, &local_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				mxFree(config_path);
-				ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "WriteFileError", "Error writing to the config file.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(CloseHandle(config_handle) == 0)
 		{
 			mxFree(config_path);
-			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #else
 	if((config_handle = open(config_path, O_RDWR | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
 	{
-		ReadMexErrorWithCode(__FILE__, __LINE__, errno, "OpenFileError", "Error opening the config file.");
+		ReadMexError(__FILE__, __LINE__, errno, "OpenFileError", "Error opening the config file.");
 	}
 	else
 	{
 		if(read(config_handle, &saved_config, sizeof(UserConfig_t)) == -1)
 		{
 			mxFree(config_path);
-			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "ReadFileError", "Error reading from the config file.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "ReadFileError", "Error reading from the config file.");
 		}
 		
 		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
@@ -252,14 +240,14 @@ void msh_WriteConfiguration(void)
 			if(write(config_handle, &local_config, sizeof(UserConfig_t)) == -1)
 			{
 				mxFree(config_path);
-				ReadMexErrorWithCode(__FILE__, __LINE__, errno, "WriteFileError", "Error writing to the config file.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(close(config_handle) == -1)
 		{
 			mxFree(config_path);
-			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CloseHandleError", "Error closing the config file handle.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #endif
@@ -281,7 +269,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(GetLastError() != ERROR_ALREADY_EXISTS)
 		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, GetLastError(), "CreateDirectoryError", "There was an error creating the directory for the matshare config file.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CreateDirectoryError", "There was an error creating the directory for the matshare config file.");
 		}
 	}
 	
@@ -295,7 +283,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(errno != EEXIST)
 		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CreateDirectoryError", "There was an error creating the user config directory.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the user config directory.");
 		}
 	}
 	
@@ -304,7 +292,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(errno != EEXIST)
 		{
-			ReadMexErrorWithCode(__FILE__, __LINE__, errno, "CreateDirectoryError", "There was an error creating the directory for the matshare config file.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the directory for the matshare config file.");
 		}
 	}
 	
@@ -314,6 +302,20 @@ char_t* msh_GetConfigurationPath(void)
 	
 	return config_path;
 	
+}
+
+
+void msh_SetDefaultConfiguration(void)
+{
+	g_shared_info->user_defined.sharetype = MSH_SHARETYPE;
+	msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_THREAD_SAFETY);
+	msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);       		  /** counter is in post state **/
+	g_shared_info->user_defined.max_shared_segments = MSH_MAX_SHARED_SEGMENTS; /** debug **/
+	g_shared_info->user_defined.max_shared_size = MSH_MAX_SHARED_SIZE; /** debug **/
+	g_shared_info->user_defined.will_gc = TRUE;
+#ifdef MSH_UNIX
+	g_shared_info->user_defined.security = MSH_DEFAULT_PERMISSIONS;
+#endif
 }
 
 
@@ -327,7 +329,7 @@ pid_t msh_GetPid(void)
 }
 
 /* returns the state of the flag after the operation */
-LockFreeCounter_t msh_IncrementCounter(LockFreeCounter_t* counter)
+LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter)
 {
 	do
 	{
@@ -339,7 +341,7 @@ LockFreeCounter_t msh_IncrementCounter(LockFreeCounter_t* counter)
 }
 
 /* returns whether the decrement changed the flag to TRUE */
-bool_t msh_DecrementCounter(LockFreeCounter_t* counter, bool_t set_flag)
+bool_t msh_DecrementCounter(volatile LockFreeCounter_t* counter, bool_t set_flag)
 {
 	do
 	{
@@ -356,7 +358,7 @@ bool_t msh_DecrementCounter(LockFreeCounter_t* counter, bool_t set_flag)
 }
 
 
-void msh_SetCounterFlag(LockFreeCounter_t* counter, unsigned long val)
+void msh_SetCounterFlag(volatile LockFreeCounter_t* counter, unsigned long val)
 {
 	do
 	{
@@ -368,7 +370,7 @@ void msh_SetCounterFlag(LockFreeCounter_t* counter, unsigned long val)
 }
 
 
-void msh_SetCounterPost(LockFreeCounter_t* counter, unsigned long val)
+void msh_SetCounterPost(volatile LockFreeCounter_t* counter, unsigned long val)
 {
 	do
 	{
@@ -378,22 +380,22 @@ void msh_SetCounterPost(LockFreeCounter_t* counter, unsigned long val)
 	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 }
 
-unsigned long msh_GetCounterCount(LockFreeCounter_t* counter)
+unsigned long msh_GetCounterCount(volatile LockFreeCounter_t* counter)
 {
 	return counter->values.count;
 }
 
-unsigned long msh_GetCounterFlag(LockFreeCounter_t* counter)
+unsigned long msh_GetCounterFlag(volatile LockFreeCounter_t* counter)
 {
 	return counter->values.flag;
 }
 
-unsigned long msh_GetCounterPost(LockFreeCounter_t* counter)
+unsigned long msh_GetCounterPost(volatile LockFreeCounter_t* counter)
 {
 	return counter->values.post;
 }
 
-void msh_WaitSetCounter(LockFreeCounter_t* counter, unsigned long val)
+void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val)
 {
 	msh_SetCounterPost(counter, FALSE);
 	old_counter.values.count = 0;
@@ -409,29 +411,140 @@ void msh_WaitSetCounter(LockFreeCounter_t* counter, unsigned long val)
 }
 
 
-long msh_AtomicIncrement(volatile long* val_ptr)
+/**
+ * Atomically adds the size_t value to the value pointed to. Fails if this will result in a
+ * value higher than the maximum specified.
+ *
+ * @param value_pointer
+ * @param add_value
+ * @param max_value
+ * @return
+ */
+bool_t msh_AtomicAddSizeWithMax(volatile size_t* value_pointer, size_t add_value, size_t max_value)
+{
+	size_t old_value, new_value;
+#ifdef MSH_WIN
+#  if MSH_BITNESS==64
+	do
+	{
+		old_value = *value_pointer;
+		new_value = old_value + add_value;
+		if(new_value > max_value)
+		{
+			return FALSE;
+		}
+	} while(InterlockedCompareExchange64((volatile long long*)value_pointer, new_value, old_value) != old_value);
+#  elif MSH_BITNESS==32
+	do
+	{
+		/* workaround because lcc defines size_t as signed (???) */
+		old_value = *value_pointer;
+		new_value = old_value + add_value;
+		if(new_value > max_value)
+		{
+			return FALSE;
+		}
+	} while(InterlockedCompareExchange((volatile long*)value_pointer, new_value, old_value) != old_value);
+#  endif
+#else
+	do
+	{
+		old_value = *value_pointer;
+		new_value = old_value + add_value;
+		if(new_value > max_value)
+		{
+			return FALSE;
+		}
+	} while(__sync_val_compare_and_swap(value_pointer, old_value, new_value) != old_value);
+#endif
+	return TRUE;
+}
+
+size_t msh_AtomicSubtractSize(volatile size_t* value_pointer, size_t subtract_value)
 {
 #ifdef MSH_WIN
-	return InterlockedIncrement(val_ptr);
+	/* using compare swaps because windows doesn't have unsigned interlocked functions */
+	size_t old_value, new_value;
+#  if MSH_BITNESS==64
+	do
+	{
+		old_value = *value_pointer;
+		new_value = old_value - subtract_value;
+	} while(InterlockedCompareExchange64((volatile long long*)value_pointer, new_value, old_value) != old_value);
+#  elif MSH_BITNESS==32
+	do
+	{
+		old_value = *value_pointer;
+		new_value = old_value - subtract_value;
+	} while(InterlockedCompareExchange((volatile long*)value_pointer, new_value, old_value) != old_value);
+#  endif
+	return new_value;
 #else
-	return __sync_add_and_fetch(val_ptr, 1);
+	return __sync_sub_and_fetch(value_pointer, subtract_value);
 #endif
 }
 
-long msh_AtomicDecrement(volatile long* val_ptr)
+/*
+long msh_AtomicAddUnsigned32(volatile uint32_T* value_pointer, uint32_T add_value)
 {
 #ifdef MSH_WIN
-	return InterlockedDecrement(val_ptr);
+	return InterlockedAdd(value_pointer, add_value);
 #else
-	return __sync_sub_and_fetch(val_ptr, 1);
+	return __sync_add_and_fetch(value_pointer, add_value);
 #endif
 }
 
-long msh_AtomicCompareSwap(volatile long* val_ptr, long compare_value, long swap_value)
+long msh_AtomicSubtractUnsigned32(volatile uint32_T* value_pointer, uint32_T subtract_value)
 {
 #ifdef MSH_WIN
-	return InterlockedCompareExchange(val_ptr, swap_value, compare_value);
+	return InterlockedSub(value_pointer, add_value);
 #else
-	return __sync_val_compare_and_swap(val_ptr, compare_value, swap_value);
+	return __sync_sub_and_fetch(value_pointer, subtract_value);
+#endif
+}
+
+long msh_AtomicAdd64(volatile uint64_T* value_pointer, uint64_T add_value)
+{
+#ifdef MSH_WIN
+	return InterlockedAdd(value_pointer, add_value);
+#else
+	return __sync_add_and_fetch(value_pointer, add_value);
+#endif
+}
+
+long msh_AtomicSubtract64(volatile uint64_T* value_pointer, uint64_T subtract_value)
+{
+#ifdef MSH_WIN
+	return InterlockedAdd(value_pointer, add_value);
+#else
+	return __sync_sub_and_fetch(value_pointer, subtract_value);
+#endif
+}
+*/
+
+long msh_AtomicIncrement(volatile long* value_pointer)
+{
+#ifdef MSH_WIN
+	return InterlockedIncrement(value_pointer);
+#else
+	return __sync_add_and_fetch(value_pointer, 1);
+#endif
+}
+
+long msh_AtomicDecrement(volatile long* value_pointer)
+{
+#ifdef MSH_WIN
+	return InterlockedDecrement(value_pointer);
+#else
+	return __sync_sub_and_fetch(value_pointer, 1);
+#endif
+}
+
+long msh_AtomicCompareSwap(volatile long* value_pointer, long compare_value, long swap_value)
+{
+#ifdef MSH_WIN
+	return InterlockedCompareExchange(value_pointer, swap_value, compare_value);
+#else
+	return __sync_val_compare_and_swap(value_pointer, compare_value, swap_value);
 #endif
 }

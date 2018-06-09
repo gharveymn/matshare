@@ -33,10 +33,14 @@ typedef DWORD errcode_t;
 typedef int errcode_t;
 #endif
 
-void ReadMexError(const char* file_name, int line, const char* error_id, const char* error_message, ...);
-void ReadMexErrorWithCode(const char* file_name, int line, errcode_t error_code, const char* error_id, const char* error_message, ...);
+#define ERROR_SEVERITY_USER        1 << 0
+#define ERROR_SEVERITY_INTERNAL    1 << 1
+#define ERROR_SEVERITY_SYSTEM      1 << 2
+#define ERROR_SEVERITY_CORRUPTION  1 << 3
+#define ERROR_SEVERITY_FATAL       1 << 4
+
+void ReadMexError(const char* file_name, int line, unsigned int error_severity, errcode_t error_code, const char* error_id, const char* error_message, ...);
 void ReadMexWarning(const char* warn_id, const char* warn_message, ...);
 void SetMexErrorCallback(void (*callback_function)(void));
-void NullCallback(void);
 
 #endif /* MATSHARE_UTILS_H */

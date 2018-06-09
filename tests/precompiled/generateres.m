@@ -29,5 +29,5 @@ function generateres(paramsfolder, paramsscriptname, savefilename)
 		end
 	end
 	
-	save(savefilename);
+%	save(savefilename);
 end

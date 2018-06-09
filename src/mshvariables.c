@@ -23,7 +23,7 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 	mxArray* new_var;
 	if(seg_node->var_node != NULL)
 	{
-		ReadMexError(__FILE__, __LINE__, "CreateVariableError", "The segment targeted for variable creation already has a variable attached to it.");
+		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_INTERNAL, 0, "CreateVariableError", "The segment targeted for variable creation already has a variable attached to it.");
 	}
 	
 	new_var = msh_FetchVariable(msh_GetSegmentData(seg_node));
