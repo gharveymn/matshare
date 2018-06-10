@@ -25,6 +25,13 @@
 #  error(No build type specified.)
 #endif
 
+#ifdef MSH_DEBUG_PERF
+#  include <time.h>
+clock_t old_wait_time;
+clock_t old_lock_time;
+clock_t old_glob_time;
+#endif
+
 #ifndef FALSE
 #  define FALSE 0
 #endif

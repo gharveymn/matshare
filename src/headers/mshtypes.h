@@ -143,6 +143,14 @@ typedef volatile struct SharedInfo_t
 #else
 	LockFreeCounter_t num_procs;
 #endif
+#ifdef MSH_DEBUG_PERF
+	struct debug_perf
+	{
+		clock_t total_time;
+		clock_t lock_time;
+		clock_t busy_wait_time;
+	} debug_perf;
+#endif
 	pid_t update_pid;
 } SharedInfo_t;
 

@@ -34,6 +34,7 @@ void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val);
 
 bool_t msh_AtomicAddSizeWithMax(volatile size_t* value_pointer, size_t add_value, size_t max_value);
 size_t msh_AtomicSubtractSize(volatile size_t* value_pointer, size_t subtract_value);
+long msh_AtomicAddLong(volatile long* value_pointer, long add_value);
 long msh_AtomicIncrement(volatile long* value_pointer);
 long msh_AtomicDecrement(volatile long* value_pointer);
 long msh_AtomicCompareSwap(volatile long* value_pointer, long compare_value, long swap_value);

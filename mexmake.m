@@ -70,6 +70,7 @@ try
     end
     
     mexflags = [mexflags {'-DMSH_MAX_SHARED_SEGMENTS=512'}];
+    %mexflags = [mexflags {'-DMSH_DEBUG_PERF'}];
 	
 	fprintf('-Compiling matshare...')
 	%mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 -Wall"'}];

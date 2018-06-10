@@ -83,6 +83,7 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 
 #ifdef MSH_UNIX
 	char_t segment_name[MSH_MAX_NAME_LEN];
+	LockFreeCounter_t old_counter, new_counter;
 #endif
 	
 	if(seg_node->var_node != NULL)
@@ -97,30 +98,33 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 	if(msh_GetSegmentMetadata(seg_node) != NULL)
 	{
 		/* lockfree */
-#ifdef MSH_WIN
-		if(msh_DecrementCounter(&msh_GetSegmentMetadata(seg_node)->procs_tracking, TRUE))
+		do
 		{
-			/* this is nilpotent, so if it's already been removed it's ok */
-			msh_RemoveSegmentFromSharedList(seg_node);
+			old_counter.span = msh_GetSegmentMetadata(seg_node)->procs_tracking.span;
+			new_counter.span = old_counter.span;
+			new_counter.values.count -= 1;
 			
-			msh_AtomicSubtractSize(&g_shared_info->total_shared_size, seg_node->seg_info.total_segment_size);
-		}
-#else
-		if(msh_DecrementCounter(&msh_GetSegmentMetadata(seg_node)->procs_tracking, TRUE))
+			/* this will only lock once for each segment */
+			if(old_counter.values.flag == FALSE && new_counter.values.count == 0)
+			{
+				msh_RemoveSegmentFromSharedList(seg_node);
+				new_counter.values.flag = TRUE;
+			}
+		} while(msh_AtomicCompareSwap(&msh_GetSegmentMetadata(seg_node)->procs_tracking.span, old_counter.span, new_counter.span) != old_counter.span);
+		
+		if(old_counter.values.flag != new_counter.values.flag)
 		{
-			/* make sure that this occurs at least once */
-			msh_RemoveSegmentFromSharedList(seg_node);
-			
+#ifdef MSH_UNIX
 			msh_WriteSegmentName(segment_name, seg_node->seg_info.seg_num);
 			if(shm_unlink(segment_name) != 0)
 			{
 				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "UnlinkError", "There was an error unlinking the segment");
 			}
+#endif
+
 			msh_SetCounterPost(&msh_GetSegmentMetadata(seg_node)->procs_tracking, TRUE);
-			
 			msh_AtomicSubtractSize(&g_shared_info->total_shared_size, seg_node->seg_info.total_segment_size);
 		}
-#endif
 		
 		msh_UnmapMemory(seg_node->seg_info.metadata, sizeof(SegmentMetadata_t));
 		seg_node->seg_info.metadata = NULL;
@@ -632,7 +636,16 @@ static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache, msh_segmentnumb
 	/* check if the segment is being unlinked */
 	if(msh_GetCounterFlag(&seg_info_cache->metadata->procs_tracking))
 	{
+
+#ifdef MSH_DEBUG_PERF
+		old_wait_time = clock();
+#endif
+		
 		while(!msh_GetCounterPost(&seg_info_cache->metadata->procs_tracking));
+
+#ifdef MSH_DEBUG_PERF
+		msh_AtomicAddLong(&g_shared_info->debug_perf.busy_wait_time, clock() - old_wait_time);
+#endif
 		
 		msh_UnmapMemory(seg_info_cache->metadata, sizeof(SegmentMetadata_t));
 		seg_info_cache->metadata = NULL;

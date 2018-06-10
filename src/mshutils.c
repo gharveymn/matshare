@@ -11,6 +11,8 @@
 
 static LockFreeCounter_t old_counter, new_counter;
 
+
+
 void msh_OnExit(void)
 {
 	
@@ -94,9 +96,17 @@ void msh_AcquireProcessLock(void)
 #ifdef MSH_WIN
 	DWORD status;
 #endif
+
+#ifdef MSH_DEBUG_PERF
+	old_wait_time = clock();
+#endif
 	
 	/* blocks until lock flag operation is finished */
 	while(!msh_GetCounterPost(&g_shared_info->user_defined.lock_counter));
+
+#ifdef MSH_DEBUG_PERF
+	msh_AtomicAddLong(&g_shared_info->debug_perf.busy_wait_time, clock() - old_wait_time);
+#endif
 	
 	msh_IncrementCounter(&g_shared_info->user_defined.lock_counter);
 	
@@ -104,7 +114,11 @@ void msh_AcquireProcessLock(void)
 	{
 		if(g_local_info.lock_level == 0)
 		{
-		
+
+#ifdef MSH_DEBUG_PERF
+			old_lock_time = clock();
+#endif
+
 #ifdef MSH_WIN
 			status = WaitForSingleObject(g_process_lock, INFINITE);
 			if(status == WAIT_ABANDONED)
@@ -119,9 +133,14 @@ void msh_AcquireProcessLock(void)
 			
 			if(lockf(g_process_lock, F_LOCK, sizeof(SharedInfo_t)) != 0)
 			{
-				ReadMexError(__FILE__, __LINE__, errno, "ProcessLockError",  "Failed to lock acquire the process lock.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "ProcessLockError",  "Failed to lock acquire the process lock.");
 			}
 #endif
+
+#ifdef MSH_DEBUG_PERF
+			msh_AtomicAddLong(&g_shared_info->debug_perf.lock_time, clock() - old_lock_time);
+#endif
+
 		}
 		
 		g_local_info.lock_level += 1;
@@ -146,7 +165,7 @@ void msh_ReleaseProcessLock(void)
 #else
 			if(lockf(g_process_lock, F_ULOCK, sizeof(SharedInfo_t)) != 0)
 			{
-				ReadMexError(__FILE__, __LINE__, errno, "ProcessUnlockError", "Failed to release the process lock.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #endif
 		}
@@ -225,7 +244,7 @@ void msh_WriteConfiguration(void)
 #else
 	if((config_handle = open(config_path, O_RDWR | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
 	{
-		ReadMexError(__FILE__, __LINE__, errno, "OpenFileError", "Error opening the config file.");
+		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "OpenFileError", "Error opening the config file.");
 	}
 	else
 	{
@@ -348,9 +367,9 @@ bool_t msh_DecrementCounter(volatile LockFreeCounter_t* counter, bool_t set_flag
 		old_counter.span = counter->span;
 		new_counter.span = old_counter.span;
 		new_counter.values.count -= 1;
-		if(set_flag && old_counter.values.flag == FALSE)
+		if(set_flag && old_counter.values.flag == FALSE && new_counter.values.count == 0)
 		{
-			new_counter.values.flag = (unsigned long)(new_counter.values.count == 0);
+			new_counter.values.flag = TRUE;
 		}
 	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 	
@@ -484,8 +503,8 @@ size_t msh_AtomicSubtractSize(volatile size_t* value_pointer, size_t subtract_va
 #endif
 }
 
-/*
-long msh_AtomicAddUnsigned32(volatile uint32_T* value_pointer, uint32_T add_value)
+
+long msh_AtomicAddLong(volatile long* value_pointer, long add_value)
 {
 #ifdef MSH_WIN
 	return InterlockedAdd(value_pointer, add_value);
@@ -494,33 +513,6 @@ long msh_AtomicAddUnsigned32(volatile uint32_T* value_pointer, uint32_T add_valu
 #endif
 }
 
-long msh_AtomicSubtractUnsigned32(volatile uint32_T* value_pointer, uint32_T subtract_value)
-{
-#ifdef MSH_WIN
-	return InterlockedSub(value_pointer, add_value);
-#else
-	return __sync_sub_and_fetch(value_pointer, subtract_value);
-#endif
-}
-
-long msh_AtomicAdd64(volatile uint64_T* value_pointer, uint64_T add_value)
-{
-#ifdef MSH_WIN
-	return InterlockedAdd(value_pointer, add_value);
-#else
-	return __sync_add_and_fetch(value_pointer, add_value);
-#endif
-}
-
-long msh_AtomicSubtract64(volatile uint64_T* value_pointer, uint64_T subtract_value)
-{
-#ifdef MSH_WIN
-	return InterlockedAdd(value_pointer, add_value);
-#else
-	return __sync_sub_and_fetch(value_pointer, subtract_value);
-#endif
-}
-*/
 
 long msh_AtomicIncrement(volatile long* value_pointer)
 {

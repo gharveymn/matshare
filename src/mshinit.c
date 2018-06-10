@@ -110,9 +110,17 @@ static void msh_InitializeSharedInfo(void)
 		/* flag is set if the shared info segment is being unlinked */
 		if(msh_GetCounterFlag(&g_shared_info->num_procs))
 		{
+
+#ifdef MSH_DEBUG_PERF
+			old_wait_time = clock();
+#endif
 			
 			/* busy wait for the unlinking operation to complete */
 			while(!msh_GetCounterPost(&g_shared_info->num_procs));
+
+#ifdef MSH_DEBUG_PERF
+			msh_AtomicAddLong(&g_shared_info->debug_perf.busy_wait_time, clock() - old_wait_time);
+#endif
 			
 			/* close whatever we just opened and get the new shared memory */
 			msh_UnmapMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
@@ -134,9 +142,17 @@ static void msh_InitializeSharedInfo(void)
 			g_shared_info->is_initialized = TRUE;
 		}
 #endif
+
+#ifdef MSH_DEBUG_PERF
+		old_wait_time = clock();
+#endif
 		
 		/* wait until the shared memory is initialized to move on */
 		while(!g_shared_info->is_initialized);
+
+#ifdef MSH_DEBUG_PERF
+		msh_AtomicAddLong(&g_shared_info->debug_perf.busy_wait_time, clock() - old_wait_time);
+#endif
 		
 		msh_LockMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
 		

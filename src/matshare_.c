@@ -66,6 +66,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 															    "located in /dev/shm/.");
 #endif
 	}
+
+#ifdef MSH_DEBUG_PERF
+	old_glob_time = clock();
+#endif
 	
 	msh_CleanSegmentList(&g_local_seg_list);
 	
@@ -137,7 +141,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
 			break;
 	}
-	
+
+#ifdef MSH_DEBUG_PERF
+	if(g_local_info.shared_info_wrapper.ptr != NULL)
+	{
+		msh_AtomicAddLong(&g_shared_info->debug_perf.total_time, clock() - old_glob_time);
+	}
+#endif
+
 }
 
 
