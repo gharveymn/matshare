@@ -9,40 +9,52 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 %	lents = 0
 
 	allvars = {};
+	
+	% unravel struct for faster access
+	clear_data_bound = bounds.clear_data;
+	clear_new_bound = bounds.clear_new;
+	clear_all_bound = bounds.clear_all;
+	mshclear_bound = bounds.mshclear;
+	mshdetach_bound = bounds.mshdetach;
+	chpar_copy_bound = bounds.chpar_copy;
+	chpar_over_bound = bounds.chpar_over;
+	chpar_gc_on_bound = bounds.chpar_gc_on;
+	chpar_gc_off_bound = bounds.chpar_gc_off;
 
 	% bound of clearing of data
-	bounds.clear_data.iter = randi(rns, bounds.clear_data.bound);
+	clear_data_iter = randi(rns, clear_data_bound);
 
-	bounds.clear_new.iter = randi(rns, bounds.clear_new.bound);
+	clear_new_iter = randi(rns, clear_new_bound);
 
-	bounds.clear_all.iter = randi(rns, bounds.clear_all.bound);
+	clear_all_iter = randi(rns, clear_all_bound);
 
 	% bound of random call to mshclear
-	bounds.mshclear.iter = randi(rns, bounds.mshclear.bound);
+	mshclear_iter = randi(rns, mshclear_bound);
 
-	bounds.mshdetach.iter = randi(rns, bounds.mshdetach.bound);
+	mshdetach_iter = randi(rns, mshdetach_bound);
 
 	% bound of random call to mshconfig to set to copy-on-write
-	bounds.chpar_copy.iter = randi(rns, bounds.chpar_copy.bound);
+	chpar_copy_iter = randi(rns, chpar_copy_bound);
 
 	% bound of random call to mshconfig to set to overwrite
-	bounds.chpar_over.iter = randi(rns, bounds.chpar_over.bound);
+	chpar_over_iter = randi(rns, chpar_over_bound);
 
 	% bound of random call to mshconfig to set gc on
-	bounds.chpar_gc_on.iter = randi(rns, bounds.chpar_gc_on.bound);
+	chpar_gc_on_iter = randi(rns, chpar_gc_on_bound);
 
 	% bound of random call of mshconfig to set gc off
-	bounds.chpar_gc_off.iter = randi(rns, bounds.chpar_gc_off.bound);
+	chpar_gc_off_iter = randi(rns, chpar_gc_off_bound);
 	
-	ri1 = ceil(4*rand(rns,[num_samples,1]));
-	ri2 = ceil(4*rand(rns,[num_samples,1]));
+	randdoubles1 = rand(rns,[num_samples,1]);
+	randdoubles2 = rand(rns,[num_samples,1]);
+	randdoubles3 = rand(rns,[num_samples,1]);
 	
 	for i = 1:num_samples
 		try
 			
 			tv = variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, false, typespec);
 			
-			switch(ri1(i))
+			switch(ceil(4*randdoubles1(i)))
 				case 1
 					mshshare(tv);
 				case 2
@@ -53,7 +65,7 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 					[data, newvars, allvars] = mshshare(tv);
 			end
 			
-			switch(ri2(i))
+			switch(ceil(4*randdoubles2(i)))
 				case 1
 					mshfetch;
 				case 2
@@ -64,55 +76,55 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 					[data, newvars, allvars] = mshfetch;
 			end
 			
-			if(mod(i, bounds.mshclear.iter) == 0)
-				if(rand(rns) < 0.75 || numel(allvars) == 0)
+			if(mod(i, mshclear_iter) == 0)
+				if(randdoubles2(i) < 0.75 || numel(allvars) == 0)
 					mshclear;
 				else
 					clridx = sort(randi(numel(allvars),[2,1]));
 					mshclear(allvars{clridx(1):clridx(2)});
 				end
-				bounds.mshclear.iter = randi(rns, bounds.mshclear.bound);
+				mshclear_iter = ceil(mshclear_bound*randdoubles3(i));
 			end
 			
 			
-			if(mod(i, bounds.mshdetach.iter) == 0)
+			if(mod(i, mshdetach_iter) == 0)
 				mshdetach;
-				bounds.mshdetach.iter = randi(rns, bounds.mshdetach.bound);
+				mshdetach_iter = ceil(mshdetach_bound*randdoubles3(i));
 			end
 			
-			if(mod(i, bounds.clear_data.iter) == 0)
+			if(mod(i, clear_data_iter) == 0)
 				data = [];
-				bounds.clear_data.iter = randi(rns, bounds.clear_data.bound);
+				clear_data_iter = ceil(clear_data_bound*randdoubles3(i));
 			end
 			
-			if(mod(i, bounds.clear_new.iter) == 0)
+			if(mod(i, clear_new_iter) == 0)
 				newvars = [];
-				bounds.clear_new.iter = randi(rns, bounds.clear_new.bound);
+				clear_new_iter = ceil(clear_new_bound*randdoubles3(i));
 			end
 			
-			if(mod(i, bounds.clear_all.iter) == 0)
+			if(mod(i, clear_all_iter) == 0)
 				allvars = [];
-				bounds.clear_all.iter = randi(rns, bounds.clear_all.bound);
+				clear_all_iter = ceil(clear_all_bound*randdoubles3(i));
 			end
 			
-			if(mod(i, bounds.chpar_copy.iter) == 0)
+			if(mod(i, chpar_copy_iter) == 0)
 				mshconfig('sharetype', 'copy');
-				bounds.chpar_copy.iter = randi(rns, bounds.chpar_copy.bound);
+				chpar_copy_iter = ceil(chpar_copy_bound*randdoubles3(i));
 			end
 			
-			if(mod(i, bounds.chpar_over.iter) == 0)
+			if(mod(i, chpar_over_iter) == 0)
 				mshconfig('sharetype','overwrite');
-				bounds.chpar_over.iter = randi(rns, bounds.chpar_over.bound);
+				chpar_over_iter = ceil(chpar_over_bound*randdoubles3(i));
 			end
 			
-			if(mod(i, bounds.chpar_gc_on.iter) == 0)
+			if(mod(i, chpar_gc_on_iter) == 0)
 				mshconfig('GC','on');
-				bounds.chpar_gc_on.iter = randi(rns, bounds.chpar_gc_on.bound);
+				chpar_gc_on_iter = ceil(chpar_gc_on_bound*randdoubles3(i));
 			end
 			
-			if(mod(i, bounds.chpar_gc_off.iter) == 0)
+			if(mod(i, chpar_gc_off_iter) == 0)
 				mshconfig('GC','off');
-				bounds.chpar_gc_off.iter = randi(rns, bounds.chpar_gc_off.bound);
+				chpar_gc_off_iter = ceil(chpar_gc_off_bound*randdoubles3(i));
 			end
 			
 		catch mexcept

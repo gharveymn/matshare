@@ -83,8 +83,9 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 
 #ifdef MSH_UNIX
 	char_t segment_name[MSH_MAX_NAME_LEN];
-	LockFreeCounter_t old_counter, new_counter;
 #endif
+	
+	LockFreeCounter_t old_counter, new_counter;
 	
 	if(seg_node->var_node != NULL)
 	{
@@ -118,7 +119,7 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 			msh_WriteSegmentName(segment_name, seg_node->seg_info.seg_num);
 			if(shm_unlink(segment_name) != 0)
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "UnlinkError", "There was an error unlinking the segment");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM | ERROR_SEVERITY_FATAL, errno, "UnlinkError", "There was an error unlinking the segment");
 			}
 #endif
 
@@ -564,17 +565,11 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_s
 	
 	if(!msh_AtomicAddSizeWithMax(&g_shared_info->total_shared_size, seg_info_cache->total_segment_size, g_shared_info->user_defined.max_shared_size))
 	{
-#if MSH_BITNESS==64
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "SegmentSizeError", "The total size of currently shared memory is %llu bytes. "
-															    "The variable shared has a size of %llu bytes and will exceed the total shared size limit of %llu bytes. "
-											"You may change this limit by using mshconfig. For more information refer to `help mshconfig`.",
+		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "SegmentSizeError", "The total size of currently shared memory is " SIZE_FORMAT_SPEC " bytes. "
+																	  "The variable shared has a size of " SIZE_FORMAT_SPEC " bytes and will exceed the "
+														   "total shared size limit of " SIZE_FORMAT_SPEC " bytes. You may change this limit by using mshconfig. "
+												    "For more information refer to `help mshconfig`.",
 				   g_shared_info->total_shared_size, seg_info_cache->total_segment_size, g_shared_info->user_defined.max_shared_size);
-#elif MSH_BITNESS==32
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "SegmentSizeError", "The total size of currently shared memory is %lu bytes. "
-															    "The variable shared has a size of %lu bytes and will exceed the total shared size limit of %lu bytes. "
-											"You may change this limit by using mshconfig. For more information refer to `help mshconfig`.",
-				   g_shared_info->total_shared_size, seg_info_cache->total_segment_size, g_shared_info->user_defined.max_shared_size);
-#endif
 	}
 	
 	/* the targeted segment number is not guaranteed to be available, so keep retrying */
@@ -638,13 +633,14 @@ static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache, msh_segmentnumb
 	{
 
 #ifdef MSH_DEBUG_PERF
-		old_wait_time = clock();
+		msh_GetTick(&busy_wait_time.old);
 #endif
 		
 		while(!msh_GetCounterPost(&seg_info_cache->metadata->procs_tracking));
 
 #ifdef MSH_DEBUG_PERF
-		msh_AtomicAddLong(&g_shared_info->debug_perf.busy_wait_time, clock() - old_wait_time);
+		msh_GetTick(&busy_wait_time.new);
+		msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.busy_wait_time, msh_GetTickDifference(&busy_wait_time), SIZE_MAX);
 #endif
 		
 		msh_UnmapMemory(seg_info_cache->metadata, sizeof(SegmentMetadata_t));

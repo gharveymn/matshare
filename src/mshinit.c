@@ -112,14 +112,15 @@ static void msh_InitializeSharedInfo(void)
 		{
 
 #ifdef MSH_DEBUG_PERF
-			old_wait_time = clock();
+			msh_GetTick(&busy_wait_time.old);
 #endif
 			
 			/* busy wait for the unlinking operation to complete */
 			while(!msh_GetCounterPost(&g_shared_info->num_procs));
 
 #ifdef MSH_DEBUG_PERF
-			msh_AtomicAddLong(&g_shared_info->debug_perf.busy_wait_time, clock() - old_wait_time);
+			msh_GetTick(&busy_wait_time.new);
+			msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.busy_wait_time, msh_GetTickDifference(&busy_wait_time), SIZE_MAX);
 #endif
 			
 			/* close whatever we just opened and get the new shared memory */
@@ -144,14 +145,15 @@ static void msh_InitializeSharedInfo(void)
 #endif
 
 #ifdef MSH_DEBUG_PERF
-		old_wait_time = clock();
+		msh_GetTick(&busy_wait_time.old);
 #endif
 		
 		/* wait until the shared memory is initialized to move on */
 		while(!g_shared_info->is_initialized);
 
 #ifdef MSH_DEBUG_PERF
-		msh_AtomicAddLong(&g_shared_info->debug_perf.busy_wait_time, clock() - old_wait_time);
+		msh_GetTick(&busy_wait_time.new);
+		msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.busy_wait_time, msh_GetTickDifference(&busy_wait_time), SIZE_MAX);
 #endif
 		
 		msh_LockMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));

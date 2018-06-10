@@ -3,28 +3,28 @@ rns = RandStream('mt19937ar', 'Seed', mod(now*10^10, feature('getpid')));
 %% Define random call test parameters
 
 % bound of clearing of data
-bounds.clear_data.bound = 50;
+bounds.clear_data = 50;
 
-bounds.clear_new.bound = 50;
+bounds.clear_new = 50;
 
-bounds.clear_all.bound = 50;
+bounds.clear_all = 50;
 
 % bound of random call to mshclear
-bounds.mshclear.bound = 200;
+bounds.mshclear = 200;
 
-bounds.mshdetach.bound = 200;
+bounds.mshdetach = 200;
 
 % bound of random call to mshconfig to set to copy-on-write
-bounds.chpar_copy.bound = 50;
+bounds.chpar_copy = 50;
 
 % bound of random call to mshconfig to set to overwrite
-bounds.chpar_over.bound = 50;
+bounds.chpar_over = 50;
 
 % bound of random call to mshconfig to set gc on
-bounds.chpar_gc_on.bound = 30;
+bounds.chpar_gc_on = 30;
 
 % bound of random call of mshconfig to set gc off
-bounds.chpar_gc_off.bound = 30;
+bounds.chpar_gc_off = 30;
 
 % max depth of structs and cells
 num_maxDepth_tests = 1;
@@ -59,29 +59,6 @@ typespecV = linspace(min_typespec, max_typespec, num_typespec_tests);
 % number of samples per variable generation model
 num_samples = 1000;
 
-% bound of clearing of data
-bounds.clear_data.iter = randi(rns, bounds.clear_data.bound);
-
-bounds.clear_new.iter = randi(rns, bounds.clear_new.bound);
-
-bounds.clear_all.iter = randi(rns, bounds.clear_all.bound);
-
-% bound of random call to mshclear
-bounds.mshclear.iter = randi(rns, bounds.mshclear.bound);
-
-bounds.mshdetach.iter = randi(rns, bounds.mshdetach.bound);
-
-% bound of random call to mshconfig to set to copy-on-write
-bounds.chpar_copy.iter = randi(rns, bounds.chpar_copy.bound);
-
-% bound of random call to mshconfig to set to overwrite
-bounds.chpar_over.iter = randi(rns, bounds.chpar_over.bound);
-
-% bound of random call to mshconfig to set gc on
-bounds.chpar_gc_on.iter = randi(rns, bounds.chpar_gc_on.bound);
-
-% bound of random call of mshconfig to set gc off
-bounds.chpar_gc_off.iter = randi(rns, bounds.chpar_gc_off.bound);
-
-ri1 = ceil(4*rand(rns,[num_samples,1]));
-ri2 = ceil(4*rand(rns,[num_samples,1]));
+randdoubles1 = rand(rns,[num_samples,1]);
+randdoubles2 = rand(rns,[num_samples,1]);
+randdoubles3 = rand(rns,[num_samples,1]);

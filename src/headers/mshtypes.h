@@ -146,9 +146,9 @@ typedef volatile struct SharedInfo_t
 #ifdef MSH_DEBUG_PERF
 	struct debug_perf
 	{
-		clock_t total_time;
-		clock_t lock_time;
-		clock_t busy_wait_time;
+		size_t total_time;
+		size_t lock_time;
+		size_t busy_wait_time;
 	} debug_perf;
 #endif
 	pid_t update_pid;

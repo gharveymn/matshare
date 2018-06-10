@@ -1,8 +1,9 @@
 #ifndef MATSHARE_MSHBASICTYPES_H
 #define MATSHARE_MSHBASICTYPES_H
 
-#include "mex.h"
 #include <stddef.h>
+
+#include "mex.h"
 
 #if defined(MATLAB_UNIX)
 #  include <sys/mman.h>
@@ -25,11 +26,34 @@
 #  error(No build type specified.)
 #endif
 
+#ifdef MSH_WIN
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+
+#  define MSH_INVALID_HANDLE INVALID_HANDLE_VALUE
+#else
+#  include <fcntl.h>
+#  include <errno.h>
+#  include <sys/mman.h>
+#  include <sys/stat.h>
+
+#  define MSH_DEFAULT_PERMISSIONS (S_IRUSR | S_IWUSR)
+#  define MSH_INVALID_HANDLE (-1)
+#endif
+
 #ifdef MSH_DEBUG_PERF
 #  include <time.h>
-clock_t old_wait_time;
-clock_t old_lock_time;
-clock_t old_glob_time;
+#  ifdef MSH_WIN
+typedef LARGE_INTEGER mshtick_t;
+#  else
+typedef clock_t tick_t;
+#  endif
+typedef struct TickTracker_t
+{
+	mshtick_t old;
+	mshtick_t new;
+} TickTracker_t;
+TickTracker_t total_time, lock_time, busy_wait_time;
 #endif
 
 #ifndef FALSE
@@ -44,23 +68,14 @@ clock_t old_glob_time;
 #  define SIZE_MAX ((size_t)(-1))
 #endif
 
-#ifndef LONG_MAX
-#  define LONG_MAX 2147483647L
+#if MSH_BITNESS==64
+#  define SIZE_FORMAT_SPEC "%llu"
+#elif MSH_BITNESS==32
+#  define SIZE_FORMAT_SPEC "%lu"
 #endif
 
-#ifdef MSH_WIN
-#  define WIN32_LEAN_AND_MEAN
-#  include <windows.h>
-
-#  define MSH_INVALID_HANDLE INVALID_HANDLE_VALUE
-#else
-#  include <fcntl.h>
-#  include <errno.h>
-#  include <sys/mman.h>
-#  include <sys/stat.h>
-
-#  define MSH_DEFAULT_PERMISSIONS (S_IRUSR | S_IWUSR)
-#  define MSH_INVALID_HANDLE (-1)
+#ifndef LONG_MAX
+#  define LONG_MAX 2147483647L
 #endif
 
 /** these are basic readability typedefs **/

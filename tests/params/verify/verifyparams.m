@@ -33,4 +33,4 @@ max_typespec = 0;
 typespecV = linspace(min_typespec, max_typespec, num_typespec_tests);
 
 % number of samples per variable generation model
-num_samples = 100;
+num_samples = 10;

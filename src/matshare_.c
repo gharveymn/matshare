@@ -68,7 +68,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	}
 
 #ifdef MSH_DEBUG_PERF
-	old_glob_time = clock();
+	msh_GetTick(&total_time.old);
 #endif
 	
 	msh_CleanSegmentList(&g_local_seg_list);
@@ -115,7 +115,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			break;
 		case msh_DEBUG:
-			/* STUB: maybe print debug information at some point */
+#ifdef MSH_DEBUG_PERF
+			mexPrintf("Total time: " SIZE_FORMAT_SPEC "\nTime waiting for the lock: " SIZE_FORMAT_SPEC "\nTime spent in busy wait: " SIZE_FORMAT_SPEC "\n",
+			g_shared_info->debug_perf.total_time, g_shared_info->debug_perf.lock_time, g_shared_info->debug_perf.busy_wait_time);
+#endif
 			break;
 		case msh_OBJ_REGISTER:
 			
@@ -145,7 +148,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 #ifdef MSH_DEBUG_PERF
 	if(g_local_info.shared_info_wrapper.ptr != NULL)
 	{
-		msh_AtomicAddLong(&g_shared_info->debug_perf.total_time, clock() - old_glob_time);
+		msh_GetTick(&total_time.new);
+		msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.total_time, msh_GetTickDifference(&total_time), SIZE_MAX);
 	}
 #endif
 
@@ -175,6 +179,7 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		
 		if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_OVERWRITE)
 		{
+			/* if the variable is exactly the same size, perform a rewrite */
 			if(g_local_seg_list.num_segs != 0 && (msh_CompareVariableSize(msh_GetSegmentData(g_local_seg_list.last), in_var) == TRUE))
 			{
 				/* this is an in-place change */

@@ -98,14 +98,15 @@ void msh_AcquireProcessLock(void)
 #endif
 
 #ifdef MSH_DEBUG_PERF
-	old_wait_time = clock();
+	msh_GetTick(&busy_wait_time.old);
 #endif
 	
 	/* blocks until lock flag operation is finished */
 	while(!msh_GetCounterPost(&g_shared_info->user_defined.lock_counter));
 
 #ifdef MSH_DEBUG_PERF
-	msh_AtomicAddLong(&g_shared_info->debug_perf.busy_wait_time, clock() - old_wait_time);
+	msh_GetTick(&busy_wait_time.new);
+	msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.busy_wait_time, msh_GetTickDifference(&busy_wait_time), SIZE_MAX);
 #endif
 	
 	msh_IncrementCounter(&g_shared_info->user_defined.lock_counter);
@@ -116,7 +117,7 @@ void msh_AcquireProcessLock(void)
 		{
 
 #ifdef MSH_DEBUG_PERF
-			old_lock_time = clock();
+			msh_GetTick(&lock_time.old);
 #endif
 
 #ifdef MSH_WIN
@@ -138,7 +139,8 @@ void msh_AcquireProcessLock(void)
 #endif
 
 #ifdef MSH_DEBUG_PERF
-			msh_AtomicAddLong(&g_shared_info->debug_perf.lock_time, clock() - old_lock_time);
+			msh_GetTick(&lock_time.new);
+			msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.lock_time, msh_GetTickDifference(&lock_time), SIZE_MAX);
 #endif
 
 		}
@@ -430,6 +432,32 @@ void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val)
 }
 
 
+#ifdef MSH_DEBUG_PERF
+void msh_GetTick(mshtick_t* tick_pointer)
+{
+#  ifdef MSH_WIN
+	QueryPerformanceCounter(tick_pointer);
+#  else
+	*tick_pointer = clock();
+#  endif
+}
+
+size_t msh_GetTickDifference(TickTracker_t* tracker)
+{
+#  ifdef MSH_WIN
+#    if MSH_BITNESS==64
+	return (size_t)(tracker->new.QuadPart - tracker->old.QuadPart);
+#    elif MSH_BITNESS==32
+	return (size_t)(tracker->new.LowPart - tracker->old.LowPart);
+#    endif
+#  else
+	return (size_t)(tracker->new - tracker->old);
+#  endif
+}
+
+#endif
+
+
 /**
  * Atomically adds the size_t value to the value pointed to. Fails if this will result in a
  * value higher than the maximum specified.
@@ -503,7 +531,7 @@ size_t msh_AtomicSubtractSize(volatile size_t* value_pointer, size_t subtract_va
 #endif
 }
 
-
+/*
 long msh_AtomicAddLong(volatile long* value_pointer, long add_value)
 {
 #ifdef MSH_WIN
@@ -512,6 +540,7 @@ long msh_AtomicAddLong(volatile long* value_pointer, long add_value)
 	return __sync_add_and_fetch(value_pointer, add_value);
 #endif
 }
+*/
 
 
 long msh_AtomicIncrement(volatile long* value_pointer)
