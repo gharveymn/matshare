@@ -9,6 +9,7 @@
 #  include <unistd.h>
 #  include <fcntl.h>
 #  include <sys/mman.h>
+#  include <sys/stat.h>
 #endif
 
 static LockFreeCounter_t old_counter, new_counter;

@@ -190,13 +190,10 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 
 #ifdef MSH_UNIX
 				/* only need to update because we have overwritten an established segment */
-				if(&g_local_seg_list.last->seg_info.raw_ptr != NULL)
+				if(msync(g_local_seg_list.last->seg_info.raw_ptr, g_local_seg_list.last->seg_info.total_segment_size, MS_SYNC | MS_INVALIDATE) != 0)
 				{
-					if(msync(g_local_seg_list.last->seg_info.raw_ptr, g_local_seg_list.last->seg_info.total_segment_size, MS_SYNC | MS_INVALIDATE) != 0)
-					{
-						/* error severity: system */
-						ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "MsyncMatlabError", "There was an error with syncing a shared data segment.");
-					}
+					/* error severity: system */
+					ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "MsyncMatlabError", "There was an error with syncing a shared data segment.");
 				}
 #endif
 				

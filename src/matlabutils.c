@@ -124,7 +124,7 @@ static void WriteSystemErrorString(char* buffer, errcode_t error_code)
 	sprintf(buffer, "System error code 0x%d: ", error_code);
 	inner_buffer += strlen(buffer);
 	
-#  if(_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && !_GNU_SOURCE
+#  if(((_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && !_GNU_SOURCE) || defined(__APPLE__))
 	/* XSI-compliant version */
 	strerror_r(error_code, inner_buffer, SYSTEM_ERROR_STRING_SIZE);
 #  else
