@@ -118,12 +118,12 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 			end
 			
 			if(mod(i, chpar_gc_on_iter) == 0)
-				mshconfig('GC','on');
+				mshconfig('GarbageCollection','on');
 				chpar_gc_on_iter = ceil(chpar_gc_on_bound*randdoubles3(i));
 			end
 			
 			if(mod(i, chpar_gc_off_iter) == 0)
-				mshconfig('GC','off');
+				mshconfig('GarbageCollection','off');
 				chpar_gc_off_iter = ceil(chpar_gc_off_bound*randdoubles3(i));
 			end
 			
