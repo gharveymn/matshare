@@ -41,14 +41,14 @@
 #ifdef MSH_DEBUG_PERF
 #  include <time.h>
 #  ifdef MSH_WIN
-typedef LARGE_INTEGER mshtick_t;
+typedef LARGE_INTEGER msh_tick_t;
 #  else
-typedef clock_t mshtick_t;
+typedef clock_t msh_tick_t;
 #  endif
 typedef struct TickTracker_t
 {
-	mshtick_t old;
-	mshtick_t new;
+	msh_tick_t old;
+	msh_tick_t new;
 } TickTracker_t;
 TickTracker_t total_time, lock_time, busy_wait_time;
 #endif
@@ -90,9 +90,8 @@ typedef DWORD pid_t;
 typedef int handle_t;				 /* give fds a uniform identifier */
 #endif
 
-#define MSH_SEG_NUM_MAX LONG_MAX      /* the maximum segment number */
+#define MSH_SEG_NUM_MAX 0x7FFFFFFF      /* the maximum segment number (which is int32 max) */
 #define MSH_INVALID_SEG_NUM (-1L)
-#define MSH_MAX_TOTAL_SIZE SIZE_MAX
 
 #if MSH_BITNESS==64
 #  define MXMALLOC_MAGIC_CHECK 0xFEEDFACE

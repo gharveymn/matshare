@@ -436,7 +436,7 @@ void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val)
 
 
 #ifdef MSH_DEBUG_PERF
-void msh_GetTick(mshtick_t* tick_pointer)
+void msh_GetTick(msh_tick_t* tick_pointer)
 {
 #  ifdef MSH_WIN
 	QueryPerformanceCounter(tick_pointer);
