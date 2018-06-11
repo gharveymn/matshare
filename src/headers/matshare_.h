@@ -13,21 +13,27 @@
 
 #define MSH_PARAM_THREADSAFETY "ThreadSafety"
 #define MSH_PARAM_THREADSAFETY_L "threadsafety"
+#define MSH_PARAM_THREADSAFETY_AB "ts"
 
 #define MSH_PARAM_SECURITY "Security"
 #define MSH_PARAM_SECURITY_L "security"
+#define MSH_PARAM_SECURITY_AB "sc"
 
 #define MSH_PARAM_SHARETYPE "Sharetype"
 #define MSH_PARAM_SHARETYPE_L "sharetype"
+#define MSH_PARAM_SHARETYPE_AB "st"
 
 #define MSH_PARAM_GC "GarbageCollection"
 #define MSH_PARAM_GC_L "garbagecollection"
+#define MSH_PARAM_GC_AB "gc"
 
 #define MSH_PARAM_MAX_VARIABLES "MaxVariables"
 #define MSH_PARAM_MAX_VARIABLES_L "maxvariables"
+#define MSH_PARAM_MAX_VARIABLES_AB "mv"
 
 #define MSH_PARAM_MAX_SIZE "MaxSize"
 #define MSH_PARAM_MAX_SIZE_L "maxsize"
+#define MSH_PARAM_MAX_SIZE_AB "ms"
 
 #ifdef MSH_WIN
 #define MSH_PARAM_INFO \
