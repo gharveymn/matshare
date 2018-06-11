@@ -45,9 +45,12 @@ try
 	end
 	
 	if(ispc)
-		mexflags = [mexflags,{'-DMATLAB_WINDOWS'}];
-	else
-		mexflags = [mexflags,{'-DMATLAB_UNIX','-lrt'}];
+		mexflags = [mexflags, {'-DMATLAB_WINDOWS'}];
+    else
+        mexflags = [mexflags, {'-DMATLAB_UNIX'}];
+        if(~ismac)
+            mexflags = [mexflags, {'-lrt'}];
+        end
 	end
 	
 	if(maxsz > 2^31-1)
@@ -70,7 +73,7 @@ try
     end
     
     mexflags = [mexflags {'-DMSH_MAX_SHARED_SEGMENTS=512'}];
-    mexflags = [mexflags {'-DMSH_DEBUG_PERF'}];
+    %mexflags = [mexflags {'-DMSH_DEBUG_PERF'}];
 	
 	fprintf('-Compiling matshare...')
 	%mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 -Wall"'}];

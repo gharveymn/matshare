@@ -71,10 +71,6 @@ TickTracker_t total_time, lock_time, busy_wait_time;
 #  define SIZE_FORMAT_SPEC "%lu"
 #endif
 
-#ifndef LONG_MAX
-#  define LONG_MAX 2147483647L
-#endif
-
 /** these are basic readability typedefs **/
 typedef char char_t;                     /* characters */
 typedef byte_T byte_t;                  /* reading physical memory */

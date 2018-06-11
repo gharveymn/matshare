@@ -137,7 +137,7 @@ void msh_AcquireProcessLock(void)
 			
 			if(lockf(g_process_lock, F_LOCK, sizeof(SharedInfo_t)) != 0)
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "ProcessLockError",  "Failed to lock acquire the process lock.");
+				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "ProcessLockError",  "Failed to acquire the process lock.");
 			}
 #endif
 
@@ -293,7 +293,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(GetLastError() != ERROR_ALREADY_EXISTS)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CreateDirectoryError", "There was an error creating the directory for the matshare config file.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".", config_path);
 		}
 	}
 	
@@ -303,20 +303,20 @@ char_t* msh_GetConfigurationPath(void)
 	user_config_folder = getenv("HOME");
 	config_path = mxCalloc(strlen(user_config_folder) + 1 + strlen(HOME_CONFIG_FOLDER) + 1 + strlen(MSH_CONFIG_FOLDER_NAME) + 1 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
 	sprintf(config_path, "%s/%s", user_config_folder, HOME_CONFIG_FOLDER);
-	if(mkdir(config_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) == 0)
+	if(mkdir(config_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) == -1)
 	{
 		if(errno != EEXIST)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the user config directory.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the user config directory at location \"%s\".", config_path);
 		}
 	}
 	
 	sprintf(config_path, "%s/%s/%s", user_config_folder, HOME_CONFIG_FOLDER, MSH_CONFIG_FOLDER_NAME);
-	if(mkdir(config_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) == 0)
+	if(mkdir(config_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) == -1)
 	{
 		if(errno != EEXIST)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the directory for the matshare config file.");
+			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".", config_path);
 		}
 	}
 	

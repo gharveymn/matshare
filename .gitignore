@@ -8,6 +8,8 @@ mexbuild*/*
 *.mexw32
 *.mexa64
 *.mexa32
+*.mexmaci64
+*.mexmaci32
 *.idea
 res/*
 *.pdb
@@ -16,6 +18,9 @@ res/*
 *.o
 *mapping
 pathdef.m
+cmake_install.cmake
+Makefile
+CMakeCache.txt
 
 *ipch/
 *.aps
@@ -66,3 +71,5 @@ bld/
 /CppProperties.json
 /bin/MatShare.m
 /tests/precompiled/res
+/_build
+/CMakeFiles
