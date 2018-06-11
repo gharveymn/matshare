@@ -6,6 +6,8 @@
 
 #ifdef MSH_UNIX
 #  include <unistd.h>
+#  include <fcntl.h>
+#  include <sys/mman.h>
 #endif
 
 static void msh_InitializeSharedInfo(void);

@@ -20,8 +20,8 @@
 #define MSH_PARAM_SHARETYPE "Sharetype"
 #define MSH_PARAM_SHARETYPE_L "sharetype"
 
-#define MSH_PARAM_GC "GC"
-#define MSH_PARAM_GC_L "gc"
+#define MSH_PARAM_GC "GarbageCollection"
+#define MSH_PARAM_GC_L "garbagecollection"
 
 #define MSH_PARAM_MAX_VARIABLES "MaxVariables"
 #define MSH_PARAM_MAX_VARIABLES_L "maxvariables"
@@ -32,16 +32,16 @@
 #ifdef MSH_WIN
 #define MSH_PARAM_INFO \
 "Current parameters for matshare: \n\
-                                      ThreadSafety: '%s'\n\
-                                      CopyOnWrite:  '%s'\n\
-                                      GC:           '%s'\n"
+                                      ThreadSafety:      '%s'\n\
+                                      CopyOnWrite:       '%s'\n\
+                                      GarbageCollection: '%s'\n"
 #else
 #define MSH_PARAM_INFO \
 "Current parameters for matshare: \n\
-                                      ThreadSafety: '%s'\n\
-                                      CopyOnWrite:  '%s'\n\
-                                      GC:           '%s'\n\
-                                      Security:     '%o'\n"
+                                      ThreadSafety:      '%s'\n\
+                                      CopyOnWrite:       '%s'\n\
+                                      GarbageCollection: '%s'\n\
+                                      Security:          '%o'\n"
 #endif
 
 typedef enum

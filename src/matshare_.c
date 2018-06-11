@@ -1,8 +1,10 @@
 #include "headers/matshare_.h"
 #include <ctype.h>
+
 #ifdef MSH_UNIX
-#include <string.h>
-#include <sys/stat.h>
+#  include <string.h>
+#  include <sys/mman.h>
+#  include <sys/stat.h>
 #endif
 
 GlobalInfo_t g_local_info = {
@@ -43,7 +45,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "NotEnoughInputsError", "Minimum input arguments missing; must supply a msh_directive.");
+		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "NotEnoughInputsError", "Minimum input arguments missing. You must supply a msh_directive.");
 	}
 	
 	/* get the msh_directive */

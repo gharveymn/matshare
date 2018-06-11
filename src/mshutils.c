@@ -7,6 +7,8 @@
 #ifdef MSH_UNIX
 #  include <string.h>
 #  include <unistd.h>
+#  include <fcntl.h>
+#  include <sys/mman.h>
 #endif
 
 static LockFreeCounter_t old_counter, new_counter;
@@ -331,8 +333,8 @@ void msh_SetDefaultConfiguration(void)
 	g_shared_info->user_defined.sharetype = MSH_SHARETYPE;
 	msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_THREAD_SAFETY);
 	msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);       		  /** counter is in post state **/
-	g_shared_info->user_defined.max_shared_segments = MSH_MAX_SHARED_SEGMENTS; /** debug **/
-	g_shared_info->user_defined.max_shared_size = MSH_MAX_SHARED_SIZE; /** debug **/
+	g_shared_info->user_defined.max_shared_segments = MSH_MAX_SHARED_SEGMENTS;
+	g_shared_info->user_defined.max_shared_size = MSH_MAX_SHARED_SIZE;
 	g_shared_info->user_defined.will_gc = TRUE;
 #ifdef MSH_UNIX
 	g_shared_info->user_defined.security = MSH_DEFAULT_PERMISSIONS;

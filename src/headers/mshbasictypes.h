@@ -32,10 +32,7 @@
 
 #  define MSH_INVALID_HANDLE INVALID_HANDLE_VALUE
 #else
-#  include <fcntl.h>
 #  include <errno.h>
-#  include <sys/mman.h>
-#  include <sys/stat.h>
 
 #  define MSH_DEFAULT_PERMISSIONS (S_IRUSR | S_IWUSR)
 #  define MSH_INVALID_HANDLE (-1)
@@ -46,7 +43,7 @@
 #  ifdef MSH_WIN
 typedef LARGE_INTEGER mshtick_t;
 #  else
-typedef clock_t tick_t;
+typedef clock_t mshtick_t;
 #  endif
 typedef struct TickTracker_t
 {
