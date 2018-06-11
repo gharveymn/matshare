@@ -1,6 +1,6 @@
 #include "headers/mshsegments.h"
 #include "headers/mshvariables.h"
-#include "headers/matlabutils.h"
+#include "headers/mlerrorutils.h"
 #include "headers/mshutils.h"
 
 #ifdef MSH_UNIX
@@ -121,7 +121,7 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 			msh_WriteSegmentName(segment_name, seg_node->seg_info.seg_num);
 			if(shm_unlink(segment_name) != 0)
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM | ERROR_SEVERITY_FATAL, errno, "UnlinkError", "There was an error unlinking the segment");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, errno, "UnlinkError", "There was an error unlinking the segment");
 			}
 #endif
 
@@ -166,8 +166,9 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 		msh_RemoveSegmentFromList(seg_node);
 		msh_DetachSegment(seg_node);
 		msh_ReleaseProcessLock();
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "TooManySegmentError", "The shared variable would exceed the current maximum number of shared variables (currently set as %l). "
-											   "You may change this limit by using mshconfig. For more information refer to `help mshconfig`.", g_shared_info->user_defined.max_shared_segments);
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManySegmentError", "The shared variable would exceed the current maximum number of shared variables (currently set as %l). "
+																		   "You may change this limit by using mshconfig. For more information refer to `help mshconfig`.",
+					   g_shared_info->user_defined.max_shared_segments);
 	}
 	else
 	{
@@ -567,11 +568,11 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_s
 	
 	if(!msh_AtomicAddSizeWithMax(&g_shared_info->total_shared_size, seg_info_cache->total_segment_size, g_shared_info->user_defined.max_shared_size))
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "SegmentSizeError", "The total size of currently shared memory is " SIZE_FORMAT_SPEC " bytes. "
-																	  "The variable shared has a size of " SIZE_FORMAT_SPEC " bytes and will exceed the "
-														   "total shared size limit of " SIZE_FORMAT_SPEC " bytes. You may change this limit by using mshconfig. "
-												    "For more information refer to `help mshconfig`.",
-				   g_shared_info->total_shared_size, seg_info_cache->total_segment_size, g_shared_info->user_defined.max_shared_size);
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "SegmentSizeError", "The total size of currently shared memory is " SIZE_FORMAT_SPEC " bytes. "
+																		"The variable shared has a size of " SIZE_FORMAT_SPEC " bytes and will exceed the "
+																		"total shared size limit of " SIZE_FORMAT_SPEC " bytes. You may change this limit by using mshconfig. "
+																		"For more information refer to `help mshconfig`.", g_shared_info->total_shared_size,
+					   seg_info_cache->total_segment_size, g_shared_info->user_defined.max_shared_size);
 	}
 	
 	/* the targeted segment number is not guaranteed to be available, so keep retrying */
@@ -682,13 +683,13 @@ handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size)
 	ret_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, segment_name);
 	if(ret_handle == NULL)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CreateFileError", "Error creating the file mapping.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateFileError", "Error creating the file mapping.");
 	}
 	else if(GetLastError() == ERROR_ALREADY_EXISTS)
 	{
 		if(CloseHandle(ret_handle) == 0)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the file handle.");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the file handle.");
 		}
 		return MSH_INVALID_HANDLE;
 	}
@@ -702,7 +703,7 @@ handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size)
 	{
 		if(errno != EEXIST)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CreateError", "There was an error creating the segment");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CreateError", "There was an error creating the segment");
 		}
 		return MSH_INVALID_HANDLE;
 	}
@@ -710,7 +711,7 @@ handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size)
 	/* set the segment size */
 	if(ftruncate(ret_handle, segment_size) != 0)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "TruncateError", "There was an error truncating the segment");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "TruncateError", "There was an error truncating the segment");
 	}
 
 #endif
@@ -730,13 +731,13 @@ handle_t msh_OpenSharedMemory(char_t* segment_name)
 	ret_handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, TRUE, segment_name);
 	if(ret_handle == NULL)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "OpenFileError", "Error opening the file mapping.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "OpenFileError", "Error opening the file mapping.");
 	}
 #else
 	ret_handle = shm_open(segment_name, O_RDWR, g_shared_info->user_defined.security);
 	if(ret_handle == -1)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "OpenError", "There was an error opening the segment");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "OpenError", "There was an error opening the segment");
 	}
 #endif
 
@@ -754,13 +755,13 @@ void* msh_MapMemory(handle_t segment_handle, size_t map_sz)
 	seg_ptr = MapViewOfFile(segment_handle, FILE_MAP_ALL_ACCESS, 0, 0, map_sz);
 	if(seg_ptr == NULL)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "MemoryMappingError", "There was an error memory mapping the segment");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "MemoryMappingError", "There was an error memory mapping the segment");
 	}
 #else
 	seg_ptr = mmap(NULL, map_sz, PROT_READ | PROT_WRITE, MAP_SHARED, segment_handle, 0);
 	if(seg_ptr == MAP_FAILED)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "MemoryMappingError", "There was an error memory mapping the segment");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "MemoryMappingError", "There was an error memory mapping the segment");
 	}
 #endif
 
@@ -773,12 +774,12 @@ void msh_UnmapMemory(void* segment_pointer, size_t map_sz)
 #ifdef MSH_WIN
 	if(UnmapViewOfFile(segment_pointer) == 0)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "UnmapFileError", "Error unmapping the file.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "UnmapFileError", "Error unmapping the file.");
 	}
 #else
 	if(munmap(segment_pointer, map_sz) != 0)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "MunmapError", "There was an error unmapping the segment");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "MunmapError", "There was an error unmapping the segment");
 	}
 #endif
 }
@@ -788,12 +789,12 @@ void msh_CloseSharedMemory(handle_t segment_handle)
 #ifdef MSH_WIN
 	if(CloseHandle(segment_handle) == 0)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the data file handle.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the data file handle.");
 	}
 #else
 	if(close(segment_handle) == -1)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the data file handle.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the data file handle.");
 	}
 #endif
 }

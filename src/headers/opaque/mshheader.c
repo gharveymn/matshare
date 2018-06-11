@@ -1,5 +1,5 @@
 #include "../mshheader.h"
-#include "../matlabutils.h"
+#include "../mlerrorutils.h"
 #include "../mshexterntypes.h"
 #ifdef MSH_UNIX
 #include <string.h>
@@ -368,7 +368,8 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	}
 	else
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidTypeError",
+					   "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
 	return obj_tree_sz;
@@ -665,7 +666,8 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			}
 			else
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER | ERROR_SEVERITY_INTERNAL, 0, "UnrecognizedTypeError", "The fetched array was of class 'sparse' but not of type 'double' or 'logical'.");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER | MEU_SEVERITY_INTERNAL, 0, "UnrecognizedTypeError",
+							   "The fetched array was of class 'sparse' but not of type 'double' or 'logical'.");
 			}
 			
 			/* free the pointers relating to sparse */
@@ -704,7 +706,8 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			}
 			else
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_INTERNAL | ERROR_SEVERITY_CORRUPTION, 0, "UnrecognizedTypeError", "The fetched array was of class not of type 'numeric', 'logical', or 'char'.");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, 0, "UnrecognizedTypeError",
+							   "The fetched array was of class not of type 'numeric', 'logical', or 'char'.");
 			}
 			
 			/* there is no data if it is empty */
@@ -903,7 +906,8 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shared_header, const mxAr
 	}
 	else
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidTypeError", "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidTypeError",
+					   "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
 	return TRUE;
@@ -999,7 +1003,7 @@ void msh_DetachVariable(mxArray* ret_var)
 	}
 	else
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_INTERNAL | ERROR_SEVERITY_CORRUPTION, 0, "InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, 0, "InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
 	}
 }
 

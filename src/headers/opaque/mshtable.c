@@ -1,6 +1,6 @@
 #include "../mshsegments.h"
 #include "../mshtypes.h"
-#include "../matlabutils.h"
+#include "../mlerrorutils.h"
 #define MSH_INIT_TABLE_SIZE 64
 
 static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs);

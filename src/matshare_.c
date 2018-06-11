@@ -7,6 +7,10 @@
 #  include <sys/stat.h>
 #endif
 
+char_t* g_msh_library_name = "matshare";
+char_t* g_msh_error_help_message = "";
+char_t* g_msh_warning_help_message = "";
+
 GlobalInfo_t g_local_info = {
 							0,                      /* rev_num */
 							0,                      /* num_registered_objs */
@@ -45,7 +49,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "NotEnoughInputsError", "Minimum input arguments missing. You must supply a msh_directive.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "NotEnoughInputsError", "Minimum input arguments missing. You must supply a msh_directive.");
 	}
 	
 	/* get the msh_directive */
@@ -62,10 +66,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	if(g_shared_info->has_fatal_error)
 	{
 #ifdef MSH_WIN
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_FATAL, 0, "FatalError", "There was previously a fatal error to the matshare system. Please restart MATLAB.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_FATAL, 0, "FatalError", "There was previously a fatal error to the matshare system. Please restart MATLAB.");
 #else
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_FATAL, 0, "FatalError", "There was previously a fatal error to the matshare system. Please restart MATLAB. You may have to delete files "
-															    "located in /dev/shm/.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_FATAL, 0, "FatalError", "There was previously a fatal error to the matshare system. Please restart MATLAB. You may have to delete files "
+																	"located in /dev/shm/.");
 #endif
 	}
 
@@ -143,7 +147,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			break;
 		default:
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
 			break;
 	}
 
@@ -167,7 +171,7 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 	/* check the inputs */
 	if(num_vars < 1)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "NoVariableError", "No variable supplied to clone.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "NoVariableError", "No variable supplied to clone.");
 	}
 	
 	for(i = 0, in_var = in_vars[i]; i < num_vars; i++, in_var = in_vars[i])
@@ -175,7 +179,8 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		
 		if(!(mxIsNumeric(in_var) || mxIsLogical(in_var) || mxIsChar(in_var) || mxIsStruct(in_var) || mxIsCell(in_var)))
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidTypeError", "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidTypeError",
+						   "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 		}
 		
 		
@@ -193,7 +198,7 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 				if(msync(g_local_seg_list.last->seg_info.raw_ptr, g_local_seg_list.last->seg_info.total_segment_size, MS_SYNC | MS_INVALIDATE) != 0)
 				{
 					/* error severity: system */
-					ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "MsyncMatlabError", "There was an error with syncing a shared data segment.");
+					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "MsyncMatlabError", "There was an error with syncing a shared data segment.");
 				}
 #endif
 				
@@ -287,7 +292,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 				
 				if(nlhs > 3)
 				{
-					ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "TooManyOutputsError", "Too many outputs. Got %d, need between 0 and 4.", nlhs);
+					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManyOutputsError", "Too many outputs. Got %d, need between 0 and 4.", nlhs);
 				}
 				
 				/* retrieve all segment variables */
@@ -414,7 +419,7 @@ void msh_Config(int num_params, const mxArray** in)
 	
 	if(num_params % 2 != 0)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidNumArgsError", "The number of parameters input must be a multiple of two.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidNumArgsError", "The number of parameters input must be a multiple of two.");
 	}
 	
 	for(i = 0; i < num_params/2; i++)
@@ -424,7 +429,7 @@ void msh_Config(int num_params, const mxArray** in)
 		
 		if(!mxIsChar(param) || !mxIsChar(val))
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidArgumentError", "All parameters and values must be input as character arrays.");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidArgumentError", "All parameters and values must be input as character arrays.");
 		}
 		
 		ps_len = (int)mxGetNumberOfElements(param);
@@ -432,11 +437,11 @@ void msh_Config(int num_params, const mxArray** in)
 		
 		if(ps_len + 1 > MSH_MAX_NAME_LEN)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
 		else if(vs_len + 1 > MSH_MAX_NAME_LEN)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, param_str);
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, param_str);
 		}
 		
 		mxGetString(param, param_str, MSH_MAX_NAME_LEN);
@@ -464,7 +469,7 @@ void msh_Config(int num_params, const mxArray** in)
 			}
 			else
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THREADSAFETY);
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THREADSAFETY);
 			}
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_SECURITY_L) == 0)
@@ -472,7 +477,8 @@ void msh_Config(int num_params, const mxArray** in)
 #ifdef MSH_UNIX
 			if(vs_len < 3 || vs_len > 4)
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidValueError", "Too many or too few digits in \"%s\" for parameter \"%s\". Must have either 3 or 4 digits.", val_str, MSH_PARAM_SECURITY);
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Too many or too few digits in \"%s\" for parameter \"%s\". Must have either 3 or 4 digits.",
+							   val_str, MSH_PARAM_SECURITY);
 			}
 			else
 			{
@@ -480,19 +486,19 @@ void msh_Config(int num_params, const mxArray** in)
 				g_shared_info->user_defined.security = (mode_t)strtol(val_str_l, NULL, 8);
 				if(fchmod(g_local_info.shared_info_wrapper.handle, g_shared_info->user_defined.security) != 0)
 				{
-					ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "ChmodError", "There was an error modifying permissions for the shared info segment.");
+					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ChmodError", "There was an error modifying permissions for the shared info segment.");
 				}
 				for(curr_seg_node = g_local_seg_list.first; curr_seg_node != NULL; curr_seg_node = curr_seg_node->next)
 				{
 					if(fchmod(curr_seg_node->seg_info.handle, g_shared_info->user_defined.security) != 0)
 					{
-						ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "ChmodError", "There was an error modifying permissions for the data segment.");
+						meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ChmodError", "There was an error modifying permissions for the data segment.");
 					}
 				}
 				msh_ReleaseProcessLock();
 			}
 #else
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
 #endif
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_SHARETYPE_L) == 0)
@@ -507,7 +513,7 @@ void msh_Config(int num_params, const mxArray** in)
 			}
 			else
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_SHARETYPE);
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_SHARETYPE);
 			}
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_GC_L) == 0)
@@ -522,7 +528,7 @@ void msh_Config(int num_params, const mxArray** in)
 			}
 			else
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_GC);
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_GC);
 			}
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_MAX_VARIABLES_L) == 0)
@@ -539,7 +545,7 @@ void msh_Config(int num_params, const mxArray** in)
 		}
 		else
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
 	}
 	
@@ -554,7 +560,7 @@ msh_directive_t msh_ParseDirective(const mxArray* in)
 	}
 	else
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_USER, 0, "InvalidDirectiveError", "Directive must be type 'uint8'.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidDirectiveError", "Directive must be type 'uint8'.");
 	}
 	return msh_DEBUG;
 }

@@ -8,7 +8,7 @@ INCLUDE_DIRECTORIES(${MATLAB_INCLUDE_DIR})
 SET(SOURCE_FILES
 		${MATLAB_INCLUDE_DIR}/mex.h
 		matshare_.c headers/matshare_.h
-	     matlabutils.c headers/matlabutils.h
+		mlerrorutils.c headers/mlerrorutils.h
 		mshinit.c headers/mshinit.h
 		mshutils.c headers/mshutils.h
 		headers/mshtypes.h
@@ -18,7 +18,7 @@ IF(UXWIN)
 	SET(SOURCE_FILES
 			${MATLAB_INCLUDE_DIR}/mex.h
 			matshare_.c headers/matshare_.h
-		    matlabutils.c headers/matlabutils.h
+			mlerrorutils.c headers/mlerrorutils.h
 			mshinit.c headers/mshinit.h
 			headers/mshtypes.h
 			extlib/mman-win32/sys/mman.h

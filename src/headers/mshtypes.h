@@ -177,6 +177,9 @@ typedef struct GlobalInfo_t
 	
 } GlobalInfo_t;
 
+extern char_t* g_msh_library_name;
+extern char_t* g_msh_error_help_message;
+extern char_t* g_msh_warning_help_message;
 
 extern GlobalInfo_t g_local_info;
 extern VariableList_t g_local_var_list;

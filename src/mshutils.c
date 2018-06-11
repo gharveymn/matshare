@@ -2,7 +2,7 @@
 #include "headers/mshutils.h"
 #include "headers/mshvariables.h"
 #include "headers/mshsegments.h"
-#include "headers/matlabutils.h"
+#include "headers/mlerrorutils.h"
 
 #ifdef MSH_UNIX
 #  include <string.h>
@@ -40,7 +40,7 @@ void msh_OnExit(void)
 			msh_WriteConfiguration();
 			if(shm_unlink(MSH_SHARED_INFO_SEGMENT_NAME) != 0)
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "UnlinkError", "There was an error unlinking the shared info segment. This is a critical error, please restart.");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "UnlinkError", "There was an error unlinking the shared info segment. This is a critical error, please restart.");
 			}
 			msh_SetCounterPost(&g_shared_info->num_procs, TRUE);
 		}
@@ -61,7 +61,7 @@ void msh_OnExit(void)
 	{
 		if(CloseHandle(g_local_info.process_lock) == 0)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the process lock handle.");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the process lock handle.");
 		}
 		g_local_info.process_lock = MSH_INVALID_HANDLE;
 	}
@@ -71,7 +71,7 @@ void msh_OnExit(void)
 	{
 		if(!mexIsLocked())
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_CORRUPTION | ERROR_SEVERITY_INTERNAL, 0, "MexUnlockedError", "Matshare tried to unlock its file when it was already unlocked.");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_CORRUPTION | MEU_SEVERITY_INTERNAL, 0, "MexUnlockedError", "Matshare tried to unlock its file when it was already unlocked.");
 		}
 		mexUnlock();
 		g_local_info.is_mex_locked = FALSE;
@@ -83,7 +83,7 @@ void msh_OnExit(void)
 
 void msh_OnError(void)
 {
-	SetMexErrorCallback(NULL);
+	meu_SetErrorCallback(NULL);
 
 	/* set the process lock at a level where it can be released if needed */
 	while(g_local_info.lock_level > 0)
@@ -127,17 +127,17 @@ void msh_AcquireProcessLock(void)
 			status = WaitForSingleObject(g_process_lock, INFINITE);
 			if(status == WAIT_ABANDONED)
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM | ERROR_SEVERITY_FATAL, 0, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, 0, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
 			}
 			else if(status == WAIT_FAILED)
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "ProcessLockError",  "Failed to lock acquire the process lock.");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ProcessLockError",  "Failed to lock acquire the process lock.");
 			}
 #else
 			
 			if(lockf(g_process_lock, F_LOCK, sizeof(SharedInfo_t)) != 0)
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "ProcessLockError",  "Failed to acquire the process lock.");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ProcessLockError", "Failed to acquire the process lock.");
 			}
 #endif
 
@@ -165,12 +165,12 @@ void msh_ReleaseProcessLock(void)
 #ifdef MSH_WIN
 			if(ReleaseMutex(g_process_lock) == 0)
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "ProcessUnlockError", "Failed to release the process lock.");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #else
 			if(lockf(g_process_lock, F_ULOCK, sizeof(SharedInfo_t)) != 0)
 			{
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "ProcessUnlockError", "Failed to release the process lock.");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #endif
 		}
@@ -221,14 +221,14 @@ void msh_WriteConfiguration(void)
 	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
 	{
 		mxFree(config_path);
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "OpenFileError", "Error opening the config file.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "OpenFileError", "Error opening the config file.");
 	}
 	else
 	{
 		if(ReadFile(config_handle, &saved_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 		{
 			mxFree(config_path);
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "ReadFileError", "Error reading from the config file.");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ReadFileError", "Error reading from the config file.");
 		}
 		
 		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
@@ -236,27 +236,27 @@ void msh_WriteConfiguration(void)
 			if(WriteFile(config_handle, &local_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				mxFree(config_path);
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "WriteFileError", "Error writing to the config file.");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(CloseHandle(config_handle) == 0)
 		{
 			mxFree(config_path);
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #else
 	if((config_handle = open(config_path, O_RDWR | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
 	{
-		ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "OpenFileError", "Error opening the config file.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "OpenFileError", "Error opening the config file.");
 	}
 	else
 	{
 		if(read(config_handle, &saved_config, sizeof(UserConfig_t)) == -1)
 		{
 			mxFree(config_path);
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "ReadFileError", "Error reading from the config file.");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ReadFileError", "Error reading from the config file.");
 		}
 		
 		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
@@ -264,14 +264,14 @@ void msh_WriteConfiguration(void)
 			if(write(config_handle, &local_config, sizeof(UserConfig_t)) == -1)
 			{
 				mxFree(config_path);
-				ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "WriteFileError", "Error writing to the config file.");
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(close(config_handle) == -1)
 		{
 			mxFree(config_path);
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the config file handle.");
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #endif
@@ -293,7 +293,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(GetLastError() != ERROR_ALREADY_EXISTS)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, GetLastError(), "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".", config_path);
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".", config_path);
 		}
 	}
 	
@@ -307,7 +307,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(errno != EEXIST)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the user config directory at location \"%s\".", config_path);
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the user config directory at location \"%s\".", config_path);
 		}
 	}
 	
@@ -316,7 +316,8 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(errno != EEXIST)
 		{
-			ReadMexError(__FILE__, __LINE__, ERROR_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".", config_path);
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".",
+						   config_path);
 		}
 	}
 	

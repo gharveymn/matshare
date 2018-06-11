@@ -2,7 +2,7 @@
 #define MATSHARE__H
 
 #include "mshtypes.h"
-#include "matlabutils.h"
+#include "mlerrorutils.h"
 #include "mshutils.h"
 #include "mshvariables.h"
 #include "mshsegments.h"
