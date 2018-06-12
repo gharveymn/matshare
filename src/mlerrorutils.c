@@ -25,19 +25,33 @@
 #define MEU_SYSTEM_ERROR_STRING_SIZE 1024 /* size of POSIX error buffer size */
 #define MEU_MATLAB_HELP_MESSAGE_SIZE 512
 #define MEU_FULL_MESSAGE_SIZE 4096 /* four times the size of max POSIX error buffer size */
+
 #define MEU_ID_FORMAT "%."EXPAND_AS_STRING(MEU_LIBRARY_NAME_SIZE)"s:%."EXPAND_AS_STRING(MEU_ID_SIZE)"s"
+
 #define MEU_ERROR_MESSAGE_FORMAT "%."EXPAND_AS_STRING(MEU_ID_BUFFER_SIZE)"s in %."EXPAND_AS_STRING(MEU_FILE_NAME_SIZE)"s, at line %d.\n%."EXPAND_AS_STRING(MEU_ERROR_SEVERITY_SIZE)"s\n\n%."EXPAND_AS_STRING(MEU_ERROR_STRING_SIZE)"s\n%."EXPAND_AS_STRING(MEU_SYSTEM_ERROR_BUFFER_SIZE)"s%."EXPAND_AS_STRING(MEU_MATLAB_HELP_MESSAGE_SIZE)"s"
 
 #define MEU_WARN_MESSAGE_FORMAT "%."EXPAND_AS_STRING(MEU_ERROR_STRING_SIZE)"s%."EXPAND_AS_STRING(MEU_MATLAB_HELP_MESSAGE_SIZE)"s"
 
-static void meu_NullCallback(void);
+/**
+ * Writes out the severity string.
+ *
+ * @param buffer A preallocated buffer. Should be size MEU_ERROR_SEVERITY_SIZE.
+ * @param error_severity The error severity bitmask.
+ */
 static void meu_WriteSeverityString(char* buffer, unsigned int error_severity);
+
+/**
+ * Writes out the system error string.
+ *
+ * @param buffer A preallocated buffer. Should be size MEU_SYSTEM_ERROR_STRING_SIZE.
+ * @param error_code The system error code returned from GetLastError() or errno.
+ */
 static void meu_WriteSystemErrorString(char* buffer, errcode_t error_code);
 
 static char* meu_library_name = "";
 
-static void (*meu_error_callback)(void) = meu_NullCallback;
-static void (*meu_warning_callback)(void) = meu_NullCallback;
+static void (*meu_error_callback)(void) = NULL;
+static void (*meu_warning_callback)(void) = NULL;
 
 static char* meu_error_help_message = "";
 static char* meu_warning_help_message = "";
@@ -65,7 +79,10 @@ void meu_PrintMexError(const char* file_name, int line, unsigned int error_sever
 	sprintf(id_buffer, MEU_ID_FORMAT, meu_library_name, error_id);
 	sprintf(full_message, MEU_ERROR_MESSAGE_FORMAT, error_id, file_name, line, error_severity_buffer, error_message_buffer, system_error_string_buffer, meu_error_help_message);
 	
-	meu_error_callback();
+	if(meu_error_callback != NULL)
+	{
+		meu_error_callback();
+	}
 	mexErrMsgIdAndTxt(id_buffer, full_message);
 	
 }
@@ -84,8 +101,11 @@ void meu_PrintMexWarning(const char* warn_id, const char* warn_message, ...)
 	
 	sprintf(id_buffer, MEU_ID_FORMAT, meu_library_name, warn_id);
 	sprintf(full_message, MEU_WARN_MESSAGE_FORMAT, message_prebuffer, meu_warning_help_message);
-	
-	meu_warning_callback();
+
+	if(meu_warning_callback != NULL)
+	{
+		meu_warning_callback();
+	}
 	mexWarnMsgIdAndTxt(id_buffer, full_message);
 }
 
@@ -110,27 +130,13 @@ void meu_SetWarningHelpMessage(char* help_message)
 
 void meu_SetErrorCallback(void (* callback_function)(void))
 {
-	if(callback_function != NULL)
-	{
-		meu_error_callback = callback_function;
-	}
-	else
-	{
-		meu_error_callback = meu_NullCallback;
-	}
+	meu_error_callback = callback_function;
 }
 
 
 void meu_SetWarningCallback(void (* callback_function)(void))
 {
-	if(callback_function != NULL)
-	{
-		meu_error_callback = callback_function;
-	}
-	else
-	{
-		meu_error_callback = meu_NullCallback;
-	}
+	meu_error_callback = callback_function;
 }
 
 
@@ -200,10 +206,4 @@ static void meu_WriteSystemErrorString(char* buffer, errcode_t error_code)
 #  endif
 #endif
 	*(buffer + strlen(buffer)) = '\n';
-}
-
-
-static void meu_NullCallback(void)
-{
-	/* does nothing */
 }
