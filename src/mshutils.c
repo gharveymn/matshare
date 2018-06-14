@@ -286,7 +286,15 @@ char_t* msh_GetConfigurationPath(void)
 	char_t* config_path;
 	
 #ifdef MSH_WIN
-	user_config_folder = getenv("LOCALAPPDATA");
+	
+	/* use NULL check to avoid reliance on _WIN32_WINNT */
+	if((user_config_folder = getenv("LOCALAPPDATA")) == NULL)
+	{
+		if((user_config_folder = getenv("APPDATA")) == NULL)
+		{
+			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ConfigPathError", "Could not find a suitable configuration path. Please make sure either %LOCALAPPDATA% or %APPDATA% is defined.");
+		}
+	}
 	config_path = mxCalloc(strlen(user_config_folder) + 2 + strlen(MSH_CONFIG_FOLDER_NAME) + 2 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
 	sprintf(config_path, "%s\\%s", user_config_folder, MSH_CONFIG_FOLDER_NAME);
 	if(CreateDirectory(config_path, NULL) == 0)

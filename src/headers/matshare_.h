@@ -55,13 +55,11 @@ typedef enum
 	msh_SHARE          = 0,
 	msh_FETCH          = 1,
 	msh_DETACH         = 2,
-	msh_PARAM          = 3,
+	msh_CONFIG         = 3,
 	msh_DEEPCOPY       = 4,
 	msh_DEBUG          = 5,
-	msh_OBJ_REGISTER   = 6,
-	msh_OBJ_DEREGISTER = 7,
-	msh_CLEAR          = 8,
-	msh_RESET          = 9
+	msh_CLEAR          = 6,
+	msh_RESET          = 7
 } msh_directive_t;
 
 void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate);

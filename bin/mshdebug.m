@@ -1,3 +1,3 @@
 function mshdebug
-    matshare_(uint8(5));
+    matshare_(5);
 end

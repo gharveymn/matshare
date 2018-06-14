@@ -1,4 +1,4 @@
 function mshdetach
-	matshare_(uint8(2));
+	matshare_(2);
 end
 

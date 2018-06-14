@@ -125,6 +125,16 @@ typedef struct AllocationHeader_t
 #  define MXMALLOC_ALIGNMENT_SHIFT (size_t)0x0F
 #endif
 
+typedef union LockFreeCounter_ut
+{
+	long span;
+	struct values_tag
+	{
+		unsigned long count : 30;
+		unsigned long flag : 1;
+		unsigned long post : 1;
+	} values;
+} LockFreeCounter_t;
 
 /**
  * Pads the input size to the alignment specified by ALIGN_SIZE and ALIGN_SHIFT.

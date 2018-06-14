@@ -2,7 +2,7 @@
 #define MATSHARE_MSHLISTS_H
 
 #include "mshtypes.h"
-
+#include "mshvariablenode.h"
 
 /**
  * Creates a new MATLAB variable from the specified shared segment, stores
@@ -53,6 +53,9 @@ void msh_RemoveVariableFromList(VariableNode_t* var_node);
 void msh_ClearVariableList(VariableList_t* var_list);
 
 void msh_CleanVariableList(VariableList_t* var_list);
+
+
+extern VariableList_t g_local_var_list;
 
 
 #endif /* MATSHARE_MSHLISTS_H */

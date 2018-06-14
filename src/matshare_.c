@@ -13,7 +13,6 @@ char_t* g_msh_warning_help_message = "";
 
 GlobalInfo_t g_local_info = {
 							0,                      /* rev_num */
-							0,                      /* num_registered_objs */
 							0,                      /* lock_level */
 							0,                      /* this_pid */
 							{
@@ -92,24 +91,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			msh_Fetch(nlhs, plhs, MSH_SHARED_COPY);
 			
 			break;
-		
-		case msh_OBJ_DEREGISTER:
-			/* deregister an object tracking this function */
-			g_local_info.num_registered_objs -= 1;
-			if(g_local_info.num_registered_objs == 0)
-			{
-				/* if we deregistered the last object then remove variables that aren't being used elsewhere in this process */
-				msh_CleanSegmentList(&g_local_seg_list);
-			}
-			
-			break;
 		case msh_DETACH:
 			
 			msh_OnExit();
 			
 			break;
 		
-		case msh_PARAM:
+		case msh_CONFIG:
 			
 			msh_Config(num_in_vars, in_vars);
 			
@@ -117,7 +105,25 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		
 		case msh_DEEPCOPY:
 			
-			msh_Fetch(nlhs, plhs, MSH_DUPLICATE);
+			if(num_in_vars == 0)
+			{
+				msh_Fetch(nlhs, plhs, MSH_DUPLICATE);
+			}
+			else if(num_in_vars == 1)
+			{
+				if(nlhs == 1)
+				{
+					plhs[0] = mxDuplicateArray(in_vars[0]);
+				}
+				else if(nlhs > 1)
+				{
+					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManyOutputsError", "Too many outputs were requested.");
+				}
+			}
+			else
+			{
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManyInputsError", "Too many inputs.");
+			}
 			
 			break;
 		case msh_DEBUG:
@@ -125,12 +131,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			mexPrintf("Total time: " SIZE_FORMAT_SPEC "\nTime waiting for the lock: " SIZE_FORMAT_SPEC "\nTime spent in busy wait: " SIZE_FORMAT_SPEC "\n",
 			g_shared_info->debug_perf.total_time, g_shared_info->debug_perf.lock_time, g_shared_info->debug_perf.busy_wait_time);
 #endif
-			break;
-		case msh_OBJ_REGISTER:
-			
-			/* tell matshare to register a new object */
-			g_local_info.num_registered_objs += 1;
-			
 			break;
 		case msh_CLEAR:
 			
@@ -177,17 +177,10 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 	for(i = 0, in_var = in_vars[i]; i < num_vars; i++, in_var = in_vars[i])
 	{
 		
-		if(!(mxIsNumeric(in_var) || mxIsLogical(in_var) || mxIsChar(in_var) || mxIsStruct(in_var) || mxIsCell(in_var)))
-		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidTypeError",
-						   "Unexpected input type. Shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
-		}
-		
-		
 		if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_OVERWRITE)
 		{
 			/* if the variable is exactly the same size, perform a rewrite */
-			if(g_local_seg_list.num_segs != 0 && (msh_CompareVariableSize(msh_GetSegmentData(g_local_seg_list.last), in_var) == TRUE))
+			if(g_local_seg_list.last != NULL && (msh_CompareVariableSize(msh_GetSegmentData(g_local_seg_list.last), in_var) == TRUE))
 			{
 				/* this is an in-place change */
 				/* do the rewrite after checking because the comparison is cheap */
@@ -221,9 +214,18 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		
 	}
 	
-	if(nlhs > 0)
+	if(nlhs == 1)
 	{
-		msh_Fetch(nlhs, plhs, MSH_SHARED_COPY);
+		/* Returns the variable we just put into shared memory. At least one segment must have been created. */
+		if(msh_GetVariableNode(g_local_seg_list.last) == NULL)
+		{
+			msh_AddVariableToList(&g_local_var_list, msh_CreateVariable(g_local_seg_list.last));
+		}
+		plhs[0] = mxCreateSharedDataCopy(msh_GetVariableData(msh_GetVariableNode(g_local_seg_list.last)));
+	}
+	else if(nlhs > 1)
+	{
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManyOutputsError", "Too many outputs were requested.");
 	}
 	
 }
@@ -253,9 +255,9 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 			
 			for(i = 0, curr_seg_node = g_local_seg_list.first;
 					i < g_local_seg_list.num_segs;
-					i++, curr_seg_node = curr_seg_node->next)
+					i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
 			{
-				if(curr_seg_node->var_node == NULL)
+				if(msh_GetVariableNode(curr_seg_node) == NULL)
 				{
 					/* create the variable node if it hasnt been created yet */
 					msh_AddVariableToList(&g_local_var_list, msh_CreateVariable(curr_seg_node));
@@ -275,15 +277,15 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 			
 			for(i = 0, curr_var_node = g_local_var_list.last;
 					i < num_new_vars;
-					i++, curr_var_node = curr_var_node->prev)
+					i++, curr_var_node = msh_GetPrevVariable(curr_var_node))
 			{
 				if(will_duplicate)
 				{
-					mxSetCell(plhs[1], num_new_vars - 1 - i, mxDuplicateArray(curr_var_node->var));
+					mxSetCell(plhs[1], num_new_vars - 1 - i, mxDuplicateArray(msh_GetVariableData(curr_var_node)));
 				}
 				else
 				{
-					mxSetCell(plhs[1], num_new_vars - 1 - i, mxCreateSharedDataCopy(curr_var_node->var));
+					mxSetCell(plhs[1], num_new_vars - 1 - i, mxCreateSharedDataCopy(msh_GetVariableData(curr_var_node)));
 				}
 			}
 			
@@ -292,7 +294,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 				
 				if(nlhs > 3)
 				{
-					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManyOutputsError", "Too many outputs. Got %d, need between 0 and 4.", nlhs);
+					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManyOutputsError", "Too many outputs. Got %d, need between 0 and 3.", nlhs);
 				}
 				
 				/* retrieve all segment variables */
@@ -302,15 +304,15 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 				
 				for(i = 0, curr_seg_node = g_local_seg_list.first;
 						i < g_local_seg_list.num_segs;
-						i++, curr_seg_node = curr_seg_node->next)
+						i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
 				{
 					if(will_duplicate)
 					{
-						mxSetCell(plhs[2], i, mxDuplicateArray(curr_seg_node->var_node->var));
+						mxSetCell(plhs[2], i, mxDuplicateArray(msh_GetVariableData(msh_GetVariableNode(curr_seg_node))));
 					}
 					else
 					{
-						mxSetCell(plhs[2], i, mxCreateSharedDataCopy(curr_seg_node->var_node->var));
+						mxSetCell(plhs[2], i, mxCreateSharedDataCopy(msh_GetVariableData(msh_GetVariableNode(curr_seg_node))));
 					}
 				}
 			}
@@ -321,7 +323,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 			/* only update the latest segment */
 			msh_UpdateLatestSegment(&g_local_seg_list);
 			
-			if(g_local_seg_list.last != NULL && g_local_seg_list.last->var_node == NULL)
+			if(g_local_seg_list.last != NULL && msh_GetVariableNode(g_local_seg_list.last) == NULL)
 			{
 				msh_AddVariableToList(&g_local_var_list, msh_CreateVariable(g_local_seg_list.last));
 			}
@@ -331,11 +333,11 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 		{
 			if(will_duplicate)
 			{
-				plhs[0] = mxDuplicateArray(g_local_seg_list.last->var_node->var);
+				plhs[0] = mxDuplicateArray(msh_GetVariableData(msh_GetVariableNode(g_local_seg_list.last)));
 			}
 			else
 			{
-				plhs[0] = mxCreateSharedDataCopy(g_local_seg_list.last->var_node->var);
+				plhs[0] = mxCreateSharedDataCopy(msh_GetVariableData(msh_GetVariableNode(g_local_seg_list.last)));
 			}
 		}
 		else
@@ -364,22 +366,22 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 		
 		for(input_num = 0; input_num < num_inputs; input_num++)
 		{
-			for(curr_var_node = g_local_var_list.first, found_variable = FALSE; curr_var_node != NULL && !found_variable; curr_var_node = curr_var_node->next)
+			for(curr_var_node = g_local_var_list.first, found_variable = FALSE; curr_var_node != NULL && !found_variable; curr_var_node = msh_GetNextVariable(curr_var_node))
 			{
 				/* begin hack */
-				link = curr_var_node->var;
+				link = msh_GetVariableData(curr_var_node);
 				do
 				{
 					if(link == in_vars[input_num])
 					{
-						msh_RemoveSegmentFromSharedList(curr_var_node->seg_node);
-						msh_RemoveSegmentFromList(curr_var_node->seg_node);
-						msh_DetachSegment(curr_var_node->seg_node);
+						msh_RemoveSegmentFromSharedList(msh_GetSegmentNode(curr_var_node));
+						msh_RemoveSegmentFromList(msh_GetSegmentNode(curr_var_node));
+						msh_DetachSegment(msh_GetSegmentNode(curr_var_node));
 						found_variable = TRUE;
 						break;
 					}
 					link = msh_GetCrosslink(link);
-				} while(link != NULL && link != curr_var_node->var);
+				} while(link != NULL && link != msh_GetVariableData(curr_var_node));
 				/* end hack */
 			}
 		}
@@ -554,13 +556,13 @@ void msh_Config(int num_params, const mxArray** in)
 msh_directive_t msh_ParseDirective(const mxArray* in)
 {
 	/* easiest way to deal with implementation defined enum sizes */
-	if(mxGetClassID(in) == mxUINT8_CLASS)
+	if(mxGetClassID(in) == mxDOUBLE_CLASS)
 	{
-		return (msh_directive_t)*((uint8_T*)(mxGetData(in)));
+		return (msh_directive_t)mxGetScalar(in);
 	}
 	else
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidDirectiveError", "Directive must be type 'uint8'.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidDirectiveError", "Directive must be type 'double'.");
 	}
 	return msh_DEBUG;
 }

@@ -1,7 +1,8 @@
 #ifndef MATSHARE_MSHSEGMENTS_H
 #define MATSHARE_MSHSEGMENTS_H
 
-#include "mshtypes.h"
+#include "mshheader.h"
+#include "mshsegmentnode.h"
 
 /**
  * Note: matshare links segments in shared memory by assigning each segment a "segment number."
@@ -13,7 +14,7 @@
  *       shared memory indicate such in their documentation.
  */
  
-#define msh_GetSegmentMetadata(seg_node) ((seg_node)->seg_info.metadata)
+#define msh_GetSegmentMetadata(seg_node) (msh_GetSegmentInfo(seg_node)->metadata)
 
 SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node);
 
@@ -126,5 +127,7 @@ void msh_CloseSharedMemory(handle_t segment_handle);
 
 void msh_LockMemory(void* ptr, size_t sz);
 void msh_UnlockMemory(void* ptr, size_t sz);
+
+extern SegmentList_t g_local_seg_list;
 
 #endif /* MATSHARE_MSHSEGMENTS_H */

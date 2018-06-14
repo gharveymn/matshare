@@ -29,20 +29,6 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_s
 static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache, msh_segmentnumber_t seg_num);
 
 
-/**
- * Create a new segment node.
- *
- * @note Completely local.
- * @param seg_info A struct containing information about a shared memory segment created either by OpenSegment or CreateSegment.
- * @return The newly allocated segment node.
- */
-static SegmentNode_t* msh_CreateSegmentNode(SegmentInfo_t* seg_info_cache);
-
-static void msh_DestroySegmentNode(SegmentNode_t* seg_node);
-
-static void msh_InitializeSegmentInfo(SegmentInfo_t* seg_info);
-
-
 /** public function definitions **/
 
 SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
@@ -50,11 +36,11 @@ SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
 	/* The raw pointer is only mapped if it is actually needed.
 	 * This improves performance of functions only needing the
 	 * metadata without effecting performance of other functions. */
-	if(seg_node->seg_info.raw_ptr == NULL)
+	if(msh_GetSegmentInfo(seg_node)->raw_ptr == NULL)
 	{
-		seg_node->seg_info.raw_ptr = msh_MapMemory(seg_node->seg_info.handle, seg_node->seg_info.total_segment_size);
+		msh_GetSegmentInfo(seg_node)->raw_ptr = msh_MapMemory(msh_GetSegmentInfo(seg_node)->handle, msh_GetSegmentInfo(seg_node)->total_segment_size);
 	}
-	return (SharedVariableHeader_t*)((byte_t*)seg_node->seg_info.raw_ptr + PadToAlignData(sizeof(SegmentMetadata_t)));
+	return (SharedVariableHeader_t*)((byte_t*)msh_GetSegmentInfo(seg_node)->raw_ptr + PadToAlignData(sizeof(SegmentMetadata_t)));
 }
 
 size_t msh_FindSegmentSize(size_t data_size)
@@ -89,21 +75,24 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 	
 	LockFreeCounter_t old_counter, new_counter;
 	
-	if(seg_node->var_node != NULL)
+	/* cache the segment info */
+	SegmentInfo_t* seg_info = msh_GetSegmentInfo(seg_node);
+	
+	if(msh_GetVariableNode(seg_node) != NULL)
 	{
-		msh_RemoveVariableFromList(seg_node->var_node);
-		if(msh_DestroyVariable(seg_node->var_node))
+		msh_RemoveVariableFromList(msh_GetVariableNode(seg_node));
+		if(msh_DestroyVariable(msh_GetVariableNode(seg_node)))
 		{
 			return;
 		}
 	}
 	
-	if(msh_GetSegmentMetadata(seg_node) != NULL)
+	if(seg_info->metadata != NULL)
 	{
 		/* lockfree */
 		do
 		{
-			old_counter.span = msh_GetSegmentMetadata(seg_node)->procs_tracking.span;
+			old_counter.span = seg_info->metadata->procs_tracking.span;
 			new_counter.span = old_counter.span;
 			new_counter.values.count -= 1;
 			
@@ -113,37 +102,37 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 				msh_RemoveSegmentFromSharedList(seg_node);
 				new_counter.values.flag = TRUE;
 			}
-		} while(msh_AtomicCompareSwap(&msh_GetSegmentMetadata(seg_node)->procs_tracking.span, old_counter.span, new_counter.span) != old_counter.span);
+		} while(msh_AtomicCompareSwap(&seg_info->metadata->procs_tracking.span, old_counter.span, new_counter.span) != old_counter.span);
 		
 		if(old_counter.values.flag != new_counter.values.flag)
 		{
 #ifdef MSH_UNIX
-			msh_WriteSegmentName(segment_name, seg_node->seg_info.seg_num);
+			msh_WriteSegmentName(segment_name, seg_info->seg_num);
 			if(shm_unlink(segment_name) != 0)
 			{
 				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, errno, "UnlinkError", "There was an error unlinking the segment");
 			}
 #endif
 
-			msh_SetCounterPost(&msh_GetSegmentMetadata(seg_node)->procs_tracking, TRUE);
-			msh_AtomicSubtractSize(&g_shared_info->total_shared_size, seg_node->seg_info.total_segment_size);
+			msh_SetCounterPost(&seg_info->metadata->procs_tracking, TRUE);
+			msh_AtomicSubtractSize(&g_shared_info->total_shared_size, seg_info->total_segment_size);
 		}
 		
-		msh_UnmapMemory(seg_node->seg_info.metadata, sizeof(SegmentMetadata_t));
-		seg_node->seg_info.metadata = NULL;
+		msh_UnmapMemory(seg_info->metadata, sizeof(SegmentMetadata_t));
+		seg_info->metadata = NULL;
 		
 	}
 	
-	if(seg_node->seg_info.raw_ptr != NULL)
+	if(seg_info->raw_ptr != NULL)
 	{
-		msh_UnmapMemory(seg_node->seg_info.raw_ptr, seg_node->seg_info.total_segment_size);
-		seg_node->seg_info.raw_ptr = NULL;
+		msh_UnmapMemory(seg_info->raw_ptr, seg_info->total_segment_size);
+		seg_info->raw_ptr = NULL;
 	}
 	
-	if(seg_node->seg_info.handle != MSH_INVALID_HANDLE)
+	if(seg_info->handle != MSH_INVALID_HANDLE)
 	{
-		msh_CloseSharedMemory(seg_node->seg_info.handle);
-		seg_node->seg_info.handle = MSH_INVALID_HANDLE;
+		msh_CloseSharedMemory(seg_info->handle);
+		seg_info->handle = MSH_INVALID_HANDLE;
 	}
 	
 	msh_DestroySegmentNode(seg_node);
@@ -154,7 +143,7 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 {
 	SegmentNode_t* last_seg_node;
-	SegmentList_t* segment_cache_list = seg_node->parent_seg_list != NULL? seg_node->parent_seg_list : &g_local_seg_list;
+	SegmentList_t* segment_cache_list = msh_GetSegmentList(seg_node) != NULL? msh_GetSegmentList(seg_node) : &g_local_seg_list;
 	SegmentMetadata_t* segment_metadata = msh_GetSegmentMetadata(seg_node);
 	
 	msh_AcquireProcessLock();
@@ -183,7 +172,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 	/* check whether to set this as the first segment number */
 	if(g_shared_info->first_seg_num == MSH_INVALID_SEG_NUM)
 	{
-		g_shared_info->first_seg_num = seg_node->seg_info.seg_num;
+		g_shared_info->first_seg_num = msh_GetSegmentInfo(seg_node)->seg_num;
 	}
 	else
 	{
@@ -193,14 +182,14 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 			last_seg_node = msh_OpenSegment(g_shared_info->last_seg_num);
 			msh_AddSegmentToList(segment_cache_list, last_seg_node);
 		}
-		msh_GetSegmentMetadata(last_seg_node)->next_seg_num = seg_node->seg_info.seg_num;
+		msh_GetSegmentMetadata(last_seg_node)->next_seg_num = msh_GetSegmentInfo(seg_node)->seg_num;
 	}
 	
 	/* set reference to previous back of list */
 	segment_metadata->prev_seg_num = g_shared_info->last_seg_num;
 	
 	/* update the last segment number */
-	g_shared_info->last_seg_num = seg_node->seg_info.seg_num;
+	g_shared_info->last_seg_num = msh_GetSegmentInfo(seg_node)->seg_num;
 	
 	/* sign the update with this process */
 	g_shared_info->update_pid = g_local_info.this_pid;
@@ -217,7 +206,7 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 {
 	
 	SegmentNode_t* prev_seg_node,* next_seg_node;
-	SegmentList_t* segment_cache_list = seg_node->parent_seg_list != NULL? seg_node->parent_seg_list : &g_local_seg_list;
+	SegmentList_t* segment_cache_list = msh_GetSegmentList(seg_node) != NULL? msh_GetSegmentList(seg_node) : &g_local_seg_list;
 	SegmentMetadata_t* segment_metadata = msh_GetSegmentMetadata(seg_node);
 	
 	if(segment_metadata->is_invalid == TRUE)
@@ -237,7 +226,7 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	/* signal that this segment is to be freed by all processes */
 	segment_metadata->is_invalid = TRUE;
 	
-	if(seg_node->seg_info.seg_num == g_shared_info->first_seg_num)
+	if(msh_GetSegmentInfo(seg_node)->seg_num == g_shared_info->first_seg_num)
 	{
 		g_shared_info->first_seg_num = segment_metadata->next_seg_num;
 	}
@@ -252,7 +241,7 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 		msh_GetSegmentMetadata(prev_seg_node)->next_seg_num = segment_metadata->next_seg_num;
 	}
 	
-	if(seg_node->seg_info.seg_num == g_shared_info->last_seg_num)
+	if(msh_GetSegmentInfo(seg_node)->seg_num == g_shared_info->last_seg_num)
 	{
 		g_shared_info->last_seg_num = segment_metadata->prev_seg_num;
 	}
@@ -357,7 +346,7 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 	/* detach the nodes that aren't in newly linked*/
 	for(curr_seg_node = seg_list->first; curr_seg_node != new_front; curr_seg_node = next_seg_node)
 	{
-		next_seg_node = curr_seg_node->next;
+		next_seg_node = msh_GetNextSegment(curr_seg_node);
 		msh_RemoveSegmentFromList(curr_seg_node);
 		msh_DetachSegment(curr_seg_node);
 	}
@@ -402,10 +391,10 @@ void msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 {
 	
 	/* this will be appended to the end so make sure next points to nothing */
-	seg_node->next = NULL;
+	msh_SetNextSegment(seg_node, NULL);
 	
 	/* always points to the end */
-	seg_node->prev = seg_list->last;
+	msh_SetPrevSegment(seg_node, seg_list->last);
 	
 	/* set new refs */
 	if(seg_list->num_segs == 0)
@@ -415,7 +404,7 @@ void msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 	else
 	{
 		/* set list pointer */
-		seg_list->last->next = seg_node;
+		msh_SetNextSegment(seg_list->last, seg_node);
 	}
 	
 	/* place this variable at the last of the list */
@@ -425,7 +414,7 @@ void msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 	seg_list->num_segs += 1;
 	
 	/* set the parent segment list */
-	seg_node->parent_seg_list = seg_list;
+	msh_SetSegmentList(seg_node, seg_list);
 	
 	msh_AddSegmentToTable(&seg_list->seg_table, seg_node, seg_list->num_segs);
 	
@@ -435,35 +424,35 @@ void msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 void msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node)
 {
 	/* if it's already at the end do nothing */
-	if(seg_node->parent_seg_list->last == seg_node)
+	if(msh_GetSegmentList(seg_node)->last == seg_node)
 	{
 		return;
 	}
 	
 	/* reset local pointers */
-	if(seg_node->prev != NULL)
+	if(msh_GetPrevSegment(seg_node) != NULL)
 	{
-		seg_node->prev->next = seg_node->next;
+		msh_SetNextSegment(msh_GetPrevSegment(seg_node), msh_GetNextSegment(seg_node));
 	}
 	
-	if(seg_node->next != NULL)
+	if(msh_GetNextSegment(seg_node) != NULL)
 	{
-		seg_node->next->prev = seg_node->prev;
+		msh_SetPrevSegment(msh_GetNextSegment(seg_node), msh_GetPrevSegment(seg_node));
 	}
 	
 	/* fix pointers to the front and back */
-	if(seg_node->parent_seg_list->first == seg_node)
+	if(msh_GetSegmentList(seg_node)->first == seg_node)
 	{
-		seg_node->parent_seg_list->first = seg_node->next;
+		msh_GetSegmentList(seg_node)->first = msh_GetNextSegment(seg_node);
 	}
 	
 	/* set up links at end of the list */
-	seg_node->parent_seg_list->last->next = seg_node;
-	seg_node->prev = seg_node->parent_seg_list->last;
+	msh_SetNextSegment(msh_GetSegmentList(seg_node)->last, seg_node);
+	msh_SetPrevSegment(seg_node, msh_GetSegmentList(seg_node)->last);
 	
 	/* reset the next pointer and place at the end of the list */
-	seg_node->next = NULL;
-	seg_node->parent_seg_list->last = seg_node;
+	msh_SetNextSegment(seg_node, NULL);
+	msh_GetSegmentList(seg_node)->last = seg_node;
 	
 	
 }
@@ -472,41 +461,40 @@ void msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node)
 void msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
 {
 	
-	if(seg_node->parent_seg_list == NULL)
+	if(msh_GetSegmentList(seg_node) == NULL)
 	{
 		return;
 	}
 	
-	msh_RemoveSegmentFromTable(&seg_node->parent_seg_list->seg_table, seg_node);
+	msh_RemoveSegmentFromTable(&msh_GetSegmentList(seg_node)->seg_table, seg_node);
 	
 	/* reset local pointers */
-	if(seg_node->prev != NULL)
+	if(msh_GetPrevSegment(seg_node) != NULL)
 	{
-		seg_node->prev->next = seg_node->next;
+		msh_SetNextSegment(msh_GetPrevSegment(seg_node), msh_GetNextSegment(seg_node));
 	}
 	
-	if(seg_node->next != NULL)
+	if(msh_GetNextSegment(seg_node) != NULL)
 	{
-		seg_node->next->prev = seg_node->prev;
+		msh_SetPrevSegment(msh_GetNextSegment(seg_node), msh_GetPrevSegment(seg_node));
 	}
 	
 	/* fix pointers to the front and back */
-	if(seg_node->parent_seg_list->first == seg_node)
+	if(msh_GetSegmentList(seg_node)->first == seg_node)
 	{
-		seg_node->parent_seg_list->first = seg_node->next;
+		msh_GetSegmentList(seg_node)->first = msh_GetNextSegment(seg_node);
 	}
 	
-	if(seg_node->parent_seg_list->last == seg_node)
+	if(msh_GetSegmentList(seg_node)->last == seg_node)
 	{
-		seg_node->parent_seg_list->last = seg_node->prev;
+		msh_GetSegmentList(seg_node)->last = msh_GetPrevSegment(seg_node);
 	}
 	
-	seg_node->parent_seg_list->num_segs -= 1;
+	msh_GetSegmentList(seg_node)->num_segs -= 1;
 	
-	
-	seg_node->next = NULL;
-	seg_node->prev = NULL;
-	seg_node->parent_seg_list = NULL;
+	msh_SetNextSegment(seg_node, NULL);
+	msh_SetPrevSegment(seg_node, NULL);
+	msh_SetSegmentList(seg_node, NULL);
 	
 }
 
@@ -515,22 +503,22 @@ void msh_CleanSegmentList(SegmentList_t* seg_list)
 	SegmentNode_t* curr_seg_node, * next_seg_node;
 	SegmentMetadata_t* curr_seg_metadata;
 	
-	if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY && g_shared_info->user_defined.will_gc && g_local_info.num_registered_objs == 0)
+	if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY && g_shared_info->user_defined.will_gc)
 	{
 		for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
 		{
 			
-			next_seg_node = curr_seg_node->next;
+			next_seg_node = msh_GetNextSegment(curr_seg_node);
 			curr_seg_metadata = msh_GetSegmentMetadata(curr_seg_node);
 			if(curr_seg_metadata->is_invalid)
 			{
 				msh_RemoveSegmentFromList(curr_seg_node);
 				msh_DetachSegment(curr_seg_node);
 			}
-			else if(curr_seg_node->var_node != NULL && msh_GetCrosslink(curr_seg_node->var_node->var) == NULL)
+			else if(msh_GetVariableNode(curr_seg_node) != NULL && msh_GetCrosslink(msh_GetVariableData(msh_GetVariableNode(curr_seg_node))) == NULL)
 			{
-				msh_RemoveVariableFromList(curr_seg_node->var_node);
-				msh_DestroyVariable(curr_seg_node->var_node);
+				msh_RemoveVariableFromList(msh_GetVariableNode(curr_seg_node));
+				msh_DestroyVariable(msh_GetVariableNode(curr_seg_node));
 			}
 		}
 	}
@@ -539,7 +527,7 @@ void msh_CleanSegmentList(SegmentList_t* seg_list)
 		for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
 		{
 			
-			next_seg_node = curr_seg_node->next;
+			next_seg_node = msh_GetNextSegment(curr_seg_node);
 			curr_seg_metadata = msh_GetSegmentMetadata(curr_seg_node);
 			if(curr_seg_metadata->is_invalid)
 			{
@@ -818,36 +806,4 @@ void msh_UnlockMemory(void* ptr, size_t sz)
 	/* unlock this set of pages */
 	munlock(ptr, sz);
 #endif
-}
-
-
-static SegmentNode_t* msh_CreateSegmentNode(SegmentInfo_t* seg_info_cache)
-{
-	SegmentNode_t* new_seg_node = mxMalloc(sizeof(SegmentNode_t));
-	mexMakeMemoryPersistent(new_seg_node);
-	
-	new_seg_node->seg_info = *seg_info_cache;
-	new_seg_node->var_node = NULL;
-	new_seg_node->parent_seg_list = NULL;
-	new_seg_node->hash_next = NULL;
-	new_seg_node->prev = NULL;
-	new_seg_node->next = NULL;
-	
-	return new_seg_node;
-}
-
-
-static void msh_DestroySegmentNode(SegmentNode_t* seg_node)
-{
-	mxFree(seg_node);
-}
-
-
-static void msh_InitializeSegmentInfo(SegmentInfo_t* seg_info)
-{
-	seg_info->raw_ptr = NULL;
-	seg_info->metadata = NULL;
-	seg_info->total_segment_size = 0;
-	seg_info->handle = MSH_INVALID_HANDLE;
-	seg_info->seg_num = -1;
 }

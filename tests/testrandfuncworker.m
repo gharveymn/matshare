@@ -14,6 +14,8 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 	clear_data_bound = bounds.clear_data;
 	clear_new_bound = bounds.clear_new;
 	clear_all_bound = bounds.clear_all;
+	mshreset_bound = bounds.mshreset;
+	mshdeepcopy_bound = bounds.mshdeepcopy;
 	mshclear_bound = bounds.mshclear;
 	mshdetach_bound = bounds.mshdetach;
 	chpar_copy_bound = bounds.chpar_copy;
@@ -27,7 +29,11 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 	clear_new_iter = randi(rns, clear_new_bound);
 
 	clear_all_iter = randi(rns, clear_all_bound);
+	
+	mshreset_iter = randi(rns, mshreset_bound);
 
+	mshdeepcopy_iter = randi(rns, mshdeepcopy_bound);
+	
 	% bound of random call to mshclear
 	mshclear_iter = randi(rns, mshclear_bound);
 
@@ -54,15 +60,11 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 			
 			tv = variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, false, typespec);
 			
-			switch(ceil(4*randdoubles1(i)))
+			switch(ceil(2*randdoubles1(i)))
 				case 1
 					mshshare(tv);
 				case 2
 					data = mshshare(tv);
-				case 3
-					[data, newvars] = mshshare(tv);
-				case 4
-					[data, newvars, allvars] = mshshare(tv);
 			end
 			
 			switch(ceil(4*randdoubles2(i)))
@@ -86,6 +88,32 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 				mshclear_iter = ceil(mshclear_bound*randdoubles3(i));
 			end
 			
+			
+			if(mod(i, mshdeepcopy_iter) == 0)
+				switch(ceil(9*randdoubles2(i)))
+					case 1
+						mshdeepcopy;
+					case 2
+						data = mshdeepcopy;
+					case 3
+						[data, newvars] = mshdeepcopy;
+					case 4
+						[data, newvars, allvars] = mshdeepcopy;
+					case 5
+						data = mshdeepcopy(data);
+					case 6
+						newvars = mshdeepcopy(newvars);
+					case 7
+						allvars = mshdeepcopy(allvars);
+					case 8
+						mshdeepcopy(data);
+				end
+			end
+			
+			if(mod(i, mshreset_iter) == 0)
+				mshreset;
+				mshreset_iter = ceil(mshreset_bound*randdoubles3(i));
+			end
 			
 			if(mod(i, mshdetach_iter) == 0)
 				mshdetach;

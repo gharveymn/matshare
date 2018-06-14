@@ -12,7 +12,7 @@ SET(SOURCE_FILES
 		mshinit.c headers/mshinit.h
 		mshutils.c headers/mshutils.h
 		headers/mshtypes.h
-		headers/mshexterntypes.h mshvariables.c headers/mshvariables.h headers/mshheader.h headers/opaque/mshheader.c headers/mshbasictypes.h headers/opaque/mshexterntypes.c mshsegments.c headers/mshsegments.h headers/opaque/mshtable.c)
+		headers/mshexterntypes.h mshvariables.c headers/mshvariables.h headers/mshheader.h headers/opaque/mshheader.c headers/mshbasictypes.h headers/opaque/mshexterntypes.c mshsegments.c headers/mshsegments.h headers/opaque/mshtable.c headers/opaque/mshvariablenode.c headers/mshvariablenode.h headers/opaque/mshsegmentnode.c headers/mshsegmentnode.h)
 
 IF(UXWIN)
 	SET(SOURCE_FILES
@@ -29,7 +29,7 @@ IF(UXWIN)
 			headers/mshbasictypes.h
 			headers/opaque/mshexterntypes.c
 			mshsegments.c headers/mshsegments.h h
-			eaders/opaque/mshtable.c)
+			eaders/opaque/mshtable.c headers/opaque/mshvariablenode.c headers/mshvariablenode.h headers/opaque/mshsegmentnode.c headers/mshsegmentnode.h)
 ENDIF(UXWIN)
 
 SET_SOURCE_FILES_PROPERTIES(${SOURCE_FILES} PROPERTIES LANGUAGE C)

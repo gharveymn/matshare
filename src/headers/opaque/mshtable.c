@@ -1,5 +1,4 @@
-#include "../mshsegments.h"
-#include "../mshtypes.h"
+#include "../mshsegmentnode.h"
 #include "../mlerrorutils.h"
 #define MSH_INIT_TABLE_SIZE 64
 
@@ -25,9 +24,9 @@ void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, u
 		msh_ResizeTable(seg_table, num_segs);
 	}
 	
-	seg_node->hash_next = NULL;
+	msh_SetHashNext(seg_node, NULL);
 	
-	seg_hash = msh_FindSegmentHash(seg_table, seg_node->seg_info.seg_num);
+	seg_hash = msh_FindSegmentHash(seg_table, msh_GetSegmentInfo(seg_node)->seg_num);
 	if(seg_table->table[seg_hash] == NULL)
 	{
 		seg_table->table[seg_hash] = seg_node;
@@ -35,11 +34,11 @@ void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, u
 	else
 	{
 		curr_seg_node = seg_table->table[seg_hash];
-		while(curr_seg_node->hash_next != NULL)
+		while(msh_GetHashNext(curr_seg_node) != NULL)
 		{
-			curr_seg_node = curr_seg_node->hash_next;
+			curr_seg_node = msh_GetHashNext(curr_seg_node);
 		}
-		curr_seg_node->hash_next = seg_node;
+		msh_SetHashNext(curr_seg_node, seg_node);
 	}
 	
 }
@@ -51,23 +50,23 @@ void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_no
 	uint32_T seg_hash;
 	
 	/* find the segment node immediately preceding this segment node in the table */
-	seg_hash = msh_FindSegmentHash(seg_table, seg_node->seg_info.seg_num);
+	seg_hash = msh_FindSegmentHash(seg_table, msh_GetSegmentInfo(seg_node)->seg_num);
 	if(seg_table->table[seg_hash] == seg_node)
 	{
-		seg_table->table[seg_hash] = seg_node->hash_next;
+		seg_table->table[seg_hash] = msh_GetHashNext(seg_node);
 	}
 	else
 	{
 		/* find the segment node immediately preceding this segment node in the table */
 		curr_seg_node = seg_table->table[seg_hash];
-		while(curr_seg_node->hash_next != seg_node)
+		while(msh_GetHashNext(curr_seg_node) != seg_node)
 		{
-			curr_seg_node = curr_seg_node->hash_next;
+			curr_seg_node = msh_GetHashNext(curr_seg_node);
 		}
-		curr_seg_node->hash_next = seg_node->hash_next;
+		msh_SetHashNext(curr_seg_node, msh_GetHashNext(seg_node));
 	}
 	
-	seg_node->hash_next = NULL;
+	msh_SetHashNext(seg_node, NULL);
 	
 }
 
@@ -87,9 +86,9 @@ SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, msh_segmentnumber_
 {
 	SegmentNode_t* curr_seg_node;
 	
-	for(curr_seg_node = seg_table->table[msh_FindSegmentHash(seg_table, seg_num)]; curr_seg_node != NULL; curr_seg_node = curr_seg_node->hash_next)
+	for(curr_seg_node = seg_table->table[msh_FindSegmentHash(seg_table, seg_num)]; curr_seg_node != NULL; curr_seg_node = msh_GetHashNext(curr_seg_node))
 	{
-		if(curr_seg_node->seg_info.seg_num == seg_num)
+		if(msh_GetSegmentInfo(curr_seg_node)->seg_num == seg_num)
 		{
 			return curr_seg_node;
 		}
@@ -118,7 +117,7 @@ static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs)
 	{
 		for(curr_seg_node = seg_table->table[curr_seg_hash]; curr_seg_node != NULL; curr_seg_node = next_seg_node)
 		{
-			next_seg_node = curr_seg_node->hash_next;
+			next_seg_node = msh_GetHashNext(curr_seg_node);
 			msh_AddSegmentToTable(&new_table, curr_seg_node, num_segs);
 		}
 	}
