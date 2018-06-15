@@ -42,17 +42,6 @@
 #define msh_SHARETYPE_COPY 0
 #define msh_SHARETYPE_OVERWRITE 1
 
-
-#ifdef MSH_WIN
-typedef handle_t ProcessLock_t;
-#else
-typedef struct ProcessLock_t
-{
-	handle_t lock_handle;
-	size_t lock_size;
-} ProcessLock_t;
-#endif
-
 typedef struct UserConfig_t
 {
 	/* these are aligned for lockless assignment */

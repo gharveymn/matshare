@@ -30,6 +30,7 @@
 #    include <windows.h>
 #  define MSH_INVALID_HANDLE INVALID_HANDLE_VALUE
 #else
+#  include <sys/types.h>
 #  include <errno.h>
 #  define MSH_DEFAULT_PERMISSIONS (S_IRUSR | S_IWUSR)
 #  define MSH_INVALID_HANDLE (-1)
@@ -76,11 +77,18 @@ typedef int32_T alignedbool_t;		/* for word sized alignment */
 typedef int32_T msh_segmentnumber_t; /* segment number identifiers */
 typedef uint32_T msh_sharetype_t;		/* ensure word-size alignment */
 typedef uint8_T msh_classid_t;             /* for packing mex class ids to prevent compiler from padding SharedVariableHeader_t */
+
 #ifdef MSH_WIN
-  typedef HANDLE handle_t;
+typedef HANDLE handle_t;
   typedef DWORD pid_t;
+  typedef handle_t ProcessLock_t;
 #else
-  typedef int handle_t;				 /* give fds a uniform identifier */
+typedef int handle_t;				 /* give fds a uniform identifier */
+typedef struct ProcessLock_t
+{
+	handle_t lock_handle;
+	size_t lock_size;
+} ProcessLock_t;
 #endif
 
 #ifdef MSH_AVX_SUPPORT
