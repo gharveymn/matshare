@@ -1,7 +1,18 @@
+/** mshsegments.c
+ * Defines shared segment creation and tracking functions.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
 #include "headers/mshsegments.h"
 #include "headers/mshvariables.h"
 #include "headers/mlerrorutils.h"
 #include "headers/mshutils.h"
+#include "headers/mshexterntypes.h"
 
 #ifdef MSH_UNIX
 #  include <unistd.h>
@@ -146,7 +157,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 	SegmentList_t* segment_cache_list = msh_GetSegmentList(seg_node) != NULL? msh_GetSegmentList(seg_node) : &g_local_seg_list;
 	SegmentMetadata_t* segment_metadata = msh_GetSegmentMetadata(seg_node);
 	
-	msh_AcquireProcessLock();
+	msh_AcquireProcessLock(g_process_lock);
 	
 	/* update number of segments tracked in shared memory */
 	if(g_shared_info->num_shared_segments >= g_shared_info->user_defined.max_shared_segments)
@@ -154,7 +165,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 		/* too many segments, unload */
 		msh_RemoveSegmentFromList(seg_node);
 		msh_DetachSegment(seg_node);
-		msh_ReleaseProcessLock();
+		msh_ReleaseProcessLock(g_process_lock);
 		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManySegmentError", "The shared variable would exceed the current maximum number of shared variables (currently set as %l). "
 																		   "You may change this limit by using mshconfig. For more information refer to `help mshconfig`.",
 					   g_shared_info->user_defined.max_shared_segments);
@@ -197,7 +208,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 	/* update the revision number to indicate other processes to retrieve new segments */
 	g_shared_info->rev_num += 1;
 	
-	msh_ReleaseProcessLock();
+	msh_ReleaseProcessLock(g_process_lock);
 	
 }
 
@@ -214,12 +225,12 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 		return;
 	}
 	
-	msh_AcquireProcessLock();
+	msh_AcquireProcessLock(g_process_lock);
 	
 	/* double check volatile flag */
 	if(segment_metadata->is_invalid == TRUE)
 	{
-		msh_ReleaseProcessLock();
+		msh_ReleaseProcessLock(g_process_lock);
 		return;
 	}
 	
@@ -269,7 +280,7 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	/* update the revision number to tell processes to update their segment lists */
 	g_shared_info->rev_num += 1;
 	
-	msh_ReleaseProcessLock();
+	msh_ReleaseProcessLock(g_process_lock);
 	
 }
 
@@ -285,15 +296,15 @@ void msh_DetachSegmentList(SegmentList_t* seg_list)
 }
 
 
-void msh_ClearSharedSegments(SegmentList_t* segment_cache_list)
+void msh_ClearSharedSegments(SegmentList_t* seg_cache_list)
 {
 	SegmentNode_t* curr_seg_node;
 	while(g_shared_info->first_seg_num != MSH_INVALID_SEG_NUM)
 	{
-		if((curr_seg_node = msh_FindSegmentNode(&segment_cache_list->seg_table, g_shared_info->first_seg_num)) == NULL)
+		if((curr_seg_node = msh_FindSegmentNode(&seg_cache_list->seg_table, g_shared_info->first_seg_num)) == NULL)
 		{
 			curr_seg_node = msh_OpenSegment(g_shared_info->first_seg_num);
-			msh_AddSegmentToList(segment_cache_list, curr_seg_node);
+			msh_AddSegmentToList(seg_cache_list, curr_seg_node);
 		}
 		msh_RemoveSegmentFromSharedList(curr_seg_node);
 		msh_RemoveSegmentFromList(curr_seg_node);
@@ -314,7 +325,7 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 		return;
 	}
 	
-	msh_AcquireProcessLock();
+	msh_AcquireProcessLock(g_process_lock);
 	
 	for(curr_seg_num = g_shared_info->first_seg_num;
 	    curr_seg_num != MSH_INVALID_SEG_NUM;
@@ -341,7 +352,7 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 	/* set this process as up to date */
 	g_local_info.rev_num = g_shared_info->rev_num;
 	
-	msh_ReleaseProcessLock();
+	msh_ReleaseProcessLock(g_process_lock);
 	
 	/* detach the nodes that aren't in newly linked*/
 	for(curr_seg_node = seg_list->first; curr_seg_node != new_front; curr_seg_node = next_seg_node)
@@ -359,7 +370,7 @@ void msh_UpdateLatestSegment(SegmentList_t* seg_list)
 	SegmentNode_t* last_seg_node;
 	if(g_shared_info->last_seg_num != MSH_INVALID_SEG_NUM && !msh_IsUpdated())
 	{
-		msh_AcquireProcessLock();
+		msh_AcquireProcessLock(g_process_lock);
 		
 		/* double check volatile flag */
 		if(g_shared_info->last_seg_num != MSH_INVALID_SEG_NUM)
@@ -367,13 +378,13 @@ void msh_UpdateLatestSegment(SegmentList_t* seg_list)
 			if((last_seg_node = msh_FindSegmentNode(&seg_list->seg_table, g_shared_info->last_seg_num)) == NULL)
 			{
 				last_seg_node = msh_OpenSegment(g_shared_info->last_seg_num);
-				msh_ReleaseProcessLock();
+				msh_ReleaseProcessLock(g_process_lock);
 				
 				msh_AddSegmentToList(seg_list, last_seg_node);
 			}
 			else
 			{
-				msh_ReleaseProcessLock();
+				msh_ReleaseProcessLock(g_process_lock);
 				
 				/* place the segment at the end of the list */
 				msh_PlaceSegmentAtEnd(last_seg_node);
@@ -381,7 +392,7 @@ void msh_UpdateLatestSegment(SegmentList_t* seg_list)
 		}
 		else
 		{
-			msh_ReleaseProcessLock();
+			msh_ReleaseProcessLock(g_process_lock);
 		}
 	}
 }
@@ -394,7 +405,7 @@ void msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 	msh_SetNextSegment(seg_node, NULL);
 	
 	/* always points to the end */
-	msh_SetPrevSegment(seg_node, seg_list->last);
+	msh_SetPreviousSegment(seg_node, seg_list->last);
 	
 	/* set new refs */
 	if(seg_list->num_segs == 0)
@@ -416,7 +427,7 @@ void msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
 	/* set the parent segment list */
 	msh_SetSegmentList(seg_node, seg_list);
 	
-	msh_AddSegmentToTable(&seg_list->seg_table, seg_node, seg_list->num_segs);
+	msh_AddSegmentToTable(&seg_list->seg_table, seg_node);
 	
 }
 
@@ -430,14 +441,14 @@ void msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node)
 	}
 	
 	/* reset local pointers */
-	if(msh_GetPrevSegment(seg_node) != NULL)
+	if(msh_GetPreviousSegment(seg_node) != NULL)
 	{
-		msh_SetNextSegment(msh_GetPrevSegment(seg_node), msh_GetNextSegment(seg_node));
+		msh_SetNextSegment(msh_GetPreviousSegment(seg_node), msh_GetNextSegment(seg_node));
 	}
 	
 	if(msh_GetNextSegment(seg_node) != NULL)
 	{
-		msh_SetPrevSegment(msh_GetNextSegment(seg_node), msh_GetPrevSegment(seg_node));
+		msh_SetPreviousSegment(msh_GetNextSegment(seg_node), msh_GetPreviousSegment(seg_node));
 	}
 	
 	/* fix pointers to the front and back */
@@ -448,7 +459,7 @@ void msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node)
 	
 	/* set up links at end of the list */
 	msh_SetNextSegment(msh_GetSegmentList(seg_node)->last, seg_node);
-	msh_SetPrevSegment(seg_node, msh_GetSegmentList(seg_node)->last);
+	msh_SetPreviousSegment(seg_node, msh_GetSegmentList(seg_node)->last);
 	
 	/* reset the next pointer and place at the end of the list */
 	msh_SetNextSegment(seg_node, NULL);
@@ -469,14 +480,14 @@ void msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
 	msh_RemoveSegmentFromTable(&msh_GetSegmentList(seg_node)->seg_table, seg_node);
 	
 	/* reset local pointers */
-	if(msh_GetPrevSegment(seg_node) != NULL)
+	if(msh_GetPreviousSegment(seg_node) != NULL)
 	{
-		msh_SetNextSegment(msh_GetPrevSegment(seg_node), msh_GetNextSegment(seg_node));
+		msh_SetNextSegment(msh_GetPreviousSegment(seg_node), msh_GetNextSegment(seg_node));
 	}
 	
 	if(msh_GetNextSegment(seg_node) != NULL)
 	{
-		msh_SetPrevSegment(msh_GetNextSegment(seg_node), msh_GetPrevSegment(seg_node));
+		msh_SetPreviousSegment(msh_GetNextSegment(seg_node), msh_GetPreviousSegment(seg_node));
 	}
 	
 	/* fix pointers to the front and back */
@@ -487,13 +498,13 @@ void msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
 	
 	if(msh_GetSegmentList(seg_node)->last == seg_node)
 	{
-		msh_GetSegmentList(seg_node)->last = msh_GetPrevSegment(seg_node);
+		msh_GetSegmentList(seg_node)->last = msh_GetPreviousSegment(seg_node);
 	}
 	
 	msh_GetSegmentList(seg_node)->num_segs -= 1;
 	
 	msh_SetNextSegment(seg_node, NULL);
-	msh_SetPrevSegment(seg_node, NULL);
+	msh_SetPreviousSegment(seg_node, NULL);
 	msh_SetSegmentList(seg_node, NULL);
 	
 }

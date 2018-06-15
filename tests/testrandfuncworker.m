@@ -15,7 +15,7 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 	clear_new_bound = bounds.clear_new;
 	clear_all_bound = bounds.clear_all;
 	mshreset_bound = bounds.mshreset;
-	mshdeepcopy_bound = bounds.mshdeepcopy;
+	mshlocalcopy_bound = bounds.mshlocalcopy;
 	mshclear_bound = bounds.mshclear;
 	mshdetach_bound = bounds.mshdetach;
 	chpar_copy_bound = bounds.chpar_copy;
@@ -32,7 +32,7 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 	
 	mshreset_iter = randi(rns, mshreset_bound);
 
-	mshdeepcopy_iter = randi(rns, mshdeepcopy_bound);
+	mshlocalcopy_iter = randi(rns, mshlocalcopy_bound);
 	
 	% bound of random call to mshclear
 	mshclear_iter = randi(rns, mshclear_bound);
@@ -89,24 +89,24 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 			end
 			
 			
-			if(mod(i, mshdeepcopy_iter) == 0)
+			if(mod(i, mshlocalcopy_iter) == 0)
 				switch(ceil(9*randdoubles2(i)))
 					case 1
-						mshdeepcopy;
+						mshlocalcopy;
 					case 2
-						data = mshdeepcopy;
+						data = mshlocalcopy;
 					case 3
-						[data, newvars] = mshdeepcopy;
+						[data, newvars] = mshlocalcopy;
 					case 4
-						[data, newvars, allvars] = mshdeepcopy;
+						[data, newvars, allvars] = mshlocalcopy;
 					case 5
-						data = mshdeepcopy(data);
+						data = mshlocalcopy(data);
 					case 6
-						newvars = mshdeepcopy(newvars);
+						newvars = mshlocalcopy(newvars);
 					case 7
-						allvars = mshdeepcopy(allvars);
+						allvars = mshlocalcopy(allvars);
 					case 8
-						mshdeepcopy(data);
+						mshlocalcopy(data);
 				end
 			end
 			

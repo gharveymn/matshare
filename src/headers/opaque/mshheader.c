@@ -1,15 +1,61 @@
+/** mshheader.c
+ * Provides a definition for the shared memory header and
+ * defines access functions. Also defines functions for
+ * placing variables into shared memory.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
 #include "../mshheader.h"
 #include "../mlerrorutils.h"
 #include "../mshexterntypes.h"
+#include "mex.h"
 #ifdef MSH_UNIX
 #include <string.h>
 #endif
 
+#if MSH_BITNESS==64
+#  define MXMALLOC_MAGIC_CHECK 0xFEEDFACE
+#  define MXMALLOC_SIG_LEN 0x10
+#  define MXMALLOC_SIG_LEN_SHIFT 0x0F
+
+typedef struct AllocationHeader_t
+{
+	uint64_T aligned_size;
+	uint32_T check;
+	uint16_T alignment;
+	uint16_T offset;
+} AllocationHeader_t;
+
+#elif MSH_BITNESS==32
+
+#  define MXMALLOC_MAGIC_CHECK 0xFEED
+#  define MXMALLOC_SIG_LEN 0x08
+#  define MXMALLOC_SIG_LEN_SHIFT 0x07
+
+typedef struct AllocationHeader_t
+{
+	uint32_T aligned_size;
+	uint16_T check;
+	uint8_T alignment;
+	uint8_T offset;
+} AllocationHeader_t;
+
+#else
+#  error(matshare is only supported in 64-bit and 32-bit variants.)
+#endif
+
+extern size_t PadToAlignData(size_t curr_sz);
+
 /**
  * Close emulation of the structure of mxArray:
  * A variable shall be packed as so: [{SharedVariableHeader_t, dims}, (child offsets, field names, data, imag_data, ir, jc)] where {} is required, () is optional.
- * This is packed to be 64 bytes so that we can back a 2 dimensional array without any padding (64 byte header, 16 bytes for dimensions, 16 bytes for the mxMalloc
- * signature, and then the data is aligned at offset 96 without any padding.
+ * This is packed to be <= 64 bytes on x64 so that we can back a 2 dimensional array without any padding (64 byte header, 16 bytes for dimensions,
+ * 16 bytes for the mxMalloc signature. Then aligned at 96 bytes.).
  */
 struct SharedVariableHeader_t
 {
@@ -45,21 +91,51 @@ struct SharedVariableHeader_t
 	} class_info_pack;
 };
 
-static size_t msh_GetFieldNamesSize(const mxArray* in_var);
-
-static void msh_GetNextFieldName(const char_t** field_str);
-
-static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz);
-
-static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t seg_sz);
 
 /**
+ * Gets the total number of bytes needed to store the fields strings.
+ *
+ * @param in_var The input variable.
+ * @return The total bytes needed.
+ */
+static size_t msh_GetFieldNamesSize(const mxArray* in_var);
+
+
+/**
+ * Gets the next field name.
+ *
+ * @param field_str A pointer to the field string.
+ */
+static void msh_GetNextFieldName(const char_t** field_str);
+
+
+/**
+ * Copies data to the destination pointer. Also preappends a header to the block.
+ *
+ * @param dest The destination of copied data.
+ * @param orig The original data.
+ * @param copy_sz The size of the data copy.
+ * @return The destination pointer.
+ */
+static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t copy_sz);
+
+
+/**
+ * Creates the allocation signature in the style of mxMalloc.
+ *
+ * @param alloc_hdr A pointer to the allocation header to be modified.
+ * @param copy_sz The size of the data copy.
+ */
+static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t copy_sz);
+
+/**
+ * Finds the padded size of the copied data.
  *
  * @note Pads to a multiple of the size of the header, so 64 bit is 16 byte padded, 32 bit is 8 byte padded.
- * @param seg_sz
- * @return
+ * @param copy_sz The size of the data copy.
+ * @return The padded size.
  */
-static size_t FindPaddedSegmentSize(size_t seg_sz);
+static size_t FindPaddedDataSize(size_t copy_sz);
 
 /** offset Get functions **/
 
@@ -120,22 +196,22 @@ int msh_GetNumFields(SharedVariableHeader_t* hdr_ptr)
 	return hdr_ptr->num_fields;
 }
 
-mxClassID msh_GetClassId(SharedVariableHeader_t* hdr_ptr)
+int msh_GetClassId(SharedVariableHeader_t* hdr_ptr)
 {
 	return (mxClassID)hdr_ptr->class_info_pack.class_id;
 }
 
-bool_t msh_GetIsEmpty(SharedVariableHeader_t* hdr_ptr)
+int msh_GetIsEmpty(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->class_info_pack.is_empty;
 }
 
-bool_t msh_GetIsSparse(SharedVariableHeader_t* hdr_ptr)
+int msh_GetIsSparse(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->class_info_pack.is_sparse;
 }
 
-bool_t msh_GetIsNumeric(SharedVariableHeader_t* hdr_ptr)
+int msh_GetIsNumeric(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->class_info_pack.is_numeric;
 }
@@ -199,24 +275,24 @@ void msh_SetNumFields(SharedVariableHeader_t* hdr_ptr, int in)
 	hdr_ptr->num_fields = in;
 }
 
-void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, mxClassID in)
+void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, int in)
 {
 	hdr_ptr->class_info_pack.class_id = (msh_classid_t)in;
 }
 
-void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, bool_t in)
+void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, int in)
 {
-	hdr_ptr->class_info_pack.is_empty = in;
+	hdr_ptr->class_info_pack.is_empty = (bool_t)in;
 }
 
-void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, bool_t in)
+void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, int in)
 {
-	hdr_ptr->class_info_pack.is_sparse = in;
+	hdr_ptr->class_info_pack.is_sparse = (bool_t)in;
 }
 
-void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, bool_t in)
+void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, int in)
 {
-	hdr_ptr->class_info_pack.is_numeric = in;
+	hdr_ptr->class_info_pack.is_numeric = (bool_t)in;
 }
 
 
@@ -264,14 +340,10 @@ SharedVariableHeader_t* msh_GetChildHeader(SharedVariableHeader_t* hdr_ptr, size
 	return (SharedVariableHeader_t*)((byte_t*)hdr_ptr + msh_GetChildOffsets(hdr_ptr)[child_num]);
 }
 
-bool_t msh_GetIsComplex(SharedVariableHeader_t* hdr_ptr)
+
+int msh_GetIsComplex(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->data_offsets.imag_data != SIZE_MAX;
-}
-
-mxComplexity msh_GetComplexity(SharedVariableHeader_t* hdr_ptr)
-{
-	return msh_GetIsComplex(hdr_ptr)? mxCOMPLEX : mxREAL;
 }
 
 
@@ -613,7 +685,7 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 	const char_t** field_names;
 	const char_t* field_name;
 	
-	mxClassID shared_class_id = msh_GetClassId(shared_header);
+	mxClassID shared_class_id = (mxClassID)msh_GetClassId(shared_header);
 	
 	/* Structure case */
 	if(shared_class_id == mxSTRUCT_CLASS)
@@ -741,7 +813,7 @@ void msh_OverwriteData(SharedVariableHeader_t* shared_header, const mxArray* in_
 	/* for structures */
 	int field_num, num_fields;                /* current field */
 	
-	mxClassID shared_class_id = msh_GetClassId(shared_header);
+	mxClassID shared_class_id = (mxClassID)msh_GetClassId(shared_header);
 	
 	/* Structure case */
 	if(shared_class_id == mxSTRUCT_CLASS)
@@ -807,7 +879,7 @@ void msh_OverwriteData(SharedVariableHeader_t* shared_header, const mxArray* in_
 }
 
 
-bool_t msh_CompareVariableSize(SharedVariableHeader_t* shared_header, const mxArray* comp_var)
+int msh_CompareVariableSize(SharedVariableHeader_t* shared_header, const mxArray* comp_var)
 {
 	
 	/* for working with shared memory ... */
@@ -818,7 +890,7 @@ bool_t msh_CompareVariableSize(SharedVariableHeader_t* shared_header, const mxAr
 	
 	const char_t* field_name;
 	
-	mxClassID shared_class_id = msh_GetClassId(shared_header);
+	mxClassID shared_class_id = (mxClassID)msh_GetClassId(shared_header);
 	
 	/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
 	if(mxGetClassID(comp_var) != shared_class_id ||
@@ -1020,7 +1092,7 @@ static size_t msh_GetFieldNamesSize(const mxArray* in_var)
 	{
 		/* This field */
 		field_name = mxGetFieldNameByNumber(in_var, i);
-		cml_sz += strlen(field_name) + 1; /* remember to add the null termination */
+		cml_sz += (strlen(field_name) + 1)*sizeof(char_t); /* remember to add the null termination */
 	}
 	
 	return cml_sz;
@@ -1033,22 +1105,22 @@ static void msh_GetNextFieldName(const char_t** field_str)
 }
 
 
-static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t cpy_sz)
+static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t copy_sz)
 {
-	msh_MakeDataSignature((AllocationHeader_t*)(dest - MXMALLOC_SIG_LEN), cpy_sz);
+	msh_MakeDataSignature((AllocationHeader_t*)(dest - MXMALLOC_SIG_LEN), copy_sz);
 	if(orig != NULL)
 	{
-		memcpy(dest, orig, cpy_sz);
+		memcpy(dest, orig, copy_sz);
 	}
 	else
 	{
-		memset(dest, 0, cpy_sz);
+		memset(dest, 0, copy_sz);
 	}
 	return dest;
 }
 
 
-static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t seg_sz)
+static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t copy_sz)
 {
 	/*
 	 * MXMALLOC SIGNATURE INFO:
@@ -1062,15 +1134,15 @@ static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t seg_sz)
 	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
 	 */
 	
-	alloc_hdr->aligned_size = (seg_sz > 0)? FindPaddedSegmentSize(seg_sz) : 0;
+	alloc_hdr->aligned_size = (copy_sz > 0)? FindPaddedDataSize(copy_sz) : 0;
 	alloc_hdr->check = MXMALLOC_MAGIC_CHECK;
-	alloc_hdr->alignment = MXMALLOC_ALIGNMENT;
+	alloc_hdr->alignment = DATA_ALIGNMENT;
 	alloc_hdr->offset = MXMALLOC_SIG_LEN;
 	
 }
 
 
-static size_t FindPaddedSegmentSize(size_t seg_sz)
+static size_t FindPaddedDataSize(size_t copy_sz)
 {
-	return seg_sz + (MXMALLOC_SIG_LEN_SHIFT - ((seg_sz - 1) & MXMALLOC_SIG_LEN_SHIFT));
+	return copy_sz + (MXMALLOC_SIG_LEN_SHIFT - ((copy_sz - 1) & MXMALLOC_SIG_LEN_SHIFT));
 }

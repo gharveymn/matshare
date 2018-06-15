@@ -1,3 +1,16 @@
+/** mshsegmentnode.c
+ * Provides a definition for segment nodes and provides access
+ * functions.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
+#include "mex.h"
+
 #include "../mshsegmentnode.h"
 #include "../mshvariablenode.h"
 
@@ -16,7 +29,8 @@ SegmentNode_t* msh_CreateSegmentNode(SegmentInfo_t* seg_info_cache)
 	SegmentNode_t* new_seg_node = mxMalloc(sizeof(SegmentNode_t));
 	mexMakeMemoryPersistent(new_seg_node);
 	
-	new_seg_node->seg_info = *seg_info_cache;
+	
+	msh_SetSegmentInfo(new_seg_node, seg_info_cache);
 	new_seg_node->var_node = NULL;
 	new_seg_node->parent_seg_list = NULL;
 	new_seg_node->hash_next = NULL;
@@ -51,7 +65,7 @@ SegmentNode_t* msh_GetNextSegment(SegmentNode_t* seg_node)
 {
 	return seg_node->next;
 }
-SegmentNode_t* msh_GetPrevSegment(SegmentNode_t* seg_node)
+SegmentNode_t* msh_GetPreviousSegment(SegmentNode_t* seg_node)
 {
 	return seg_node->prev;
 }
@@ -80,7 +94,7 @@ void msh_SetNextSegment(SegmentNode_t* seg_node, SegmentNode_t* next_seg_node)
 	seg_node->next = next_seg_node;
 }
 
-void msh_SetPrevSegment(SegmentNode_t* seg_node, SegmentNode_t* prev_seg_node)
+void msh_SetPreviousSegment(SegmentNode_t* seg_node, SegmentNode_t* prev_seg_node)
 {
 	seg_node->prev = prev_seg_node;
 }

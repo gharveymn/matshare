@@ -1,5 +1,48 @@
+/** mshexterntypes.c
+ * Provides a partial definition for mxArray. This is a hack.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+ 
+ 
+#include "mex.h"
+
 #include "../mshexterntypes.h"
 
+/* partial definition */
+struct InternalMexStruct_t
+{
+	void* name;             /*   prev - R2008b: Name of variable in workspace
+				               R2009a - R2010b: NULL
+				               R2011a - later : Reverse crosslink pointer    */
+	mxClassID class_id;      /* 0 = unknown     10 = int16
+                                1 = cell        11 = uint16
+                                2 = struct      12 = int32
+                                3 = logical     13 = uint32
+                                4 = char        14 = int64
+                                5 = void        15 = uint64
+                                6 = double      16 = function_handle
+                                7 = single      17 = opaque (classdef)
+                                8 = int8        18 = object (old style)
+                                9 = uint8       19 = index (deprecated)
+                               10 = int16       20 = sparse (deprecated)     */
+	int variable_type;       /*  0 = normal
+                                1 = persistent
+                                2 = global
+                                3 = sub-element (field or cell)
+                                4 = temporary
+                                5 = (unknown)
+                                6 = property of opaque class object
+                                7 = (unknown)                                */
+	mxArray* crosslink;     /* Address of next shared-data variable          */
+	/* the rest is undefined here */
+};
+
+/* the full definition */
+#if 0
 struct InternalMexStruct_t
 {
 	void* name;             /*   prev - R2008b: Name of variable in workspace
@@ -55,6 +98,7 @@ struct InternalMexStruct_t
 	size_t nzmax;            /* Number of elements allocated for sparse        */
 /*   size_t reserved;             Don't believe this! It is not really there!    */
 };
+#endif
 
 mxArray* msh_GetCrosslink(mxArray* var)
 {

@@ -1,3 +1,15 @@
+/** mshutils.c
+ * Defines miscellaneous utility functions.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
+#include "mex.h"
+
 #include "headers/mshtypes.h"
 #include "headers/mshutils.h"
 #include "headers/mshvariables.h"
@@ -12,17 +24,13 @@
 #  include <sys/stat.h>
 #endif
 
-static LockFreeCounter_t old_counter, new_counter;
-
-
-
 void msh_OnExit(void)
 {
 	
 	g_local_info.is_initialized = FALSE;
 	
 	msh_DetachSegmentList(&g_local_seg_list);
-	msh_DestroyTable(&g_local_seg_list.seg_table);
+	msh_FreeTable(&g_local_seg_list.seg_table);
 	
 	if(g_local_info.shared_info_wrapper.ptr != NULL)
 	{
@@ -65,6 +73,12 @@ void msh_OnExit(void)
 		}
 		g_local_info.process_lock = MSH_INVALID_HANDLE;
 	}
+#else
+	if(g_local_info.process_lock.lock_handle != MSH_INVALID_HANDLE)
+	{
+		g_local_info.process_lock.lock_handle = MSH_INVALID_HANDLE;
+		g_local_info.process_lock.lock_size = 0;
+	}
 #endif
 	
 	if(g_local_info.is_mex_locked)
@@ -76,7 +90,6 @@ void msh_OnExit(void)
 		mexUnlock();
 		g_local_info.is_mex_locked = FALSE;
 	}
-	mexAtExit(msh_NullFunction);
 	
 }
 
@@ -88,13 +101,13 @@ void msh_OnError(void)
 	/* set the process lock at a level where it can be released if needed */
 	while(g_local_info.lock_level > 0)
 	{
-		msh_ReleaseProcessLock();
+		msh_ReleaseProcessLock(g_process_lock);
 	}
 
 }
 
 
-void msh_AcquireProcessLock(void)
+void msh_AcquireProcessLock(ProcessLock_t process_lock)
 {
 #ifdef MSH_WIN
 	DWORD status;
@@ -124,7 +137,7 @@ void msh_AcquireProcessLock(void)
 #endif
 
 #ifdef MSH_WIN
-			status = WaitForSingleObject(g_process_lock, INFINITE);
+			status = WaitForSingleObject(process_lock, INFINITE);
 			if(status == WAIT_ABANDONED)
 			{
 				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, 0, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
@@ -134,8 +147,7 @@ void msh_AcquireProcessLock(void)
 				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ProcessLockError",  "Failed to lock acquire the process lock.");
 			}
 #else
-			
-			if(lockf(g_process_lock, F_LOCK, sizeof(SharedInfo_t)) != 0)
+			if(lockf(process_lock.lock_handle, F_LOCK, process_lock.lock_size) != 0)
 			{
 				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ProcessLockError", "Failed to acquire the process lock.");
 			}
@@ -154,7 +166,7 @@ void msh_AcquireProcessLock(void)
 }
 
 
-void msh_ReleaseProcessLock(void)
+void msh_ReleaseProcessLock(ProcessLock_t process_lock)
 {
 	msh_DecrementCounter(&g_shared_info->user_defined.lock_counter, FALSE);
 	
@@ -163,12 +175,12 @@ void msh_ReleaseProcessLock(void)
 		if(g_local_info.lock_level == 1)
 		{
 #ifdef MSH_WIN
-			if(ReleaseMutex(g_process_lock) == 0)
+			if(ReleaseMutex(process_lock) == 0)
 			{
 				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #else
-			if(lockf(g_process_lock, F_ULOCK, sizeof(SharedInfo_t)) != 0)
+			if(lockf(process_lock.lock_handle, F_ULOCK, process_lock.lock_size) != 0)
 			{
 				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ProcessUnlockError", "Failed to release the process lock.");
 			}
@@ -181,21 +193,10 @@ void msh_ReleaseProcessLock(void)
 
 }
 
-size_t PadToAlignData(size_t curr_sz)
-{
-	return curr_sz + (MXMALLOC_ALIGNMENT_SHIFT - ((curr_sz - 1) & MXMALLOC_ALIGNMENT_SHIFT));
-}
-
 
 void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num)
 {
 	sprintf(name_buffer, MSH_SEGMENT_NAME, (unsigned long)seg_num);
-}
-
-
-void msh_NullFunction(void)
-{
-	/* does nothing (so we can reset the mexAtExit function, since NULL is undocumented) */
 }
 
 
@@ -364,6 +365,7 @@ pid_t msh_GetPid(void)
 /* returns the state of the flag after the operation */
 LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter)
 {
+	LockFreeCounter_t old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
@@ -376,12 +378,13 @@ LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter)
 /* returns whether the decrement changed the flag to TRUE */
 bool_t msh_DecrementCounter(volatile LockFreeCounter_t* counter, bool_t set_flag)
 {
+	LockFreeCounter_t old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
 		new_counter.span = old_counter.span;
 		new_counter.values.count -= 1;
-		if(set_flag && old_counter.values.flag == FALSE && new_counter.values.count == 0)
+		if(set_flag && new_counter.values.count == 0)
 		{
 			new_counter.values.flag = TRUE;
 		}
@@ -393,6 +396,7 @@ bool_t msh_DecrementCounter(volatile LockFreeCounter_t* counter, bool_t set_flag
 
 void msh_SetCounterFlag(volatile LockFreeCounter_t* counter, unsigned long val)
 {
+	LockFreeCounter_t old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
@@ -405,6 +409,7 @@ void msh_SetCounterFlag(volatile LockFreeCounter_t* counter, unsigned long val)
 
 void msh_SetCounterPost(volatile LockFreeCounter_t* counter, unsigned long val)
 {
+	LockFreeCounter_t old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
@@ -430,6 +435,8 @@ unsigned long msh_GetCounterPost(volatile LockFreeCounter_t* counter)
 
 void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val)
 {
+	LockFreeCounter_t old_counter, new_counter;
+	
 	msh_SetCounterPost(counter, FALSE);
 	old_counter.values.count = 0;
 	old_counter.values.post = FALSE;
@@ -470,56 +477,62 @@ size_t msh_GetTickDifference(TickTracker_t* tracker)
 #endif
 
 
+size_t PadToAlignData(size_t curr_sz)
+{
+	return curr_sz + (DATA_ALIGNMENT_SHIFT - ((curr_sz - 1) & DATA_ALIGNMENT_SHIFT));
+}
+
+
 /**
  * Atomically adds the size_t value to the value pointed to. Fails if this will result in a
  * value higher than the maximum specified.
  *
- * @param value_pointer
+ * @param dest
  * @param add_value
  * @param max_value
  * @return
  */
-bool_t msh_AtomicAddSizeWithMax(volatile size_t* value_pointer, size_t add_value, size_t max_value)
+bool_t msh_AtomicAddSizeWithMax(volatile size_t* dest, size_t add_value, size_t max_value)
 {
 	size_t old_value, new_value;
 #ifdef MSH_WIN
 #  if MSH_BITNESS==64
 	do
 	{
-		old_value = *value_pointer;
+		old_value = *dest;
 		new_value = old_value + add_value;
 		if(new_value > max_value)
 		{
 			return FALSE;
 		}
-	} while(InterlockedCompareExchange64((volatile long long*)value_pointer, new_value, old_value) != old_value);
+	} while(InterlockedCompareExchange64((volatile long long*)dest, new_value, old_value) != old_value);
 #  elif MSH_BITNESS==32
 	do
 	{
 		/* workaround because lcc defines size_t as signed (???) */
-		old_value = *value_pointer;
+		old_value = *dest;
 		new_value = old_value + add_value;
 		if(new_value > max_value)
 		{
 			return FALSE;
 		}
-	} while(InterlockedCompareExchange((volatile long*)value_pointer, new_value, old_value) != old_value);
+	} while(InterlockedCompareExchange((volatile long*)dest, new_value, old_value) != old_value);
 #  endif
 #else
 	do
 	{
-		old_value = *value_pointer;
+		old_value = *dest;
 		new_value = old_value + add_value;
 		if(new_value > max_value)
 		{
 			return FALSE;
 		}
-	} while(__sync_val_compare_and_swap(value_pointer, old_value, new_value) != old_value);
+	} while(__sync_val_compare_and_swap(dest, old_value, new_value) != old_value);
 #endif
 	return TRUE;
 }
 
-size_t msh_AtomicSubtractSize(volatile size_t* value_pointer, size_t subtract_value)
+size_t msh_AtomicSubtractSize(volatile size_t* dest, size_t subtract_value)
 {
 #ifdef MSH_WIN
 	/* using compare swaps because windows doesn't have unsigned interlocked functions */
@@ -527,57 +540,57 @@ size_t msh_AtomicSubtractSize(volatile size_t* value_pointer, size_t subtract_va
 #  if MSH_BITNESS==64
 	do
 	{
-		old_value = *value_pointer;
+		old_value = *dest;
 		new_value = old_value - subtract_value;
-	} while(InterlockedCompareExchange64((volatile long long*)value_pointer, new_value, old_value) != old_value);
+	} while(InterlockedCompareExchange64((volatile long long*)dest, new_value, old_value) != old_value);
 #  elif MSH_BITNESS==32
 	do
 	{
-		old_value = *value_pointer;
+		old_value = *dest;
 		new_value = old_value - subtract_value;
-	} while(InterlockedCompareExchange((volatile long*)value_pointer, new_value, old_value) != old_value);
+	} while(InterlockedCompareExchange((volatile long*)dest, new_value, old_value) != old_value);
 #  endif
 	return new_value;
 #else
-	return __sync_sub_and_fetch(value_pointer, subtract_value);
+	return __sync_sub_and_fetch(dest, subtract_value);
 #endif
 }
 
 /*
-long msh_AtomicAddLong(volatile long* value_pointer, long add_value)
+long msh_AtomicAddLong(volatile long* dest, long add_value)
 {
 #ifdef MSH_WIN
-	return InterlockedAdd(value_pointer, add_value);
+	return InterlockedAdd(dest, add_value);
 #else
-	return __sync_add_and_fetch(value_pointer, add_value);
+	return __sync_add_and_fetch(dest, add_value);
 #endif
 }
 */
 
 
-long msh_AtomicIncrement(volatile long* value_pointer)
+long msh_AtomicIncrement(volatile long* dest)
 {
 #ifdef MSH_WIN
-	return InterlockedIncrement(value_pointer);
+	return InterlockedIncrement(dest);
 #else
-	return __sync_add_and_fetch(value_pointer, 1);
+	return __sync_add_and_fetch(dest, 1);
 #endif
 }
 
-long msh_AtomicDecrement(volatile long* value_pointer)
+long msh_AtomicDecrement(volatile long* dest)
 {
 #ifdef MSH_WIN
-	return InterlockedDecrement(value_pointer);
+	return InterlockedDecrement(dest);
 #else
-	return __sync_sub_and_fetch(value_pointer, 1);
+	return __sync_sub_and_fetch(dest, 1);
 #endif
 }
 
-long msh_AtomicCompareSwap(volatile long* value_pointer, long compare_value, long swap_value)
+long msh_AtomicCompareSwap(volatile long* dest, long compare_value, long swap_value)
 {
 #ifdef MSH_WIN
-	return InterlockedCompareExchange(value_pointer, swap_value, compare_value);
+	return InterlockedCompareExchange(dest, swap_value, compare_value);
 #else
-	return __sync_val_compare_and_swap(value_pointer, compare_value, swap_value);
+	return __sync_val_compare_and_swap(dest, compare_value, swap_value);
 #endif
 }

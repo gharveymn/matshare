@@ -1,3 +1,14 @@
+/** mshinit.c
+ * Defines initialization functions.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+#include "mex.h"
+
 #include "headers/mshinit.h"
 #include "headers/mlerrorutils.h"
 #include "headers/mshutils.h"
@@ -10,8 +21,18 @@
 #  include <sys/mman.h>
 #endif
 
+
+/**
+ * Initializes the shared info segment.
+ */
 static void msh_InitializeSharedInfo(void);
+
+
+/**
+ * Initializes the configuration parameters.
+ */
 static void msh_InitializeConfiguration(void);
+
 
 void msh_InitializeMatshare(void)
 {
@@ -20,6 +41,8 @@ void msh_InitializeMatshare(void)
 	{
 		return;
 	}
+	
+	mexAtExit(msh_OnExit);
 	
 	meu_SetErrorCallback(msh_OnError);
 	meu_SetWarningCallback(NULL);
@@ -35,7 +58,6 @@ void msh_InitializeMatshare(void)
 		{
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, 0, "MexLockedError", "Matshare tried to lock its file when it was already locked.");
 		}
-		mexAtExit(msh_OnExit);
 		mexLock();
 		g_local_info.is_mex_locked = TRUE;
 	}
@@ -45,6 +67,8 @@ void msh_InitializeMatshare(void)
 		g_local_info.this_pid = msh_GetPid();
 	}
 	
+	msh_InitializeSharedInfo();
+
 #ifdef MSH_WIN
 	if(g_local_info.process_lock == MSH_INVALID_HANDLE)
 	{
@@ -53,9 +77,13 @@ void msh_InitializeMatshare(void)
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateMutexError", "Failed to create the mutex.");
 		}
 	}
+#else
+	if(g_local_info.process_lock.lock_handle == MSH_INVALID_HANDLE)
+	{
+		g_local_info.process_lock.lock_handle = g_local_info.shared_info_wrapper.handle;
+		g_local_info.process_lock.lock_size = sizeof(SharedInfo_t);
+	}
 #endif
-	
-	msh_InitializeSharedInfo();
 	
 	if(g_local_seg_list.seg_table.table == NULL)
 	{

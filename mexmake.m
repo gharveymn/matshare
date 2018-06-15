@@ -7,7 +7,7 @@ try
 		fprintf('-Compiling in debug mode.\n')
 		mexflags = {'-g', '-O', '-v', '-outdir', output_path};
 	else
-		mexflags = {'-O', '-silent', '-outdir', output_path};
+		mexflags = {'-O', '-v', '-outdir', output_path};
 	end
 	
 	if(ThreadSafety)
@@ -26,7 +26,7 @@ try
 		mexflags = [mexflags {'-DMSH_SHARETYPE=msh_SHARETYPE_OVERWRITE'}];
 	end
 	
-	[comp,maxsz,endi] = computer;	
+	[comp,maxsz,endi] = computer;
 	
 	sources = {
 				'matshare_.c',...
@@ -47,9 +47,9 @@ try
 	end
 	
 	if(ispc)
-		mexflags = [mexflags, {'-DMATLAB_WINDOWS'}];
+		mexflags = [mexflags, {'-DMSH_WIN'}];
     else
-        mexflags = [mexflags, {'-DMATLAB_UNIX'}];
+        mexflags = [mexflags, {'-DMSH_UNIX'}];
         if(~ismac)
             mexflags = [mexflags, {'-lrt'}];
         end
@@ -78,7 +78,7 @@ try
     %mexflags = [mexflags {'-DMSH_DEBUG_PERF'}];
 	
 	fprintf('-Compiling matshare...')
-	%mexflags = [mexflags {'CFLAGS="$CFLAGS -std=c89 -Wall"'}];
+	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /W4"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n%s\n',['-The function is located in ' fullfile(pwd,'bin') '.'])
 	

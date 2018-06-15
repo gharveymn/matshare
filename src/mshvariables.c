@@ -1,7 +1,21 @@
+/** mshvariables.c
+ * Defines functions for variable creation and tracking.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
+#include "mex.h"
+
 #include "headers/mshvariables.h"
 #include "headers/mshsegments.h"
+#include "headers/mshheader.h"
 #include "headers/mlerrorutils.h"
 #include "headers/mshutils.h"
+#include "headers/mshexterntypes.h"
 
 
 /** public function definitions **/
@@ -87,7 +101,7 @@ void msh_AddVariableToList(VariableList_t* var_list, VariableNode_t* var_node)
 {
 	msh_SetVariableList(var_node, var_list);
 	msh_SetNextVariable(var_node, NULL);
-	msh_SetPrevVariable(var_node, var_list->last);
+	msh_SetPreviousVariable(var_node, var_list->last);
 	
 	if(var_list->num_vars != 0)
 	{
@@ -116,14 +130,14 @@ void msh_RemoveVariableFromList(VariableNode_t* var_node)
 	VariableList_t* var_list = msh_GetVariableList(var_node);
 	
 	/* reset references in prev and next var node */
-	if(msh_GetPrevVariable(var_node) != NULL)
+	if(msh_GetPreviousVariable(var_node) != NULL)
 	{
-		msh_SetNextVariable(msh_GetPrevVariable(var_node), msh_GetNextVariable(var_node));
+		msh_SetNextVariable(msh_GetPreviousVariable(var_node), msh_GetNextVariable(var_node));
 	}
 	
 	if(msh_GetNextVariable(var_node) != NULL)
 	{
-		msh_SetPrevVariable(msh_GetNextVariable(var_node), msh_GetPrevVariable(var_node));
+		msh_SetPreviousVariable(msh_GetNextVariable(var_node), msh_GetPreviousVariable(var_node));
 	}
 	
 	if(var_list->first == var_node)
@@ -133,11 +147,11 @@ void msh_RemoveVariableFromList(VariableNode_t* var_node)
 	
 	if(var_list->last == var_node)
 	{
-		var_list->last = msh_GetPrevVariable(var_node);
+		var_list->last = msh_GetPreviousVariable(var_node);
 	}
 	
 	msh_SetNextVariable(var_node, NULL);
-	msh_SetPrevVariable(var_node, NULL);
+	msh_SetPreviousVariable(var_node, NULL);
 	
 	/* decrement number of variables in the list */
 	var_list->num_vars -= 1;

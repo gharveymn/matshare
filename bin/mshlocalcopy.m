@@ -1,4 +1,4 @@
-function [data, newvars, allvars] = mshdeepcopy(in)
+function [data, newvars, allvars] = mshlocalcopy(in)
 	
 	% make a local copy of the variable
 	if(nargin == 1)

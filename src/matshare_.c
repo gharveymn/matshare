@@ -1,4 +1,25 @@
+/** matshare_.c
+ * Defines the MEX entry function and other top level functions.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
+#include "mex.h"
+
 #include "headers/matshare_.h"
+#include "headers/mshheader.h"
+#include "headers/mshexterntypes.h"
+#include "headers/mshtypes.h"
+#include "headers/mlerrorutils.h"
+#include "headers/mshutils.h"
+#include "headers/mshvariables.h"
+#include "headers/mshsegments.h"
+#include "headers/mshinit.h"
+
 #include <ctype.h>
 
 #ifdef MSH_UNIX
@@ -6,6 +27,9 @@
 #  include <sys/mman.h>
 #  include <sys/stat.h>
 #endif
+
+/* undocumented function */
+extern mxArray* mxCreateSharedDataCopy(mxArray *);
 
 char_t* g_msh_library_name = "matshare";
 char_t* g_msh_error_help_message = "";
@@ -21,6 +45,9 @@ GlobalInfo_t g_local_info = {
 							},     					/* shared_info_wrapper */
 #ifdef MSH_WIN
 							MSH_INVALID_HANDLE,     /* process_lock */
+#else
+							MSH_INVALID_HANDLE,
+							0,
 #endif
 							0,                      /* is_mex_locked */
 							0                       /* is_initialized */
@@ -51,8 +78,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "NotEnoughInputsError", "Minimum input arguments missing. You must supply a msh_directive.");
 	}
 	
-	/* get the msh_directive */
-	msh_directive = msh_ParseDirective(in_directive);
+	/* get the msh_directive, no check made since the function should not be used without entry functions */
+	msh_directive = (msh_directive_t)mxGetScalar(in_directive);
 	
 	/* Don't initialize if we are detaching and matshare has not been initialized for this process yet */
 	if(msh_directive == msh_DETACH && !g_local_info.is_initialized)
@@ -99,11 +126,16 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		
 		case msh_CONFIG:
 			
-			msh_Config(num_in_vars, in_vars);
+			if(num_in_vars % 2 != 0)
+			{
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidNumArgsError", "Each parameter must have a value associated to it.");
+			}
+			
+			msh_Config(num_in_vars/2, in_vars);
 			
 			break;
 		
-		case msh_DEEPCOPY:
+		case msh_LOCALCOPY:
 			
 			if(num_in_vars == 0)
 			{
@@ -139,13 +171,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		case msh_RESET:
 			
-			msh_AcquireProcessLock();
+			msh_AcquireProcessLock(g_process_lock);
 			msh_Clear(0, NULL);
 			msh_SetDefaultConfiguration();
 			msh_WriteConfiguration();
-			msh_ReleaseProcessLock();
+			msh_ReleaseProcessLock(g_process_lock);
 			
 			break;
+			
 		default:
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
 			break;
@@ -188,7 +221,7 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 
 #ifdef MSH_UNIX
 				/* only need to update because we have overwritten an established segment */
-				if(msync(g_local_seg_list.last->seg_info.raw_ptr, g_local_seg_list.last->seg_info.total_segment_size, MS_SYNC | MS_INVALIDATE) != 0)
+				if(msync(msh_GetSegmentInfo(g_local_seg_list.last)->raw_ptr, msh_GetSegmentInfo(g_local_seg_list.last)->total_segment_size, MS_SYNC | MS_INVALIDATE) != 0)
 				{
 					/* error severity: system */
 					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "MsyncMatlabError", "There was an error with syncing a shared data segment.");
@@ -277,7 +310,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 			
 			for(i = 0, curr_var_node = g_local_var_list.last;
 					i < num_new_vars;
-					i++, curr_var_node = msh_GetPrevVariable(curr_var_node))
+					i++, curr_var_node = msh_GetPreviousVariable(curr_var_node))
 			{
 				if(will_duplicate)
 				{
@@ -357,7 +390,7 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 	mxArray* link;
 	bool_t found_variable;
 	int input_num;
-	msh_AcquireProcessLock();
+	msh_AcquireProcessLock(g_process_lock);
 	
 	if(num_inputs > 0)
 	{
@@ -390,7 +423,7 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 	{
 		msh_ClearSharedSegments(&g_local_seg_list);
 	}
-	msh_ReleaseProcessLock();
+	msh_ReleaseProcessLock(g_process_lock);
 }
 
 
@@ -419,12 +452,7 @@ void msh_Config(int num_params, const mxArray** in)
 #endif
 	}
 	
-	if(num_params % 2 != 0)
-	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidNumArgsError", "The number of parameters input must be a multiple of two.");
-	}
-	
-	for(i = 0; i < num_params/2; i++)
+	for(i = 0; i < num_params; i++)
 	{
 		param = in[2*i];
 		val = in[2*i + 1];
@@ -484,20 +512,20 @@ void msh_Config(int num_params, const mxArray** in)
 			}
 			else
 			{
-				msh_AcquireProcessLock();
+				msh_AcquireProcessLock(g_process_lock);
 				g_shared_info->user_defined.security = (mode_t)strtol(val_str_l, NULL, 8);
 				if(fchmod(g_local_info.shared_info_wrapper.handle, g_shared_info->user_defined.security) != 0)
 				{
 					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ChmodError", "There was an error modifying permissions for the shared info segment.");
 				}
-				for(curr_seg_node = g_local_seg_list.first; curr_seg_node != NULL; curr_seg_node = curr_seg_node->next)
+				for(curr_seg_node = g_local_seg_list.first; curr_seg_node != NULL; curr_seg_node = msh_GetNextSegment(curr_seg_node))
 				{
-					if(fchmod(curr_seg_node->seg_info.handle, g_shared_info->user_defined.security) != 0)
+					if(fchmod(msh_GetSegmentInfo(curr_seg_node)->handle, g_shared_info->user_defined.security) != 0)
 					{
 						meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ChmodError", "There was an error modifying permissions for the data segment.");
 					}
 				}
-				msh_ReleaseProcessLock();
+				msh_ReleaseProcessLock(g_process_lock);;
 			}
 #else
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
@@ -551,18 +579,4 @@ void msh_Config(int num_params, const mxArray** in)
 		}
 	}
 	
-}
-
-msh_directive_t msh_ParseDirective(const mxArray* in)
-{
-	/* easiest way to deal with implementation defined enum sizes */
-	if(mxGetClassID(in) == mxDOUBLE_CLASS)
-	{
-		return (msh_directive_t)mxGetScalar(in);
-	}
-	else
-	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidDirectiveError", "Directive must be type 'double'.");
-	}
-	return msh_DEBUG;
 }

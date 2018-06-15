@@ -1,10 +1,22 @@
-#include "headers/mlerrorutils.h"
+/** mlerrorutils.c
+ * Defines error and warning utility functions for easier
+ * output of error information.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+#include "mex.h"
 #include <stdarg.h>
 #include <fcntl.h>
 
 #ifndef _WIN32
 #  include <string.h>
 #endif
+
+#include "headers/mlerrorutils.h"
 
 #define VALUE_AS_STRING(value) #value
 #define EXPAND_AS_STRING(num) VALUE_AS_STRING(num)

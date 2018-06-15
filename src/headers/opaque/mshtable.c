@@ -1,9 +1,45 @@
+/** mshtable.c
+ * Defines functions for handling segment hash tables.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
+#include "mex.h"
+
 #include "../mshsegmentnode.h"
 #include "../mlerrorutils.h"
 #define MSH_INIT_TABLE_SIZE 64
 
+
+/**
+ * Resizes the segment table.
+ *
+ * @param seg_table The segment table.
+ * @param num_segs The number of segments hooked into the table.
+ */
 static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs);
+
+
+/**
+ * Calculates the new hash table size.
+ *
+ * @param curr_sz The current table size.
+ * @return The new table size.
+ */
 static uint32_T msh_FindNewTableSize(uint32_T curr_sz);
+
+
+/**
+ * Calculates the segment hash.
+ *
+ * @param seg_table The segment table.
+ * @param seg_num The segment number.
+ * @return The segment hash.
+ */
 static uint32_T msh_FindSegmentHash(SegmentTable_t* seg_table, msh_segmentnumber_t seg_num);
 
 
@@ -14,14 +50,14 @@ void msh_InitializeTable(SegmentTable_t* seg_table)
 	mexMakeMemoryPersistent(seg_table->table);
 }
 
-void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, uint32_T num_segs)
+void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node)
 {
 	SegmentNode_t* curr_seg_node;
 	uint32_T seg_hash;
 	
-	if(num_segs >= seg_table->table_sz)
+	if(msh_GetSegmentList(seg_node)->num_segs >= seg_table->table_sz)
 	{
-		msh_ResizeTable(seg_table, num_segs);
+		msh_ResizeTable(seg_table, msh_GetSegmentList(seg_node)->num_segs);
 	}
 	
 	msh_SetHashNext(seg_node, NULL);
@@ -71,7 +107,7 @@ void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_no
 }
 
 
-void msh_DestroyTable(SegmentTable_t* seg_table)
+void msh_FreeTable(SegmentTable_t* seg_table)
 {
 	if(seg_table->table != NULL)
 	{
@@ -118,12 +154,11 @@ static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs)
 		for(curr_seg_node = seg_table->table[curr_seg_hash]; curr_seg_node != NULL; curr_seg_node = next_seg_node)
 		{
 			next_seg_node = msh_GetHashNext(curr_seg_node);
-			msh_AddSegmentToTable(&new_table, curr_seg_node, num_segs);
+			msh_AddSegmentToTable(&new_table, curr_seg_node);
 		}
 	}
 	
-	
-	msh_DestroyTable(seg_table);
+	msh_FreeTable(seg_table);
 	
 	*seg_table = new_table;
 	

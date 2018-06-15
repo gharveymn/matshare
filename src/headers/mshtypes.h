@@ -1,12 +1,18 @@
+/** mshtypes.h
+ * Defines structs for process local information as well as
+ * shared information.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
 #ifndef MATSHARE_MSH_TYPES_H
 #define MATSHARE_MSH_TYPES_H
 
-#include "mex.h"
-#include "mshexterntypes.h"
-#include "mshheader.h"
 #include "mshbasictypes.h"
-
-extern mxArray* mxCreateSharedDataCopy(mxArray*);
 
 #define MSH_MAX_NAME_LEN 64
 
@@ -35,6 +41,17 @@ extern mxArray* mxCreateSharedDataCopy(mxArray*);
 
 #define msh_SHARETYPE_COPY 0
 #define msh_SHARETYPE_OVERWRITE 1
+
+
+#ifdef MSH_WIN
+typedef handle_t ProcessLock_t;
+#else
+typedef struct ProcessLock_t
+{
+	handle_t lock_handle;
+	size_t lock_size;
+} ProcessLock_t;
+#endif
 
 typedef struct UserConfig_t
 {
@@ -88,29 +105,38 @@ typedef struct GlobalInfo_t
 		SharedInfo_t* ptr;
 		handle_t handle;
 	} shared_info_wrapper;
-
-#ifdef MSH_WIN
-	handle_t process_lock;
-#endif
+	
+	ProcessLock_t process_lock;
 	
 	bool_t is_mex_locked;
 	bool_t is_initialized;
 	
 } GlobalInfo_t;
 
+/**
+ * Forward declaration of the library name.
+ */
 extern char_t* g_msh_library_name;
+
+/**
+ * Forward declaration of the error help message.
+ */
 extern char_t* g_msh_error_help_message;
+
+
+/**
+ * Forward declaration of the warning help message.
+ */
 extern char_t* g_msh_warning_help_message;
 
+/**
+ * Forward declaration of the global information struct.
+ */
 extern GlobalInfo_t g_local_info;
 
 #define g_shared_info (g_local_info.shared_info_wrapper.ptr)
 
-#ifdef MSH_WIN
-#  define g_process_lock (g_local_info.process_lock)
-#else
-#  define g_process_lock (g_local_info.shared_info_wrapper.handle)
-#endif
+#define g_process_lock (g_local_info.process_lock)
 
 #define msh_IsUpdated() (g_local_info.rev_num == g_shared_info->rev_num)
 

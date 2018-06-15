@@ -1,4 +1,17 @@
+/** mshvariablenode.c
+ * Defines functions for creating and handling variable nodes.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
+#include "mex.h"
+
 #include "../mshvariablenode.h"
+#include "../mshsegmentnode.h"
 
 struct VariableNode_t
 {
@@ -36,7 +49,7 @@ VariableNode_t* msh_GetNextVariable(VariableNode_t* var_node)
 }
 
 
-VariableNode_t* msh_GetPrevVariable(VariableNode_t* var_node)
+VariableNode_t* msh_GetPreviousVariable(VariableNode_t* var_node)
 {
 	return var_node->prev;
 }
@@ -68,7 +81,7 @@ void msh_SetNextVariable(VariableNode_t* var_node, VariableNode_t* next_var_node
 }
 
 
-void msh_SetPrevVariable(VariableNode_t* var_node, VariableNode_t* prev_var_node)
+void msh_SetPreviousVariable(VariableNode_t* var_node, VariableNode_t* prev_var_node)
 {
 	var_node->prev = prev_var_node;
 }

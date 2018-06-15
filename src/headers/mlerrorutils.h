@@ -1,19 +1,30 @@
+/** mlerrorutils.h
+ * Declares functions and macros for mex error utility functions.
+ *
+ * Copyright (c) 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license.  See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
 #ifndef MATSHARE_UTILS_H
 #define MATSHARE_UTILS_H
 
-#include "mex.h"
-
 #ifdef _WIN32
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
 #  include <windows.h>
-typedef DWORD errcode_t;
+   typedef DWORD errcode_t;
 #else
-typedef int errcode_t;
+   typedef int errcode_t;
 #  if(((_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && !_GNU_SOURCE) || defined(__APPLE__))
-/* XSI-compliant version */
-extern int strerror_r(int errnum, char *buf, size_t buflen);
-#  elif
-/* GNU-specific */
-extern char *strerror_r(int errnum, char *buf, size_t buflen);
+     /* XSI-compliant version */
+     extern int strerror_r(int errnum, char *buf, size_t buflen);
+#  else
+     /* GNU-specific */
+     extern char *strerror_r(int errnum, char *buf, size_t buflen);
 #  endif
 #endif
 

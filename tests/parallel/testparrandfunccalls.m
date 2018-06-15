@@ -10,8 +10,8 @@ bounds.clear_all = 50;
 % bound of running mshreset
 bounds.mshreset = 200;
 
-% bound of running mshdeepcopy
-bounds.mshdeepcopy = 10;
+% bound of running mshlocalcopy
+bounds.mshlocalcopy = 10;
 
 % bound of random call to mshclear
 bounds.mshclear = 200;

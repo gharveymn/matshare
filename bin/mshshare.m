@@ -1,4 +1,4 @@
-function [shared_variable] = mshshare(in)
+function shared_variable = mshshare(in)
 	% ordered by predicted usage amounts to slightly improve performance
 	switch(nargout)
 		case 0
