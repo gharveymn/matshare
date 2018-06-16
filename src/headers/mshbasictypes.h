@@ -32,7 +32,6 @@
 #else
 #  include <sys/types.h>
 #  include <errno.h>
-#  define MSH_DEFAULT_PERMISSIONS (S_IRUSR | S_IWUSR)
 #  define MSH_INVALID_HANDLE (-1)
 #endif
 

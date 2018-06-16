@@ -9,16 +9,18 @@
  * of the MIT license.  See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+#include "mex.h"
 
 #include "../mshheader.h"
 #include "../mlerrorutils.h"
 #include "../mshexterntypes.h"
-#include "mex.h"
+
+
 #ifdef MSH_UNIX
 #include <string.h>
 #endif
 
-#if MSH_BITNESS==64
+#if MSH_BITNESS == 64
 #  define MXMALLOC_MAGIC_CHECK 0xFEEDFACE
 #  define MXMALLOC_SIG_LEN 0x10
 #  define MXMALLOC_SIG_LEN_SHIFT 0x0F
@@ -31,7 +33,7 @@ typedef struct AllocationHeader_t
 	uint16_T offset;
 } AllocationHeader_t;
 
-#elif MSH_BITNESS==32
+#elif MSH_BITNESS == 32
 
 #  define MXMALLOC_MAGIC_CHECK 0xFEED
 #  define MXMALLOC_SIG_LEN 0x08
@@ -49,7 +51,9 @@ typedef struct AllocationHeader_t
 #  error(matshare is only supported in 64-bit and 32-bit variants.)
 #endif
 
+
 extern size_t PadToAlignData(size_t curr_sz);
+
 
 /**
  * Close emulation of the structure of mxArray:
@@ -128,6 +132,7 @@ static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t copy_sz);
  */
 static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t copy_sz);
 
+
 /**
  * Finds the padded size of the copied data.
  *
@@ -137,6 +142,7 @@ static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t copy_sz)
  */
 static size_t FindPaddedDataSize(size_t copy_sz);
 
+
 /** offset Get functions **/
 
 size_t msh_GetDataOffset(SharedVariableHeader_t* hdr_ptr)
@@ -144,30 +150,36 @@ size_t msh_GetDataOffset(SharedVariableHeader_t* hdr_ptr)
 	return hdr_ptr->data_offsets.data;
 }
 
+
 size_t msh_GetImagDataOffset(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->data_offsets.imag_data;
 }
+
 
 size_t msh_GetIrOffset(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->data_offsets.ir_fn.ir;
 }
 
+
 size_t msh_GetFieldNamesOffset(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->data_offsets.ir_fn.field_names;
 }
+
 
 size_t msh_GetJcOffset(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->data_offsets.jc_co.jc;
 }
 
+
 size_t msh_GetChildOffsOffset(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->data_offsets.jc_co.child_offs;
 }
+
 
 /** attribute Get functions **/
 
@@ -176,45 +188,54 @@ size_t msh_GetNumDims(SharedVariableHeader_t* hdr_ptr)
 	return hdr_ptr->num_dims;
 }
 
+
 size_t msh_GetElemSize(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->elem_size;
 }
+
 
 size_t msh_GetNumElems(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->ne_nz.num_elems;
 }
 
+
 size_t msh_GetNzmax(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->ne_nz.nzmax;
 }
+
 
 int msh_GetNumFields(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->num_fields;
 }
 
+
 int msh_GetClassId(SharedVariableHeader_t* hdr_ptr)
 {
 	return (mxClassID)hdr_ptr->class_info_pack.class_id;
 }
+
 
 int msh_GetIsEmpty(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->class_info_pack.is_empty;
 }
 
+
 int msh_GetIsSparse(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->class_info_pack.is_sparse;
 }
 
+
 int msh_GetIsNumeric(SharedVariableHeader_t* hdr_ptr)
 {
 	return hdr_ptr->class_info_pack.is_numeric;
 }
+
 
 /** offset Set functions **/
 
@@ -223,30 +244,36 @@ void msh_SetDataOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off)
 	hdr_ptr->data_offsets.data = new_off;
 }
 
+
 void msh_SetImagDataOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off)
 {
 	hdr_ptr->data_offsets.imag_data = new_off;
 }
+
 
 void msh_SetIrOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off)
 {
 	hdr_ptr->data_offsets.ir_fn.ir = new_off;
 }
 
+
 void msh_SetFieldNamesOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off)
 {
 	hdr_ptr->data_offsets.ir_fn.field_names = new_off;
 }
+
 
 void msh_SetJcOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off)
 {
 	hdr_ptr->data_offsets.jc_co.jc = new_off;
 }
 
+
 void msh_SetChildOffsOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off)
 {
 	hdr_ptr->data_offsets.jc_co.child_offs = new_off;
 }
+
 
 /** attribute Set functions **/
 
@@ -255,40 +282,48 @@ void msh_SetNumDims(SharedVariableHeader_t* hdr_ptr, size_t in)
 	hdr_ptr->num_dims = in;
 }
 
+
 void msh_SetElemSize(SharedVariableHeader_t* hdr_ptr, size_t in)
 {
 	hdr_ptr->elem_size = in;
 }
+
 
 void msh_SetNumElems(SharedVariableHeader_t* hdr_ptr, size_t in)
 {
 	hdr_ptr->ne_nz.num_elems = in;
 }
 
+
 void msh_SetNzmax(SharedVariableHeader_t* hdr_ptr, size_t in)
 {
 	hdr_ptr->ne_nz.nzmax = in;
 }
+
 
 void msh_SetNumFields(SharedVariableHeader_t* hdr_ptr, int in)
 {
 	hdr_ptr->num_fields = in;
 }
 
+
 void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, int in)
 {
 	hdr_ptr->class_info_pack.class_id = (msh_classid_t)in;
 }
+
 
 void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, int in)
 {
 	hdr_ptr->class_info_pack.is_empty = (bool_t)in;
 }
 
+
 void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, int in)
 {
 	hdr_ptr->class_info_pack.is_sparse = (bool_t)in;
 }
+
 
 void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, int in)
 {
@@ -303,35 +338,42 @@ mwSize* msh_GetDimensions(SharedVariableHeader_t* hdr_ptr)
 	return (mwSize*)((byte_t*)hdr_ptr + sizeof(SharedVariableHeader_t));
 }
 
+
 void* msh_GetData(SharedVariableHeader_t* hdr_ptr)
 {
 	return (byte_t*)hdr_ptr + msh_GetDataOffset(hdr_ptr);
 }
+
 
 void* msh_GetImagData(SharedVariableHeader_t* hdr_ptr)
 {
 	return (byte_t*)hdr_ptr + msh_GetImagDataOffset(hdr_ptr);
 }
 
+
 mwIndex* msh_GetIr(SharedVariableHeader_t* hdr_ptr)
 {
-	return  (mwIndex*)((byte_t*)hdr_ptr + msh_GetIrOffset(hdr_ptr));
+	return (mwIndex*)((byte_t*)hdr_ptr + msh_GetIrOffset(hdr_ptr));
 }
+
 
 char_t* msh_GetFieldNames(SharedVariableHeader_t* hdr_ptr)
 {
 	return (char_t*)((byte_t*)hdr_ptr + msh_GetFieldNamesOffset(hdr_ptr));
 }
 
+
 mwIndex* msh_GetJc(SharedVariableHeader_t* hdr_ptr)
 {
 	return (mwIndex*)((byte_t*)hdr_ptr + msh_GetJcOffset(hdr_ptr));
 }
 
+
 size_t* msh_GetChildOffsets(SharedVariableHeader_t* hdr_ptr)
 {
 	return (size_t*)((byte_t*)hdr_ptr + msh_GetChildOffsOffset(hdr_ptr));
 }
+
 
 /** Miscellaneous functions utilizing inference **/
 
@@ -352,7 +394,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	/* Note: Compiler optimization should cache the redundant function calls here because of the
 	 * const declaration (and if it doesn't, then these are very light calls anyway). I don't
 	 * want to use SharedVariableHeader_t for anything other than the actual segment. */
-
+	
 	/* adds the total size of the aligned data */
 #define AddDataSize(obj_sz_, data_sz_) (obj_sz_) = PadToAlignData((obj_sz_) + MXMALLOC_SIG_LEN) + (data_sz_);
 	
@@ -796,7 +838,6 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			
 		}
 		
-		
 		mxSetDimensions(ret_var, msh_GetDimensions(shared_header), msh_GetNumDims(shared_header));
 		
 	}
@@ -893,9 +934,8 @@ int msh_CompareVariableSize(SharedVariableHeader_t* shared_header, const mxArray
 	mxClassID shared_class_id = (mxClassID)msh_GetClassId(shared_header);
 	
 	/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
-	if(mxGetClassID(comp_var) != shared_class_id ||
-	   mxGetNumberOfDimensions(comp_var) != msh_GetNumDims(shared_header) ||
-	   memcmp(mxGetDimensions(comp_var), msh_GetDimensions(shared_header), msh_GetNumDims(shared_header) * sizeof(mwSize)) != 0)
+	if(mxGetClassID(comp_var) != shared_class_id || mxGetNumberOfDimensions(comp_var) != msh_GetNumDims(shared_header)
+	   || memcmp(mxGetDimensions(comp_var), msh_GetDimensions(shared_header), msh_GetNumDims(shared_header)*sizeof(mwSize)) != 0)
 	{
 		return FALSE;
 	}
@@ -990,10 +1030,10 @@ int msh_CompareVariableSize(SharedVariableHeader_t* shared_header, const mxArray
 void msh_DetachVariable(mxArray* ret_var)
 {
 	mxArray* link;
-	size_t num_dims = 0, idx, num_elems;
+	size_t idx, num_elems;
 	int field_num, num_fields;
 	mwSize new_dims[] = {0, 0};
-	mwSize new_nzmax = 0;
+	mwSize num_dims = 2, new_nzmax = 0;
 	void* new_data = NULL, * new_imag_data = NULL;
 	mwIndex* new_ir = NULL, * new_jc = NULL;
 	
@@ -1031,7 +1071,6 @@ void msh_DetachVariable(mxArray* ret_var)
 		/* handle sparse objects */
 		if(mxIsSparse(ret_var))
 		{
-			num_dims = 2;
 			new_nzmax = 1;
 			
 			/* allocate 1 element */
@@ -1043,8 +1082,6 @@ void msh_DetachVariable(mxArray* ret_var)
 			
 			new_ir = mxCalloc(new_nzmax, sizeof(mwIndex));
 			new_jc = mxCalloc(new_dims[1] + 1, sizeof(mwIndex));
-			
-			
 		}
 		
 		
@@ -1053,7 +1090,6 @@ void msh_DetachVariable(mxArray* ret_var)
 		link = ret_var;
 		do
 		{
-			
 			mxSetData(link, new_data);
 			if(mxIsComplex(link))
 			{

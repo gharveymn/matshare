@@ -6,7 +6,7 @@
  * This software may be modified and distributed under the terms
  * of the MIT license.  See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-
+ 
 #include "mex.h"
 
 #include "headers/mshinit.h"
@@ -112,7 +112,7 @@ static void msh_InitializeSharedInfo(void)
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateSharedInfoError", "Could not create or open the shared info segment.");
 		}
 #else
-		g_local_info.shared_info_wrapper.handle = shm_open(MSH_SHARED_INFO_SEGMENT_NAME, O_RDWR | O_CREAT, MSH_DEFAULT_PERMISSIONS);
+		g_local_info.shared_info_wrapper.handle = shm_open(MSH_SHARED_INFO_SEGMENT_NAME, O_RDWR | O_CREAT, MSH_DEFAULT_SECURITY);
 		if(g_local_info.shared_info_wrapper.handle == MSH_INVALID_HANDLE)
 		{
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CreateError", "There was an error creating the shared info segment.");
@@ -195,6 +195,7 @@ static void msh_InitializeSharedInfo(void)
 	}
 }
 
+
 static void msh_InitializeConfiguration(void)
 {
 #ifdef MSH_WIN
@@ -205,7 +206,7 @@ static void msh_InitializeConfiguration(void)
 	char_t* config_path;
 	
 	config_path = msh_GetConfigurationPath();
-	
+
 #ifdef MSH_WIN
 	
 	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
@@ -284,9 +285,9 @@ static void msh_InitializeConfiguration(void)
 		mxFree(config_path);
 		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the config file handle.");
 	}
-	
-#endif
 
+#endif
+	
 	mxFree(config_path);
 	
 }

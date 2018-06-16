@@ -7,12 +7,10 @@
  * of the MIT license.  See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-
 #include "mex.h"
 
 #include "headers/mshtypes.h"
 #include "headers/mshutils.h"
-#include "headers/mshvariables.h"
 #include "headers/mshsegments.h"
 #include "headers/mlerrorutils.h"
 
@@ -21,8 +19,8 @@
 #  include <unistd.h>
 #  include <fcntl.h>
 #  include <sys/mman.h>
-#  include <sys/stat.h>
 #endif
+
 
 void msh_OnExit(void)
 {
@@ -34,7 +32,7 @@ void msh_OnExit(void)
 	
 	if(g_local_info.shared_info_wrapper.ptr != NULL)
 	{
-	
+
 #ifdef MSH_WIN
 		if(msh_AtomicDecrement(&g_shared_info->num_procs) == 0)
 		{
@@ -97,13 +95,13 @@ void msh_OnExit(void)
 void msh_OnError(void)
 {
 	meu_SetErrorCallback(NULL);
-
+	
 	/* set the process lock at a level where it can be released if needed */
 	while(g_local_info.lock_level > 0)
 	{
 		msh_ReleaseProcessLock(g_process_lock);
 	}
-
+	
 }
 
 
@@ -157,7 +155,7 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 			msh_GetTick(&lock_time.new);
 			msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.lock_time, msh_GetTickDifference(&lock_time), SIZE_MAX);
 #endif
-
+		
 		}
 		
 		g_local_info.lock_level += 1;
@@ -190,7 +188,7 @@ void msh_ReleaseProcessLock(ProcessLock_t process_lock)
 		g_local_info.lock_level -= 1;
 		
 	}
-
+	
 }
 
 
@@ -208,11 +206,11 @@ void msh_WriteConfiguration(void)
 #endif
 	
 	char_t* config_path;
-
+	
 	
 	handle_t config_handle;
 	UserConfig_t local_config = g_shared_info->user_defined, saved_config;
-	local_config.lock_counter.values.count = 0;				/* reset the lock_counter so that it counter values don't roll over */
+	local_config.lock_counter.values.count = 0;                    /* reset the lock_counter so that it counter values don't roll over */
 	local_config.lock_counter.values.post = TRUE;
 	
 	config_path = msh_GetConfigurationPath();
@@ -285,7 +283,7 @@ char_t* msh_GetConfigurationPath(void)
 {
 	char_t* user_config_folder;
 	char_t* config_path;
-	
+
 #ifdef MSH_WIN
 	
 	/* use NULL check to avoid reliance on _WIN32_WINNT */
@@ -307,7 +305,7 @@ char_t* msh_GetConfigurationPath(void)
 	}
 	
 	sprintf(config_path, "%s\\%s\\%s", user_config_folder, MSH_CONFIG_FOLDER_NAME, MSH_CONFIG_FILE_NAME);
-	
+
 #else
 	user_config_folder = getenv("HOME");
 	config_path = mxCalloc(strlen(user_config_folder) + 1 + strlen(HOME_CONFIG_FOLDER) + 1 + strlen(MSH_CONFIG_FOLDER_NAME) + 1 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
@@ -331,7 +329,7 @@ char_t* msh_GetConfigurationPath(void)
 	}
 	
 	sprintf(config_path, "%s/%s/%s/%s", user_config_folder, HOME_CONFIG_FOLDER, MSH_CONFIG_FOLDER_NAME, MSH_CONFIG_FILE_NAME);
-	
+
 #endif
 	
 	return config_path;
@@ -341,14 +339,14 @@ char_t* msh_GetConfigurationPath(void)
 
 void msh_SetDefaultConfiguration(void)
 {
-	g_shared_info->user_defined.sharetype = MSH_SHARETYPE;
-	msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_THREAD_SAFETY);
-	msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);       		  /** counter is in post state **/
-	g_shared_info->user_defined.max_shared_segments = MSH_MAX_SHARED_SEGMENTS;
-	g_shared_info->user_defined.max_shared_size = MSH_MAX_SHARED_SIZE;
-	g_shared_info->user_defined.will_gc = TRUE;
+	g_shared_info->user_defined.sharetype = MSH_DEFAULT_SHARETYPE;
+	msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_DEFAULT_THREAD_SAFETY);
+	msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);                 /** counter is in post state **/
+	g_shared_info->user_defined.max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;
+	g_shared_info->user_defined.max_shared_size = MSH_DEFAULT_MAX_SHARED_SIZE;
+	g_shared_info->user_defined.will_gc = MSH_DEFAULT_GC;
 #ifdef MSH_UNIX
-	g_shared_info->user_defined.security = MSH_DEFAULT_PERMISSIONS;
+	g_shared_info->user_defined.security = MSH_DEFAULT_SECURITY;
 #endif
 }
 
@@ -362,6 +360,7 @@ pid_t msh_GetPid(void)
 #endif
 }
 
+
 /* returns the state of the flag after the operation */
 LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter)
 {
@@ -374,6 +373,7 @@ LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter)
 	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 	return new_counter;
 }
+
 
 /* returns whether the decrement changed the flag to TRUE */
 bool_t msh_DecrementCounter(volatile LockFreeCounter_t* counter, bool_t set_flag)
@@ -418,20 +418,24 @@ void msh_SetCounterPost(volatile LockFreeCounter_t* counter, unsigned long val)
 	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 }
 
+
 unsigned long msh_GetCounterCount(volatile LockFreeCounter_t* counter)
 {
 	return counter->values.count;
 }
+
 
 unsigned long msh_GetCounterFlag(volatile LockFreeCounter_t* counter)
 {
 	return counter->values.flag;
 }
 
+
 unsigned long msh_GetCounterPost(volatile LockFreeCounter_t* counter)
 {
 	return counter->values.post;
 }
+
 
 void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val)
 {
@@ -452,6 +456,8 @@ void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val)
 
 
 #ifdef MSH_DEBUG_PERF
+
+
 void msh_GetTick(msh_tick_t* tick_pointer)
 {
 #  ifdef MSH_WIN
@@ -460,6 +466,7 @@ void msh_GetTick(msh_tick_t* tick_pointer)
 	*tick_pointer = clock();
 #  endif
 }
+
 
 size_t msh_GetTickDifference(TickTracker_t* tracker)
 {
@@ -473,6 +480,7 @@ size_t msh_GetTickDifference(TickTracker_t* tracker)
 	return (size_t)(tracker->new - tracker->old);
 #  endif
 }
+
 
 #endif
 
@@ -532,6 +540,7 @@ bool_t msh_AtomicAddSizeWithMax(volatile size_t* dest, size_t add_value, size_t 
 	return TRUE;
 }
 
+
 size_t msh_AtomicSubtractSize(volatile size_t* dest, size_t subtract_value)
 {
 #ifdef MSH_WIN
@@ -556,6 +565,7 @@ size_t msh_AtomicSubtractSize(volatile size_t* dest, size_t subtract_value)
 #endif
 }
 
+
 /*
 long msh_AtomicAddLong(volatile long* dest, long add_value)
 {
@@ -577,6 +587,7 @@ long msh_AtomicIncrement(volatile long* dest)
 #endif
 }
 
+
 long msh_AtomicDecrement(volatile long* dest)
 {
 #ifdef MSH_WIN
@@ -585,6 +596,7 @@ long msh_AtomicDecrement(volatile long* dest)
 	return __sync_sub_and_fetch(dest, 1);
 #endif
 }
+
 
 long msh_AtomicCompareSwap(volatile long* dest, long compare_value, long swap_value)
 {

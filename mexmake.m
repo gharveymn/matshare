@@ -1,29 +1,14 @@
-addpath('bin')
-output_path = fullfile(pwd,'bin');
+
+output_path = fullfile(fileparts(which(mfilename)),'bin');
+
+addpath(output_path)
 
 try
 	
-	if(DebugMode)
-		fprintf('-Compiling in debug mode.\n')
+	if(mshDebugMode)
 		mexflags = {'-g', '-O', '-v', '-outdir', output_path};
 	else
 		mexflags = {'-O', '-v', '-outdir', output_path};
-	end
-	
-	if(ThreadSafety)
-		fprintf('-Thread safety is enabled.\n')
-		mexflags = [mexflags {'-DMSH_THREAD_SAFETY=TRUE'}];
-	else
-		fprintf('-Thread safety is disabled.\n')
-		mexflags = [mexflags {'-DMSH_THREAD_SAFETY=FALSE'}];
-	end
-	
-	if(CopyOnWrite)
-		fprintf('-Compiling in copy-on-write mode.\n')
-		mexflags = [mexflags {'-DMSH_SHARETYPE=msh_SHARETYPE_COPY'}];
-	else
-		fprintf('-Compiling in overwrite mode.\n')
-		mexflags = [mexflags {'-DMSH_SHARETYPE=msh_SHARETYPE_OVERWRITE'}];
 	end
 	
 	[comp,maxsz,endi] = computer;
@@ -55,6 +40,28 @@ try
         end
 	end
 	
+	if(strcmp(mshSharetype, 'CopyOnWrite'))
+		fprintf('-Compiling in copy-on-write mode.\n')
+		mexflags = [mexflags {'-DMSH_DEFAULT_SHARETYPE=msh_SHARETYPE_COPY'}];
+	elseif(strcmp(mshSharetype, 'Overwrite'))
+		fprintf('-Compiling in overwrite mode.\n')
+		mexflags = [mexflags {'-DMSH_DEFAULT_SHARETYPE=msh_SHARETYPE_OVERWRITE'}];
+	else
+		error('Invalid value for compilation parameter mshSharetype');
+	end
+	
+	if(strcmp(mshThreadSafety, 'on'))
+		fprintf('-Thread safety is enabled.\n')
+		mexflags = [mexflags {'-DMSH_DEFAULT_THREAD_SAFETY=TRUE'}];
+	elseif(strcmp(mshThreadSafety, 'off'))
+		fprintf('-Thread safety is disabled.\n')
+		mexflags = [mexflags {'-DMSH_DEFAULT_THREAD_SAFETY=FALSE'}];
+	else
+		error('Invalid value for compilation parameter mshThreadSafety');
+	end
+	
+	mexflags = [mexflags {['-DMSH_DEFAULT_MAX_SHARED_SEGMENTS=' mshMaxVariables]}];
+	
 	if(maxsz > 2^31-1)
 		% R2018a
 		if(verLessThan('matlab','9.4'))
@@ -64,28 +71,40 @@ try
 				'which are integral to this function'])
 			mexflags = [mexflags, {'-R2017b'}];
 		end
-		mexflags = [mexflags, {'-DMSH_BITNESS=64', '-DMSH_MAX_SHARED_SIZE=0xFFFFFFFF'}];
+		mexflags = [mexflags, {'-DMSH_BITNESS=64', ['-DMSH_DEFAULT_MAX_SHARED_SIZE=' mshMaxSize64]}];
 	else
-		mexflags = [mexflags {'-compatibleArrayDims', '-DMSH_BITNESS=32', '-DMSH_MAX_SHARED_SIZE=0xFFFFFFFF'}];
+		mexflags = [mexflags {'-compatibleArrayDims', '-DMSH_BITNESS=32', ['-DMSH_DEFAULT_MAX_SHARED_SIZE=' mshMaxSize32]}];
 	end
+	
+	if(strcmp(mshGarbageCollection, 'on'))
+		fprintf('-Thread safety is enabled.\n')
+		mexflags = [mexflags {'-DMSH_DEFAULT_GC=TRUE'}];
+	elseif(strcmp(mshGarbageCollection, 'off'))
+		fprintf('-Thread safety is disabled.\n')
+		mexflags = [mexflags {'-DMSH_DEFAULT_GC=FALSE'}];
+	else
+		error('Invalid value for compilation parameter mshGarbageCollection');
+	end
+	
+	mexflags = [mexflags {['-DMSH_DEFAULT_SECURITY=' mshSecurity]}];
 	
 	% R2011b
 	if(~verLessThan('matlab', '7.13'))
 		mexflags = [mexflags {'-DMSH_AVX_SUPPORT'}];
     end
     
-    mexflags = [mexflags {'-DMSH_MAX_SHARED_SEGMENTS=512'}];
     %mexflags = [mexflags {'-DMSH_DEBUG_PERF'}];
 	
 	fprintf('-Compiling matshare...')
 	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /W4"'}];
 	mex(mexflags{:} , sources{:})
-	fprintf(' successful.\n%s\n',['-The function is located in ' fullfile(pwd,'bin') '.'])
-	
-	addpath('bin');
-	clear mexflags sources output_path comp endi maxsz doINSTALL i ...
-	ThreadSafety AutomaticInitialization DebugMode CopyOnWrite
-	
+	fprintf(' successful.\n')
+	if(mshDebugMode)
+		fprintf('-Compiled for DEBUGGING.\n');
+	else
+		fprintf('-Compiled for RELEASE.\n');
+	end
+	fprintf('%s\n', ['-The function is located in ' output_path '.']);	
 	
 catch ME
 	

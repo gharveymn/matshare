@@ -487,7 +487,22 @@ void msh_Config(int num_params, const mxArray** in)
 			val_str_l[j] = (char)tolower(val_str[j]);
 		}
 		
-		if(strcmp(param_str_l, MSH_PARAM_THREADSAFETY_L) == 0 || strcmp(param_str_l, MSH_PARAM_THREADSAFETY_AB) == 0)
+		if(strcmp(param_str_l, MSH_PARAM_SHARETYPE_L) == 0 || strcmp(param_str_l, MSH_PARAM_SHARETYPE_AB) == 0)
+		{
+			if(strncmp(val_str_l, "copy", 4) == 0)
+			{
+				g_shared_info->user_defined.sharetype = msh_SHARETYPE_COPY;
+			}
+			else if(strcmp(val_str_l, "overwrite") == 0)
+			{
+				g_shared_info->user_defined.sharetype = msh_SHARETYPE_OVERWRITE;
+			}
+			else
+			{
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_SHARETYPE);
+			}
+		}
+		else if(strcmp(param_str_l, MSH_PARAM_THREADSAFETY_L) == 0 || strcmp(param_str_l, MSH_PARAM_THREADSAFETY_AB) == 0)
 		{
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
@@ -500,6 +515,33 @@ void msh_Config(int num_params, const mxArray** in)
 			else
 			{
 				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THREADSAFETY);
+			}
+		}
+		else if(strcmp(param_str_l, MSH_PARAM_MAX_VARIABLES_L) == 0 || strcmp(param_str_l, MSH_PARAM_MAX_VARIABLES_AB) == 0)
+		{
+			g_shared_info->user_defined.max_shared_segments = strtoul(val_str_l, NULL, 10);
+		}
+		else if(strcmp(param_str_l, MSH_PARAM_MAX_SIZE_L) == 0 || strcmp(param_str_l, MSH_PARAM_MAX_SIZE_AB) == 0)
+		{
+#if MSH_BITNESS==64
+			g_shared_info->user_defined.max_shared_size = strtoull(val_str_l, NULL, 10);
+#elif MSH_BITNESS==32
+			g_shared_info->user_defined.max_shared_size = strtoul(val_str_l, NULL, 10);
+#endif
+		}
+		else if(strcmp(param_str_l, MSH_PARAM_GC_L) == 0 || strcmp(param_str_l, MSH_PARAM_GC_AB) == 0)
+		{
+			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
+			{
+				g_shared_info->user_defined.will_gc = TRUE;
+			}
+			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
+			{
+				g_shared_info->user_defined.will_gc = FALSE;
+			}
+			else
+			{
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_GC);
 			}
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_SECURITY_L) == 0 || strcmp(param_str_l, MSH_PARAM_SECURITY_AB) == 0)
@@ -529,48 +571,6 @@ void msh_Config(int num_params, const mxArray** in)
 			}
 #else
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);
-#endif
-		}
-		else if(strcmp(param_str_l, MSH_PARAM_SHARETYPE_L) == 0 || strcmp(param_str_l, MSH_PARAM_SHARETYPE_AB) == 0)
-		{
-			if(strncmp(val_str_l, "copy", 4) == 0)
-			{
-				g_shared_info->user_defined.sharetype = msh_SHARETYPE_COPY;
-			}
-			else if(strcmp(val_str_l, "overwrite") == 0)
-			{
-				g_shared_info->user_defined.sharetype = msh_SHARETYPE_OVERWRITE;
-			}
-			else
-			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_SHARETYPE);
-			}
-		}
-		else if(strcmp(param_str_l, MSH_PARAM_GC_L) == 0 || strcmp(param_str_l, MSH_PARAM_GC_AB) == 0)
-		{
-			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
-			{
-				g_shared_info->user_defined.will_gc = TRUE;
-			}
-			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
-			{
-				g_shared_info->user_defined.will_gc = FALSE;
-			}
-			else
-			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_GC);
-			}
-		}
-		else if(strcmp(param_str_l, MSH_PARAM_MAX_VARIABLES_L) == 0 || strcmp(param_str_l, MSH_PARAM_MAX_VARIABLES_AB) == 0)
-		{
-			g_shared_info->user_defined.max_shared_segments = strtoul(val_str_l, NULL, 10);
-		}
-		else if(strcmp(param_str_l, MSH_PARAM_MAX_SIZE_L) == 0 || strcmp(param_str_l, MSH_PARAM_MAX_SIZE_AB) == 0)
-		{
-#if MSH_BITNESS==64
-			g_shared_info->user_defined.max_shared_size = strtoull(val_str_l, NULL, 10);
-#elif MSH_BITNESS==32
-			g_shared_info->user_defined.max_shared_size = strtoul(val_str_l, NULL, 10);
 #endif
 		}
 		else

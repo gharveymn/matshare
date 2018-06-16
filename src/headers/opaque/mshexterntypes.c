@@ -7,10 +7,10 @@
  * of the MIT license.  See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
  
- 
 #include "mex.h"
 
 #include "../mshexterntypes.h"
+
 
 /* partial definition */
 struct InternalMexStruct_t
@@ -99,6 +99,7 @@ struct InternalMexStruct_t
 /*   size_t reserved;             Don't believe this! It is not really there!    */
 };
 #endif
+
 
 mxArray* msh_GetCrosslink(mxArray* var)
 {

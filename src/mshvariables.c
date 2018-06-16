@@ -7,7 +7,6 @@
  * of the MIT license.  See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-
 #include "mex.h"
 
 #include "headers/mshvariables.h"
@@ -51,9 +50,8 @@ bool_t msh_DestroyVariable(VariableNode_t* var_node)
 	msh_SetVariableNode(msh_GetSegmentNode(var_node), NULL);
 	
 	/* decrement number of processes using this variable; if this is the last variable then GC */
-	if(msh_AtomicDecrement(&msh_GetSegmentMetadata(msh_GetSegmentNode(var_node))->procs_using) == 0 &&
-	   g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY &&
-	   g_shared_info->user_defined.will_gc)
+	if(msh_AtomicDecrement(&msh_GetSegmentMetadata(msh_GetSegmentNode(var_node))->procs_using) == 0 && g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY
+	   && g_shared_info->user_defined.will_gc)
 	{
 		msh_RemoveSegmentFromSharedList(msh_GetSegmentNode(var_node));
 		msh_RemoveSegmentFromList(msh_GetSegmentNode(var_node));

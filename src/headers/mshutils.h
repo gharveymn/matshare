@@ -13,7 +13,7 @@
 
 #include "mshbasictypes.h"
 
-/* for lcc compatibility --- requires Windows XP+ */
+/* for lcc compatibility --- matshare requires at least Windows XP */
 #ifdef MSH_WIN
 #  ifndef InterlockedCompareExchange
 /*LONG __cdecl InterlockedCompareExchange(_Inout_ LONG volatile *Destination, _In_ LONG Exchange, _In_ LONG Comparand);*/
@@ -68,7 +68,7 @@ char_t* msh_GetConfigurationPath(void);
 
 
 /**
- * Sets the configuration to default and writes it to the config file.
+ * Sets the shared configuration to default.
  */
 void msh_SetDefaultConfiguration(void);
 

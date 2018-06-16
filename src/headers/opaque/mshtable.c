@@ -6,14 +6,14 @@
  * This software may be modified and distributed under the terms
  * of the MIT license.  See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-
-
+ 
 #include "mex.h"
 
 #include "../mshsegmentnode.h"
 #include "../mlerrorutils.h"
-#define MSH_INIT_TABLE_SIZE 64
 
+
+#define MSH_INIT_TABLE_SIZE 64
 
 /**
  * Resizes the segment table.

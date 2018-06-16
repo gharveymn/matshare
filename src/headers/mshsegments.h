@@ -6,8 +6,7 @@
  * This software may be modified and distributed under the terms
  * of the MIT license.  See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-
-
+ 
 #ifndef MATSHARE_MSHSEGMENTS_H
 #define MATSHARE_MSHSEGMENTS_H
 
@@ -22,7 +21,6 @@ typedef struct SharedVariableHeader_t SharedVariableHeader_t;
  *       This is done as a doubly linked list, which each process tracks locally. This tracking
  *       may be asynchronous since the shared linked list is updated behind a lock.
  */
- 
 
 /**
  * Gets the pointer to the segment metadata through struct access.

@@ -7,11 +7,11 @@
  * of the MIT license.  See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-
 #include "mex.h"
 
 #include "../mshvariablenode.h"
 #include "../mshsegmentnode.h"
+
 
 struct VariableNode_t
 {
@@ -21,6 +21,7 @@ struct VariableNode_t
 	mxArray* var;
 	SegmentNode_t* seg_node;
 };
+
 
 VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var)
 {
@@ -34,6 +35,7 @@ VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var
 	
 	return new_var_node;
 }
+
 
 /** getters */
 

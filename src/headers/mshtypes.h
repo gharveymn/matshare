@@ -45,10 +45,10 @@
 typedef struct UserConfig_t
 {
 	/* these are aligned for lockless assignment */
-	size_t max_shared_size;
+	msh_sharetype_t sharetype;
 	volatile LockFreeCounter_t lock_counter;
 	unsigned long max_shared_segments;
-	msh_sharetype_t sharetype;
+	size_t max_shared_size;
 	alignedbool_t will_gc;
 #ifdef MSH_UNIX
 	mode_t security;

@@ -7,8 +7,7 @@
  * This software may be modified and distributed under the terms
  * of the MIT license.  See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-
-
+ 
 #ifndef MATSHARE_MSHHEADERTYPE_H
 #define MATSHARE_MSHHEADERTYPE_H
 
