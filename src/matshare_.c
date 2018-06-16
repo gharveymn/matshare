@@ -287,7 +287,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 			msh_UpdateSegmentTracking(&g_local_seg_list);
 			
 			for(i = 0, curr_seg_node = g_local_seg_list.first;
-					i < g_local_seg_list.num_segs;
+			    (uint32_T)i < g_local_seg_list.num_segs;
 					i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
 			{
 				if(msh_GetVariableNode(curr_seg_node) == NULL)
@@ -336,7 +336,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 				plhs[2] = mxCreateCellArray(2, ret_dims);
 				
 				for(i = 0, curr_seg_node = g_local_seg_list.first;
-						i < g_local_seg_list.num_segs;
+				    		(uint32_T)i < g_local_seg_list.num_segs;
 						i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
 				{
 					if(will_duplicate)

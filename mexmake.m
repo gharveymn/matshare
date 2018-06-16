@@ -77,10 +77,10 @@ try
 	end
 	
 	if(strcmp(mshGarbageCollection, 'on'))
-		fprintf('-Thread safety is enabled.\n')
+		fprintf('-Garbage collection is enabled.\n')
 		mexflags = [mexflags {'-DMSH_DEFAULT_GC=TRUE'}];
 	elseif(strcmp(mshGarbageCollection, 'off'))
-		fprintf('-Thread safety is disabled.\n')
+		fprintf('-Garbage collection is disabled.\n')
 		mexflags = [mexflags {'-DMSH_DEFAULT_GC=FALSE'}];
 	else
 		error('Invalid value for compilation parameter mshGarbageCollection');

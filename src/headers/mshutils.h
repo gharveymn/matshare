@@ -14,11 +14,9 @@
 #include "mshbasictypes.h"
 
 /* for lcc compatibility --- matshare requires at least Windows XP */
-#ifdef MSH_WIN
-#  ifndef InterlockedCompareExchange
+#if defined(MSH_WIN) && defined(__LCC__)
 /*LONG __cdecl InterlockedCompareExchange(_Inout_ LONG volatile *Destination, _In_ LONG Exchange, _In_ LONG Comparand);*/
 LONG STDCALL InterlockedCompareExchange(LPLONG, LONG, LONG);
-#  endif
 #endif
 
 
