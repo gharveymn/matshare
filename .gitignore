@@ -38,6 +38,7 @@ CMakeCache.txt
 *.meta
 *.obj
 *.pch
+*.pdb
 *.pgc
 *.pgd
 *.rsp
@@ -64,12 +65,8 @@ bld/
 !*pthreadGC2.dll
 [Oo]bj/
 [Ll]og/
-/src/extlib
-/bin/examine.c
-/bin/examine.mexw64
-/bin/matshare_.mexw64.pdb
-/CppProperties.json
-/bin/MatShare.m
-/tests/precompiled/res
-/_build
-/CMakeFiles
+src/extlib
+CppProperties.json
+tests/precompiled/res
+_build
+CMakeFiles
