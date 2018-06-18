@@ -128,7 +128,7 @@ int msh_GetNumFields(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The class ID.
  */
-int msh_GetClassId(SharedVariableHeader_t* hdr_ptr);
+int msh_GetClassID(SharedVariableHeader_t* hdr_ptr);
 
 
 /**
@@ -424,7 +424,7 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header);
  * @param shared_header The shared variable header.
  * @param in_var The input variable.
  */
-void msh_OverwriteData(SharedVariableHeader_t* shared_header, const mxArray* in_var);
+void msh_OverwriteHeader(SharedVariableHeader_t* shared_header, const mxArray* in_var);
 
 
 /**
@@ -434,7 +434,7 @@ void msh_OverwriteData(SharedVariableHeader_t* shared_header, const mxArray* in_
  * @param comp_var The input comparison variable.
  * @return Whether the variable is the same size.
  */
-int msh_CompareVariableSize(SharedVariableHeader_t* shared_header, const mxArray* comp_var);
+int msh_CompareHeaderSize(SharedVariableHeader_t* shared_header, const mxArray* comp_var);
 
 
 /**

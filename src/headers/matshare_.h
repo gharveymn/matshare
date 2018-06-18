@@ -16,9 +16,6 @@
 /* forward declaration to avoid include */
 typedef struct mxArray_tag mxArray;
 
-#define MSH_DUPLICATE TRUE
-#define MSH_SHARED_COPY FALSE
-
 #define MSH_PARAM_SHARETYPE "Sharetype"
 #define MSH_PARAM_SHARETYPE_L "sharetype"
 #define MSH_PARAM_SHARETYPE_AB "st"
@@ -60,14 +57,18 @@ typedef struct mxArray_tag mxArray;
 
 typedef enum
 {
-	msh_SHARE = 0,
-	msh_FETCH = 1,
-	msh_DETACH = 2,
-	msh_CONFIG = 3,
-	msh_LOCALCOPY = 4,
-	msh_DEBUG = 5,
-	msh_CLEAR = 6,
-	msh_RESET = 7
+	msh_SHARE         = 0x00,
+	msh_FETCH         = 0x01,
+	msh_DETACH        = 0x02,
+	msh_CONFIG        = 0x03,
+	msh_LOCALCOPY     = 0x04,
+	msh_DEBUG         = 0x05,
+	msh_CLEAR         = 0x06,
+	msh_RESET         = 0x07,
+	msh_OVERWRITE     = 0x08,
+	msh_SAFEOVERWRITE = 0x09,
+	msh_LOCK          = 0x0A,
+	msh_UNLOCK        = 0x0B
 } msh_directive_t;
 
 
@@ -87,18 +88,9 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars);
  *
  * @param nlhs The number of ouputs. If this is 1 then it fetches the most recent variable; if 2 then all variables not already fetched; if 3 then all variables in shared memory.
  * @param plhs An array of output mxArrays.
- * @param will_duplicate A flag indicating whether to return local copies or shared copies.
+ * @param directive A flag indicating whether to return local copies or shared copies.
  */
-void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate);
-
-
-/**
- * Changes configuration parameters.
- *
- * @param num_params The number of parameters input.
- * @param in An array of the parameters and values.
- */
-void msh_Config(int num_params, const mxArray** in);
+void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive);
 
 
 /**
@@ -109,5 +101,24 @@ void msh_Config(int num_params, const mxArray** in);
  */
 void msh_Clear(int num_inputs, const mxArray** in_vars);
 
+
+/**
+ * Overwrite a variable in-place. Does this in a safe or unsafe manner
+ * depending on the directive.
+ *
+ * @param dest_var The destination variable.
+ * @param in_var The input variable.
+ * @param directive The input directive.
+ */
+void msh_Overwrite(const mxArray* dest_var, const mxArray* in_var, msh_directive_t directive);
+
+
+/**
+ * Changes configuration parameters.
+ *
+ * @param num_params The number of parameters input.
+ * @param in An array of the parameters and values.
+ */
+void msh_Config(int num_params, const mxArray** in);
 
 #endif /* MATSHARE__H */

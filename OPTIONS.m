@@ -25,4 +25,4 @@ mshGarbageCollection = 'on';
 mshSecurity = '0600';
 
 %% Enable or disable debug mode
-mshDebugMode = true;
+mshDebugMode = false;

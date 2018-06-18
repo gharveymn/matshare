@@ -72,6 +72,34 @@ void msh_SetDefaultConfiguration(void);
 
 
 /**
+ * Gets the PID for the current process.
+ *
+ * @return The PID for the current process.
+ */
+pid_t msh_GetPid(void);
+
+
+/**
+ * Compares the size of the two mxArrays. Returns TRUE if
+ * they are the same size, returns FALSE otherwise.
+ *
+ * @param dest_var The first variable to be compared.
+ * @param comp_var The second variable to be compared.
+ * @return Whether they are equal in size.
+ */
+int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var);
+
+
+/**
+ * Overwrites the data in dest_var with the data in in_var.
+ *
+ * @param dest_var The destination variable.
+ * @param in_var The input variable.
+ */
+void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var);
+
+
+/**
  * Gets the current count of the lock free counter.
  *
  * @param counter The counter.
@@ -236,13 +264,5 @@ void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num);
  * @return The padded size.
  */
 size_t PadToAlignData(size_t curr_sz);
-
-
-/**
- * Gets the PID for the current process.
- *
- * @return The PID for the current process.
- */
-pid_t msh_GetPid(void);
 
 #endif /* MATSHARE_MATSHAREUTILS_H */

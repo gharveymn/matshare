@@ -361,6 +361,181 @@ pid_t msh_GetPid(void)
 }
 
 
+int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
+{
+	/* for loops */
+	size_t idx, count, dest_num_elems;
+	
+	/* for structures */
+	int field_num, dest_num_fields;                /* current field */
+	
+	mxClassID dest_class_id = mxGetClassID(dest_var);
+	
+	/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
+	if(dest_class_id != mxGetClassID(comp_var) || mxGetNumberOfDimensions(dest_var) != mxGetNumberOfDimensions(comp_var)
+	   || memcmp(mxGetDimensions(dest_var), mxGetDimensions(comp_var), mxGetNumberOfDimensions(dest_var)*sizeof(mwSize)) != 0)
+	{
+		return FALSE;
+	}
+	
+	/* Structure case */
+	if(dest_class_id == mxSTRUCT_CLASS)
+	{
+		
+		dest_num_elems = mxGetNumberOfElements(dest_var);
+		dest_num_fields = mxGetNumberOfFields(dest_var);
+		
+		if(dest_num_fields != mxGetNumberOfFields(comp_var) || dest_num_elems != mxGetNumberOfElements(comp_var))
+		{
+			return FALSE;
+		}
+		
+		/* Go through each element */
+		for(field_num = 0, count = 0; field_num < dest_num_fields; field_num++)     /* each field */
+		{
+			
+			if(strcmp(mxGetFieldNameByNumber(dest_var, field_num), mxGetFieldNameByNumber(comp_var, field_num)) != 0)
+			{
+				return FALSE;
+			}
+			
+			for(idx = 0; idx < dest_num_elems; idx++, count++)
+			{
+				if(!msh_CompareVariableSize(mxGetFieldByNumber(dest_var, idx, field_num), mxGetFieldByNumber(comp_var, idx, field_num)))
+				{
+					return FALSE;
+				}
+			}
+			
+		}
+		
+	}
+	else if(dest_class_id == mxCELL_CLASS) /* Cell case */
+	{
+		dest_num_elems = mxGetNumberOfElements(dest_var);
+		
+		if(dest_num_elems != mxGetNumberOfElements(comp_var))
+		{
+			return FALSE;
+		}
+		
+		for(count = 0; count < dest_num_elems; count++)
+		{
+			if(!msh_CompareVariableSize(mxGetCell(dest_var, count), mxGetCell(comp_var, count)))
+			{
+				return FALSE;
+			}
+		}
+	}
+	else if(mxIsNumeric(dest_var) || dest_class_id == mxLOGICAL_CLASS || dest_class_id == mxCHAR_CLASS)      /*base case*/
+	{
+		
+		if(mxIsComplex(dest_var) != mxIsComplex(comp_var))
+		{
+			return FALSE;
+		}
+		
+		if(mxIsSparse(dest_var))
+		{
+			if(mxGetNzmax(dest_var) != mxGetNzmax(comp_var) || mxGetN(dest_var) != mxGetN(comp_var) || !mxIsSparse(comp_var))
+			{
+				return FALSE;
+			}
+		}
+		else
+		{
+			if(mxGetNumberOfElements(dest_var) != mxGetNumberOfElements(comp_var) || mxIsSparse(comp_var))
+			{
+				return FALSE;
+			}
+		}
+	}
+	else
+	{
+		/* this may occur if the user passes a destination variable which is not in shared memory */
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidTypeError",
+					   "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+	}
+	
+	return TRUE;
+}
+
+
+void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var)
+{
+	size_t idx, count, num_elems, nzmax;
+	
+	/* for structures */
+	int field_num, num_fields;                /* current field */
+	
+	mxClassID shared_class_id = mxGetClassID(in_var);
+	
+	/* Structure case */
+	if(shared_class_id == mxSTRUCT_CLASS)
+	{
+		num_elems = mxGetNumberOfElements(in_var);
+		num_fields = mxGetNumberOfFields(in_var);
+		
+		/* Go through each element */
+		for(field_num = 0, count = 0; field_num < num_fields; field_num++)     /* each field */
+		{
+			for(idx = 0; idx < num_elems; idx++, count++)
+			{
+				/* And fill it */
+				msh_OverwriteVariable(mxGetFieldByNumber(dest_var, idx, field_num), mxGetFieldByNumber(in_var, idx, field_num));
+			}
+		}
+	}
+	else if(shared_class_id == mxCELL_CLASS) /* Cell case */
+	{
+		num_elems = mxGetNumberOfElements(in_var);
+		
+		for(count = 0; count < num_elems; count++)
+		{
+			/* And fill it */
+			msh_OverwriteVariable(mxGetCell(dest_var, count), mxGetCell(in_var, count));
+		}
+	}
+	else     /*base case*/
+	{
+		
+		/* if sparse get a list of the elements */
+		if(mxIsSparse(in_var))
+		{
+			
+			nzmax = mxGetNzmax(in_var);
+			
+			memcpy(mxGetIr(dest_var), mxGetIr(in_var), nzmax*sizeof(mwIndex));
+			memcpy(mxGetJc(dest_var), mxGetJc(in_var), (mxGetN(in_var) + 1)*sizeof(mwIndex));
+			
+			/* rewrite real data */
+			memcpy(mxGetData(dest_var), mxGetData(in_var), nzmax*mxGetElementSize(in_var));
+			
+			/* if complex get a pointer to the complex data */
+			if(mxIsComplex(in_var))
+			{
+				memcpy(mxGetImagData(dest_var), mxGetImagData(in_var), nzmax*mxGetElementSize(in_var));
+			}
+		}
+		else if(!mxIsEmpty(in_var))
+		{
+			
+			num_elems = mxGetNumberOfElements(in_var);
+			
+			/* rewrite real data */
+			memcpy(mxGetData(dest_var), mxGetData(in_var), num_elems*mxGetElementSize(in_var));
+			
+			/* if complex get a pointer to the complex data */
+			if(mxIsComplex(in_var))
+			{
+				memcpy(mxGetImagData(dest_var), mxGetImagData(in_var), num_elems*mxGetElementSize(in_var));
+			}
+		}
+		
+	}
+}
+
+
 /* returns the state of the flag after the operation */
 LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter)
 {

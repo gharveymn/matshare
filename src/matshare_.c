@@ -58,7 +58,6 @@ SegmentList_t g_local_seg_list = {0};
 
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
-/*                                                                           */
 /* ------------------------------------------------------------------------- */
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
@@ -70,7 +69,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	const mxArray** in_vars = prhs + 1;
 	
 	/* resultant matshare directive */
-	msh_directive_t msh_directive;
+	msh_directive_t directive;
 	
 	/* check min number of arguments */
 	if(nrhs < 1)
@@ -79,10 +78,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	}
 	
 	/* get the msh_directive, no check made since the function should not be used without entry functions */
-	msh_directive = (msh_directive_t)mxGetScalar(in_directive);
+	directive = (msh_directive_t)mxGetScalar(in_directive);
 	
 	/* Don't initialize if we are detaching and matshare has not been initialized for this process yet */
-	if(msh_directive == msh_DETACH && !g_local_info.is_initialized)
+	if(directive == msh_DETACH && !g_local_info.is_initialized)
 	{
 		return;
 	}
@@ -105,7 +104,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	
 	msh_CleanSegmentList(&g_local_seg_list);
 	
-	switch(msh_directive)
+	switch(directive)
 	{
 		case msh_SHARE:
 			
@@ -115,7 +114,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		
 		case msh_FETCH:
 			
-			msh_Fetch(nlhs, plhs, MSH_SHARED_COPY);
+			msh_Fetch(nlhs, plhs, directive);
 			
 			break;
 		case msh_DETACH:
@@ -139,7 +138,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			if(num_in_vars == 0)
 			{
-				msh_Fetch(nlhs, plhs, MSH_DUPLICATE);
+				msh_Fetch(nlhs, plhs, directive);
 			}
 			else if(num_in_vars == 1)
 			{
@@ -172,13 +171,37 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		case msh_RESET:
 			
 			msh_AcquireProcessLock(g_process_lock);
-			msh_Clear(0, NULL);
-			msh_SetDefaultConfiguration();
-			msh_WriteConfiguration();
+				msh_Clear(0, NULL);
+				msh_SetDefaultConfiguration();
+				msh_WriteConfiguration();
 			msh_ReleaseProcessLock(g_process_lock);
 			
 			break;
 			
+		case msh_OVERWRITE:
+		case msh_SAFEOVERWRITE:
+			
+			if(nrhs == 2)
+			{
+				msh_Overwrite(prhs[0], prhs[1], directive);
+			}
+			else
+			{
+				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "IncorrectNumberOfInputsError", "Incorrect number of inputs. Please use one of the entry functions provided.");
+			}
+			
+			break;
+		
+		case msh_LOCK:
+			
+			msh_AcquireProcessLock(g_process_lock);
+			
+			break;
+		case msh_UNLOCK:
+			
+			msh_ReleaseProcessLock(g_process_lock);
+			
+			break;
 		default:
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
 			break;
@@ -213,11 +236,11 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_OVERWRITE)
 		{
 			/* if the variable is exactly the same size, perform a rewrite */
-			if(g_local_seg_list.last != NULL && (msh_CompareVariableSize(msh_GetSegmentData(g_local_seg_list.last), in_var) == TRUE))
+			if(g_local_seg_list.last != NULL && (msh_CompareHeaderSize(msh_GetSegmentData(g_local_seg_list.last), in_var) == TRUE))
 			{
 				/* this is an in-place change */
 				/* do the rewrite after checking because the comparison is cheap */
-				msh_OverwriteData(msh_GetSegmentData(g_local_seg_list.last), in_var);
+				msh_OverwriteHeader(msh_GetSegmentData(g_local_seg_list.last), in_var);
 
 #ifdef MSH_UNIX
 				/* only need to update because we have overwritten an established segment */
@@ -264,7 +287,7 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 }
 
 
-void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
+void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive)
 {
 	
 	VariableNode_t* curr_var_node;
@@ -312,7 +335,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 					i < num_new_vars;
 					i++, curr_var_node = msh_GetPreviousVariable(curr_var_node))
 			{
-				if(will_duplicate)
+				if(directive == msh_LOCALCOPY)
 				{
 					mxSetCell(plhs[1], num_new_vars - 1 - i, mxDuplicateArray(msh_GetVariableData(curr_var_node)));
 				}
@@ -339,7 +362,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 				    		(uint32_T)i < g_local_seg_list.num_segs;
 						i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
 				{
-					if(will_duplicate)
+					if(directive == msh_LOCALCOPY)
 					{
 						mxSetCell(plhs[2], i, mxDuplicateArray(msh_GetVariableData(msh_GetVariableNode(curr_seg_node))));
 					}
@@ -364,7 +387,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, bool_t will_duplicate)
 		
 		if(g_local_seg_list.last != NULL)
 		{
-			if(will_duplicate)
+			if(directive == msh_LOCALCOPY)
 			{
 				plhs[0] = mxDuplicateArray(msh_GetVariableData(msh_GetVariableNode(g_local_seg_list.last)));
 			}
@@ -424,6 +447,29 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 		msh_ClearSharedSegments(&g_local_seg_list);
 	}
 	msh_ReleaseProcessLock(g_process_lock);
+}
+
+
+void msh_Overwrite(const mxArray* dest_var, const mxArray* in_var, msh_directive_t directive)
+{
+	if(msh_CompareVariableSize(dest_var, in_var))
+	{
+		if(directive == msh_SAFEOVERWRITE)
+		{
+			msh_AcquireProcessLock(g_process_lock);
+		}
+		
+		msh_OverwriteVariable(dest_var, in_var);
+		
+		if(directive == msh_SAFEOVERWRITE)
+		{
+			msh_ReleaseProcessLock(g_process_lock);
+		}
+	}
+	else
+	{
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "VariableSizeError", "The size of the variable to be overwritten was incompatible with the input variable.");
+	}
 }
 
 
