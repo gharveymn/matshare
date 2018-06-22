@@ -14,6 +14,7 @@
 #include "mshtypes.h"
 #include "mshvariablenode.h"
 
+#define MSH_VIRTUAL_SCALAR_SIGNATURE 0xAA
 
 /**
  * Creates a new MATLAB variable from the specified shared segment.
@@ -30,7 +31,7 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node);
  * @note May do garbage collection on the segment node if this is the last variable using the segment.
  * @param var_node The variable node containing the variable to be destroyed.
  */
-bool_t msh_DestroyVariable(VariableNode_t* var_node);
+int msh_DestroyVariable(VariableNode_t* var_node);
 
 
 /**
@@ -67,10 +68,12 @@ void msh_ClearVariableList(VariableList_t* var_list);
 void msh_CleanVariableList(VariableList_t* var_list);
 
 
-/**
- * Forward declaration of the global variable list.
- */
+/** Forward declaration of the global variable list. **/
 extern VariableList_t g_local_var_list;
+
+
+/** global virtual scalar list **/
+extern VariableList_t g_virtual_scalar_list;
 
 
 #endif /* MATSHARE_MSHLISTS_H */

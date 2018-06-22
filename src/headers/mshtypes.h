@@ -45,7 +45,6 @@
 typedef struct UserConfig_t
 {
 	/* these are aligned for lockless assignment */
-	msh_sharetype_t sharetype;
 	volatile LockFreeCounter_t lock_counter;
 	unsigned long max_shared_segments;
 	size_t max_shared_size;
@@ -71,6 +70,7 @@ typedef volatile struct SharedInfo_t
 #else
 	LockFreeCounter_t num_procs;
 #endif
+	pid_t update_pid;
 #ifdef MSH_DEBUG_PERF
 	struct debug_perf
 	{
@@ -79,11 +79,10 @@ typedef volatile struct SharedInfo_t
 		size_t busy_wait_time;
 	} debug_perf;
 #endif
-	pid_t update_pid;
 } SharedInfo_t;
 
 
-typedef struct GlobalInfo_t
+typedef struct LocalInfo_t
 {
 	size_t rev_num;
 	uint32_T lock_level;
@@ -100,7 +99,7 @@ typedef struct GlobalInfo_t
 	bool_t is_mex_locked;
 	bool_t is_initialized;
 	
-} GlobalInfo_t;
+} LocalInfo_t;
 
 /**
  * Forward declaration of the library name.
@@ -121,7 +120,7 @@ extern char_t* g_msh_warning_help_message;
 /**
  * Forward declaration of the global information struct.
  */
-extern GlobalInfo_t g_local_info;
+extern LocalInfo_t g_local_info;
 
 #define g_shared_info (g_local_info.shared_info_wrapper.ptr)
 

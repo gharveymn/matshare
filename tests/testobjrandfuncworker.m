@@ -1,4 +1,4 @@
-function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, observerpid, isparallel)
+function testobjrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, observerpid, isparallel)
 	thispid = feature('getpid');
 	if(isparallel)
 		% only do this if in parallel so we have consistent results otherwise
@@ -54,20 +54,20 @@ function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespe
 			
 			switch(ceil(2*randdoubles1(i)))
 				case 1
-					mshshare(tv);
+					matshare(tv);
 				case 2
-					data = mshshare(tv);
+					shared = matshare(tv);
 			end
 			
 			switch(ceil(4*randdoubles2(i)))
 				case 1
-					mshfetch;
+					matshare.fetch;
 				case 2
-					data = mshfetch;
+					data = matshare.fetch;
 				case 3
-					[data, newvars] = mshfetch;
+					[data, newvars] = matshare.fetch;
 				case 4
-					[data, newvars, allvars] = mshfetch;
+					[data, newvars, allvars] = matshare.fetch;
 			end
 			
 			if(mod(i, mshclear_iter) == 0)

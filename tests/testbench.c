@@ -6,7 +6,7 @@ typedef struct {
 	void *name;             /*   prev - R2008b: Name of variable in workspace
 	 * R2009a - R2010b: NULL
 	 * R2011a - later : Reverse CrossLink pointer    */
-	mxClassID ClassID;      /*  0 = unknown     10 = int16
+	mxClassID ClassID;      /*  0 = unknown
 	 * 1 = cell        11 = uint16
 	 * 2 = struct      12 = int32
 	 * 3 = logical     13 = uint32
@@ -18,13 +18,13 @@ typedef struct {
 	 * 9 = uint8       19 = index (deprecated)
 	 * 10 = int16       20 = sparse (deprecated)     */
 	int VariableType;       /*  0 = normal
-	 * 1 = persistent
-	 * 2 = global
-	 * 3 = sub-element (field or cell)
-	 * 4 = temporary
-	 * 5 = (unknown)
-	 * 6 = property of opaque class object
-	 * 7 = (unknown)                                */
+						* 1 = persistent
+						* 2 = global
+						* 3 = sub-element (field or cell)
+						* 4 = temporary
+						* 5 = (unknown)
+						* 6 = property of opaque class object
+						* 7 = (unknown)                                */
 	mxArray *CrossLink;     /* Address of next shared-data variable          */
 	size_t ndim;            /* Number of dimensions                          */
 	unsigned int RefCount;  /* Number of extra sub-element copies            */
@@ -54,12 +54,67 @@ typedef struct {
 	/*  size_t reserved;           Don't believe this! It is not really there!   */
 } mxArrayStruct;
 
-mxArray* sps;
+mxArray* persist = NULL;
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-
-	plhs[0] = mxCreateNumericArray(0, NULL, mxUINT32_CLASS, mxREAL);
+	
+	int i;
+	
+	mxArray* x,* link,* mx_version;
+	mwSize dims[2] = {1,1};
+	
+	if(nrhs > 0)
+	{
+		link = prhs[0];
+		do
+		{
+			mexPrintf("addr: %llu\n", link);
+			link = ((mxArrayStruct*)link)->CrossLink;
+		} while(link != NULL && link != prhs[0]);
+		if(persist != NULL)
+		{
+			for(link = ((mxArrayStruct*)persist)->CrossLink; link != NULL && link != persist; link = ((mxArrayStruct*)link)->CrossLink)
+			{
+				mxSetM(link, 0);
+				mxSetN(link, 0);
+			}
+			*((double*)mxGetData(persist)) = 2.0;
+		}
+		return;
+	}
+	
+	if(persist == NULL)
+	{
+		persist = mxCreateDoubleMatrix(2, 1, mxREAL);
+		
+		mexPrintf("CrossLink: %llu\n", ((mxArrayStruct*)persist)->CrossLink);
+		mexPrintf("VariableType: %i\n", ((mxArrayStruct*)persist)->VariableType);
+		mexPrintf("flags: %u\n", ((mxArrayStruct*)persist)->flags);
+			
+			mexMakeArrayPersistent(persist);
+			
+			//mxSetM(((mxArrayStruct*)x)->CrossLink, 1);
+			
+			if(nlhs > 0)
+			{
+				plhs[0] = mxCreateSharedDataCopy(persist);
+				mexPrintf("CrossLink: %llu\n", ((mxArrayStruct*)plhs[0])->CrossLink);
+				mexPrintf("VariableType: %i\n", ((mxArrayStruct*)plhs[0])->VariableType);
+				mexPrintf("flags: %u\n", ((mxArrayStruct*)plhs[0])->flags);	
+			}
+	}
+	else
+	{
+		link = persist;
+		do
+		{
+			mexPrintf("addr: %llu\n", link);
+			link = ((mxArrayStruct*)link)->CrossLink;
+		} while(link != NULL && link != persist);
+		mxDestroyArray(persist);
+		persist = NULL;
+	}
 	
 // 	mxArray* in = mxCreateDoubleMatrix(3,3,mxREAL);
 // 	mxArray* shared = mxCreateSharedDataCopy(in);

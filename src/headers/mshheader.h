@@ -13,12 +13,13 @@
 
 #include "mshbasictypes.h"
 
+#define MSH_VIRTUAL_SCALAR_M 2
+#define MSH_VIRTUAL_SCALAR_N 1
+
 /* forward declaration to avoid include */
 typedef struct mxArray_tag mxArray;
 
-/**
- * Forward declaration for SharedVariableHeader_t
- */
+/** Forward declaration for SharedVariableHeader_t **/
 typedef struct SharedVariableHeader_t SharedVariableHeader_t;
 
 /** getters **/
@@ -158,6 +159,15 @@ int msh_GetIsSparse(SharedVariableHeader_t* hdr_ptr);
 int msh_GetIsNumeric(SharedVariableHeader_t* hdr_ptr);
 
 
+/**
+ * Returns the virtual scalar flag.
+ *
+ * @param hdr_ptr The shared variable header.
+ * @return The numeric flag.
+ */
+int msh_GetIsVirtualScalar(SharedVariableHeader_t* hdr_ptr);
+
+
 /** setters **/
 
 /**
@@ -259,41 +269,49 @@ void msh_SetNzmax(SharedVariableHeader_t* hdr_ptr, size_t in);
 void msh_SetNumFields(SharedVariableHeader_t* hdr_ptr, int in);
 
 
-
 /**
  * Sets the class ID.
  *
  * @param hdr_ptr The shared variable header.
  * @param in The class ID.
  */
-void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, int in);
+void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, unsigned int in);
 
 
 /**
- * Returns the variable empty flag.
+ * Sets the variable empty flag.
  *
  * @param hdr_ptr The shared variable header.
  * @param in The empty flag.
  */
-void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, int in);
+void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, unsigned int in);
 
 
 /**
- * Returns the variable sparsity flag.
+ * Sets the variable sparsity flag.
  *
  * @param hdr_ptr The shared variable header.
  * @param in The sparsity flag.
  */
-void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, int in);
+void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, unsigned int in);
 
 
 /**
- * Returns the variable numeric flag.
+ * Sets the variable numeric flag.
  *
  * @param hdr_ptr The shared variable header.
  * @param in The numeric flag.
  */
-void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, int in);
+void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, unsigned int in);
+
+
+/**
+ * Returns the virtual scalar flag.
+ *
+ * @param hdr_ptr The shared variable header.
+ * @param in The numeric flag.
+ */
+void msh_SetIsVirtualScalar(SharedVariableHeader_t* hdr_ptr, unsigned int in);
 
 
 /**

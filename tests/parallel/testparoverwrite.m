@@ -6,9 +6,11 @@ verifyparams;
 count = 1;
 total_num_tests = num_maxDepth_tests*num_maxElements_tests*num_maxDims_tests*num_maxChildren_tests*num_typespec_tests;
 
+transfer = cell(numworkers,1);
+
 %% result verification test
 lents = 0;
-fprintf('Verifying results of randomly generated variables...\n');
+fprintf('Testing overwrite functions...\n');
 for i = 1:num_maxDepth_tests
 	maxDepth = maxDepthV(i);
 	for j = 1:num_maxElements_tests
@@ -41,6 +43,25 @@ for i = 1:num_maxDepth_tests
 						tv = variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, true, typespec);
 						testparvarresult(tv, numworkers);
 						
+						% test overwriting in one workspace
+						tv2 = variablefromtemplate(rns, tv);
+						mshoverwrite(tv, tv2);
+						parfor workernum = 1:numworkers
+							transfer{workernum} = mshfetch;
+						end
+
+						for workernum = 1:numworkers
+							if(~compstruct(tv, transfer{workernum}))
+								error('Matshare failed because parallel results were not equal.');
+							end
+						end
+						
+						% test safe overwriting
+						parfor workernum = 1:numworkers
+							tv = mshfetch;
+							tv2 = variablefromtemplate(rns, tv);
+							mshsafeoverwrite(tv, tv2);
+						end
 						
 					end
 					count = count + 1;

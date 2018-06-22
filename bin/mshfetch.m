@@ -7,5 +7,6 @@ function [data, newvars, allvars] = mshfetch
 	else
 		[data, newvars] = matshare_(1);
 	end
+	matshare_(12);
 end
 

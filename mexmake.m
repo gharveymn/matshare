@@ -46,16 +46,6 @@ try
 	end
 	mshconfigfolder = fullfile(userconfigfolder, 'matshare');
 	
-	if(strcmp(mshSharetype, 'CopyOnWrite'))
-		fprintf('-Compiling in copy-on-write mode.\n')
-		mexflags = [mexflags {'-DMSH_DEFAULT_SHARETYPE=msh_SHARETYPE_COPY'}];
-	elseif(strcmp(mshSharetype, 'Overwrite'))
-		fprintf('-Compiling in overwrite mode.\n')
-		mexflags = [mexflags {'-DMSH_DEFAULT_SHARETYPE=msh_SHARETYPE_OVERWRITE'}];
-	else
-		error('Invalid value for compilation parameter mshSharetype');
-	end
-	
 	if(strcmp(mshThreadSafety, 'on'))
 		fprintf('-Thread safety is enabled.\n')
 		mexflags = [mexflags {'-DMSH_DEFAULT_THREAD_SAFETY=TRUE'}];

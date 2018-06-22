@@ -201,7 +201,7 @@ SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, msh_segmentnumber_
  *
  * @param seg_list The segment list to be cleaned.
  */
-void msh_CleanSegmentList(SegmentList_t* seg_list);
+void msh_CleanSegmentList(SegmentList_t* seg_list, int gc_override);
 
 
 /**

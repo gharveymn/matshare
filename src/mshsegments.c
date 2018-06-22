@@ -174,11 +174,6 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 		g_shared_info->num_shared_segments += 1;
 	}
 	
-	if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_OVERWRITE)
-	{
-		msh_ClearSharedSegments(segment_cache_list);
-	}
-	
 	/* check whether to set this as the first segment number */
 	if(g_shared_info->first_seg_num == MSH_INVALID_SEG_NUM)
 	{
@@ -508,12 +503,12 @@ void msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
 	
 }
 
-void msh_CleanSegmentList(SegmentList_t* seg_list)
+void msh_CleanSegmentList(SegmentList_t* seg_list, int gc_override)
 {
 	SegmentNode_t* curr_seg_node, * next_seg_node;
 	SegmentMetadata_t* curr_seg_metadata;
 	
-	if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY && g_shared_info->user_defined.will_gc)
+	if(g_shared_info->user_defined.will_gc || gc_override)
 	{
 		for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
 		{
@@ -566,9 +561,9 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_s
 	
 	if(!msh_AtomicAddSizeWithMax(&g_shared_info->total_shared_size, seg_info_cache->total_segment_size, g_shared_info->user_defined.max_shared_size))
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "SegmentSizeError", "The total size of currently shared memory is " SIZE_FORMAT_SPEC " bytes. "
-																		"The variable shared has a size of " SIZE_FORMAT_SPEC " bytes and will exceed the "
-																		"total shared size limit of " SIZE_FORMAT_SPEC " bytes. You may change this limit by using mshconfig. "
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "SegmentSizeError", "The total size of currently shared memory is " SIZE_FORMAT " bytes. "
+																		"The variable shared has a size of " SIZE_FORMAT " bytes and will exceed the "
+																		"total shared size limit of " SIZE_FORMAT " bytes. You may change this limit by using mshconfig. "
 																		"For more information refer to `help mshconfig`.", g_shared_info->total_shared_size,
 					   seg_info_cache->total_segment_size, g_shared_info->user_defined.max_shared_size);
 	}

@@ -63,9 +63,9 @@ TickTracker_t total_time, lock_time, busy_wait_time;
 #endif
 
 #if MSH_BITNESS==64
-#  define SIZE_FORMAT_SPEC "%llu"
+#  define SIZE_FORMAT "%llu"
 #elif MSH_BITNESS==32
-#  define SIZE_FORMAT_SPEC "%lu"
+#  define SIZE_FORMAT "%lu"
 #endif
 
 /** these are basic readability typedefs **/
@@ -74,20 +74,24 @@ typedef byte_T byte_t;                  /* reading physical memory */
 typedef int8_T bool_t;                  /* conditionals */
 typedef int32_T alignedbool_t;		/* for word sized alignment */
 typedef int32_T msh_segmentnumber_t; /* segment number identifiers */
-typedef uint32_T msh_sharetype_t;		/* ensure word-size alignment */
-typedef uint8_T msh_classid_t;             /* for packing mex class ids to prevent compiler from padding SharedVariableHeader_t */
+
+#define MSH_SEG_NUM_FORMAT "%li"
 
 #ifdef MSH_WIN
-typedef HANDLE handle_t;
-  typedef DWORD pid_t;
-  typedef handle_t ProcessLock_t;
+   typedef HANDLE handle_t;
+   typedef DWORD pid_t;
+   typedef handle_t ProcessLock_t;
+#  define HANDLE_FORMAT SIZE_FORMAT
+#  define PID_FORMAT "%lu"
 #else
-typedef int handle_t;				 /* give fds a uniform identifier */
-typedef struct ProcessLock_t
-{
-	handle_t lock_handle;
-	size_t lock_size;
-} ProcessLock_t;
+   typedef int handle_t;				 /* give fds a uniform identifier */
+   typedef struct ProcessLock_t
+   {
+      handle_t lock_handle;
+      size_t lock_size;
+   } ProcessLock_t;
+#define HANDLE_FORMAT "%i"
+#define PID_FORMAT "%i"
 #endif
 
 #ifdef MSH_AVX_SUPPORT
@@ -111,6 +115,5 @@ typedef union LockFreeCounter_ut
 		unsigned long post : 1;
 	} values;
 } LockFreeCounter_t;
-
 
 #endif /* MATSHARE_MSHBASICTYPES_H */

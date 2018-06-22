@@ -1,6 +1,6 @@
 clear x
 
-nums = 5000000;
+nums = 50000;
 % memstride = 100;
 % lents = 0;
 % disp(getmem);
@@ -10,8 +10,8 @@ nums = 5000000;
 tic
 for i = 1:nums
 	
-	mshshare(i);
-	x = mshfetch;
+	x = mshshare(i);
+	y = x;
 % 	if(mod(i,memstride) == 0)
 % 		mems(i/memstride) = getmem;
 % 	end

@@ -1,17 +1,38 @@
 classdef matshare
 	
-	properties (SetAccess = immutable)
+	% This is stored information
+	properties (Hidden)
+		shared_data;
+	end
+	
+	% This is the property that users will query
+	properties (Dependent)
 		data
 	end
 	
 	methods
-		function obj = matshare(in, noshare)
-			% normal assignment so we don't share the variable twice
-			if(nargin > 1 && noshare)
-				obj.data = in;
-			elseif(nargin > 0)
-				obj.data = matshare_(0, in);
+		
+		function obj = matshare(num_objs)
+			if(nargin > 0 && num_objs > 0)
+				obj(num_objs) = matshare;
 			end
+		end
+		
+		function obj = set.data(obj, in)
+			obj.shared_data = matshare_(0, in);
+			matshare_(12);
+		end
+		
+		function ret = get.data(obj)
+			ret = obj.shared_data;
+		end
+		
+		function overwrite(obj, in)
+			matshare_(8, obj.shared_data, in);
+		end
+		
+		function safeoverwrite(obj, in)
+			matshare_(9, obj.shared_data, in);
 		end
 		
 		function cleardata(obj)
@@ -29,39 +50,55 @@ classdef matshare
 		% these are just the entry functions but in static method form
 		
 		function newobj = share(in)
-			switch(nargout)
-				case 0
-					matshare_(0, in);
-				case 1
-					newobj = matshare(in);
-			end
+			newobj = matshare;
+			newobj.data = in;
 		end
 		
 		function [newestobj, newvarobjs, allvarobjs] = fetch
 			if(nargout <= 1)
-				newestobj = matshare(matshare_(1), true);
+				newestobj = matshare;
+				newestobj.shared_data = matshare_(1);
 			elseif(nargout == 3)
-				[newestobj, newvarobjs, allvarobjs] = matshare_(1);
+				[newestvar, newvars, allvars] = matshare_(1);
+				newestobj = matshare;
 				
-				newestobj = matshare(newestobj, true);
-				
-				for i = 1:numel(newvarobjs)
-					newvarobjs{i} = matshare(newvarobjs{i}, true);
+				if(numel(newvars) > 0)
+					newvarobjs = num2cell(matshare(numel(newvars)));
+				else
+					newvarobjs = [];
 				end
 				
-				for i = 1:numel(allvarobjs)
-					allvarobjs{i} = matshare(allvarobjs{i}, true);
+				if(numel(allvars) > 0)
+					allvarobjs = num2cell(matshare(numel(allvars)));
+				else
+					allvarobjs = [];
 				end
 				
+				newestobj.shared_data = newestvar;
+				
+				for i = 1:numel(newvars)
+					newvarobjs{i}.shared_data = newvars{i};
+				end
+				
+				for i = 1:numel(allvars)
+					allvarobjs{i}.shared_data = allvars{i};
+				end
 			else
-				[newestobj, newvarobjs] = matshare_(1);
+				[newestvar, newvars] = matshare_(1);
 				
-				newestobj = matshare(newestobj, true);
+				newestobj = matshare;
 				
-				for i = 1:numel(newvarobjs)
-					newvarobjs{i} = matshare(newvarobjs{i}, true);
+				if(numel(newvars) > 0)
+					newvarobjs = num2cell(matshare(numel(newvars)));
+				end
+				
+				newestobj.shared_data = newestvar;
+				
+				for i = 1:numel(newvars)
+					newvarobjs{i}.shared_data = newvars{i};
 				end
 			end
+			matshare_(12);
 		end
 		
 		function detach
@@ -85,7 +122,15 @@ classdef matshare
 		end
 		
 		function reset
-			matshare_(7)
+			matshare_(7);
+		end
+		
+		function lock
+			matshare_(10);
+		end
+		
+		function unlock
+			matshare_(11);
 		end
 		
 	end

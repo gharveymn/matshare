@@ -3,9 +3,6 @@
 
 %% Default preferences
 
-% Specify the sharetype for matlab (either 'CopyOnWrite' or 'Overwrite')
-mshSharetype = 'CopyOnWrite';
-
 % Control whether or not to use locks when sharing memory ('on' or 'off')
 mshThreadSafety = 'on';
 
@@ -25,4 +22,4 @@ mshGarbageCollection = 'on';
 mshSecurity = '0600';
 
 %% Enable or disable debug mode
-mshDebugMode = false;
+mshDebugMode = true;

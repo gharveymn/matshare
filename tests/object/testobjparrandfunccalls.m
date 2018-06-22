@@ -91,7 +91,7 @@ for i = 1:num_maxDepth_tests
 					fprintf([repmat('\b',1,lents) timestr]);
 					lents = numel(timestr);
 					parfor o = 1:numworkers
-						testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, observerpid, true);
+						testobjrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, observerpid, true);
 					end
 					count = count + 1;
 				end
@@ -99,7 +99,7 @@ for i = 1:num_maxDepth_tests
 		end
 	end
 end
-mshclear
-mshdebug
-mshdetach
+matshare.clear
+matshare.debug
+matshare.detach
 fprintf('Test successful.\n\n');

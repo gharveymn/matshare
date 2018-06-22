@@ -49,6 +49,6 @@ for i = 1:num_maxDepth_tests
 		end
 	end
 end
-mshclear
-mshdetach
+matshare.clear
+matshare.detach
 fprintf('Test successful.\n\n');

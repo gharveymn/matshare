@@ -16,10 +16,6 @@
 /* forward declaration to avoid include */
 typedef struct mxArray_tag mxArray;
 
-#define MSH_PARAM_SHARETYPE "Sharetype"
-#define MSH_PARAM_SHARETYPE_L "sharetype"
-#define MSH_PARAM_SHARETYPE_AB "st"
-
 #define MSH_PARAM_THREADSAFETY "ThreadSafety"
 #define MSH_PARAM_THREADSAFETY_L "threadsafety"
 #define MSH_PARAM_THREADSAFETY_AB "ts"
@@ -40,20 +36,108 @@ typedef struct mxArray_tag mxArray;
 #define MSH_PARAM_SECURITY_L "security"
 #define MSH_PARAM_SECURITY_AB "sc"
 
-#ifdef MSH_WIN
-#define MSH_PARAM_INFO \
-"Current parameters for matshare: \n\
-							   ThreadSafety:      '%s'\n\
-							   ShareType:       '%s'\n\
-							   GarbageCollection: '%s'\n"
-#else
-#define MSH_PARAM_INFO \
-"Current parameters for matshare: \n\
-                                      ThreadSafety:      '%s'\n\
-                                      ShareType:       '%s'\n\
-                                      GarbageCollection: '%s'\n\
+#define MSH_CONFIG_STRING_FORMAT \
+"Current matshare configuration: \n\
+                                      Current lock count:  %li\n\
+                                      Thread safety:       '%s'\n\
+                                      Max variables: %lu\n\
+                                      Max shared size:     "SIZE_FORMAT"\n\
+                                      Garbage collection:  '%s'\n"
+
+#ifdef MSH_UNIX
+#define MSH_CONFIG_SECURITY_STRING_FORMAT "\
                                       Security:          '%o'\n"
 #endif
+
+
+#define MSH_DEBUG_LOCAL_FORMAT \
+"g_local_info: \n" \
+"     rev_num: "SIZE_FORMAT"\n" \
+"     lock_level: %lu\n" \
+"     this_pid: "PID_FORMAT"\n" \
+"     shared_info_wrapper (struct): \n" \
+"          ptr: "SIZE_FORMAT"\n" \
+"          handle: "HANDLE_FORMAT"\n" \
+"     process_lock: "HANDLE_FORMAT"\n" \
+"     is_mex_locked: %u\n" \
+"     is_initialized: %u\n"
+
+#define MSH_DEBUG_LOCAL_ARGS \
+g_local_info.rev_num, \
+g_local_info.lock_level, \
+g_local_info.this_pid, \
+g_local_info.shared_info_wrapper.ptr, \
+g_local_info.shared_info_wrapper.handle, \
+g_local_info.process_lock, \
+g_local_info.is_mex_locked, \
+g_local_info.is_initialized
+
+#ifdef MSH_WIN
+#  define MSH_SECURITY_FORMAT \
+""
+#  define MSH_NUM_PROCS_FORMAT \
+"     num_procs: %li\n"
+#  define MSH_SECURITY_ARG
+#  define MSH_NUM_PROCS_ARG g_shared_info->num_procs,
+#else
+#  define MSH_SECURITY_FORMAT \
+"          security: %i\n"
+#  define MSH_NUM_PROCS_FORMAT \
+"     lock_counter (union): \n" \
+"          span: %li" \
+"          values (struct): \n" \
+"               count: %lu \n" \
+"               flag: %lu \n" \
+"               post: %lu \n"
+#  define MSH_SECURITY_ARG g_shared_info->user_defined.security,
+#  define MSH_NUM_PROCS_ARG \
+g_shared_info->num_procs.span, \
+g_shared_info->num_procs.values.count, \
+g_shared_info->num_procs.values.flag, \
+g_shared_info->num_procs.values.post,
+#endif
+
+#define MSH_DEBUG_SHARED_FORMAT \
+"g_shared_info: \n" \
+"     rev_num: "SIZE_FORMAT"\n" \
+"     total_shared_size: "SIZE_FORMAT"\n" \
+"     user_defined (struct): \n" \
+"          lock_counter (union): \n" \
+"               span: %li\n" \
+"               values (struct): \n" \
+"                    count: %lu \n" \
+"                    flag: %lu \n" \
+"                    post: %lu \n" \
+"          max_shared_segments: %lu\n" \
+"          max_shared_size: "SIZE_FORMAT"\n" \
+"          will_gc: %lu\n" \
+MSH_SECURITY_FORMAT\
+"     first_seg_num: "MSH_SEG_NUM_FORMAT"\n" \
+"     last_seg_num: "MSH_SEG_NUM_FORMAT"\n" \
+"     num_shared_segments: %lu\n" \
+"     has_fatal_error: %lu\n" \
+"     is_initialized: %lu\n" \
+MSH_NUM_PROCS_FORMAT\
+"     update_pid: "PID_FORMAT" \n"
+
+#define MSH_DEBUG_SHARED_ARGS \
+g_shared_info->rev_num, \
+g_shared_info->total_shared_size, \
+g_shared_info->user_defined.lock_counter.span, \
+g_shared_info->user_defined.lock_counter.values.count, \
+g_shared_info->user_defined.lock_counter.values.flag, \
+g_shared_info->user_defined.lock_counter.values.post, \
+g_shared_info->user_defined.max_shared_segments, \
+g_shared_info->user_defined.max_shared_size, \
+g_shared_info->user_defined.will_gc, \
+MSH_SECURITY_ARG \
+g_shared_info->first_seg_num, \
+g_shared_info->last_seg_num, \
+g_shared_info->num_shared_segments, \
+g_shared_info->has_fatal_error, \
+g_shared_info->is_initialized, \
+MSH_NUM_PROCS_ARG \
+g_shared_info->update_pid
 
 typedef enum
 {
@@ -68,7 +152,9 @@ typedef enum
 	msh_OVERWRITE     = 0x08,
 	msh_SAFEOVERWRITE = 0x09,
 	msh_LOCK          = 0x0A,
-	msh_UNLOCK        = 0x0B
+	msh_UNLOCK        = 0x0B,
+	msh_VIRTUALRESIZE = 0x0C,
+	msh_CLEAN = 0x0D
 } msh_directive_t;
 
 
@@ -117,8 +203,15 @@ void msh_Overwrite(const mxArray* dest_var, const mxArray* in_var, msh_directive
  * Changes configuration parameters.
  *
  * @param num_params The number of parameters input.
- * @param in An array of the parameters and values.
+ * @param in_params An array of the parameters and values.
  */
-void msh_Config(int num_params, const mxArray** in);
+void msh_Config(int num_params, const mxArray** in_params);
+
+
+/**
+ * Resizes virtual scalars. This should be called from MATLAB after a call to
+ * mshshare or mshfetch.
+ */
+void msh_VirtualResize(void);
 
 #endif /* MATSHARE__H */

@@ -10,8 +10,10 @@
 #include "mex.h"
 
 #include "headers/mshtypes.h"
+#include "headers/mshexterntypes.h"
 #include "headers/mshutils.h"
 #include "headers/mshsegments.h"
+#include "headers/mshvariables.h"
 #include "headers/mlerrorutils.h"
 
 #ifdef MSH_UNIX
@@ -339,7 +341,6 @@ char_t* msh_GetConfigurationPath(void)
 
 void msh_SetDefaultConfiguration(void)
 {
-	g_shared_info->user_defined.sharetype = MSH_DEFAULT_SHARETYPE;
 	msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_DEFAULT_THREAD_SAFETY);
 	msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);                 /** counter is in post state **/
 	g_shared_info->user_defined.max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;

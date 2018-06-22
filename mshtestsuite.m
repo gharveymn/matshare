@@ -16,18 +16,10 @@ testparessential;
 testparresultverify;
 
 % parallel function calls
-testparrandfunccalls;
-
-mshconfig('gc', 'on', 'sharetype', 'copy');
-
-% test essential variables
-testparessential;
+testparlock;
 
 % test parallel results
-testparresultverify;
-
-% parallel function calls
-testparrandfunccalls;
+testparoverwrite;
 
 fprintf('Test suite ran successfully.\n\n');
 

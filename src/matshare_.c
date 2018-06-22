@@ -35,25 +35,26 @@ char_t* g_msh_library_name = "matshare";
 char_t* g_msh_error_help_message = "";
 char_t* g_msh_warning_help_message = "";
 
-GlobalInfo_t g_local_info = {
-							0,                      /* rev_num */
-							0,                      /* lock_level */
-							0,                      /* this_pid */
+LocalInfo_t g_local_info = {
+							0,                          /* rev_num */
+							0,                          /* lock_level */
+							0,                          /* this_pid */
 							{
-								NULL,                    /* ptr */
-								MSH_INVALID_HANDLE       /* handle */
-							},     					/* shared_info_wrapper */
+								NULL,                  /* ptr */
+								MSH_INVALID_HANDLE     /* handle */
+							},                          /* shared_info_wrapper */
 #ifdef MSH_WIN
-							MSH_INVALID_HANDLE,     /* process_lock */
+							MSH_INVALID_HANDLE,         /* process_lock */
 #else
-							MSH_INVALID_HANDLE,
-							0,
+							MSH_INVALID_HANDLE,         /* process_lock */
+							0,                          /* lock_size */
 #endif
-							0,                      /* is_mex_locked */
-							0                       /* is_initialized */
+							0,                          /* is_mex_locked */
+							0                           /* is_initialized */
 						};
 
 VariableList_t g_local_var_list = {0};
+VariableList_t g_virtual_scalar_list = {0};
 SegmentList_t g_local_seg_list = {0};
 
 /* ------------------------------------------------------------------------- */
@@ -74,11 +75,31 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "NotEnoughInputsError", "Minimum input arguments missing. You must supply a msh_directive.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "NotEnoughInputsError", "Minimum input arguments missing. You must supply a directive.");
 	}
 	
-	/* get the msh_directive, no check made since the function should not be used without entry functions */
+	/* get the directive, no check is made since the matshare should not be used without entry functions */
 	directive = (msh_directive_t)mxGetScalar(in_directive);
+	
+	/* if we are printing out debug information do not change anything, but print out info and exit */
+	if(directive == msh_DEBUG)
+	{
+		/* first print out local information */
+		mexPrintf(MSH_DEBUG_LOCAL_FORMAT, MSH_DEBUG_LOCAL_ARGS);
+		
+		/* now print out shared information if available */
+		if(g_local_info.shared_info_wrapper.ptr != NULL)
+		{
+			mexPrintf(MSH_DEBUG_SHARED_FORMAT, MSH_DEBUG_SHARED_ARGS);
+#ifdef MSH_DEBUG_PERF
+			mexPrintf("Total time: " SIZE_FORMAT "\nTime waiting for the lock: " SIZE_FORMAT "\nTime spent in busy wait: " SIZE_FORMAT "\n", g_shared_info->debug_perf.total_time,
+					g_shared_info->debug_perf.lock_time, g_shared_info->debug_perf.busy_wait_time);
+#endif
+		}
+		
+		/* return immediately */
+		return;
+	}
 	
 	/* Don't initialize if we are detaching and matshare has not been initialized for this process yet */
 	if(directive == msh_DETACH && !g_local_info.is_initialized)
@@ -86,14 +107,15 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		return;
 	}
 	
+	/* run initialization */
 	msh_InitializeMatshare();
 	
 	if(g_shared_info->has_fatal_error)
 	{
 #ifdef MSH_WIN
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_FATAL, 0, "FatalError", "There was previously a fatal error to the matshare system. Please restart MATLAB.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_FATAL, 0, "FatalError", "There was previously a fatal error in the matshare system. Please restart MATLAB.");
 #else
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_FATAL, 0, "FatalError", "There was previously a fatal error to the matshare system. Please restart MATLAB. You may have to delete files "
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_FATAL, 0, "FatalError", "There was previously a fatal error in the matshare system. Please restart MATLAB. You may have to delete files "
 																	"located in /dev/shm/.");
 #endif
 	}
@@ -102,7 +124,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	msh_GetTick(&total_time.old);
 #endif
 	
-	msh_CleanSegmentList(&g_local_seg_list);
+	/* clean invalid segments out of tracking */
+	msh_CleanSegmentList(&g_local_seg_list, directive == msh_CLEAN);
 	
 	switch(directive)
 	{
@@ -159,7 +182,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		case msh_DEBUG:
 #ifdef MSH_DEBUG_PERF
-			mexPrintf("Total time: " SIZE_FORMAT_SPEC "\nTime waiting for the lock: " SIZE_FORMAT_SPEC "\nTime spent in busy wait: " SIZE_FORMAT_SPEC "\n",
+			mexPrintf("Total time: " SIZE_FORMAT "\nTime waiting for the lock: " SIZE_FORMAT "\nTime spent in busy wait: " SIZE_FORMAT "\n",
 			g_shared_info->debug_perf.total_time, g_shared_info->debug_perf.lock_time, g_shared_info->debug_perf.busy_wait_time);
 #endif
 			break;
@@ -181,9 +204,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		case msh_OVERWRITE:
 		case msh_SAFEOVERWRITE:
 			
-			if(nrhs == 2)
+			if(nrhs == 3)
 			{
-				msh_Overwrite(prhs[0], prhs[1], directive);
+				msh_Overwrite(prhs[1], prhs[2], directive);
 			}
 			else
 			{
@@ -201,6 +224,14 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			msh_ReleaseProcessLock(g_process_lock);
 			
+			break;
+		case msh_VIRTUALRESIZE:
+			
+			msh_VirtualResize();
+			
+			break;
+		case msh_CLEAN:
+			/* do nothing */
 			break;
 		default:
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
@@ -221,46 +252,24 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 {
 	SegmentNode_t* new_seg_node;
-	const mxArray* in_var;
-	int i;
+	VariableNode_t* new_var_node;
+	int input_num;
 	
 	/* check the inputs */
 	if(num_vars < 1)
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "NoVariableError", "No variable supplied to clone.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "NoVariableError", "No variable supplied to share.");
 	}
 	
-	for(i = 0, in_var = in_vars[i]; i < num_vars; i++, in_var = in_vars[i])
+	
+	for(input_num = 0; input_num < num_vars; input_num++)
 	{
 		
-		if(g_shared_info->user_defined.sharetype == msh_SHARETYPE_OVERWRITE)
-		{
-			/* if the variable is exactly the same size, perform a rewrite */
-			if(g_local_seg_list.last != NULL && (msh_CompareHeaderSize(msh_GetSegmentData(g_local_seg_list.last), in_var) == TRUE))
-			{
-				/* this is an in-place change */
-				/* do the rewrite after checking because the comparison is cheap */
-				msh_OverwriteHeader(msh_GetSegmentData(g_local_seg_list.last), in_var);
-
-#ifdef MSH_UNIX
-				/* only need to update because we have overwritten an established segment */
-				if(msync(msh_GetSegmentInfo(g_local_seg_list.last)->raw_ptr, msh_GetSegmentInfo(g_local_seg_list.last)->total_segment_size, MS_SYNC | MS_INVALIDATE) != 0)
-				{
-					/* error severity: system */
-					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "MsyncMatlabError", "There was an error with syncing a shared data segment.");
-				}
-#endif
-				
-				/* DON'T DO ANYTHING ELSE */
-				continue;
-			}
-		}
-		
 		/* scan input data to get required size and create the segment */
-		new_seg_node = msh_CreateSegment(msh_FindSharedSize(in_var));
+		new_seg_node = msh_CreateSegment(msh_FindSharedSize(in_vars[input_num]));
 		
 		/* copy data to the shared memory */
-		msh_CopyVariable(msh_GetSegmentData(new_seg_node), in_var);
+		msh_CopyVariable(msh_GetSegmentData(new_seg_node), in_vars[input_num]);
 		
 		/* segment must also be tracked locally, so do that now */
 		msh_AddSegmentToList(&g_local_seg_list, new_seg_node);
@@ -268,20 +277,17 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		/* Add the new segment to the shared list */
 		msh_AddSegmentToSharedList(new_seg_node);
 		
-	}
-	
-	if(nlhs == 1)
-	{
-		/* Returns the variable we just put into shared memory. At least one segment must have been created. */
-		if(msh_GetVariableNode(g_local_seg_list.last) == NULL)
+		if(input_num < nlhs)
 		{
-			msh_AddVariableToList(&g_local_var_list, msh_CreateVariable(g_local_seg_list.last));
+			/* Returns the variable we just put into shared memory. At least one segment must have been created. */
+			if((new_var_node = msh_GetVariableNode(new_seg_node)) == NULL)
+			{
+				new_var_node = msh_CreateVariable(new_seg_node);
+				msh_AddVariableToList(&g_local_var_list, new_var_node);
+			}
+			plhs[input_num] = mxCreateSharedDataCopy(msh_GetVariableData(new_var_node));
 		}
-		plhs[0] = mxCreateSharedDataCopy(msh_GetVariableData(msh_GetVariableNode(g_local_seg_list.last)));
-	}
-	else if(nlhs > 1)
-	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManyOutputsError", "Too many outputs were requested.");
+		
 	}
 	
 }
@@ -292,14 +298,8 @@ void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive)
 	
 	VariableNode_t* curr_var_node;
 	SegmentNode_t* curr_seg_node;
-
-#if MSH_BITNESS==64
-	size_t i, num_new_vars = 0;
-	size_t ret_dims[2];
-#elif MSH_BITNESS==32
-	int i, num_new_vars = 0;
-	int ret_dims[2];
-#endif
+	
+	uint32_T i, num_new_vars = 0;
 	
 	if(nlhs >= 1)
 	{
@@ -309,9 +309,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive)
 			/* perform a full update */
 			msh_UpdateSegmentTracking(&g_local_seg_list);
 			
-			for(i = 0, curr_seg_node = g_local_seg_list.first;
-			    (uint32_T)i < g_local_seg_list.num_segs;
-					i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
+			for(curr_seg_node = g_local_seg_list.first; curr_seg_node != NULL; curr_seg_node = msh_GetNextSegment(curr_seg_node))
 			{
 				if(msh_GetVariableNode(curr_seg_node) == NULL)
 				{
@@ -322,14 +320,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive)
 			}
 			
 			/* return the new variables detected */
-#if MSH_BITNESS==64
-			ret_dims[0] = (size_t)(num_new_vars != 0);
-#elif MSH_BITNESS==32
-			ret_dims[0] = (int)(num_new_vars != 0);
-#endif
-			
-			ret_dims[1] = num_new_vars;
-			plhs[1] = mxCreateCellArray(2, ret_dims);
+			plhs[1] = mxCreateCellMatrix((size_t)(num_new_vars != 0), num_new_vars);
 			
 			for(i = 0, curr_var_node = g_local_var_list.last;
 					i < num_new_vars;
@@ -354,12 +345,10 @@ void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive)
 				}
 				
 				/* retrieve all segment variables */
-				ret_dims[0] = (size_t)(g_local_seg_list.num_segs != 0);
-				ret_dims[1] = g_local_seg_list.num_segs;
-				plhs[2] = mxCreateCellArray(2, ret_dims);
+				plhs[2] = mxCreateCellMatrix((size_t)(g_local_seg_list.num_segs != 0), g_local_seg_list.num_segs);
 				
 				for(i = 0, curr_seg_node = g_local_seg_list.first;
-				    		(uint32_T)i < g_local_seg_list.num_segs;
+				    		i < g_local_seg_list.num_segs;
 						i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
 				{
 					if(directive == msh_LOCALCOPY)
@@ -468,12 +457,33 @@ void msh_Overwrite(const mxArray* dest_var, const mxArray* in_var, msh_directive
 	}
 	else
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "VariableSizeError", "The size of the variable to be overwritten was incompatible with the input variable.");
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "VariableSizeError", "The size of the variable to be overwritten is incompatible with the input variable.");
 	}
 }
 
 
-void msh_Config(int num_params, const mxArray** in)
+void msh_VirtualResize(void)
+{
+	VariableNode_t* curr_virtual_scalar;
+	mxArray* link,* resize_var;
+	mwSize* resize_dims;
+	size_t resize_num_dims;
+	for(curr_virtual_scalar = g_virtual_scalar_list.first; curr_virtual_scalar != NULL; curr_virtual_scalar = msh_GetNextVariable(curr_virtual_scalar))
+	{
+		/* do the resizing operation */
+		resize_var = msh_GetVariableData(curr_virtual_scalar);
+		resize_dims = msh_GetDimensions(msh_GetSharedHeader(curr_virtual_scalar));
+		resize_num_dims = msh_GetNumDims(msh_GetSharedHeader(curr_virtual_scalar));
+		
+		for(link = msh_GetCrosslink(resize_var); link != NULL && link != resize_var; link = msh_GetCrosslink(link))
+		{
+			mxSetDimensions(link, resize_dims, resize_num_dims);
+		}
+	}
+}
+
+
+void msh_Config(int num_params, const mxArray** in_params)
 {
 	int i, j, ps_len, vs_len;
 	char param_str[MSH_MAX_NAME_LEN] = {0}, val_str[MSH_MAX_NAME_LEN] = {0}, param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
@@ -484,24 +494,18 @@ void msh_Config(int num_params, const mxArray** in)
 	
 	if(num_params == 0)
 	{
-#ifdef MSH_WIN
-		mexPrintf(MSH_PARAM_INFO,
+		mexPrintf(MSH_CONFIG_STRING_FORMAT,
 				msh_GetCounterFlag(&g_shared_info->user_defined.lock_counter)? "true" : "false",
-				g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY? "true" : "false",
 				g_shared_info->user_defined.will_gc? "true" : "false");
-#else
-		mexPrintf(MSH_PARAM_INFO,
-				msh_GetCounterFlag(&g_shared_info->user_defined.lock_counter)? "true" : "false",
-				g_shared_info->user_defined.sharetype == msh_SHARETYPE_COPY? "true" : "false",
-				g_shared_info->user_defined.will_gc? "true" : "false",
-				g_shared_info->user_defined.security);
+#ifdef MSH_UNIX
+		mexPrintf(MSH_CONFIG_SECURITY_STRING_FORMAT, g_shared_info->user_defined.security);
 #endif
 	}
 	
 	for(i = 0; i < num_params; i++)
 	{
-		param = in[2*i];
-		val = in[2*i + 1];
+		param = in_params[2*i];
+		val = in_params[2*i + 1];
 		
 		if(!mxIsChar(param) || !mxIsChar(val))
 		{
@@ -533,22 +537,7 @@ void msh_Config(int num_params, const mxArray** in)
 			val_str_l[j] = (char)tolower(val_str[j]);
 		}
 		
-		if(strcmp(param_str_l, MSH_PARAM_SHARETYPE_L) == 0 || strcmp(param_str_l, MSH_PARAM_SHARETYPE_AB) == 0)
-		{
-			if(strncmp(val_str_l, "copy", 4) == 0)
-			{
-				g_shared_info->user_defined.sharetype = msh_SHARETYPE_COPY;
-			}
-			else if(strcmp(val_str_l, "overwrite") == 0)
-			{
-				g_shared_info->user_defined.sharetype = msh_SHARETYPE_OVERWRITE;
-			}
-			else
-			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_SHARETYPE);
-			}
-		}
-		else if(strcmp(param_str_l, MSH_PARAM_THREADSAFETY_L) == 0 || strcmp(param_str_l, MSH_PARAM_THREADSAFETY_AB) == 0)
+		if(strcmp(param_str_l, MSH_PARAM_THREADSAFETY_L) == 0 || strcmp(param_str_l, MSH_PARAM_THREADSAFETY_AB) == 0)
 		{
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
@@ -613,7 +602,7 @@ void msh_Config(int num_params, const mxArray** in)
 						meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ChmodError", "There was an error modifying permissions for the data segment.");
 					}
 				}
-				msh_ReleaseProcessLock(g_process_lock);;
+				msh_ReleaseProcessLock(g_process_lock);
 			}
 #else
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidParamError", "Parameter \"%s\" has not been implemented for Windows.", param_str);

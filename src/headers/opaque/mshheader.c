@@ -12,6 +12,7 @@
 #include "mex.h"
 
 #include "../mshheader.h"
+#include "../mshvariables.h"
 #include "../mlerrorutils.h"
 #include "../mshexterntypes.h"
 
@@ -88,10 +89,11 @@ struct SharedVariableHeader_t
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
 	struct class_info_pack_tag
 	{
-		msh_classid_t class_id; /* matlab class id packed to save space */
-		bool_t is_empty;
-		bool_t is_sparse;
-		bool_t is_numeric;
+		uint32_T class_id          : 16;
+		uint32_T is_empty          : 4;
+		uint32_T is_sparse         : 4;
+		uint32_T is_numeric        : 4;
+		uint32_T is_virtual_scalar : 4;
 	} class_info_pack;
 };
 
@@ -111,17 +113,6 @@ static size_t msh_GetFieldNamesSize(const mxArray* in_var);
  * @param field_str A pointer to the field string.
  */
 static void msh_GetNextFieldName(const char_t** field_str);
-
-
-/**
- * Copies data to the destination pointer. Also preappends a header to the block.
- *
- * @param dest The destination of copied data.
- * @param orig The original data.
- * @param copy_sz The size of the data copy.
- * @return The destination pointer.
- */
-static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t copy_sz);
 
 
 /**
@@ -237,7 +228,15 @@ int msh_GetIsNumeric(SharedVariableHeader_t* hdr_ptr)
 }
 
 
+int msh_GetIsVirtualScalar(SharedVariableHeader_t* hdr_ptr)
+{
+	return hdr_ptr->class_info_pack.is_virtual_scalar;
+}
+
+
+
 /** offset Set functions **/
+
 
 void msh_SetDataOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off)
 {
@@ -277,6 +276,7 @@ void msh_SetChildOffsOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off)
 
 /** attribute Set functions **/
 
+
 void msh_SetNumDims(SharedVariableHeader_t* hdr_ptr, size_t in)
 {
 	hdr_ptr->num_dims = in;
@@ -307,27 +307,33 @@ void msh_SetNumFields(SharedVariableHeader_t* hdr_ptr, int in)
 }
 
 
-void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, int in)
+void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, unsigned int in)
 {
-	hdr_ptr->class_info_pack.class_id = (msh_classid_t)in;
+	hdr_ptr->class_info_pack.class_id = in;
 }
 
 
-void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, int in)
+void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, unsigned int in)
 {
-	hdr_ptr->class_info_pack.is_empty = (bool_t)in;
+	hdr_ptr->class_info_pack.is_empty = in;
 }
 
 
-void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, int in)
+void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, unsigned int in)
 {
-	hdr_ptr->class_info_pack.is_sparse = (bool_t)in;
+	hdr_ptr->class_info_pack.is_sparse = in;
 }
 
 
-void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, int in)
+void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, unsigned int in)
 {
-	hdr_ptr->class_info_pack.is_numeric = (bool_t)in;
+	hdr_ptr->class_info_pack.is_numeric = in;
+}
+
+
+void msh_SetIsVirtualScalar(SharedVariableHeader_t* hdr_ptr, unsigned int in)
+{
+	hdr_ptr->class_info_pack.is_virtual_scalar = in;
 }
 
 
@@ -470,11 +476,24 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 			if(!mxIsEmpty(in_var))
 			{
 				/* add the size of the real data */
-				AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNumberOfElements(in_var));
-				if(mxIsComplex(in_var))
+				if(mxGetNumberOfElements(in_var) == 1)
 				{
-					/* and the imaginary data */
+					AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*2);
+					if(mxIsComplex(in_var))
+					{
+						/* and the imaginary data */
+						AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*2);
+					}
+					
+				}
+				else
+				{
 					AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNumberOfElements(in_var));
+					if(mxIsComplex(in_var))
+					{
+						/* and the imaginary data */
+						AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNumberOfElements(in_var));
+					}
 				}
 			}
 		}
@@ -492,7 +511,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 
 size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 {
-	size_t curr_off = 0, idx, cpy_sz, count, num_elems;
+	size_t curr_off = 0, idx, copy_sz, alloc_sz, count, num_elems;
 	
 	int field_num, num_fields;
 	const char_t* field_name;
@@ -518,11 +537,11 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 	curr_off += sizeof(SharedVariableHeader_t);
 	
 	/* copy the dimensions */
-	cpy_sz = msh_GetNumDims(dest)*sizeof(mwSize);
-	memcpy(msh_GetDimensions(dest), mxGetDimensions(in_var), cpy_sz);
+	copy_sz = msh_GetNumDims(dest)*sizeof(mwSize);
+	memcpy(msh_GetDimensions(dest), mxGetDimensions(in_var), copy_sz);
 	
 	/* shift to end of dims */
-	curr_off += cpy_sz;
+	curr_off += copy_sz;
 	
 	/* Structure case */
 	if(mxGetClassID(in_var) == mxSTRUCT_CLASS)
@@ -552,9 +571,9 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 		{
 			
 			field_name = mxGetFieldNameByNumber(in_var, field_num);
-			cpy_sz = strlen(field_name) + 1;
-			memcpy(field_name_dest, field_name, cpy_sz);
-			field_name_dest += cpy_sz;
+			copy_sz = strlen(field_name) + 1;
+			memcpy(field_name_dest, field_name, copy_sz);
+			field_name_dest += copy_sz;
 			
 			for(idx = 0; idx < num_elems; idx++, count++)                                   /* the struct array indices */
 			{
@@ -612,11 +631,12 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			msh_SetDataOffset(dest, curr_off);
 			
 			/* copy over the data with the signature */
-			cpy_sz = msh_GetNzmax(dest)*msh_GetElemSize(dest);
-			msh_CopyData(msh_GetData(dest), mxGetData(in_var), cpy_sz);
+			copy_sz = msh_GetNzmax(dest)*msh_GetElemSize(dest), alloc_sz = copy_sz;
+			msh_MakeDataSignature((AllocationHeader_t*)msh_GetData(dest) - 1, alloc_sz);
+			memcpy(msh_GetData(dest), mxGetData(in_var), copy_sz);
 			
 			/* shift to end of the data */
-			curr_off += cpy_sz;
+			curr_off += alloc_sz;
 			
 			/** begin copy imag_data **/
 			if(mxIsComplex(in_var))
@@ -628,10 +648,11 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				msh_SetImagDataOffset(dest, curr_off);
 				
 				/* copy over the data with the signature */
-				msh_CopyData(msh_GetImagData(dest), mxGetImagData(in_var), cpy_sz);
+				msh_MakeDataSignature((AllocationHeader_t*)msh_GetImagData(dest) - 1, alloc_sz);
+				memcpy(msh_GetImagData(dest), mxGetImagData(in_var), copy_sz);
 				
 				/* shift to end of the imaginary data */
-				curr_off += cpy_sz;
+				curr_off += alloc_sz;
 				
 			}
 			
@@ -645,11 +666,12 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			msh_SetIrOffset(dest, curr_off);
 			
 			/* copy over ir with the signature */
-			cpy_sz = msh_GetNzmax(dest)*sizeof(mwIndex);
-			msh_CopyData((void*)msh_GetIr(dest), (void*)mxGetIr(in_var), cpy_sz);
+			copy_sz = msh_GetNzmax(dest)*sizeof(mwIndex), alloc_sz = copy_sz;
+			msh_MakeDataSignature((AllocationHeader_t*)msh_GetIr(dest) - 1, alloc_sz);
+			memcpy(msh_GetIr(dest), mxGetIr(in_var), copy_sz);
 			
 			/* shift to end of ir */
-			curr_off += cpy_sz;
+			curr_off += alloc_sz;
 			
 			/** begin copy jc **/
 			
@@ -660,11 +682,12 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			msh_SetJcOffset(dest, curr_off);
 			
 			/* copy over jc with the signature */
-			cpy_sz = (msh_GetDimensions(dest)[1] + 1)*sizeof(mwIndex);
-			msh_CopyData((void*)msh_GetJc(dest), (void*)mxGetJc(in_var), cpy_sz);
+			copy_sz = (msh_GetDimensions(dest)[1] + 1)*sizeof(mwIndex), alloc_sz = copy_sz;
+			msh_MakeDataSignature((AllocationHeader_t*)msh_GetJc(dest) - 1, alloc_sz);
+			memcpy(msh_GetJc(dest), mxGetJc(in_var), copy_sz);
 			
 			/* shift to the end of jc */
-			curr_off += cpy_sz;
+			curr_off += alloc_sz;
 			
 		}
 		else
@@ -673,7 +696,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			if(!mxIsEmpty(in_var))
 			{
 				
-				/** begin copy data **/
+				/* copy data */
 				
 				/* make room for the mxMalloc signature */
 				curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
@@ -682,11 +705,25 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				msh_SetDataOffset(dest, curr_off);
 				
 				/* copy over the data with the signature */
-				cpy_sz = msh_GetNumElems(dest)*msh_GetElemSize(dest);
-				msh_CopyData(msh_GetData(dest), mxGetData(in_var), cpy_sz);
+				copy_sz = msh_GetNumElems(dest)*msh_GetElemSize(dest);
+				
+				if(msh_GetNumElems(dest) <= 1)
+				{
+					/* we need to store this as a virtual scalar, so the allocation size will be different */
+					alloc_sz = MSH_VIRTUAL_SCALAR_M * MSH_VIRTUAL_SCALAR_N * msh_GetElemSize(dest);
+					msh_SetIsVirtualScalar(dest, TRUE);
+				}
+				else
+				{
+					msh_SetIsVirtualScalar(dest, FALSE);
+					alloc_sz = copy_sz;
+				}
+				
+				msh_MakeDataSignature((AllocationHeader_t*)msh_GetData(dest) - 1, alloc_sz);
+				memcpy(msh_GetData(dest), mxGetData(in_var), copy_sz);
 				
 				/* shift to end of the data */
-				curr_off += cpy_sz;
+				curr_off += alloc_sz;
 				
 				/* copy imag_data */
 				if(mxIsComplex(in_var))
@@ -698,10 +735,11 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 					msh_SetImagDataOffset(dest, curr_off);
 					
 					/* copy over the data with the signature */
-					msh_CopyData(msh_GetImagData(dest), mxGetImagData(in_var), cpy_sz);
+					msh_MakeDataSignature((AllocationHeader_t*)msh_GetImagData(dest) - 1, alloc_sz);
+					memcpy(msh_GetImagData(dest), mxGetImagData(in_var), copy_sz);
 					
 					/* shift to end of the imaginary data */
-					curr_off += cpy_sz;
+					curr_off += alloc_sz;
 					
 				}
 			}
@@ -802,6 +840,8 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			
 			mxSetNzmax(ret_var, msh_GetNzmax(shared_header));
 			
+			mxSetDimensions(ret_var, msh_GetDimensions(shared_header), msh_GetNumDims(shared_header));
+			
 		}
 		else
 		{
@@ -836,9 +876,20 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 				}
 			}
 			
+			/* set up virtual scalar tracking */
+			if(msh_GetIsVirtualScalar(shared_header))
+			{
+				msh_AddVariableToList(&g_virtual_scalar_list, msh_CreateVariableNode(NULL, ret_var, shared_header));
+				
+				mxSetM(ret_var, MSH_VIRTUAL_SCALAR_M);
+				mxSetN(ret_var, MSH_VIRTUAL_SCALAR_N);
+				
+			}
+			else
+			{
+				mxSetDimensions(ret_var, msh_GetDimensions(shared_header), msh_GetNumDims(shared_header));
+			}
 		}
-		
-		mxSetDimensions(ret_var, msh_GetDimensions(shared_header), msh_GetNumDims(shared_header));
 		
 	}
 	
@@ -1135,21 +1186,6 @@ static size_t msh_GetFieldNamesSize(const mxArray* in_var)
 static void msh_GetNextFieldName(const char_t** field_str)
 {
 	*field_str = *field_str + strlen(*field_str) + 1;
-}
-
-
-static void* msh_CopyData(byte_t* dest, byte_t* orig, size_t copy_sz)
-{
-	msh_MakeDataSignature((AllocationHeader_t*)(dest - MXMALLOC_SIG_LEN), copy_sz);
-	if(orig != NULL)
-	{
-		memcpy(dest, orig, copy_sz);
-	}
-	else
-	{
-		memset(dest, 0, copy_sz);
-	}
-	return dest;
 }
 
 

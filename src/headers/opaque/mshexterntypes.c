@@ -48,7 +48,7 @@ struct InternalMexStruct_t
 	void* name;             /*   prev - R2008b: Name of variable in workspace
 				               R2009a - R2010b: NULL
 				               R2011a - later : Reverse crosslink pointer    */
-	mxClassID class_id;      /* 0 = unknown     10 = int16
+	mxClassID class_id;      /* 0 = unknown
                                 1 = cell        11 = uint16
                                 2 = struct      12 = int32
                                 3 = logical     13 = uint32
@@ -96,7 +96,6 @@ struct InternalMexStruct_t
 		mxClassID class_id;  /* Old User Defined Class ID                     */
 	} jc_data;
 	size_t nzmax;            /* Number of elements allocated for sparse        */
-/*   size_t reserved;             Don't believe this! It is not really there!    */
 };
 #endif
 
