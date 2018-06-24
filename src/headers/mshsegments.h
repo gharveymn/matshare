@@ -14,7 +14,7 @@
 #include "mshsegmentnode.h"
 
 /* forward declaration, definition in mshheader.c */
-typedef struct LocalVariableHeader_t LocalVariableHeader_t;
+typedef struct SharedVariableHeader_t SharedVariableHeader_t;
 
 /**
  * Note: matshare links segments in shared memory by assigning each segment a "segment number."
@@ -37,7 +37,7 @@ typedef struct LocalVariableHeader_t LocalVariableHeader_t;
  * @param seg_node The segment node.
  * @return The segment data.
  */
-LocalVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node);
+SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node);
 
 
 /**

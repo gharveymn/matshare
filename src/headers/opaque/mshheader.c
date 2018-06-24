@@ -22,9 +22,9 @@
 #endif
 
 #if MSH_BITNESS == 64
-#  define MXMALLOC_MAGIC_CHECK 0xFEEDFACE
-#  define MXMALLOC_SIG_LEN 0x10
-#  define MXMALLOC_SIG_LEN_SHIFT 0x0F
+#  define ALLOCATION_HEADER_MAGIC_CHECK 0xFEEDFACE
+#  define ALLOCATION_HEADER_SIZE 0x10
+#  define ALLOCATION_HEADER_SIZE_SHIFT 0x0F
 
 typedef struct AllocationHeader_t
 {
@@ -36,9 +36,9 @@ typedef struct AllocationHeader_t
 
 #elif MSH_BITNESS == 32
 
-#  define MXMALLOC_MAGIC_CHECK 0xFEED
-#  define MXMALLOC_SIG_LEN 0x08
-#  define MXMALLOC_SIG_LEN_SHIFT 0x07
+#  define ALLOCATION_HEADER_MAGIC_CHECK 0xFEED
+#  define ALLOCATION_HEADER_SIZE 0x08
+#  define ALLOCATION_HEADER_SIZE_SHIFT 0x07
 
 typedef struct AllocationHeader_t
 {
@@ -53,7 +53,19 @@ typedef struct AllocationHeader_t
 #endif
 
 
-extern size_t PadToAlignData(size_t curr_sz);
+struct
+{
+	AllocationHeader_t alloc_header;
+	size_t data[2];
+} g_virtual_empty =
+		{
+				{
+					ALLOCATION_HEADER_SIZE, ALLOCATION_HEADER_MAGIC_CHECK, DATA_ALIGNMENT, ALLOCATION_HEADER_SIZE
+				},
+				{
+					0,0
+				}
+		};
 
 
 /**
@@ -97,6 +109,7 @@ struct SharedVariableHeader_t
 	} class_info_pack;
 };
 
+extern size_t PadToAlignData(size_t curr_sz);
 
 /**
  * Gets the total number of bytes needed to store the fields strings.
@@ -121,7 +134,7 @@ static void msh_GetNextFieldName(const char_t** field_str);
  * @param alloc_hdr A pointer to the allocation header to be modified.
  * @param copy_sz The size of the data copy.
  */
-static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t copy_sz);
+static void msh_MakeAllocationHeader(AllocationHeader_t* alloc_hdr, size_t copy_sz);
 
 
 /**
@@ -307,31 +320,31 @@ void msh_SetNumFields(SharedVariableHeader_t* hdr_ptr, int in)
 }
 
 
-void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, unsigned int in)
+void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, int in)
 {
 	hdr_ptr->class_info_pack.class_id = in;
 }
 
 
-void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, unsigned int in)
+void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, int in)
 {
 	hdr_ptr->class_info_pack.is_empty = in;
 }
 
 
-void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, unsigned int in)
+void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, int in)
 {
 	hdr_ptr->class_info_pack.is_sparse = in;
 }
 
 
-void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, unsigned int in)
+void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, int in)
 {
 	hdr_ptr->class_info_pack.is_numeric = in;
 }
 
 
-void msh_SetIsVirtualScalar(SharedVariableHeader_t* hdr_ptr, unsigned int in)
+void msh_SetIsVirtualScalar(SharedVariableHeader_t* hdr_ptr, int in)
 {
 	hdr_ptr->class_info_pack.is_virtual_scalar = in;
 }
@@ -402,7 +415,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	 * want to use SharedVariableHeader_t for anything other than the actual segment. */
 	
 	/* adds the total size of the aligned data */
-#define AddDataSize(obj_sz_, data_sz_) (obj_sz_) = PadToAlignData((obj_sz_) + MXMALLOC_SIG_LEN) + (data_sz_);
+#define AddDataSize(obj_sz_, data_sz_) (obj_sz_) = PadToAlignData((obj_sz_) + ALLOCATION_HEADER_SIZE) + (data_sz_);
 	
 	/* counters */
 	size_t idx, count, obj_tree_sz = 0;
@@ -509,7 +522,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 }
 
 
-size_t msh_CopyVariable(void* dest, const mxArray* in_var)
+size_t msh_CopyVariable(void* dest, const mxArray* in_var, int is_top_level)
 {
 	size_t curr_off = 0, idx, copy_sz, alloc_sz, count, num_elems;
 	
@@ -581,7 +594,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				msh_GetChildOffsets(dest)[count] = curr_off;
 				
 				/* And fill it */
-				curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetFieldByNumber(in_var, idx, field_num)));
+				curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetFieldByNumber(in_var, idx, field_num), FALSE));
 				
 			}
 			
@@ -607,7 +620,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			msh_GetChildOffsets(dest)[count] = curr_off;
 			
 			/* And fill it */
-			curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetCell(in_var, count)));
+			curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetCell(in_var, count), FALSE));
 		}
 		
 	}
@@ -625,14 +638,14 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			/** begin copy data **/
 			
 			/* make room for the mxMalloc signature */
-			curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
+			curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 			
 			/* set the offset of the data */
 			msh_SetDataOffset(dest, curr_off);
 			
 			/* copy over the data with the signature */
 			copy_sz = msh_GetNzmax(dest)*msh_GetElemSize(dest), alloc_sz = copy_sz;
-			msh_MakeDataSignature((AllocationHeader_t*)msh_GetData(dest) - 1, alloc_sz);
+			msh_MakeAllocationHeader((AllocationHeader_t*)msh_GetData(dest) - 1, alloc_sz);
 			memcpy(msh_GetData(dest), mxGetData(in_var), copy_sz);
 			
 			/* shift to end of the data */
@@ -642,13 +655,13 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			if(mxIsComplex(in_var))
 			{
 				/* make room for the mxMalloc signature */
-				curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
+				curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 				
 				/* set the offset of the imaginary data */
 				msh_SetImagDataOffset(dest, curr_off);
 				
 				/* copy over the data with the signature */
-				msh_MakeDataSignature((AllocationHeader_t*)msh_GetImagData(dest) - 1, alloc_sz);
+				msh_MakeAllocationHeader((AllocationHeader_t*)msh_GetImagData(dest) - 1, alloc_sz);
 				memcpy(msh_GetImagData(dest), mxGetImagData(in_var), copy_sz);
 				
 				/* shift to end of the imaginary data */
@@ -660,14 +673,14 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			/** begin copy ir **/
 			
 			/* make room for the mxMalloc signature */
-			curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
+			curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 			
 			/* set the offset of ir */
 			msh_SetIrOffset(dest, curr_off);
 			
 			/* copy over ir with the signature */
 			copy_sz = msh_GetNzmax(dest)*sizeof(mwIndex), alloc_sz = copy_sz;
-			msh_MakeDataSignature((AllocationHeader_t*)msh_GetIr(dest) - 1, alloc_sz);
+			msh_MakeAllocationHeader((AllocationHeader_t*)msh_GetIr(dest) - 1, alloc_sz);
 			memcpy(msh_GetIr(dest), mxGetIr(in_var), copy_sz);
 			
 			/* shift to end of ir */
@@ -676,14 +689,14 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			/** begin copy jc **/
 			
 			/* make room for the mxMalloc signature */
-			curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
+			curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 			
 			/* set the offset of jc */
 			msh_SetJcOffset(dest, curr_off);
 			
 			/* copy over jc with the signature */
 			copy_sz = (msh_GetDimensions(dest)[1] + 1)*sizeof(mwIndex), alloc_sz = copy_sz;
-			msh_MakeDataSignature((AllocationHeader_t*)msh_GetJc(dest) - 1, alloc_sz);
+			msh_MakeAllocationHeader((AllocationHeader_t*)msh_GetJc(dest) - 1, alloc_sz);
 			memcpy(msh_GetJc(dest), mxGetJc(in_var), copy_sz);
 			
 			/* shift to the end of jc */
@@ -692,6 +705,9 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 		}
 		else
 		{
+			
+			msh_SetIsVirtualScalar(dest, (msh_GetNumElems(dest) <= 1) & is_top_level);
+			
 			/* copy data */
 			if(!mxIsEmpty(in_var))
 			{
@@ -699,27 +715,16 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				/* copy data */
 				
 				/* make room for the mxMalloc signature */
-				curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
+				curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 				
 				/* set the offset of the data */
 				msh_SetDataOffset(dest, curr_off);
 				
 				/* copy over the data with the signature */
 				copy_sz = msh_GetNumElems(dest)*msh_GetElemSize(dest);
+				alloc_sz = msh_GetIsVirtualScalar(dest)? MSH_VIRTUAL_SCALAR_M * MSH_VIRTUAL_SCALAR_N * msh_GetElemSize(dest) : copy_sz;
 				
-				if(msh_GetNumElems(dest) <= 1)
-				{
-					/* we need to store this as a virtual scalar, so the allocation size will be different */
-					alloc_sz = MSH_VIRTUAL_SCALAR_M * MSH_VIRTUAL_SCALAR_N * msh_GetElemSize(dest);
-					msh_SetIsVirtualScalar(dest, TRUE);
-				}
-				else
-				{
-					msh_SetIsVirtualScalar(dest, FALSE);
-					alloc_sz = copy_sz;
-				}
-				
-				msh_MakeDataSignature((AllocationHeader_t*)msh_GetData(dest) - 1, alloc_sz);
+				msh_MakeAllocationHeader((AllocationHeader_t*)msh_GetData(dest) - 1, alloc_sz);
 				memcpy(msh_GetData(dest), mxGetData(in_var), copy_sz);
 				
 				/* shift to end of the data */
@@ -729,13 +734,13 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				if(mxIsComplex(in_var))
 				{
 					/* make room for the mxMalloc signature */
-					curr_off = PadToAlignData(curr_off + MXMALLOC_SIG_LEN);
+					curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 					
 					/* set the offset of the imaginary data */
 					msh_SetImagDataOffset(dest, curr_off);
 					
 					/* copy over the data with the signature */
-					msh_MakeDataSignature((AllocationHeader_t*)msh_GetImagData(dest) - 1, alloc_sz);
+					msh_MakeAllocationHeader((AllocationHeader_t*)msh_GetImagData(dest) - 1, alloc_sz);
 					memcpy(msh_GetImagData(dest), mxGetImagData(in_var), copy_sz);
 					
 					/* shift to end of the imaginary data */
@@ -873,6 +878,14 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 				{
 					mxFree(mxGetImagData(ret_var));
 					mxSetImagData(ret_var, msh_GetImagData(shared_header));
+				}
+			}
+			else
+			{
+				mxSetData(ret_var, &g_virtual_empty.data);
+				if(msh_GetIsComplex(shared_header))
+				{
+					mxSetImagData(ret_var, &g_virtual_empty.data);
 				}
 			}
 			
@@ -1189,7 +1202,7 @@ static void msh_GetNextFieldName(const char_t** field_str)
 }
 
 
-static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t copy_sz)
+static void msh_MakeAllocationHeader(AllocationHeader_t* alloc_hdr, size_t copy_sz)
 {
 	/*
 	 * MXMALLOC SIGNATURE INFO:
@@ -1204,14 +1217,14 @@ static void msh_MakeDataSignature(AllocationHeader_t* alloc_hdr, size_t copy_sz)
 	 */
 	
 	alloc_hdr->aligned_size = (copy_sz > 0)? FindPaddedDataSize(copy_sz) : 0;
-	alloc_hdr->check = MXMALLOC_MAGIC_CHECK;
+	alloc_hdr->check = ALLOCATION_HEADER_MAGIC_CHECK;
 	alloc_hdr->alignment = DATA_ALIGNMENT;
-	alloc_hdr->offset = MXMALLOC_SIG_LEN;
+	alloc_hdr->offset = ALLOCATION_HEADER_SIZE;
 	
 }
 
 
 static size_t FindPaddedDataSize(size_t copy_sz)
 {
-	return copy_sz + (MXMALLOC_SIG_LEN_SHIFT - ((copy_sz - 1) & MXMALLOC_SIG_LEN_SHIFT));
+	return copy_sz + (ALLOCATION_HEADER_SIZE_SHIFT - ((copy_sz - 1) & ALLOCATION_HEADER_SIZE_SHIFT));
 }

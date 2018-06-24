@@ -41,7 +41,7 @@ static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache, msh_segmentnumb
 
 /** public function definitions **/
 
-LocalVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
+SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
 {
 	/* The raw pointer is only mapped if it is actually needed.
 	 * This improves performance of functions only needing the
@@ -50,7 +50,7 @@ LocalVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
 	{
 		msh_GetSegmentInfo(seg_node)->raw_ptr = msh_MapMemory(msh_GetSegmentInfo(seg_node)->handle, msh_GetSegmentInfo(seg_node)->total_segment_size);
 	}
-	return (LocalVariableHeader_t*)((byte_t*)msh_GetSegmentInfo(seg_node)->raw_ptr + PadToAlignData(sizeof(SegmentMetadata_t)));
+	return (SharedVariableHeader_t*)((byte_t*)msh_GetSegmentInfo(seg_node)->raw_ptr + PadToAlignData(sizeof(SegmentMetadata_t)));
 }
 
 size_t msh_FindSegmentSize(size_t data_size)
