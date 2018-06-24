@@ -33,7 +33,7 @@ typedef struct VariableList_t
 
 
 /** Forward declaration for SharedVariableHeader_t **/
-typedef struct SharedVariableHeader_t SharedVariableHeader_t;
+typedef struct LocalVariableHeader_t LocalVariableHeader_t;
 
 
 /**
@@ -43,7 +43,7 @@ typedef struct SharedVariableHeader_t SharedVariableHeader_t;
  * @param new_var The mxArray to be tracked.
  * @return The new variable node.
  */
-VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var, SharedVariableHeader_t* shared_header);
+VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var, LocalVariableHeader_t* shared_header);
 
 
 /**
@@ -105,7 +105,7 @@ VariableNode_t* msh_GetFirstVirtualScalar(VariableNode_t* var_node);
 VariableNode_t* msh_GetLastVirtualScalar(VariableNode_t* var_node);
 
 
-SharedVariableHeader_t* msh_GetSharedHeader(VariableNode_t* var_node);
+LocalVariableHeader_t* msh_GetSharedHeader(VariableNode_t* var_node);
 
 
 /**
@@ -159,7 +159,7 @@ void msh_SetFirstVirtualScalar(VariableNode_t* var_node, VariableNode_t* virtual
 void msh_SetLastVirtualScalar(VariableNode_t* var_node, VariableNode_t* virtual_scalar_node);
 
 
-void msh_SetSharedHeader(VariableNode_t* var_node, SharedVariableHeader_t* shared_header);
+void msh_SetSharedHeader(VariableNode_t* var_node, LocalVariableHeader_t* shared_header);
 
 
 #endif /* MATSHARE_MSHVARIABLENODE_H */

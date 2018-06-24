@@ -180,12 +180,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			}
 			
 			break;
+		/*
 		case msh_DEBUG:
-#ifdef MSH_DEBUG_PERF
-			mexPrintf("Total time: " SIZE_FORMAT "\nTime waiting for the lock: " SIZE_FORMAT "\nTime spent in busy wait: " SIZE_FORMAT "\n",
-			g_shared_info->debug_perf.total_time, g_shared_info->debug_perf.lock_time, g_shared_info->debug_perf.busy_wait_time);
-#endif
 			break;
+		 */
 		case msh_CLEAR:
 			
 			msh_Clear(num_in_vars, in_vars);
@@ -269,7 +267,7 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		new_seg_node = msh_CreateSegment(msh_FindSharedSize(in_vars[input_num]));
 		
 		/* copy data to the shared memory */
-		msh_CopyVariable(msh_GetSegmentData(new_seg_node), in_vars[input_num]);
+		msh_CopyVariable(msh_GetSegmentData(new_seg_node), in_vars[input_num], TRUE);
 		
 		/* segment must also be tracked locally, so do that now */
 		msh_AddSegmentToList(&g_local_seg_list, new_seg_node);
@@ -475,9 +473,20 @@ void msh_VirtualResize(void)
 		resize_dims = msh_GetDimensions(msh_GetSharedHeader(curr_virtual_scalar));
 		resize_num_dims = msh_GetNumDims(msh_GetSharedHeader(curr_virtual_scalar));
 		
-		for(link = msh_GetCrosslink(resize_var); link != NULL && link != resize_var; link = msh_GetCrosslink(link))
+		if(msh_GetIsEmpty(msh_GetSharedHeader(curr_virtual_scalar)))
 		{
-			mxSetDimensions(link, resize_dims, resize_num_dims);
+			for(link = msh_GetCrosslink(resize_var); link != NULL && link != resize_var; link = msh_GetCrosslink(link))
+			{
+				mxSetDimensions(link, resize_dims, resize_num_dims);
+				mxSetData(link, NULL);
+			}
+		}
+		else
+		{
+			for(link = msh_GetCrosslink(resize_var); link != NULL && link != resize_var; link = msh_GetCrosslink(link))
+			{
+				mxSetDimensions(link, resize_dims, resize_num_dims);
+			}
 		}
 	}
 }

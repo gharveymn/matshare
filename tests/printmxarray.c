@@ -58,8 +58,6 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
 	mxArrayStruct* arr;
 	
-	mexPrintf("%llu",sizeof(mxClassID));
-	
 	if(nrhs > 0)
 	{
 		arr = (mxArrayStruct*)prhs[0];
@@ -74,15 +72,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 			   "Mdims (union): \n"
 			   "     M: "SIZE_FORMAT"\n"
 			   "     dims: "SIZE_FORMAT"\n"
+			   "N: "SIZE_FORMAT"\n"
 			   "data: "SIZE_FORMAT"\n"
 			   "imag_data: "SIZE_FORMAT"\n"
 			   "irClassNameID (union):\n"
 			   "     ir: "SIZE_FORMAT"\n"
-			   "     ClassID: "SIZE_FORMAT"\n"
+			   "     ClassID: %i\n"
 			   "     ClassName: "SIZE_FORMAT"\n"
 			   "jcClassID (union):\n"
 			   "     jc: "SIZE_FORMAT"\n"
-			   "     ClassID: "SIZE_FORMAT"\n"
+			   "     ClassID: %i\n"
 			   "nzmax: "SIZE_FORMAT"\n", 
 			   arr->name,
 			   arr->ClassID,
@@ -93,6 +92,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 			   arr->flags,
 			   arr->Mdims.M,
 			   arr->Mdims.dims,
+			   arr->N,
 			   arr->data,
 			   arr->imag_data,
 			   arr->irClassNameID.ir,

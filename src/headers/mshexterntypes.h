@@ -16,6 +16,9 @@ typedef struct mxArray_tag mxArray;
 /* Credit to Yair M. Altman */
 typedef struct InternalMexStruct_t InternalMexStruct_t;
 
+void msh_SetName(mxArray* var, mxArray* crosslink);
+
+void msh_SetCrosslink(mxArray* var, mxArray* crosslink);
 
 /**
  * Fetches the crosslink for the given mxArray.

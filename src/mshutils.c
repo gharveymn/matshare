@@ -41,7 +41,6 @@ void msh_OnExit(void)
 			msh_WriteConfiguration();
 		}
 #else
-		
 		/* this will set the unlink flag to TRUE if it hits zero atomically, and only return true if this process did the operation */
 		if(msh_DecrementCounter(&g_shared_info->num_procs, TRUE))
 		{
@@ -285,7 +284,7 @@ char_t* msh_GetConfigurationPath(void)
 {
 	char_t* user_config_folder;
 	char_t* config_path;
-
+	
 #ifdef MSH_WIN
 	
 	/* use NULL check to avoid reliance on _WIN32_WINNT */
@@ -296,6 +295,9 @@ char_t* msh_GetConfigurationPath(void)
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ConfigPathError", "Could not find a suitable configuration path. Please make sure either %LOCALAPPDATA% or %APPDATA% is defined.");
 		}
 	}
+	
+	
+	
 	config_path = mxCalloc(strlen(user_config_folder) + 2 + strlen(MSH_CONFIG_FOLDER_NAME) + 2 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
 	sprintf(config_path, "%s\\%s", user_config_folder, MSH_CONFIG_FOLDER_NAME);
 	if(CreateDirectory(config_path, NULL) == 0)
@@ -309,7 +311,11 @@ char_t* msh_GetConfigurationPath(void)
 	sprintf(config_path, "%s\\%s\\%s", user_config_folder, MSH_CONFIG_FOLDER_NAME, MSH_CONFIG_FILE_NAME);
 
 #else
-	user_config_folder = getenv("HOME");
+	if((user_config_folder = getenv("HOME")) == NULL)
+	{
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ConfigPathError", "Could not find a suitable configuration path. Please make sure $HOME is defined.");
+	}
+	
 	config_path = mxCalloc(strlen(user_config_folder) + 1 + strlen(HOME_CONFIG_FOLDER) + 1 + strlen(MSH_CONFIG_FOLDER_NAME) + 1 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
 	sprintf(config_path, "%s/%s", user_config_folder, HOME_CONFIG_FOLDER);
 	if(mkdir(config_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) == -1)

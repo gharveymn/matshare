@@ -20,12 +20,12 @@ struct VariableNode_t
 	VariableNode_t* prev;
 	mxArray* var;
 	SegmentNode_t* seg_node;
-	SharedVariableHeader_t* shared_header;
+	LocalVariableHeader_t* shared_header;
 	VariableList_t virtual_scalar_list;
 };
 
 
-VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var, SharedVariableHeader_t* shared_header)
+VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var, LocalVariableHeader_t* shared_header)
 {
 	VariableNode_t* new_var_node = mxCalloc(1, sizeof(VariableNode_t));
 	mexMakeMemoryPersistent(new_var_node);
@@ -87,7 +87,7 @@ VariableNode_t* msh_GetLastVirtualScalar(VariableNode_t* var_node)
 }
 
 
-SharedVariableHeader_t* msh_GetSharedHeader(VariableNode_t* var_node)
+LocalVariableHeader_t* msh_GetSharedHeader(VariableNode_t* var_node)
 {
 	return var_node->shared_header;
 }
@@ -137,7 +137,7 @@ void msh_SetLastVirtualScalar(VariableNode_t* var_node, VariableNode_t* virtual_
 }
 
 
-void msh_SetSharedHeader(VariableNode_t* var_node, SharedVariableHeader_t* shared_header)
+void msh_SetSharedHeader(VariableNode_t* var_node, LocalVariableHeader_t* shared_header)
 {
 	var_node->shared_header = shared_header;
 }

@@ -31,6 +31,7 @@
 #  define MSH_SHARED_INFO_SEGMENT_NAME "/MSH_SHARED_INFO_SEGMENT32"
 #  define MSH_SEGMENT_NAME "/MSH_32SEGMENT%0lx"
 #  define MSH_CONFIG_FOLDER_NAME "matshare"
+#  define MSH_ "matshare"
 #  define MSH_CONFIG_FILE_NAME "mshconfig32"
 #  ifdef MSH_WIN
 #    define MSH_LOCK_NAME "/MSH_LOCK32"

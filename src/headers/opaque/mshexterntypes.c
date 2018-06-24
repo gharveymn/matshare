@@ -13,6 +13,7 @@
 
 
 /* partial definition */
+#if 0
 struct InternalMexStruct_t
 {
 	void* name;             /*   prev - R2008b: Name of variable in workspace
@@ -40,9 +41,10 @@ struct InternalMexStruct_t
 	mxArray* crosslink;     /* Address of next shared-data variable          */
 	/* the rest is undefined here */
 };
+#endif
 
 /* the full definition */
-#if 0
+#if 1
 struct InternalMexStruct_t
 {
 	void* name;             /*   prev - R2008b: Name of variable in workspace
@@ -99,6 +101,15 @@ struct InternalMexStruct_t
 };
 #endif
 
+void msh_SetName(mxArray* var, mxArray* crosslink)
+{
+	((InternalMexStruct_t*)var)->name = crosslink;
+}
+
+void msh_SetCrosslink(mxArray* var, mxArray* crosslink)
+{
+	((InternalMexStruct_t*)var)->crosslink = crosslink;
+}
 
 mxArray* msh_GetCrosslink(mxArray* var)
 {

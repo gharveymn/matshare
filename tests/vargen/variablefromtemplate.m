@@ -12,7 +12,9 @@ function out = variablefromtemplate(rns, in)
 			out{i} = variablefromtemplate(rns, in{i});
 		end
 	else
-		out = rand(rns, size(in), 'like', in);
+		if(~isempty(in))
+			out = rand(rns, size(in), 'like', in);
+		end
 	end
 end
 
