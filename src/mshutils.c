@@ -27,6 +27,11 @@
 void msh_OnExit(void)
 {
 	
+	if(g_local_info.is_deinitialized)
+	{
+		return;
+	}
+	
 	g_local_info.is_initialized = FALSE;
 	
 	msh_DetachSegmentList(&g_local_seg_list);
@@ -89,6 +94,8 @@ void msh_OnExit(void)
 		mexUnlock();
 		g_local_info.is_mex_locked = FALSE;
 	}
+	
+	g_local_info.is_deinitialized = TRUE;
 	
 }
 
@@ -351,7 +358,7 @@ void msh_SetDefaultConfiguration(void)
 	msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);                 /** counter is in post state **/
 	g_shared_info->user_defined.max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;
 	g_shared_info->user_defined.max_shared_size = MSH_DEFAULT_MAX_SHARED_SIZE;
-	g_shared_info->user_defined.will_gc = MSH_DEFAULT_GC;
+	g_shared_info->user_defined.will_shared_gc = MSH_DEFAULT_SHARED_GC;
 #ifdef MSH_UNIX
 	g_shared_info->user_defined.security = MSH_DEFAULT_SECURITY;
 #endif

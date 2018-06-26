@@ -33,6 +33,8 @@
 #define MEU_SEVERITY_CORRUPTION  1 << 3
 #define MEU_SEVERITY_FATAL       1 << 4
 
+#define MEU_FL __FILE__, __LINE__
+
 /**
  * Prints the specified error in MATLAB. Takes various parameters.
  *

@@ -46,10 +46,11 @@
 typedef struct UserConfig_t
 {
 	/* these are aligned for lockless assignment */
+	size_t max_shared_size;
 	volatile LockFreeCounter_t lock_counter;
 	unsigned long max_shared_segments;
-	size_t max_shared_size;
-	alignedbool_t will_gc;
+	alignedbool_t will_shared_gc;
+	alignedbool_t will_local_gc;
 #ifdef MSH_UNIX
 	mode_t security;
 #endif
@@ -99,7 +100,7 @@ typedef struct LocalInfo_t
 	
 	bool_t is_mex_locked;
 	bool_t is_initialized;
-	
+	bool_t is_deinitialized;
 } LocalInfo_t;
 
 /**

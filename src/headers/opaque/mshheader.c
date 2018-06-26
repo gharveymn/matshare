@@ -101,11 +101,11 @@ struct SharedVariableHeader_t
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
 	struct class_info_pack_tag
 	{
-		uint32_T class_id          : 16;
-		uint32_T is_empty          : 4;
-		uint32_T is_sparse         : 4;
-		uint32_T is_numeric        : 4;
-		uint32_T is_virtual_scalar : 4;
+		int32_T class_id          : 16;
+		int32_T is_empty          : 4;
+		int32_T is_sparse         : 4;
+		int32_T is_numeric        : 4;
+		int32_T is_virtual_scalar : 4;
 	} class_info_pack;
 };
 
@@ -424,6 +424,11 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	/* Add space for the header */
 	obj_tree_sz += sizeof(SharedVariableHeader_t);
 	
+	if(mxGetNumberOfDimensions(in_var) < 2)
+	{
+		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "UndefinedDimensionsError", "There was an unexpected number of dimensions. Make sure the array has at least two dimensions.");
+	}
+	
 	/* Add space for the dimensions */
 	obj_tree_sz += mxGetNumberOfDimensions(in_var)*sizeof(mwSize);
 	
@@ -722,7 +727,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var, int is_top_level)
 				
 				/* copy over the data with the signature */
 				copy_sz = msh_GetNumElems(dest)*msh_GetElemSize(dest);
-				alloc_sz = msh_GetIsVirtualScalar(dest)? MSH_VIRTUAL_SCALAR_M * MSH_VIRTUAL_SCALAR_N * msh_GetElemSize(dest) : copy_sz;
+				alloc_sz = msh_GetIsVirtualScalar(dest)? MSH_VIRTUAL_SCALAR_MAX_DIM * msh_GetElemSize(dest) : copy_sz;
 				
 				msh_MakeAllocationHeader((AllocationHeader_t*)msh_GetData(dest) - 1, alloc_sz);
 				memcpy(msh_GetData(dest), mxGetData(in_var), copy_sz);
@@ -762,7 +767,9 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 	mxArray* ret_var = NULL;
 	
 	/* for loops */
-	size_t idx, count, num_elems;
+	size_t idx, count, num_elems, num_dims;
+	
+	size_t* virtual_dims;
 	
 	/* for structures */
 	int field_num, num_fields;
@@ -894,8 +901,19 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			{
 				msh_AddVariableToList(&g_virtual_scalar_list, msh_CreateVariableNode(NULL, ret_var, shared_header));
 				
-				mxSetM(ret_var, MSH_VIRTUAL_SCALAR_M);
-				mxSetN(ret_var, MSH_VIRTUAL_SCALAR_N);
+				num_dims = msh_GetNumDims(shared_header);
+				virtual_dims = mxMalloc(num_dims * sizeof(size_t));
+				
+				/* set the last dimension to keep the dimensionality so shared copies are performed correctly */
+				for(idx = 0; idx < num_dims-1; idx++)
+				{
+					virtual_dims[idx] = 1;
+				}
+				virtual_dims[num_dims-1] = MSH_VIRTUAL_SCALAR_MAX_DIM;
+				
+				mxSetDimensions(ret_var, virtual_dims, msh_GetNumDims(shared_header));
+				
+				mxFree(virtual_dims);
 				
 			}
 			else
@@ -1166,7 +1184,7 @@ void msh_DetachVariable(mxArray* ret_var)
 			
 			mxSetDimensions(link, new_dims, num_dims);
 			
-			link = msh_GetCrosslink(link);
+			link = met_GetCrosslink(link);
 		} while(link != NULL && link != ret_var);
 		
 	}

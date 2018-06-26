@@ -44,6 +44,7 @@ for i = 1:num_maxDepth_tests
 						testparvarresult(tv, numworkers);
 						
 						% test overwriting in one workspace
+						tv = mshshare(tv);
 						tv2 = variablefromtemplate(rns, tv);
 						mshoverwrite(tv, tv2);
 						parfor workernum = 1:numworkers
@@ -51,7 +52,7 @@ for i = 1:num_maxDepth_tests
 						end
 
 						for workernum = 1:numworkers
-							if(~compstruct(tv, transfer{workernum}))
+							if(~compstruct(tv2, transfer{workernum}))
 								error('Matshare failed because parallel results were not equal.');
 							end
 						end

@@ -23,6 +23,7 @@ typedef struct SegmentMetadata_t
 {
 	/* use these to link together the memory segments */
 	size_t data_size;							/* segment size---this won't change so it's not volatile */
+	volatile alignedbool_t is_persistent;                 /* set to TRUE if the segment will not be automatically garbage collected */
 	volatile alignedbool_t is_invalid;                    /* set to TRUE if this segment is to be freed by all processes */
 	volatile msh_segmentnumber_t prev_seg_num;
 	volatile msh_segmentnumber_t next_seg_num;

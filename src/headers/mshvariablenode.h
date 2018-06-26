@@ -107,6 +107,8 @@ VariableNode_t* msh_GetLastVirtualScalar(VariableNode_t* var_node);
 
 SharedVariableHeader_t* msh_GetSharedHeader(VariableNode_t* var_node);
 
+int msh_GetIsUsed(VariableNode_t* var_node);
+
 
 /**
  * Sets the parent variable list.
@@ -161,5 +163,6 @@ void msh_SetLastVirtualScalar(VariableNode_t* var_node, VariableNode_t* virtual_
 
 void msh_SetSharedHeader(VariableNode_t* var_node, SharedVariableHeader_t* shared_header);
 
+void msh_SetIsUsed(VariableNode_t* var_node, int is_used);
 
 #endif /* MATSHARE_MSHVARIABLENODE_H */

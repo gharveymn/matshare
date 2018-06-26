@@ -26,7 +26,7 @@
  * @note Modifies the shared memory linked list.
  * @param seg_sz The size of the segment to be opened.
  */
-static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_size);
+static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_size, int is_persistent);
 
 
 /**
@@ -58,11 +58,11 @@ size_t msh_FindSegmentSize(size_t data_size)
 	return PadToAlignData(sizeof(SegmentMetadata_t)) + data_size;
 }
 
-SegmentNode_t* msh_CreateSegment(size_t data_size)
+SegmentNode_t* msh_CreateSegment(size_t data_size, int is_persistent)
 {
 	SegmentInfo_t seg_info_cache;
 	msh_InitializeSegmentInfo(&seg_info_cache);
-	msh_CreateSegmentWorker(&seg_info_cache, data_size);
+	msh_CreateSegmentWorker(&seg_info_cache, data_size, is_persistent);
 	return msh_CreateSegmentNode(&seg_info_cache);
 }
 
@@ -123,7 +123,6 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, errno, "UnlinkError", "There was an error unlinking the segment");
 			}
 #endif
-
 			msh_SetCounterPost(&seg_info->metadata->procs_tracking, TRUE);
 			msh_AtomicSubtractSize(&g_shared_info->total_shared_size, seg_info->total_segment_size);
 		}
@@ -503,45 +502,36 @@ void msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
 	
 }
 
-void msh_CleanSegmentList(SegmentList_t* seg_list, int gc_override)
+void msh_CleanSegmentList(SegmentList_t* seg_list, int shared_gc_override)
 {
 	SegmentNode_t* curr_seg_node, * next_seg_node;
-	SegmentMetadata_t* curr_seg_metadata;
+	VariableNode_t* curr_var_node;
 	
-	if(g_shared_info->user_defined.will_gc || gc_override)
+	for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
 	{
-		for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
+		
+		next_seg_node = msh_GetNextSegment(curr_seg_node);
+		if(msh_GetSegmentMetadata(curr_seg_node)->is_invalid)
 		{
-			
-			next_seg_node = msh_GetNextSegment(curr_seg_node);
-			curr_seg_metadata = msh_GetSegmentMetadata(curr_seg_node);
-			if(curr_seg_metadata->is_invalid)
-			{
-				msh_RemoveSegmentFromList(curr_seg_node);
-				msh_DetachSegment(curr_seg_node);
-			}
-			else if(msh_GetVariableNode(curr_seg_node) != NULL && msh_GetCrosslink(msh_GetVariableData(msh_GetVariableNode(curr_seg_node))) == NULL)
-			{
-				msh_RemoveVariableFromList(msh_GetVariableNode(curr_seg_node));
-				msh_DestroyVariable(msh_GetVariableNode(curr_seg_node));
-			}
+			msh_RemoveSegmentFromList(curr_seg_node);
+			msh_DetachSegment(curr_seg_node);
 		}
-	}
-	else
-	{
-		for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
+		else if((curr_var_node = msh_GetVariableNode(curr_seg_node)) != NULL && met_GetCrosslink(msh_GetVariableData(curr_var_node)) == NULL)
 		{
 			
-			next_seg_node = msh_GetNextSegment(curr_seg_node);
-			curr_seg_metadata = msh_GetSegmentMetadata(curr_seg_node);
-			if(curr_seg_metadata->is_invalid)
+			msh_SetIsUsed(curr_var_node, FALSE);
+			
+			/* decrement number of processes using this variable; if this is the last variable then GC */
+			if(msh_AtomicDecrement(&msh_GetSegmentMetadata(curr_seg_node)->procs_using) == 0 &&
+			   (g_shared_info->user_defined.will_shared_gc || shared_gc_override) &&
+			   !msh_GetSegmentMetadata(curr_seg_node)->is_persistent)
 			{
+				msh_RemoveSegmentFromSharedList(curr_seg_node);
 				msh_RemoveSegmentFromList(curr_seg_node);
 				msh_DetachSegment(curr_seg_node);
 			}
 		}
 	}
-	
 	
 }
 
@@ -549,7 +539,7 @@ void msh_CleanSegmentList(SegmentList_t* seg_list, int gc_override)
 /** static function definitions **/
 
 
-static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_size)
+static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_size, int is_persistent)
 {
 	char_t segment_name[MSH_MAX_NAME_LEN];
 	
@@ -582,6 +572,9 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_s
 	
 	/* set the size of the segment */
 	seg_info_cache->metadata->data_size = data_size;
+	
+	/* set the persistence flag */
+	seg_info_cache->metadata->is_persistent = is_persistent;
 	
 	/* number of processes with variables instantiated using this segment */
 	seg_info_cache->metadata->procs_using = 0;

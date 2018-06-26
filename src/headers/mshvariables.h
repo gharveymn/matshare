@@ -28,8 +28,8 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node);
 /**
  * Detaches and destroys the variable contained in the specified variable node.
  *
- * @note May do garbage collection on the segment node if this is the last variable using the segment.
  * @param var_node The variable node containing the variable to be destroyed.
+ * @return whether the associated segment was also removed.
  */
 int msh_DestroyVariable(VariableNode_t* var_node);
 
@@ -66,6 +66,10 @@ void msh_ClearVariableList(VariableList_t* var_list);
  * @param var_list The variable list to be cleaned.
  */
 void msh_CleanVariableList(VariableList_t* var_list);
+
+
+mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node);
+
 
 
 /** Forward declaration of the global variable list. **/

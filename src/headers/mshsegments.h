@@ -57,7 +57,7 @@ size_t msh_FindSegmentSize(size_t data_size);
  * @param data_size The size of the new segment.
  * @return The new segment node which holds information about the new segment.
  */
-SegmentNode_t* msh_CreateSegment(size_t data_size);
+SegmentNode_t* msh_CreateSegment(size_t data_size, int is_persistent);
 
 
 /**
@@ -201,7 +201,7 @@ SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, msh_segmentnumber_
  *
  * @param seg_list The segment list to be cleaned.
  */
-void msh_CleanSegmentList(SegmentList_t* seg_list, int gc_override);
+void msh_CleanSegmentList(SegmentList_t* seg_list, int shared_gc_override);
 
 
 /**

@@ -159,14 +159,12 @@ function [ret] = variablegenerator_(currDepth, rns, maxDepth, maxElems, maxDims,
 			ret = randi(rns, intmax('uint32'),dims,'uint32');
 		case(14)
 			% 	14	mxINT64_CLASS,
-			f = @() uint64(randi(rns, intmax('uint32'), dims, 'uint32'));
-			% bitshift and bitor to convert into a proper uint64        
-			ret = int64(bitor( bitshift(f(),32), f() ));
+			% bitshift and bitor to convert into a proper int64        
+			ret = int64(bitor(bitshift(randuint64shifted(rns, dims),32), randuint64shifted(rns, dims)));
 		case(15)
 			% 	15	mxUINT64_CLASS,
-			f = @() uint64(randi(rns, intmax('uint32'), dims, 'uint32'));
 			% bitshift and bitor to convert into a proper uint64        
-			ret = bitor( bitshift(f(),32), f() );
+			ret = bitor(bitshift(randuint64shifted(rns, dims),32), randuint64shifted(rns, dims));
 		case(16)
 			% 	16	mxFUNCTION_CLASS,
 			af1 = @(x) x + 17;

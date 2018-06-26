@@ -22,6 +22,7 @@ struct VariableNode_t
 	SegmentNode_t* seg_node;
 	SharedVariableHeader_t* shared_header;
 	VariableList_t virtual_scalar_list;
+	int is_used;
 };
 
 
@@ -92,6 +93,11 @@ SharedVariableHeader_t* msh_GetSharedHeader(VariableNode_t* var_node)
 	return var_node->shared_header;
 }
 
+int msh_GetIsUsed(VariableNode_t* var_node)
+{
+	return var_node->is_used;
+}
+
 
 /** setters **/
 
@@ -140,6 +146,12 @@ void msh_SetLastVirtualScalar(VariableNode_t* var_node, VariableNode_t* virtual_
 void msh_SetSharedHeader(VariableNode_t* var_node, SharedVariableHeader_t* shared_header)
 {
 	var_node->shared_header = shared_header;
+}
+
+
+void msh_SetIsUsed(VariableNode_t* var_node, int is_used)
+{
+	var_node->is_used = is_used;
 }
 
 

@@ -16,6 +16,8 @@
 #include "headers/mshutils.h"
 #include "headers/mshexterntypes.h"
 
+/* undocumented function */
+extern mxArray* mxCreateSharedDataCopy(mxArray *);
 
 /** public function definitions **/
 
@@ -37,8 +39,6 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 	new_var = msh_FetchVariable(msh_GetSegmentData(seg_node));
 	mexMakeArrayPersistent(new_var);
 	
-	msh_AtomicIncrement(&msh_GetSegmentMetadata(seg_node)->procs_using);
-	
 	new_var_node = msh_CreateVariableNode(seg_node, new_var, msh_GetSegmentData(seg_node));
 	
 	msh_SetFirstVirtualScalar(new_var_node, ((last_virtual_scalar == NULL)? g_virtual_scalar_list.first : msh_GetNextVariable(last_virtual_scalar)));
@@ -51,38 +51,44 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 int msh_DestroyVariable(VariableNode_t* var_node)
 {
 	
-	VariableNode_t* virtual_scalar;
-	int did_destroy_segment = FALSE;
+	VariableNode_t* curr_virtual_scalar;
+	SegmentNode_t* seg_node = msh_GetSegmentNode(var_node);
+	int did_remove_segment = FALSE;
 	
 	/* detach all of the Matlab pointers */
 	msh_DetachVariable(msh_GetVariableData(var_node));
 	mxDestroyArray(msh_GetVariableData(var_node));
 	
 	/* remove tracking for this variable */
-	msh_SetVariableNode(msh_GetSegmentNode(var_node), NULL);
+	msh_SetVariableNode(seg_node, NULL);
 	
 	/* remove virtual scalar tracking */
-	for(virtual_scalar = msh_GetFirstVirtualScalar(var_node);
-			virtual_scalar != NULL && virtual_scalar != msh_GetNextVariable(msh_GetLastVirtualScalar(var_node));
-			virtual_scalar = msh_GetNextVariable(virtual_scalar))
+	for(curr_virtual_scalar = msh_GetFirstVirtualScalar(var_node);
+			curr_virtual_scalar != NULL && curr_virtual_scalar != msh_GetNextVariable(msh_GetLastVirtualScalar(var_node));
+			curr_virtual_scalar = msh_GetNextVariable(curr_virtual_scalar))
 	{
-		msh_RemoveVariableFromList(virtual_scalar);
-		msh_DestroyVariableNode(virtual_scalar);
+		msh_RemoveVariableFromList(curr_virtual_scalar);
+		msh_DestroyVariableNode(curr_virtual_scalar);
 	}
-	
-	/* decrement number of processes using this variable; if this is the last variable then GC */
-	if(msh_AtomicDecrement(&msh_GetSegmentMetadata(msh_GetSegmentNode(var_node))->procs_using) == 0 && g_shared_info->user_defined.will_gc)
+
+	if(msh_GetIsUsed(var_node))
 	{
-		msh_RemoveSegmentFromSharedList(msh_GetSegmentNode(var_node));
-		msh_RemoveSegmentFromList(msh_GetSegmentNode(var_node));
-		msh_DetachSegment(msh_GetSegmentNode(var_node));
-		did_destroy_segment = TRUE;
+		msh_SetIsUsed(var_node, FALSE);
+		if((msh_AtomicDecrement(&msh_GetSegmentMetadata(seg_node)->procs_using) == 0) &&
+		   g_shared_info->user_defined.will_shared_gc &&
+		   !msh_GetSegmentMetadata(seg_node)->is_persistent)
+		{
+			msh_RemoveSegmentFromSharedList(seg_node);
+			msh_RemoveSegmentFromList(seg_node);
+			msh_DetachSegment(seg_node);
+			did_remove_segment = TRUE;
+		}
 	}
 	
 	/* destroy the rest */
 	msh_DestroyVariableNode(var_node);
-	
-	return did_destroy_segment;
+
+	return did_remove_segment;
 	
 }
 
@@ -106,7 +112,7 @@ void msh_CleanVariableList(VariableList_t* var_list)
 	for(curr_var_node = var_list->first; curr_var_node != NULL; curr_var_node = next_var_node)
 	{
 		next_var_node = msh_GetNextVariable(curr_var_node);
-		if(msh_GetCrosslink(msh_GetVariableData(curr_var_node)) == NULL)
+		if(met_GetCrosslink(msh_GetVariableData(curr_var_node)) == NULL)
 		{
 			msh_RemoveVariableFromList(curr_var_node);
 			msh_DestroyVariable(curr_var_node);
@@ -138,6 +144,17 @@ void msh_AddVariableToList(VariableList_t* var_list, VariableNode_t* var_node)
 	/* increment number of variables */
 	/* var_list->num_vars += 1; */
 	
+}
+
+
+mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node)
+{
+	if(met_GetCrosslink(msh_GetVariableData(var_node)) == NULL)
+	{
+		msh_SetIsUsed(var_node, TRUE);
+		msh_AtomicIncrement(&msh_GetSegmentMetadata(msh_GetSegmentNode(var_node))->procs_using);
+	}
+	return mxCreateSharedDataCopy(msh_GetVariableData(var_node));
 }
 
 

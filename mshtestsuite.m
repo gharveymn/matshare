@@ -15,6 +15,9 @@ testparessential;
 % test parallel results
 testparresultverify;
 
+% test random function calls in parallel
+testparrandfunccalls;
+
 % parallel function calls
 testparlock;
 

@@ -13,8 +13,7 @@
 
 #include "mshbasictypes.h"
 
-#define MSH_VIRTUAL_SCALAR_M 2
-#define MSH_VIRTUAL_SCALAR_N 1
+#define MSH_VIRTUAL_SCALAR_MAX_DIM 2
 
 /* forward declaration to avoid include */
 typedef struct mxArray_tag mxArray;

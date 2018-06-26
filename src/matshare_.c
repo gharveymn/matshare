@@ -28,9 +28,6 @@
 #  include <sys/stat.h>
 #endif
 
-/* undocumented function */
-extern mxArray* mxCreateSharedDataCopy(mxArray *);
-
 char_t* g_msh_library_name = "matshare";
 char_t* g_msh_error_help_message = "";
 char_t* g_msh_warning_help_message = "";
@@ -49,8 +46,9 @@ LocalInfo_t g_local_info = {
 							MSH_INVALID_HANDLE,         /* process_lock */
 							0,                          /* lock_size */
 #endif
-							0,                          /* is_mex_locked */
-							0                           /* is_initialized */
+							FALSE,                      /* is_mex_locked */
+							FALSE,                      /* is_initialized */
+							TRUE                        /* is_deinitialized */
 						};
 
 VariableList_t g_local_var_list = {0};
@@ -63,11 +61,11 @@ SegmentList_t g_local_seg_list = {0};
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
 	/* number of inputs other than the msh_directive */
-	int num_in_vars = nrhs - 1;
+	int num_in_args = nrhs - 1;
 	
 	/* inputs */
 	const mxArray* in_directive = prhs[0];
-	const mxArray** in_vars = prhs + 1;
+	const mxArray** in_args = prhs + 1;
 	
 	/* resultant matshare directive */
 	msh_directive_t directive;
@@ -101,9 +99,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		return;
 	}
 	
-	/* Don't initialize if we are detaching and matshare has not been initialized for this process yet */
-	if(directive == msh_DETACH && !g_local_info.is_initialized)
+	/* Run the detach operation first */
+	if(directive == msh_DETACH)
 	{
+		msh_OnExit();
 		return;
 	}
 	
@@ -130,44 +129,48 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	switch(directive)
 	{
 		case msh_SHARE:
+		case msh_PERSISTSHARE:
 			
-			msh_Share(nlhs, plhs, num_in_vars, in_vars);
+			if(num_in_args < 1)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, 0, "NotEnoughInputsError", "Not enough inputs. Please use the entry functions provided.");
+			}
+			
+			msh_Share(num_in_args-1, in_args+1, (int)mxGetScalar(in_args[0]), directive);
 			
 			break;
 		
 		case msh_FETCH:
 			
-			msh_Fetch(nlhs, plhs, directive);
+			msh_Fetch(nlhs, plhs);
 			
 			break;
+			/*
 		case msh_DETACH:
-			
-			msh_OnExit();
-			
 			break;
-		
+			 */
 		case msh_CONFIG:
 			
-			if(num_in_vars % 2 != 0)
+			if(num_in_args % 2 != 0)
 			{
 				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidNumArgsError", "Each parameter must have a value associated to it.");
 			}
 			
-			msh_Config(num_in_vars/2, in_vars);
+			msh_Config(num_in_args/2, in_args);
 			
 			break;
 		
 		case msh_LOCALCOPY:
 			
-			if(num_in_vars == 0)
+			if(num_in_args == 0)
 			{
-				msh_Fetch(nlhs, plhs, directive);
+				msh_LocalCopy(nlhs, plhs);
 			}
-			else if(num_in_vars == 1)
+			else if(num_in_args == 1)
 			{
 				if(nlhs == 1)
 				{
-					plhs[0] = mxDuplicateArray(in_vars[0]);
+					plhs[0] = mxDuplicateArray(in_args[0]);
 				}
 				else if(nlhs > 1)
 				{
@@ -186,7 +189,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		 */
 		case msh_CLEAR:
 			
-			msh_Clear(num_in_vars, in_vars);
+			msh_Clear(num_in_args, in_args);
 			
 			break;
 		case msh_RESET:
@@ -229,7 +232,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			
 			break;
 		case msh_CLEAN:
-			/* do nothing */
+			/* do nothing, operation was performed above */
 			break;
 		default:
 			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
@@ -247,11 +250,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 }
 
 
-void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
+void msh_Share(int num_vars, const mxArray** in_vars, int return_expected, msh_directive_t directive)
 {
-	SegmentNode_t* new_seg_node;
-	VariableNode_t* new_var_node;
-	int input_num;
+	SegmentNode_t* new_seg_node = NULL;
+	VariableNode_t* new_var_node = NULL;
+	int input_num, is_persistent = (directive == msh_PERSISTSHARE);
 	
 	/* check the inputs */
 	if(num_vars < 1)
@@ -259,12 +262,10 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "NoVariableError", "No variable supplied to share.");
 	}
 	
-	
 	for(input_num = 0; input_num < num_vars; input_num++)
 	{
-		
 		/* scan input data to get required size and create the segment */
-		new_seg_node = msh_CreateSegment(msh_FindSharedSize(in_vars[input_num]));
+		new_seg_node = msh_CreateSegment(msh_FindSharedSize(in_vars[input_num]), is_persistent);
 		
 		/* copy data to the shared memory */
 		msh_CopyVariable(msh_GetSegmentData(new_seg_node), in_vars[input_num], TRUE);
@@ -274,26 +275,103 @@ void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars)
 		
 		/* Add the new segment to the shared list */
 		msh_AddSegmentToSharedList(new_seg_node);
-		
-		if(input_num < nlhs)
+	}
+	
+	if(return_expected)
+	{
+		/* Returns the variable we just put into shared memory. At least one segment must have been created. */
+		if((new_var_node = msh_GetVariableNode(new_seg_node)) == NULL)
 		{
-			/* Returns the variable we just put into shared memory. At least one segment must have been created. */
-			if((new_var_node = msh_GetVariableNode(new_seg_node)) == NULL)
-			{
-				new_var_node = msh_CreateVariable(new_seg_node);
-				msh_AddVariableToList(&g_local_var_list, new_var_node);
-			}
-			plhs[input_num] = mxCreateSharedDataCopy(msh_GetVariableData(new_var_node));
+			new_var_node = msh_CreateVariable(new_seg_node);
+			msh_AddVariableToList(&g_local_var_list, new_var_node);
 		}
+		met_PutSharedCopy("caller", "shared", msh_CreateSharedDataCopy(new_var_node));
+	}
+	
+}
+
+
+void msh_Fetch(int nlhs, mxArray** plhs)
+{
+	
+	VariableNode_t* curr_var_node;
+	SegmentNode_t* curr_seg_node;
+	
+	uint32_T i, num_new_vars = 0;
+	
+	if(nlhs >= 0)
+	{
+		if(nlhs >= 1)
+		{
+			
+			/* perform a full update */
+			msh_UpdateSegmentTracking(&g_local_seg_list);
+			
+			for(curr_seg_node = g_local_seg_list.first; curr_seg_node != NULL; curr_seg_node = msh_GetNextSegment(curr_seg_node))
+			{
+				if(msh_GetVariableNode(curr_seg_node) == NULL)
+				{
+					/* create the variable node if it hasnt been created yet */
+					msh_AddVariableToList(&g_local_var_list, msh_CreateVariable(curr_seg_node));
+					num_new_vars += 1;
+				}
+			}
+			
+			/* return the new variables detected */
+			plhs[0] = mxCreateCellMatrix((size_t)(num_new_vars != 0), num_new_vars);
+			
+			for(i = 0, curr_var_node = g_local_var_list.last;
+					i < num_new_vars;
+					i++, curr_var_node = msh_GetPreviousVariable(curr_var_node))
+			{
+				mxSetCell(plhs[0], num_new_vars - 1 - i, msh_CreateSharedDataCopy(curr_var_node));
+			}
+			
+			if(nlhs >= 2)
+			{
+				
+				if(nlhs > 2)
+				{
+					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManyOutputsError", "Too many outputs. Got %d, need between 0 and 2.", nlhs);
+				}
+				
+				/* retrieve all segment variables */
+				plhs[1] = mxCreateCellMatrix((size_t)(g_local_seg_list.num_segs != 0), g_local_seg_list.num_segs);
+				
+				
+				for(i = 0, curr_seg_node = g_local_seg_list.first;
+				    		i < g_local_seg_list.num_segs;
+						i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
+				{
+					mxSetCell(plhs[1], i, msh_CreateSharedDataCopy(msh_GetVariableNode(curr_seg_node)));
+				}
+			}
+		}
+		else
+		{
+			
+			/* only update the latest segment */
+			msh_UpdateLatestSegment(&g_local_seg_list);
+			
+			if(g_local_seg_list.last != NULL && msh_GetVariableNode(g_local_seg_list.last) == NULL)
+			{
+				msh_AddVariableToList(&g_local_var_list, msh_CreateVariable(g_local_seg_list.last));
+			}
+		}
+		
+		if(g_local_seg_list.last != NULL)
+		{
+			met_PutSharedCopy("caller", "latest", msh_CreateSharedDataCopy(msh_GetVariableNode(g_local_seg_list.last)));
+		}
+		/* do nothing otherwise; the variable is set in the workspace */
 		
 	}
 	
 }
 
 
-void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive)
+void msh_LocalCopy(int nlhs, mxArray** plhs)
 {
-	
 	VariableNode_t* curr_var_node;
 	SegmentNode_t* curr_seg_node;
 	
@@ -321,17 +399,10 @@ void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive)
 			plhs[1] = mxCreateCellMatrix((size_t)(num_new_vars != 0), num_new_vars);
 			
 			for(i = 0, curr_var_node = g_local_var_list.last;
-					i < num_new_vars;
-					i++, curr_var_node = msh_GetPreviousVariable(curr_var_node))
+			    i < num_new_vars;
+			    i++, curr_var_node = msh_GetPreviousVariable(curr_var_node))
 			{
-				if(directive == msh_LOCALCOPY)
-				{
-					mxSetCell(plhs[1], num_new_vars - 1 - i, mxDuplicateArray(msh_GetVariableData(curr_var_node)));
-				}
-				else
-				{
-					mxSetCell(plhs[1], num_new_vars - 1 - i, mxCreateSharedDataCopy(msh_GetVariableData(curr_var_node)));
-				}
+				mxSetCell(plhs[1], num_new_vars - 1 - i, mxDuplicateArray(msh_GetVariableData(curr_var_node)));
 			}
 			
 			if(nlhs >= 3)
@@ -339,24 +410,18 @@ void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive)
 				
 				if(nlhs > 3)
 				{
-					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManyOutputsError", "Too many outputs. Got %d, need between 0 and 3.", nlhs);
+					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "TooManyOutputsError", "Too many outputs. Got %d, need between 0 and 2.", nlhs);
 				}
 				
 				/* retrieve all segment variables */
 				plhs[2] = mxCreateCellMatrix((size_t)(g_local_seg_list.num_segs != 0), g_local_seg_list.num_segs);
 				
+				
 				for(i = 0, curr_seg_node = g_local_seg_list.first;
-				    		i < g_local_seg_list.num_segs;
-						i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
+				    i < g_local_seg_list.num_segs;
+				    i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
 				{
-					if(directive == msh_LOCALCOPY)
-					{
-						mxSetCell(plhs[2], i, mxDuplicateArray(msh_GetVariableData(msh_GetVariableNode(curr_seg_node))));
-					}
-					else
-					{
-						mxSetCell(plhs[2], i, mxCreateSharedDataCopy(msh_GetVariableData(msh_GetVariableNode(curr_seg_node))));
-					}
+					mxSetCell(plhs[2], i, mxDuplicateArray(msh_GetVariableData(msh_GetVariableNode(curr_seg_node))));
 				}
 			}
 		}
@@ -374,14 +439,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive)
 		
 		if(g_local_seg_list.last != NULL)
 		{
-			if(directive == msh_LOCALCOPY)
-			{
-				plhs[0] = mxDuplicateArray(msh_GetVariableData(msh_GetVariableNode(g_local_seg_list.last)));
-			}
-			else
-			{
-				plhs[0] = mxCreateSharedDataCopy(msh_GetVariableData(msh_GetVariableNode(g_local_seg_list.last)));
-			}
+			plhs[0] = mxDuplicateArray(msh_GetVariableData(msh_GetVariableNode(g_local_seg_list.last)));
 		}
 		else
 		{
@@ -389,7 +447,6 @@ void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive)
 		}
 		
 	}
-	
 }
 
 
@@ -423,7 +480,7 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 						found_variable = TRUE;
 						break;
 					}
-					link = msh_GetCrosslink(link);
+					link = met_GetCrosslink(link);
 				} while(link != NULL && link != msh_GetVariableData(curr_var_node));
 				/* end hack */
 			}
@@ -475,7 +532,7 @@ void msh_VirtualResize(void)
 		
 		if(msh_GetIsEmpty(msh_GetSharedHeader(curr_virtual_scalar)))
 		{
-			for(link = msh_GetCrosslink(resize_var); link != NULL && link != resize_var; link = msh_GetCrosslink(link))
+			for(link = met_GetCrosslink(resize_var); link != NULL && link != resize_var; link = met_GetCrosslink(link))
 			{
 				mxSetDimensions(link, resize_dims, resize_num_dims);
 				mxSetData(link, NULL);
@@ -483,7 +540,7 @@ void msh_VirtualResize(void)
 		}
 		else
 		{
-			for(link = msh_GetCrosslink(resize_var); link != NULL && link != resize_var; link = msh_GetCrosslink(link))
+			for(link = met_GetCrosslink(resize_var); link != NULL && link != resize_var; link = met_GetCrosslink(link))
 			{
 				mxSetDimensions(link, resize_dims, resize_num_dims);
 			}
@@ -505,7 +562,7 @@ void msh_Config(int num_params, const mxArray** in_params)
 	{
 		mexPrintf(MSH_CONFIG_STRING_FORMAT,
 				msh_GetCounterFlag(&g_shared_info->user_defined.lock_counter)? "true" : "false",
-				g_shared_info->user_defined.will_gc? "true" : "false");
+				g_shared_info->user_defined.will_shared_gc? "true" : "false");
 #ifdef MSH_UNIX
 		mexPrintf(MSH_CONFIG_SECURITY_STRING_FORMAT, g_shared_info->user_defined.security);
 #endif
@@ -577,11 +634,11 @@ void msh_Config(int num_params, const mxArray** in_params)
 		{
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
-				g_shared_info->user_defined.will_gc = TRUE;
+				g_shared_info->user_defined.will_shared_gc = TRUE;
 			}
 			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
-				g_shared_info->user_defined.will_gc = FALSE;
+				g_shared_info->user_defined.will_shared_gc = FALSE;
 			}
 			else
 			{

@@ -42,6 +42,8 @@ void msh_InitializeMatshare(void)
 		return;
 	}
 	
+	g_local_info.is_deinitialized = FALSE;
+	
 	mexAtExit(msh_OnExit);
 	
 	meu_SetErrorCallback(msh_OnError);

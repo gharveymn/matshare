@@ -110,7 +110,7 @@ g_shared_info->num_procs.values.post,
 "                    post: %lu \n" \
 "          max_shared_segments: %lu\n" \
 "          max_shared_size: "SIZE_FORMAT"\n" \
-"          will_gc: %lu\n" \
+"          will_shared_gc: %lu\n" \
 MSH_SECURITY_FORMAT\
 "     first_seg_num: "MSH_SEG_NUM_FORMAT"\n" \
 "     last_seg_num: "MSH_SEG_NUM_FORMAT"\n" \
@@ -129,7 +129,7 @@ g_shared_info->user_defined.lock_counter.values.flag, \
 g_shared_info->user_defined.lock_counter.values.post, \
 g_shared_info->user_defined.max_shared_segments, \
 g_shared_info->user_defined.max_shared_size, \
-g_shared_info->user_defined.will_gc, \
+g_shared_info->user_defined.will_shared_gc, \
 MSH_SECURITY_ARG \
 g_shared_info->first_seg_num, \
 g_shared_info->last_seg_num, \
@@ -141,20 +141,21 @@ g_shared_info->update_pid
 
 typedef enum
 {
-	msh_SHARE         = 0x00,
-	msh_FETCH         = 0x01,
-	msh_DETACH        = 0x02,
-	msh_CONFIG        = 0x03,
-	msh_LOCALCOPY     = 0x04,
-	msh_DEBUG         = 0x05,
-	msh_CLEAR         = 0x06,
-	msh_RESET         = 0x07,
-	msh_OVERWRITE     = 0x08,
-	msh_SAFEOVERWRITE = 0x09,
-	msh_LOCK          = 0x0A,
-	msh_UNLOCK        = 0x0B,
-	msh_VIRTUALRESIZE = 0x0C,
-	msh_CLEAN = 0x0D
+	msh_SHARE           = 0x0000,  /* share a variable */
+	msh_FETCH           = 0x0001,  /* fetch shared variables */
+	msh_DETACH          = 0x0002,  /* detach this session from shared memory */
+	msh_CONFIG          = 0x0003,  /* change the configuration */
+	msh_LOCALCOPY       = 0x0004,  /* create a local deepcopy of the variable */
+	msh_DEBUG           = 0x0005,  /* print debug information */
+	msh_CLEAR           = 0x0006,  /* clear segments from shared memory */
+	msh_RESET           = 0x0007,  /* reset the configuration */
+	msh_OVERWRITE       = 0x0008,  /* overwrite the specified variable in-place */
+	msh_SAFEOVERWRITE   = 0x0009,  /* threadsafe overwrite of the variable */
+	msh_LOCK            = 0x000A,  /* acquire the matshare interprocess lock */
+	msh_UNLOCK          = 0x000B,  /* release the interprocess lock */
+	msh_VIRTUALRESIZE   = 0x000C,  /* internal use to resize virtual scalars */
+	msh_CLEAN           = 0x000D,  /* clean invalid and unused segments */
+	msh_PERSISTSHARE    = 0x000E   /* share a variable persistently */
 } msh_directive_t;
 
 
@@ -166,17 +167,20 @@ typedef enum
  * @param num_vars The number of variables to be shared.
  * @param in_vars The variables to be shared.
  */
-void msh_Share(int nlhs, mxArray** plhs, int num_vars, const mxArray** in_vars);
+void msh_Share(int num_vars, const mxArray** in_vars, int return_expected, msh_directive_t directive);
 
 
 /**
  * Fetches variables from shared memory. Either returns shared copies or duplicates to local memory.
  *
- * @param nlhs The number of ouputs. If this is 1 then it fetches the most recent variable; if 2 then all variables not already fetched; if 3 then all variables in shared memory.
+ * @param num_requested The number of ouputs. If this is 1 then it fetches the most recent variable; if 2 then all variables not already fetched; if 3 then all variables in shared memory.
  * @param plhs An array of output mxArrays.
  * @param directive A flag indicating whether to return local copies or shared copies.
  */
-void msh_Fetch(int nlhs, mxArray** plhs, msh_directive_t directive);
+void msh_Fetch(int nlhs, mxArray** plhs);
+
+
+void msh_LocalCopy(int nlhs, mxArray** plhs);
 
 
 /**

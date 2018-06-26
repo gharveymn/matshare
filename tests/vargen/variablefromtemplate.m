@@ -7,13 +7,26 @@ function out = variablefromtemplate(rns, in)
 				out(j).(fn{i}) = variablefromtemplate(rns, in(j).(fn{i}));
 			end
 		end
-	elseif(iscell(in))
+	elseif(iscell(out))
 		for i = 1:numel(out)
 			out{i} = variablefromtemplate(rns, in{i});
 		end
-	else
-		if(~isempty(in))
-			out = rand(rns, size(in), 'like', in);
+	elseif(isnumeric(out))
+		
+		if(issparse(in))
+			out = sprand(in);
+		else
+			if(numel(in) > 0)
+				if(isa(in, 'double') || isa(in, 'single'))
+					out = rand(rns, size(in), class(in));
+				elseif(isa(in, 'int64'))
+					out = int64(bitor(bitshift(randuint64shifted(rns, size(in)),32), randuint64shifted(rns, size(in))));
+				elseif(isa(in, 'uint64'))
+					out = bitor(bitshift(randuint64shifted(rns, size(in)),32), randuint64shifted(rns, size(in)));
+				else
+					out = randi(rns, max(in(:)), size(in), class(in));
+				end
+			end
 		end
 	end
 end
