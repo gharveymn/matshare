@@ -11,6 +11,17 @@
 #define MATSHARE_INIT_H
 
 /**
+ * Runs exit hooks for when MATLAB clears the MEX function.
+ */
+void msh_OnExit(void);
+
+
+/**
+ * Runs hooks for when matshare has an error.
+ */
+void msh_OnError(void);
+
+/**
  * Runs initialization for matshare. Hooks into necessary shared segments
  * and loads the configuration.
  */

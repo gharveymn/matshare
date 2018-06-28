@@ -21,18 +21,6 @@ LONG STDCALL InterlockedCompareExchange(LPLONG, LONG, LONG);
 
 
 /**
- * Runs exit hooks for when MATLAB clears the MEX function.
- */
-void msh_OnExit(void);
-
-
-/**
- * Runs hooks for when matshare has an error.
- */
-void msh_OnError(void);
-
-
-/**
  * Acquires the specified interprocess lock.
  *
  * @note Does not lock if thread safety is turned off.
@@ -185,7 +173,6 @@ void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val);
 bool_t msh_AtomicAddSizeWithMax(volatile size_t* dest, size_t add_value, size_t max_value);
 
 
-
 /**
  * Subtracts the size_t value from the pointer.
  *
@@ -194,7 +181,6 @@ bool_t msh_AtomicAddSizeWithMax(volatile size_t* dest, size_t add_value, size_t 
  * @return The destination value immediately after the operation.
  */
 size_t msh_AtomicSubtractSize(volatile size_t* dest, size_t subtract_value);
-
 
 
 /**
@@ -229,6 +215,8 @@ long msh_AtomicCompareSwap(volatile long* dest, long compare_value, long swap_va
 
 
 #ifdef MSH_DEBUG_PERF
+
+
 /**
  * Gets the current CPU tick.
  *
@@ -244,6 +232,8 @@ void msh_GetTick(msh_tick_t* tick_pointer);
  * @return The difference in tick values.
  */
 size_t msh_GetTickDifference(TickTracker_t* tracker);
+
+
 #endif
 
 
@@ -264,5 +254,6 @@ void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num);
  * @return The padded size.
  */
 size_t PadToAlignData(size_t curr_sz);
+
 
 #endif /* MATSHARE_MATSHAREUTILS_H */

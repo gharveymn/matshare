@@ -11,6 +11,7 @@
 
 #include "../mshsegmentnode.h"
 #include "../mlerrorutils.h"
+#include "../mshsegments.h"
 
 
 #define MSH_INIT_TABLE_SIZE 64

@@ -10,7 +10,20 @@ for i = 1:100
 	end
 
 	if(res ~= numworkers)
-		error('Unexpected result');
+		error('Unexpected result.');
 	end
+	
+	res = mshshare(sparse(0));
+	parfor workernum = 1:numworkers
+		mshlock;
+		iter = mshfetch;
+		mshoverwrite(iter, iter + sparse(1));
+		mshunlock;
+	end
+
+	if(res ~= numworkers)
+		error('Unexpected result.');
+	end
+	
 end
 fprintf('Test successful.\n\n');

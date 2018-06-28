@@ -1,3 +1,5 @@
+addpath(fullfile(mfilefolder(mfilename), 'vargen'));
+
 %% Define random call test parameters
 
 % bound of clearing of data
@@ -7,10 +9,17 @@ bounds.clear_new = 20;
 
 bounds.clear_all = 20;
 
-% bound of random call to mshclear
-bounds.mshclear = 20;
+% bound of running mshreset
+bounds.mshreset = 200;
 
-bounds.mshdetach = 20;
+% bound of running mshlocalcopy
+bounds.mshlocalcopy = 10;
+
+% bound of random call to mshclear
+bounds.mshclear = 200;
+
+% bound of random call to mshdetach
+bounds.mshdetach = 5;
 
 % bound of random call to mshconfig to set to copy-on-write
 bounds.chpar_copy = 20;

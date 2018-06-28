@@ -13,8 +13,6 @@
 
 #include "mshbasictypes.h"
 
-#define MSH_VIRTUAL_SCALAR_MAX_DIM 2
-
 /* forward declaration to avoid include */
 typedef struct mxArray_tag mxArray;
 
@@ -460,6 +458,9 @@ int msh_CompareHeaderSize(SharedVariableHeader_t* shared_header, const mxArray* 
  * @param ret_var The variable to be detached.
  */
 void msh_DetachVariable(mxArray* ret_var);
+
+
+void msh_SetVirtualEmpty(mxArray* dest);
 
 
 #endif /* MATSHARE_MSHHEADERTYPE_H */

@@ -52,18 +52,6 @@ void msh_InitializeMatshare(void)
 	meu_SetErrorHelpMessage(g_msh_error_help_message);
 	meu_SetWarningHelpMessage(g_msh_warning_help_message);
 	
-	
-	/* lock the file */
-	if(!g_local_info.is_mex_locked)
-	{
-		if(mexIsLocked())
-		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, 0, "MexLockedError", "Matshare tried to lock its file when it was already locked.");
-		}
-		mexLock();
-		g_local_info.is_mex_locked = TRUE;
-	}
-	
 	if(g_local_info.this_pid == 0)
 	{
 		g_local_info.this_pid = msh_GetPid();
@@ -76,7 +64,7 @@ void msh_InitializeMatshare(void)
 	{
 		if((g_local_info.process_lock = CreateMutex(NULL, FALSE, MSH_LOCK_NAME)) == NULL)
 		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateMutexError", "Failed to create the mutex.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateMutexError", "Failed to create the mutex.");
 		}
 	}
 #else
@@ -111,18 +99,18 @@ static void msh_InitializeSharedInfo(void)
 		g_local_info.shared_info_wrapper.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)sizeof(SharedInfo_t), MSH_SHARED_INFO_SEGMENT_NAME);
 		if(g_local_info.shared_info_wrapper.handle == NULL)
 		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateSharedInfoError", "Could not create or open the shared info segment.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateSharedInfoError", "Could not create or open the shared info segment.");
 		}
 #else
 		g_local_info.shared_info_wrapper.handle = shm_open(MSH_SHARED_INFO_SEGMENT_NAME, O_RDWR | O_CREAT, MSH_DEFAULT_SECURITY);
 		if(g_local_info.shared_info_wrapper.handle == MSH_INVALID_HANDLE)
 		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CreateError", "There was an error creating the shared info segment.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CreateError", "There was an error creating the shared info segment.");
 		}
 		
 		if(ftruncate(g_local_info.shared_info_wrapper.handle, sizeof(SharedInfo_t)) != 0)
 		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "TruncateError", "There was an error truncating the shared info segment.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "TruncateError", "There was an error truncating the shared info segment.");
 		}
 #endif
 	}
@@ -214,7 +202,7 @@ static void msh_InitializeConfiguration(void)
 	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
 	{
 		mxFree(config_path);
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateFileError", "Error opening the config file.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateFileError", "Error opening the config file.");
 	}
 	else
 	{
@@ -223,7 +211,7 @@ static void msh_InitializeConfiguration(void)
 			if(ReadFile(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				mxFree(config_path);
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ReadFileError", "Error reading from the config file.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ReadFileError", "Error reading from the config file.");
 			}
 		}
 		else
@@ -234,14 +222,14 @@ static void msh_InitializeConfiguration(void)
 			if(WriteFile(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				mxFree(config_path);
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "WriteFileError", "Error writing to the config file.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(CloseHandle(config_handle) == 0)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #else
@@ -250,7 +238,7 @@ static void msh_InitializeConfiguration(void)
 		if(errno != EEXIST)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CreateFileError", "Error creating the config file.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CreateFileError", "Error creating the config file.");
 		}
 		else
 		{
@@ -258,14 +246,14 @@ static void msh_InitializeConfiguration(void)
 			if((config_handle = open(config_path, O_RDONLY | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
 			{
 				mxFree(config_path);
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "OpenFileError", "Error opening the config file.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "OpenFileError", "Error opening the config file.");
 			}
 			else
 			{
 				if(read(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t)) == -1)
 				{
 					mxFree(config_path);
-					meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ReadFileError", "Error reading from the config file.");
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "ReadFileError", "Error reading from the config file.");
 				}
 			}
 		}
@@ -278,18 +266,96 @@ static void msh_InitializeConfiguration(void)
 		if(write(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t)) == -1)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "WriteFileError", "Error writing to the config file.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "WriteFileError", "Error writing to the config file.");
 		}
 	}
 	
 	if(close(config_handle) == -1)
 	{
 		mxFree(config_path);
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the config file handle.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the config file handle.");
 	}
 
 #endif
 	
 	mxFree(config_path);
 	
+}
+
+
+void msh_OnExit(void)
+{
+	
+	if(g_local_info.is_deinitialized)
+	{
+		return;
+	}
+	
+	g_local_info.is_initialized = FALSE;
+	
+	msh_DetachSegmentList(&g_local_seg_list);
+	msh_FreeTable(&g_local_seg_list.seg_table);
+	
+	if(g_local_info.shared_info_wrapper.ptr != NULL)
+	{
+
+#ifdef MSH_WIN
+		if(msh_AtomicDecrement(&g_shared_info->num_procs) == 0)
+		{
+			msh_WriteConfiguration();
+		}
+#else
+		/* this will set the unlink flag to TRUE if it hits zero atomically, and only return true if this process did the operation */
+		if(msh_DecrementCounter(&g_shared_info->num_procs, TRUE))
+		{
+			msh_WriteConfiguration();
+			if(shm_unlink(MSH_SHARED_INFO_SEGMENT_NAME) != 0)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "UnlinkError", "There was an error unlinking the shared info segment. This is a critical error, please restart.");
+			}
+			msh_SetCounterPost(&g_shared_info->num_procs, TRUE);
+		}
+#endif
+		msh_UnlockMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
+		msh_UnmapMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
+		g_local_info.shared_info_wrapper.ptr = NULL;
+	}
+	
+	if(g_local_info.shared_info_wrapper.handle != MSH_INVALID_HANDLE)
+	{
+		msh_CloseSharedMemory(g_local_info.shared_info_wrapper.handle);
+		g_local_info.shared_info_wrapper.handle = MSH_INVALID_HANDLE;
+	}
+
+#ifdef MSH_WIN
+	if(g_local_info.process_lock != MSH_INVALID_HANDLE)
+	{
+		if(CloseHandle(g_local_info.process_lock) == 0)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the process lock handle.");
+		}
+		g_local_info.process_lock = MSH_INVALID_HANDLE;
+	}
+#else
+	if(g_local_info.process_lock.lock_handle != MSH_INVALID_HANDLE)
+	{
+		g_local_info.process_lock.lock_handle = MSH_INVALID_HANDLE;
+		g_local_info.process_lock.lock_size = 0;
+	}
+#endif
+	
+	g_local_info.is_deinitialized = TRUE;
+	
+}
+
+
+void msh_OnError(void)
+{
+	meu_SetErrorCallback(NULL);
+	
+	/* set the process lock at a level where it can be released if needed */
+	while(g_local_info.lock_level > 0)
+	{
+		msh_ReleaseProcessLock(g_process_lock);
+	}
 }

@@ -2,11 +2,14 @@
 #include "../src/headers/mshexterntypes.h"
 
 extern mxArray* mxCreateSharedDataCopy(mxArray *);
-
+void callback(void);
 mxArray* persist = NULL;
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
+	
+	mexAtExit(callback);
+	return;
 	
 	int i;
 	
@@ -30,9 +33,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	
 	if(persist == NULL)
 	{
-		persist = mxCreateDoubleMatrix(1, 1, mxREAL);
+		persist = mxCreateSparse(0, 0, 1, mxREAL);
 			
 		mexMakeArrayPersistent(persist);
+		
+		mexPrintf("%u\n", mxIsEmpty(persist));
 		
 		//shared_data_copy = mxCreateSharedDataCopy(persist);
 		
@@ -150,4 +155,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	//InternalMexStruct_t* arr = (InternalMexStruct_t*)plhs[0];
 	//arr->data = mem;
 	//memcpy(mxGetData(plhs[0]), mem-16,16);
+}
+
+void callback(void)
+{
+	mexPrintf("ran\n");
 }

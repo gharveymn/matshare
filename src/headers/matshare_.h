@@ -59,8 +59,8 @@ typedef struct mxArray_tag mxArray;
 "          ptr: "SIZE_FORMAT"\n" \
 "          handle: "HANDLE_FORMAT"\n" \
 "     process_lock: "HANDLE_FORMAT"\n" \
-"     is_mex_locked: %u\n" \
-"     is_initialized: %u\n"
+"     is_initialized: %u\n" \
+"     is_deinitialized: %u\n"
 
 #define MSH_DEBUG_LOCAL_ARGS \
 g_local_info.rev_num, \
@@ -69,8 +69,8 @@ g_local_info.this_pid, \
 g_local_info.shared_info_wrapper.ptr, \
 g_local_info.shared_info_wrapper.handle, \
 g_local_info.process_lock, \
-g_local_info.is_mex_locked, \
-g_local_info.is_initialized
+g_local_info.is_initialized, \
+g_local_info.is_deinitialized
 
 #ifdef MSH_WIN
 #  define MSH_SECURITY_FORMAT \

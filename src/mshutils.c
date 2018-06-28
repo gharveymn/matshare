@@ -24,95 +24,6 @@
 #endif
 
 
-void msh_OnExit(void)
-{
-	
-	if(g_local_info.is_deinitialized)
-	{
-		return;
-	}
-	
-	g_local_info.is_initialized = FALSE;
-	
-	msh_DetachSegmentList(&g_local_seg_list);
-	msh_FreeTable(&g_local_seg_list.seg_table);
-	
-	if(g_local_info.shared_info_wrapper.ptr != NULL)
-	{
-
-#ifdef MSH_WIN
-		if(msh_AtomicDecrement(&g_shared_info->num_procs) == 0)
-		{
-			msh_WriteConfiguration();
-		}
-#else
-		/* this will set the unlink flag to TRUE if it hits zero atomically, and only return true if this process did the operation */
-		if(msh_DecrementCounter(&g_shared_info->num_procs, TRUE))
-		{
-			msh_WriteConfiguration();
-			if(shm_unlink(MSH_SHARED_INFO_SEGMENT_NAME) != 0)
-			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "UnlinkError", "There was an error unlinking the shared info segment. This is a critical error, please restart.");
-			}
-			msh_SetCounterPost(&g_shared_info->num_procs, TRUE);
-		}
-#endif
-		msh_UnlockMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
-		msh_UnmapMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
-		g_local_info.shared_info_wrapper.ptr = NULL;
-	}
-	
-	if(g_local_info.shared_info_wrapper.handle != MSH_INVALID_HANDLE)
-	{
-		msh_CloseSharedMemory(g_local_info.shared_info_wrapper.handle);
-		g_local_info.shared_info_wrapper.handle = MSH_INVALID_HANDLE;
-	}
-
-#ifdef MSH_WIN
-	if(g_local_info.process_lock != MSH_INVALID_HANDLE)
-	{
-		if(CloseHandle(g_local_info.process_lock) == 0)
-		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the process lock handle.");
-		}
-		g_local_info.process_lock = MSH_INVALID_HANDLE;
-	}
-#else
-	if(g_local_info.process_lock.lock_handle != MSH_INVALID_HANDLE)
-	{
-		g_local_info.process_lock.lock_handle = MSH_INVALID_HANDLE;
-		g_local_info.process_lock.lock_size = 0;
-	}
-#endif
-	
-	if(g_local_info.is_mex_locked)
-	{
-		if(!mexIsLocked())
-		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_CORRUPTION | MEU_SEVERITY_INTERNAL, 0, "MexUnlockedError", "Matshare tried to unlock its file when it was already unlocked.");
-		}
-		mexUnlock();
-		g_local_info.is_mex_locked = FALSE;
-	}
-	
-	g_local_info.is_deinitialized = TRUE;
-	
-}
-
-
-void msh_OnError(void)
-{
-	meu_SetErrorCallback(NULL);
-	
-	/* set the process lock at a level where it can be released if needed */
-	while(g_local_info.lock_level > 0)
-	{
-		msh_ReleaseProcessLock(g_process_lock);
-	}
-	
-}
-
-
 void msh_AcquireProcessLock(ProcessLock_t process_lock)
 {
 #ifdef MSH_WIN
@@ -146,16 +57,16 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 			status = WaitForSingleObject(process_lock, INFINITE);
 			if(status == WAIT_ABANDONED)
 			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, 0, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, 0, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
 			}
 			else if(status == WAIT_FAILED)
 			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ProcessLockError",  "Failed to lock acquire the process lock.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ProcessLockError",  "Failed to lock acquire the process lock.");
 			}
 #else
 			if(lockf(process_lock.lock_handle, F_LOCK, process_lock.lock_size) != 0)
 			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ProcessLockError", "Failed to acquire the process lock.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "ProcessLockError", "Failed to acquire the process lock.");
 			}
 #endif
 
@@ -183,12 +94,12 @@ void msh_ReleaseProcessLock(ProcessLock_t process_lock)
 #ifdef MSH_WIN
 			if(ReleaseMutex(process_lock) == 0)
 			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ProcessUnlockError", "Failed to release the process lock.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #else
 			if(lockf(process_lock.lock_handle, F_ULOCK, process_lock.lock_size) != 0)
 			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ProcessUnlockError", "Failed to release the process lock.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #endif
 		}
@@ -202,7 +113,12 @@ void msh_ReleaseProcessLock(ProcessLock_t process_lock)
 
 void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num)
 {
-	sprintf(name_buffer, MSH_SEGMENT_NAME, (unsigned long)seg_num);
+	if(seg_num == MSH_INVALID_SEG_NUM)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_FATAL, 0, "InternalLogicError", "There was an internal logic error where matshare lost track of its internal shared memory list. Please"
+															 "report this if you can.");
+	}
+	sprintf(name_buffer, MSH_SEGMENT_NAME_FORMAT, (unsigned long)seg_num);
 }
 
 
@@ -228,14 +144,14 @@ void msh_WriteConfiguration(void)
 	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
 	{
 		mxFree(config_path);
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "OpenFileError", "Error opening the config file.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "OpenFileError", "Error opening the config file.");
 	}
 	else
 	{
 		if(ReadFile(config_handle, &saved_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ReadFileError", "Error reading from the config file.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ReadFileError", "Error reading from the config file.");
 		}
 		
 		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
@@ -243,27 +159,27 @@ void msh_WriteConfiguration(void)
 			if(WriteFile(config_handle, &local_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				mxFree(config_path);
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "WriteFileError", "Error writing to the config file.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(CloseHandle(config_handle) == 0)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #else
 	if((config_handle = open(config_path, O_RDWR | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "OpenFileError", "Error opening the config file.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "OpenFileError", "Error opening the config file.");
 	}
 	else
 	{
 		if(read(config_handle, &saved_config, sizeof(UserConfig_t)) == -1)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "ReadFileError", "Error reading from the config file.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "ReadFileError", "Error reading from the config file.");
 		}
 		
 		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
@@ -271,14 +187,14 @@ void msh_WriteConfiguration(void)
 			if(write(config_handle, &local_config, sizeof(UserConfig_t)) == -1)
 			{
 				mxFree(config_path);
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "WriteFileError", "Error writing to the config file.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(close(config_handle) == -1)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the config file handle.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #endif
@@ -299,7 +215,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if((user_config_folder = getenv("APPDATA")) == NULL)
 		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ConfigPathError", "Could not find a suitable configuration path. Please make sure either %LOCALAPPDATA% or %APPDATA% is defined.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ConfigPathError", "Could not find a suitable configuration path. Please make sure either %LOCALAPPDATA% or %APPDATA% is defined.");
 		}
 	}
 	
@@ -311,7 +227,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(GetLastError() != ERROR_ALREADY_EXISTS)
 		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".", config_path);
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".", config_path);
 		}
 	}
 	
@@ -320,7 +236,7 @@ char_t* msh_GetConfigurationPath(void)
 #else
 	if((user_config_folder = getenv("HOME")) == NULL)
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, GetLastError(), "ConfigPathError", "Could not find a suitable configuration path. Please make sure $HOME is defined.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ConfigPathError", "Could not find a suitable configuration path. Please make sure $HOME is defined.");
 	}
 	
 	config_path = mxCalloc(strlen(user_config_folder) + 1 + strlen(HOME_CONFIG_FOLDER) + 1 + strlen(MSH_CONFIG_FOLDER_NAME) + 1 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
@@ -329,7 +245,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(errno != EEXIST)
 		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the user config directory at location \"%s\".", config_path);
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the user config directory at location \"%s\".", config_path);
 		}
 	}
 	
@@ -338,7 +254,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(errno != EEXIST)
 		{
-			meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".",
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".",
 						   config_path);
 		}
 	}
@@ -467,7 +383,7 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
 	else
 	{
 		/* this may occur if the user passes a destination variable which is not in shared memory */
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidTypeError",
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, 0, "InvalidTypeError",
 					   "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	

@@ -60,10 +60,10 @@ struct
 } g_virtual_empty =
 		{
 				{
-					ALLOCATION_HEADER_SIZE, ALLOCATION_HEADER_MAGIC_CHECK, DATA_ALIGNMENT, ALLOCATION_HEADER_SIZE
+						ALLOCATION_HEADER_SIZE, ALLOCATION_HEADER_MAGIC_CHECK, DATA_ALIGNMENT, ALLOCATION_HEADER_SIZE
 				},
 				{
-					0,0
+						0,0
 				}
 		};
 
@@ -426,7 +426,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	
 	if(mxGetNumberOfDimensions(in_var) < 2)
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "UndefinedDimensionsError", "There was an unexpected number of dimensions. Make sure the array has at least two dimensions.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, 0, "UndefinedDimensionsError", "There was an unexpected number of dimensions. Make sure the array has at least two dimensions.");
 	}
 	
 	/* Add space for the dimensions */
@@ -519,7 +519,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	}
 	else
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER, 0, "InvalidTypeError",
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, 0, "InvalidTypeError",
 					   "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
@@ -710,9 +710,6 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var, int is_top_level)
 		}
 		else
 		{
-			
-			msh_SetIsVirtualScalar(dest, (msh_GetNumElems(dest) <= 1) & is_top_level);
-			
 			/* copy data */
 			if(!mxIsEmpty(in_var))
 			{
@@ -727,7 +724,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var, int is_top_level)
 				
 				/* copy over the data with the signature */
 				copy_sz = msh_GetNumElems(dest)*msh_GetElemSize(dest);
-				alloc_sz = msh_GetIsVirtualScalar(dest)? MSH_VIRTUAL_SCALAR_MAX_DIM * msh_GetElemSize(dest) : copy_sz;
+				alloc_sz = copy_sz;
 				
 				msh_MakeAllocationHeader((AllocationHeader_t*)msh_GetData(dest) - 1, alloc_sz);
 				memcpy(msh_GetData(dest), mxGetData(in_var), copy_sz);
@@ -767,9 +764,8 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 	mxArray* ret_var = NULL;
 	
 	/* for loops */
-	size_t idx, count, num_elems, num_dims;
+	size_t idx, count, num_elems;
 	
-	size_t* virtual_dims;
 	
 	/* for structures */
 	int field_num, num_fields;
@@ -830,7 +826,7 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			}
 			else
 			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_USER | MEU_SEVERITY_INTERNAL, 0, "UnrecognizedTypeError",
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER | MEU_SEVERITY_INTERNAL, 0, "UnrecognizedTypeError",
 							   "The fetched array was of class 'sparse' but not of type 'double' or 'logical'.");
 			}
 			
@@ -872,7 +868,7 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			}
 			else
 			{
-				meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, 0, "UnrecognizedTypeError",
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, 0, "UnrecognizedTypeError",
 							   "The fetched array was of class not of type 'numeric', 'logical', or 'char'.");
 			}
 			
@@ -887,39 +883,9 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 					mxSetImagData(ret_var, msh_GetImagData(shared_header));
 				}
 			}
-			else
-			{
-				mxSetData(ret_var, &g_virtual_empty.data);
-				if(msh_GetIsComplex(shared_header))
-				{
-					mxSetImagData(ret_var, &g_virtual_empty.data);
-				}
-			}
 			
 			/* set up virtual scalar tracking */
-			if(msh_GetIsVirtualScalar(shared_header))
-			{
-				msh_AddVariableToList(&g_virtual_scalar_list, msh_CreateVariableNode(NULL, ret_var, shared_header));
-				
-				num_dims = msh_GetNumDims(shared_header);
-				virtual_dims = mxMalloc(num_dims * sizeof(size_t));
-				
-				/* set the last dimension to keep the dimensionality so shared copies are performed correctly */
-				for(idx = 0; idx < num_dims-1; idx++)
-				{
-					virtual_dims[idx] = 1;
-				}
-				virtual_dims[num_dims-1] = MSH_VIRTUAL_SCALAR_MAX_DIM;
-				
-				mxSetDimensions(ret_var, virtual_dims, msh_GetNumDims(shared_header));
-				
-				mxFree(virtual_dims);
-				
-			}
-			else
-			{
-				mxSetDimensions(ret_var, msh_GetDimensions(shared_header), msh_GetNumDims(shared_header));
-			}
+			mxSetDimensions(ret_var, msh_GetDimensions(shared_header), msh_GetNumDims(shared_header));
 		}
 		
 	}
@@ -1190,7 +1156,7 @@ void msh_DetachVariable(mxArray* ret_var)
 	}
 	else
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, 0, "InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, 0, "InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
 	}
 }
 
@@ -1211,6 +1177,12 @@ static size_t msh_GetFieldNamesSize(const mxArray* in_var)
 	}
 	
 	return cml_sz;
+}
+
+
+void msh_SetVirtualEmpty(mxArray* dest)
+{
+	mxSetData(dest, g_virtual_empty.data);
 }
 
 

@@ -30,7 +30,7 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 	
 	if(msh_GetVariableNode(seg_node) != NULL)
 	{
-		meu_PrintMexError(__FILE__, __LINE__, MEU_SEVERITY_INTERNAL, 0, "CreateVariableError", "The segment targeted for variable creation already has a variable attached to it.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, 0, "CreateVariableError", "The segment targeted for variable creation already has a variable attached to it.");
 	}
 	
 	/* keep track of the last virtual scalar before the fetch operation */
@@ -149,12 +149,35 @@ void msh_AddVariableToList(VariableList_t* var_list, VariableNode_t* var_node)
 
 mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node)
 {
-	if(met_GetCrosslink(msh_GetVariableData(var_node)) == NULL)
+	
+	mxArray* shared_data_copy,* var = msh_GetVariableData(var_node);
+	
+	if(mxIsEmpty(var) && !mxIsSparse(var))
 	{
-		msh_SetIsUsed(var_node, TRUE);
-		msh_AtomicIncrement(&msh_GetSegmentMetadata(msh_GetSegmentNode(var_node))->procs_using);
+		/* temporarily set as non-empty so the shared data copy gets a crosslink */
+		msh_SetVirtualEmpty(var);
+	
+		if(met_GetCrosslink(var) == NULL)
+		{
+			msh_SetIsUsed(var_node, TRUE);
+			msh_AtomicIncrement(&msh_GetSegmentMetadata(msh_GetSegmentNode(var_node))->procs_using);
+		}
+		shared_data_copy = mxCreateSharedDataCopy(var);
+	
+		mxSetData(shared_data_copy, NULL);
+		mxSetData(var, NULL);
 	}
-	return mxCreateSharedDataCopy(msh_GetVariableData(var_node));
+	else
+	{
+		if(met_GetCrosslink(var) == NULL)
+		{
+			msh_SetIsUsed(var_node, TRUE);
+			msh_AtomicIncrement(&msh_GetSegmentMetadata(msh_GetSegmentNode(var_node))->procs_using);
+		}
+		shared_data_copy = mxCreateSharedDataCopy(var);
+	}
+	
+	return shared_data_copy;
 }
 
 

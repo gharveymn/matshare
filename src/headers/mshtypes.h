@@ -17,9 +17,9 @@
 #define MSH_MAX_NAME_LEN 64
 
 /* differentiate these in case we have both running at the same time for some reason */
-#if MSH_BITNESS==64
+#if MSH_BITNESS == 64
 #  define MSH_SHARED_INFO_SEGMENT_NAME "/MSH_SHARED_INFO_SEGMENT"
-#  define MSH_SEGMENT_NAME "/MSH_SEGMENT%0lx"
+#  define MSH_SEGMENT_NAME_FORMAT "/MSH_SEGMENT%0lx"
 #  define MSH_CONFIG_FOLDER_NAME "matshare"
 #  define MSH_CONFIG_FILE_NAME "mshconfig"
 #  ifdef MSH_WIN
@@ -27,9 +27,9 @@
 #  else
 #    define HOME_CONFIG_FOLDER ".config"
 #  endif
-#elif MSH_BITNESS==32
+#elif MSH_BITNESS == 32
 #  define MSH_SHARED_INFO_SEGMENT_NAME "/MSH_SHARED_INFO_SEGMENT32"
-#  define MSH_SEGMENT_NAME "/MSH_32SEGMENT%0lx"
+#  define MSH_SEGMENT_NAME_FORMAT "/MSH_32SEGMENT%0lx"
 #  define MSH_CONFIG_FOLDER_NAME "matshare"
 #  define MSH_ "matshare"
 #  define MSH_CONFIG_FILE_NAME "mshconfig32"
@@ -98,7 +98,6 @@ typedef struct LocalInfo_t
 	
 	ProcessLock_t process_lock;
 	
-	bool_t is_mex_locked;
 	bool_t is_initialized;
 	bool_t is_deinitialized;
 } LocalInfo_t;

@@ -10,6 +10,7 @@
 #include "mex.h"
 
 #include "../mshexterntypes.h"
+#include "../mlerrorutils.h"
 
 /* Credit to James Tursa for the definitions */
 #define MSH_USE_PARTIAL_DEFINITION 0
@@ -122,25 +123,119 @@ mxArray* met_GetCrosslink(mxArray* var)
 	return ((InternalMexStruct_t*)var)->crosslink;
 }
 
-void met_SwapStruct(mxArray* dest, mxArray* src)
-{
-	InternalMexStruct_t temp = *((InternalMexStruct_t*)dest);
-	*((InternalMexStruct_t*)dest) = *((InternalMexStruct_t*)src);
-	*((InternalMexStruct_t*)src) = temp;
-}
-
 
 int met_PutSharedCopy(const char* workspace_name, const char* variable_name, mxArray* shared_data_copy)
 {
 	InternalMexStruct_t workspace_variable_copy;
 	mxArray* workspace_variable, * dummy_variable,* curr_var;
+	mwSize* dummy_dims;
+	mwSize num_dims, i;
+
+	if(met_GetCrosslink(shared_data_copy) == NULL)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, 0, "NoCrosslinkError", "There was an error where matshare unexpectedly lost track of a MATLAB variable. If you can, please report this.");
+	}
+
 	int is_doubly_linked = (met_GetName(met_GetCrosslink(shared_data_copy)) == shared_data_copy);
 	
-	dummy_variable = mxCreateNumericArray(0, NULL, mxDOUBLE_CLASS, mxREAL);
+	/* different routes because matlab caches information about the variable on entry */
+	if(mxIsEmpty(shared_data_copy))
+	{
+		if(mxIsStruct(shared_data_copy))
+		{
+			dummy_variable = mxCreateStructArray(0, NULL, 0, NULL);
+		}
+		else if(mxIsCell(shared_data_copy))
+		{
+			dummy_variable = mxCreateCellArray(0, NULL);
+		}
+		else
+		{
+			if(mxIsSparse(shared_data_copy))
+			{
+				if(mxIsDouble(shared_data_copy))
+				{
+					dummy_variable = mxCreateSparse(0, 0, 1, mxIsComplex(shared_data_copy)? mxCOMPLEX : mxREAL);
+				}
+				else
+				{
+					dummy_variable = mxCreateSparseLogicalMatrix(0, 0, 1);
+				}
+			}
+			else
+			{
+				if(mxIsLogical(shared_data_copy))
+				{
+					dummy_variable = mxCreateLogicalArray(0, NULL);
+				}
+				else if(mxIsChar(shared_data_copy))
+				{
+					dummy_variable = mxCreateCharArray(0, NULL);
+				}
+				else
+				{
+					dummy_variable = mxCreateNumericArray(0, NULL, mxGetClassID(shared_data_copy), mxIsComplex(shared_data_copy)? mxCOMPLEX : mxREAL);
+				}
+			}
+		}
+	}
+	else
+	{
+		
+		num_dims = mxGetNumberOfDimensions(shared_data_copy);
+		dummy_dims = mxMalloc(num_dims * sizeof(mwSize));
+		for(i = 0; i < num_dims - 1; i++)
+		{
+			dummy_dims[i] = 1;
+		}
+		dummy_dims[num_dims-1] = 2;
+		
+		if(mxIsStruct(shared_data_copy))
+		{
+			dummy_variable = mxCreateStructArray(num_dims, dummy_dims, 0, NULL);
+		}
+		else if(mxIsCell(shared_data_copy))
+		{
+			dummy_variable = mxCreateCellArray(num_dims, dummy_dims);
+		}
+		else
+		{
+			if(mxIsSparse(shared_data_copy))
+			{
+				if(mxIsDouble(shared_data_copy))
+				{
+					dummy_variable = mxCreateSparse(1, 1, 1, mxIsComplex(shared_data_copy)? mxCOMPLEX : mxREAL);
+				}
+				else
+				{
+					dummy_variable = mxCreateSparseLogicalMatrix(1, 1, 1);
+				}
+			}
+			else
+			{
+				if(mxIsLogical(shared_data_copy))
+				{
+					dummy_variable = mxCreateLogicalArray(num_dims, dummy_dims);
+				}
+				else if(mxIsChar(shared_data_copy))
+				{
+					dummy_variable = mxCreateCharArray(num_dims, dummy_dims);
+				}
+				else
+				{
+					dummy_variable = mxCreateNumericArray(num_dims, dummy_dims, mxGetClassID(shared_data_copy), mxIsComplex(shared_data_copy)? mxCOMPLEX : mxREAL);
+				}
+			}
+		}
+		
+		mxFree(dummy_dims);
+		
+	}
+	
 	
 	if(mexPutVariable(workspace_name, variable_name, dummy_variable))
 	{
-		return 1;
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, 0, "PutVariableError", "There was an error placing the temporary variable in the workspace.");
 	}
 	mxDestroyArray(dummy_variable);
 	
@@ -178,5 +273,7 @@ int met_PutSharedCopy(const char* workspace_name, const char* variable_name, mxA
 	((InternalMexStruct_t*)workspace_variable)->flags &= ~0x10;
 	
 	mxDestroyArray(shared_data_copy);
+	
+	return 0;
 	
 }

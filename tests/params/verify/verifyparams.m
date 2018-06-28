@@ -21,7 +21,7 @@ max_maxDims = 1000;
 maxDimsV = round(linspace(min_maxDims, max_maxDims, num_maxDims_tests));
 
 % max children per level in structs and cells
-num_maxChildren_tests = 1;
+num_maxChildren_tests = 2;
 min_maxChildren = 0;
 max_maxChildren = 10;
 maxChildrenV = round(linspace(min_maxChildren, max_maxChildren, num_maxChildren_tests));
@@ -33,4 +33,4 @@ max_typespec = 0;
 typespecV = linspace(min_typespec, max_typespec, num_typespec_tests);
 
 % number of samples per variable generation model
-num_samples = 10;
+num_samples = 100;
