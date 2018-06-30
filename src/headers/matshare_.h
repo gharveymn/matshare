@@ -1,10 +1,10 @@
 /** matshare_.h
  * Declares top level functions and macros.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #ifndef MATSHARE__H
@@ -15,6 +15,9 @@
 
 /* forward declaration to avoid include */
 typedef struct mxArray_tag mxArray;
+
+#define MSHSHARE_RETURN_NAME "shared"
+#define MSHFETCH_RETURN_NAME "latest"
 
 #define MSH_PARAM_THREADSAFETY "ThreadSafety"
 #define MSH_PARAM_THREADSAFETY_L "threadsafety"
@@ -38,15 +41,14 @@ typedef struct mxArray_tag mxArray;
 
 #define MSH_CONFIG_STRING_FORMAT \
 "Current matshare configuration: \n\
-                                      Current lock count:  %li\n\
-                                      Thread safety:       '%s'\n\
-                                      Max variables: %lu\n\
-                                      Max shared size:     "SIZE_FORMAT"\n\
-                                      Garbage collection:  '%s'\n"
-
+                                     Current lock count:  %lu\n\
+                                     Thread safety:       '%s'\n\
+                                     Max variables:       %lu\n\
+                                     Max shared size:     "SIZE_FORMAT"\n\
+                                     Garbage collection:  '%s'\n"
 #ifdef MSH_UNIX
 #define MSH_CONFIG_SECURITY_STRING_FORMAT "\
-                                      Security:          '%o'\n"
+                                     Security:            '%o'\n"
 #endif
 
 
@@ -153,9 +155,8 @@ typedef enum
 	msh_SAFEOVERWRITE   = 0x0009,  /* threadsafe overwrite of the variable */
 	msh_LOCK            = 0x000A,  /* acquire the matshare interprocess lock */
 	msh_UNLOCK          = 0x000B,  /* release the interprocess lock */
-	msh_VIRTUALRESIZE   = 0x000C,  /* internal use to resize virtual scalars */
-	msh_CLEAN           = 0x000D,  /* clean invalid and unused segments */
-	msh_PERSISTSHARE    = 0x000E   /* share a variable persistently */
+	msh_CLEAN           = 0x000C,  /* clean invalid and unused segments */
+	msh_PERSISTSHARE    = 0x000D   /* share a variable persistently */
 } msh_directive_t;
 
 
@@ -171,15 +172,21 @@ void msh_Share(int num_vars, const mxArray** in_vars, int return_expected, msh_d
 
 
 /**
- * Fetches variables from shared memory. Either returns shared copies or duplicates to local memory.
+ * Fetches variables from shared memory as shared data copies.
  *
- * @param num_requested The number of ouputs. If this is 1 then it fetches the most recent variable; if 2 then all variables not already fetched; if 3 then all variables in shared memory.
+ * @note this function will set a maximum of two cell arrays, and put the latest variable directly into the workspace
+ * @param nlhs The number of ouputs. If this is 0 then it fetches the most recent variable; if 1 then all variables not already fetched; if 2 then all variables in shared memory.
  * @param plhs An array of output mxArrays.
- * @param directive A flag indicating whether to return local copies or shared copies.
  */
 void msh_Fetch(int nlhs, mxArray** plhs);
 
 
+/**
+ * Fetches variables from shared memory as local deep copies.
+ *
+ * @param nlhs The number of ouputs. If this is 1 then it fetches the most recent variable; if 2 then all variables not already fetched; if 3 then all variables in shared memory.
+ * @param plhs An array of output mxArrays.
+ */
 void msh_LocalCopy(int nlhs, mxArray** plhs);
 
 
@@ -210,12 +217,5 @@ void msh_Overwrite(const mxArray* dest_var, const mxArray* in_var, msh_directive
  * @param in_params An array of the parameters and values.
  */
 void msh_Config(int num_params, const mxArray** in_params);
-
-
-/**
- * Resizes virtual scalars. This should be called from MATLAB after a call to
- * mshshare or mshfetch.
- */
-void msh_VirtualResize(void);
 
 #endif /* MATSHARE__H */

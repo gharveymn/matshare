@@ -1,10 +1,10 @@
 /** mshutils.c
  * Defines miscellaneous utility functions.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #include "mex.h"
@@ -57,16 +57,16 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 			status = WaitForSingleObject(process_lock, INFINITE);
 			if(status == WAIT_ABANDONED)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, 0, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
 			}
 			else if(status == WAIT_FAILED)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ProcessLockError",  "Failed to lock acquire the process lock.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError",  "Failed to lock acquire the process lock.");
 			}
 #else
 			if(lockf(process_lock.lock_handle, F_LOCK, process_lock.lock_size) != 0)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "ProcessLockError", "Failed to acquire the process lock.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError", "Failed to acquire the process lock.");
 			}
 #endif
 
@@ -94,12 +94,16 @@ void msh_ReleaseProcessLock(ProcessLock_t process_lock)
 #ifdef MSH_WIN
 			if(ReleaseMutex(process_lock) == 0)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ProcessUnlockError", "Failed to release the process lock.");
+				/* prevent recursion in error callback */
+				meu_SetErrorCallback(NULL);
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #else
 			if(lockf(process_lock.lock_handle, F_ULOCK, process_lock.lock_size) != 0)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "ProcessUnlockError", "Failed to release the process lock.");
+				/* prevent recursion in error callback */
+				meu_SetErrorCallback(NULL);
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #endif
 		}
@@ -144,14 +148,14 @@ void msh_WriteConfiguration(void)
 	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
 	{
 		mxFree(config_path);
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "OpenFileError", "Error opening the config file.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "OpenFileError", "Error opening the config file.");
 	}
 	else
 	{
 		if(ReadFile(config_handle, &saved_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ReadFileError", "Error reading from the config file.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 		}
 		
 		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
@@ -159,27 +163,27 @@ void msh_WriteConfiguration(void)
 			if(WriteFile(config_handle, &local_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				mxFree(config_path);
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "WriteFileError", "Error writing to the config file.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(CloseHandle(config_handle) == 0)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #else
 	if((config_handle = open(config_path, O_RDWR | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "OpenFileError", "Error opening the config file.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "OpenFileError", "Error opening the config file.");
 	}
 	else
 	{
 		if(read(config_handle, &saved_config, sizeof(UserConfig_t)) == -1)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "ReadFileError", "Error reading from the config file.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 		}
 		
 		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
@@ -187,14 +191,14 @@ void msh_WriteConfiguration(void)
 			if(write(config_handle, &local_config, sizeof(UserConfig_t)) == -1)
 			{
 				mxFree(config_path);
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "WriteFileError", "Error writing to the config file.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(close(config_handle) == -1)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the config file handle.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #endif
@@ -215,7 +219,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if((user_config_folder = getenv("APPDATA")) == NULL)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ConfigPathError", "Could not find a suitable configuration path. Please make sure either %LOCALAPPDATA% or %APPDATA% is defined.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ConfigPathError", "Could not find a suitable configuration path. Please make sure either %LOCALAPPDATA% or %APPDATA% is defined.");
 		}
 	}
 	
@@ -227,7 +231,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(GetLastError() != ERROR_ALREADY_EXISTS)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".", config_path);
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".", config_path);
 		}
 	}
 	
@@ -236,7 +240,7 @@ char_t* msh_GetConfigurationPath(void)
 #else
 	if((user_config_folder = getenv("HOME")) == NULL)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ConfigPathError", "Could not find a suitable configuration path. Please make sure $HOME is defined.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ConfigPathError", "Could not find a suitable configuration path. Please make sure $HOME is defined.");
 	}
 	
 	config_path = mxCalloc(strlen(user_config_folder) + 1 + strlen(HOME_CONFIG_FOLDER) + 1 + strlen(MSH_CONFIG_FOLDER_NAME) + 1 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
@@ -245,7 +249,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(errno != EEXIST)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the user config directory at location \"%s\".", config_path);
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateDirectoryError", "There was an error creating the user config directory at location \"%s\".", config_path);
 		}
 	}
 	
@@ -254,7 +258,7 @@ char_t* msh_GetConfigurationPath(void)
 	{
 		if(errno != EEXIST)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".",
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateDirectoryError", "There was an error creating the directory for the matshare config file at location \"%s\".",
 						   config_path);
 		}
 	}
@@ -383,7 +387,7 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
 	else
 	{
 		/* this may occur if the user passes a destination variable which is not in shared memory */
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, 0, "InvalidTypeError",
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidTypeError",
 					   "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
@@ -618,18 +622,17 @@ bool_t msh_AtomicAddSizeWithMax(volatile size_t* dest, size_t add_value, size_t 
 		{
 			return FALSE;
 		}
-	} while(InterlockedCompareExchange64((volatile long long*)dest, new_value, old_value) != old_value);
+	} while((size_t)InterlockedCompareExchange64((volatile long long*)dest, new_value, old_value) != old_value);
 #  elif MSH_BITNESS==32
 	do
 	{
-		/* workaround because lcc defines size_t as signed (???) */
 		old_value = *dest;
 		new_value = old_value + add_value;
 		if(new_value > max_value)
 		{
 			return FALSE;
 		}
-	} while(InterlockedCompareExchange((volatile long*)dest, new_value, old_value) != old_value);
+	} while((size_t)InterlockedCompareExchange((volatile long*)dest, new_value, old_value) != old_value);
 #  endif
 #else
 	do

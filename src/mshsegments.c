@@ -1,10 +1,10 @@
 /** mshsegments.c
  * Defines shared segment creation and tracking functions.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #include "headers/mshsegments.h"
@@ -124,7 +124,7 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 			msh_WriteSegmentName(segment_name, seg_info->seg_num);
 			if(shm_unlink(segment_name) != 0)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, errno, "UnlinkError", "There was an error unlinking the segment");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "UnlinkError", "There was an error unlinking the segment");
 			}
 #endif
 			msh_SetCounterPost(&seg_info->metadata->procs_tracking, TRUE);
@@ -170,7 +170,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 		meu_PrintMexError(MEU_FL,
 		                  MEU_SEVERITY_USER,
 		                  0,
-		                  "TooManySegmentsError",
+		                  "TooManyVariablesError",
 		                  "The shared variable would exceed the current maximum number of shared variables (currently set as %li). "
 		                  "You may change this limit by using mshconfig. For more information refer to `help mshconfig`.",
 		                  g_shared_info->user_defined.max_shared_segments);
@@ -688,13 +688,13 @@ handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size)
 	ret_handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, hi_sz, lo_sz, segment_name);
 	if(ret_handle == NULL)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateFileError", "Error creating the file mapping.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateFileError", "Error creating the file mapping.");
 	}
 	else if(GetLastError() == ERROR_ALREADY_EXISTS)
 	{
 		if(CloseHandle(ret_handle) == 0)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the file handle.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the file handle.");
 		}
 		return MSH_INVALID_HANDLE;
 	}
@@ -708,7 +708,7 @@ handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size)
 	{
 		if(errno != EEXIST)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CreateError", "There was an error creating the segment");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateError", "There was an error creating the segment");
 		}
 		return MSH_INVALID_HANDLE;
 	}
@@ -716,7 +716,7 @@ handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size)
 	/* set the segment size */
 	if(ftruncate(ret_handle, segment_size) != 0)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "TruncateError", "There was an error truncating the segment");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "TruncateError", "There was an error truncating the segment");
 	}
 
 #endif
@@ -738,18 +738,18 @@ handle_t msh_OpenSharedMemory(char_t* segment_name)
 	{
 		if(GetLastError() == ERROR_FILE_NOT_FOUND)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, GetLastError(), "VariableNotFoundError", "There was an error where matshare lost track of a variable. "
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "VariableNotFoundError", "There was an error where matshare lost track of a variable. "
 			                                                                                                             "This is usually because a linked session of MATLAB was "
 			                                                                                                             "terminated unexpectedly, which can occur when closing a parpool. "
 			                                                                                                             "To prevent this, make a call to mshdetach before closing the parpool.");
 		}
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "OpenFileError", "Error opening the file mapping.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "OpenFileError", "Error opening the file mapping.");
 	}
 #else
 	ret_handle = shm_open(segment_name, O_RDWR, g_shared_info->user_defined.security);
 	if(ret_handle == -1)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "OpenError", "There was an error opening the segment");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "OpenError", "There was an error opening the segment");
 	}
 #endif
 	
@@ -767,13 +767,13 @@ void* msh_MapMemory(handle_t segment_handle, size_t map_sz)
 	seg_ptr = MapViewOfFile(segment_handle, FILE_MAP_ALL_ACCESS, 0, 0, map_sz);
 	if(seg_ptr == NULL)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "MemoryMappingError", "There was an error memory mapping the segment");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "MemoryMappingError", "There was an error memory mapping the segment");
 	}
 #else
 	seg_ptr = mmap(NULL, map_sz, PROT_READ | PROT_WRITE, MAP_SHARED, segment_handle, 0);
 	if(seg_ptr == MAP_FAILED)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "MemoryMappingError", "There was an error memory mapping the segment");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "MemoryMappingError", "There was an error memory mapping the segment");
 	}
 #endif
 	
@@ -787,12 +787,12 @@ void msh_UnmapMemory(void* segment_pointer, size_t map_sz)
 #ifdef MSH_WIN
 	if(UnmapViewOfFile(segment_pointer) == 0)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "UnmapFileError", "Error unmapping the file.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "UnmapFileError", "Error unmapping the file.");
 	}
 #else
 	if(munmap(segment_pointer, map_sz) != 0)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "MunmapError", "There was an error unmapping the segment");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "MunmapError", "There was an error unmapping the segment");
 	}
 #endif
 }
@@ -803,12 +803,12 @@ void msh_CloseSharedMemory(handle_t segment_handle)
 #ifdef MSH_WIN
 	if(CloseHandle(segment_handle) == 0)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the data file handle.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the data file handle.");
 	}
 #else
 	if(close(segment_handle) == -1)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the data file handle.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the data file handle.");
 	}
 #endif
 }

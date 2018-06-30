@@ -1,15 +1,17 @@
 /** mshbasictypes.h
  * Provides some basic typedefs needed in most files.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 
 #ifndef MATSHARE_MSHBASICTYPES_H
 #define MATSHARE_MSHBASICTYPES_H
+
+#include <errno.h>
 
 #include "tmwtypes.h"
 
@@ -31,7 +33,6 @@
 #  define MSH_INVALID_HANDLE INVALID_HANDLE_VALUE
 #else
 #  include <sys/types.h>
-#  include <errno.h>
 #  define MSH_INVALID_HANDLE (-1)
 #endif
 

@@ -1,10 +1,10 @@
 /** mshtable.c
  * Defines functions for handling segment hash tables.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
  
 #include "mex.h"

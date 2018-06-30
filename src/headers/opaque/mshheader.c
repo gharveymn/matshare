@@ -3,10 +3,10 @@
  * defines access functions. Also defines functions for
  * placing variables into shared memory.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #include "mex.h"
@@ -241,12 +241,6 @@ int msh_GetIsNumeric(SharedVariableHeader_t* hdr_ptr)
 }
 
 
-int msh_GetIsVirtualScalar(SharedVariableHeader_t* hdr_ptr)
-{
-	return hdr_ptr->class_info_pack.is_virtual_scalar;
-}
-
-
 
 /** offset Set functions **/
 
@@ -344,12 +338,6 @@ void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, int in)
 }
 
 
-void msh_SetIsVirtualScalar(SharedVariableHeader_t* hdr_ptr, int in)
-{
-	hdr_ptr->class_info_pack.is_virtual_scalar = in;
-}
-
-
 /** data pointer accessors */
 
 mwSize* msh_GetDimensions(SharedVariableHeader_t* hdr_ptr)
@@ -426,7 +414,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	
 	if(mxGetNumberOfDimensions(in_var) < 2)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, 0, "UndefinedDimensionsError", "There was an unexpected number of dimensions. Make sure the array has at least two dimensions.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UndefinedDimensionsError", "There was an unexpected number of dimensions. Make sure the array has at least two dimensions.");
 	}
 	
 	/* Add space for the dimensions */
@@ -519,7 +507,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	}
 	else
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, 0, "InvalidTypeError",
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidTypeError",
 					   "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
@@ -527,7 +515,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 }
 
 
-size_t msh_CopyVariable(void* dest, const mxArray* in_var, int is_top_level)
+size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 {
 	size_t curr_off = 0, idx, copy_sz, alloc_sz, count, num_elems;
 	
@@ -599,7 +587,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var, int is_top_level)
 				msh_GetChildOffsets(dest)[count] = curr_off;
 				
 				/* And fill it */
-				curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetFieldByNumber(in_var, idx, field_num), FALSE));
+				curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetFieldByNumber(in_var, idx, field_num)));
 				
 			}
 			
@@ -625,7 +613,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var, int is_top_level)
 			msh_GetChildOffsets(dest)[count] = curr_off;
 			
 			/* And fill it */
-			curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetCell(in_var, count), FALSE));
+			curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetCell(in_var, count)));
 		}
 		
 	}
@@ -826,7 +814,7 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			}
 			else
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER | MEU_SEVERITY_INTERNAL, 0, "UnrecognizedTypeError",
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER | MEU_SEVERITY_INTERNAL, "UnrecognizedTypeError",
 							   "The fetched array was of class 'sparse' but not of type 'double' or 'logical'.");
 			}
 			
@@ -868,7 +856,7 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 			}
 			else
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, 0, "UnrecognizedTypeError",
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, "UnrecognizedTypeError",
 							   "The fetched array was of class not of type 'numeric', 'logical', or 'char'.");
 			}
 			
@@ -1156,7 +1144,7 @@ void msh_DetachVariable(mxArray* ret_var)
 	}
 	else
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, 0, "InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_CORRUPTION, "InvalidTypeError", "Unsupported type. The segment may have been corrupted.");
 	}
 }
 

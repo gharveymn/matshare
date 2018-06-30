@@ -1,10 +1,10 @@
 /** mshexterntypes.c
  * Provides a partial definition for mxArray. This is a hack.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
  
 #include "mex.h"
@@ -133,7 +133,7 @@ int met_PutSharedCopy(const char* workspace_name, const char* variable_name, mxA
 
 	if(met_GetCrosslink(shared_data_copy) == NULL)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, 0, "NoCrosslinkError", "There was an error where matshare unexpectedly lost track of a MATLAB variable. If you can, please report this.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "NoCrosslinkError", "There was an error where matshare unexpectedly lost track of a MATLAB variable. If you can, please report this.");
 	}
 
 	int is_doubly_linked = (met_GetName(met_GetCrosslink(shared_data_copy)) == shared_data_copy);
@@ -235,7 +235,7 @@ int met_PutSharedCopy(const char* workspace_name, const char* variable_name, mxA
 	
 	if(mexPutVariable(workspace_name, variable_name, dummy_variable))
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, 0, "PutVariableError", "There was an error placing the temporary variable in the workspace.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "PutVariableError", "There was an error placing the temporary variable in the workspace.");
 	}
 	mxDestroyArray(dummy_variable);
 	

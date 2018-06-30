@@ -65,6 +65,7 @@ for i = 1:num_maxDepth_tests
 						end
 						
 					end
+					%mshclear;
 					count = count + 1;
 				end
 			end

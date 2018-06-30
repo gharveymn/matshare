@@ -1,10 +1,10 @@
 /** mshinit.c
  * Defines initialization functions.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
  
 #include "mex.h"
@@ -64,7 +64,7 @@ void msh_InitializeMatshare(void)
 	{
 		if((g_local_info.process_lock = CreateMutex(NULL, FALSE, MSH_LOCK_NAME)) == NULL)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateMutexError", "Failed to create the mutex.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateMutexError", "Failed to create the mutex.");
 		}
 	}
 #else
@@ -99,18 +99,18 @@ static void msh_InitializeSharedInfo(void)
 		g_local_info.shared_info_wrapper.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)sizeof(SharedInfo_t), MSH_SHARED_INFO_SEGMENT_NAME);
 		if(g_local_info.shared_info_wrapper.handle == NULL)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateSharedInfoError", "Could not create or open the shared info segment.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateSharedInfoError", "Could not create or open the shared info segment.");
 		}
 #else
 		g_local_info.shared_info_wrapper.handle = shm_open(MSH_SHARED_INFO_SEGMENT_NAME, O_RDWR | O_CREAT, MSH_DEFAULT_SECURITY);
 		if(g_local_info.shared_info_wrapper.handle == MSH_INVALID_HANDLE)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CreateError", "There was an error creating the shared info segment.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateError", "There was an error creating the shared info segment.");
 		}
 		
 		if(ftruncate(g_local_info.shared_info_wrapper.handle, sizeof(SharedInfo_t)) != 0)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "TruncateError", "There was an error truncating the shared info segment.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "TruncateError", "There was an error truncating the shared info segment.");
 		}
 #endif
 	}
@@ -202,7 +202,7 @@ static void msh_InitializeConfiguration(void)
 	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
 	{
 		mxFree(config_path);
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CreateFileError", "Error opening the config file.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateFileError", "Error opening the config file.");
 	}
 	else
 	{
@@ -211,7 +211,7 @@ static void msh_InitializeConfiguration(void)
 			if(ReadFile(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				mxFree(config_path);
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "ReadFileError", "Error reading from the config file.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 			}
 		}
 		else
@@ -222,14 +222,14 @@ static void msh_InitializeConfiguration(void)
 			if(WriteFile(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				mxFree(config_path);
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "WriteFileError", "Error writing to the config file.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(CloseHandle(config_handle) == 0)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the config file handle.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
 #else
@@ -238,7 +238,7 @@ static void msh_InitializeConfiguration(void)
 		if(errno != EEXIST)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CreateFileError", "Error creating the config file.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateFileError", "Error creating the config file.");
 		}
 		else
 		{
@@ -246,14 +246,14 @@ static void msh_InitializeConfiguration(void)
 			if((config_handle = open(config_path, O_RDONLY | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
 			{
 				mxFree(config_path);
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "OpenFileError", "Error opening the config file.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "OpenFileError", "Error opening the config file.");
 			}
 			else
 			{
 				if(read(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t)) == -1)
 				{
 					mxFree(config_path);
-					meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "ReadFileError", "Error reading from the config file.");
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 				}
 			}
 		}
@@ -266,14 +266,14 @@ static void msh_InitializeConfiguration(void)
 		if(write(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t)) == -1)
 		{
 			mxFree(config_path);
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "WriteFileError", "Error writing to the config file.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
 		}
 	}
 	
 	if(close(config_handle) == -1)
 	{
 		mxFree(config_path);
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "CloseHandleError", "Error closing the config file handle.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the config file handle.");
 	}
 
 #endif
@@ -311,7 +311,7 @@ void msh_OnExit(void)
 			msh_WriteConfiguration();
 			if(shm_unlink(MSH_SHARED_INFO_SEGMENT_NAME) != 0)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, errno, "UnlinkError", "There was an error unlinking the shared info segment. This is a critical error, please restart.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "UnlinkError", "There was an error unlinking the shared info segment. This is a critical error, please restart.");
 			}
 			msh_SetCounterPost(&g_shared_info->num_procs, TRUE);
 		}
@@ -332,7 +332,7 @@ void msh_OnExit(void)
 	{
 		if(CloseHandle(g_local_info.process_lock) == 0)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, GetLastError(), "CloseHandleError", "Error closing the process lock handle.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the process lock handle.");
 		}
 		g_local_info.process_lock = MSH_INVALID_HANDLE;
 	}
@@ -349,9 +349,17 @@ void msh_OnExit(void)
 }
 
 
-void msh_OnError(void)
+void msh_OnError(int error_severity)
 {
-	meu_SetErrorCallback(NULL);
+	/* if the severity compromises the system set local and shared memory fatal flags */
+	if(error_severity & MEU_SEVERITY_FATAL)
+	{
+		g_local_info.has_fatal_error = TRUE;
+		if(g_shared_info != NULL)
+		{
+			g_shared_info->has_fatal_error = TRUE;
+		}
+	}
 	
 	/* set the process lock at a level where it can be released if needed */
 	while(g_local_info.lock_level > 0)

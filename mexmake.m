@@ -100,7 +100,8 @@ try
 	%mexflags = [mexflags {'-DMSH_DEBUG_PERF'}];
 	
 	fprintf('-Compiling matshare...')
-	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /W4"'}];
+	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /Wall"'}];
+	%mexflags = [mexflags {'CFLAGS="$CFLAGS -Wall"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n')
 	if(mshDebugMode)

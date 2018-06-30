@@ -2,10 +2,10 @@
  * Defines structs for process local information as well as
  * shared information.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 
@@ -50,7 +50,6 @@ typedef struct UserConfig_t
 	volatile LockFreeCounter_t lock_counter;
 	unsigned long max_shared_segments;
 	alignedbool_t will_shared_gc;
-	alignedbool_t will_local_gc;
 #ifdef MSH_UNIX
 	mode_t security;
 #endif
@@ -98,6 +97,7 @@ typedef struct LocalInfo_t
 	
 	ProcessLock_t process_lock;
 	
+	bool_t has_fatal_error;
 	bool_t is_initialized;
 	bool_t is_deinitialized;
 } LocalInfo_t;

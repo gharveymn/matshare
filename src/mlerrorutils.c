@@ -2,10 +2,10 @@
  * Defines error and warning utility functions for easier
  * output of error information.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #include "mex.h"
@@ -58,17 +58,17 @@ static void meu_WriteSeverityString(char* buffer, unsigned int error_severity);
  * @param buffer A preallocated buffer. Should be size MEU_SYSTEM_ERROR_STRING_SIZE.
  * @param error_code The system error code returned from GetLastError() or errno.
  */
-static void meu_WriteSystemErrorString(char* buffer, errcode_t error_code);
+static void meu_WriteSystemErrorString(char* buffer, unsigned int error_severity);
 
 static char* meu_library_name = "";
 
-static void (*meu_error_callback)(void) = NULL;
+static void (*meu_error_callback)(int) = NULL;
 static void (*meu_warning_callback)(void) = NULL;
 
 static char* meu_error_help_message = "";
 static char* meu_warning_help_message = "";
 
-void meu_PrintMexError(const char* file_name, int line, unsigned int error_severity, errcode_t error_code, const char* error_id, const char* error_message, ...)
+void meu_PrintMexError(const char* file_name, int line, unsigned int error_severity, const char* error_id, const char* error_message, ...)
 {
 	char full_message[MEU_FULL_MESSAGE_SIZE] = {0};
 	char error_message_buffer[MEU_ERROR_STRING_SIZE] = {0};
@@ -76,24 +76,24 @@ void meu_PrintMexError(const char* file_name, int line, unsigned int error_sever
 	char id_buffer[MEU_ID_BUFFER_SIZE] = {0};
 	char system_error_string_buffer[MEU_SYSTEM_ERROR_STRING_SIZE] = {0};
 	
+	if(error_severity & MEU_SEVERITY_SYSTEM)
+	{
+		meu_WriteSystemErrorString(system_error_string_buffer, error_severity);
+	}
+	
 	va_list va;
 	va_start(va, error_message);
 	vsprintf(error_message_buffer, error_message, va);
 	va_end(va);
 	
 	meu_WriteSeverityString(error_severity_buffer, error_severity);
-
-	if(error_severity & MEU_SEVERITY_SYSTEM)
-	{
-		meu_WriteSystemErrorString(system_error_string_buffer, error_code);
-	}
 	
 	sprintf(id_buffer, MEU_ID_FORMAT, meu_library_name, error_id);
 	sprintf(full_message, MEU_ERROR_MESSAGE_FORMAT, error_id, file_name, line, error_severity_buffer, error_message_buffer, system_error_string_buffer, meu_error_help_message);
 	
 	if(meu_error_callback != NULL)
 	{
-		meu_error_callback();
+		meu_error_callback(error_severity);
 	}
 	mexErrMsgIdAndTxt(id_buffer, full_message);
 	
@@ -140,15 +140,15 @@ void meu_SetWarningHelpMessage(char* help_message)
 }
 
 
-void meu_SetErrorCallback(void (* callback_function)(void))
+void meu_SetErrorCallback(void (*callback_function)(int))
 {
 	meu_error_callback = callback_function;
 }
 
 
-void meu_SetWarningCallback(void (* callback_function)(void))
+void meu_SetWarningCallback(void (*callback_function)(void))
 {
-	meu_error_callback = callback_function;
+	meu_warning_callback = callback_function;
 }
 
 
@@ -191,31 +191,42 @@ static void meu_WriteSeverityString(char* buffer, unsigned int error_severity)
 }
 
 
-static void meu_WriteSystemErrorString(char* buffer, errcode_t error_code)
+static void meu_WriteSystemErrorString(char* buffer, unsigned int error_severity)
 {
 	char* inner_buffer = buffer;
 	
 #ifdef _WIN32
-	sprintf(buffer, "System error code 0x%lX: ", error_code);
-	inner_buffer += strlen(buffer);
 	
-	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-			    NULL,
-			    error_code,
-			    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-			    inner_buffer,
-			    MEU_SYSTEM_ERROR_STRING_SIZE, NULL);
+	if(error_severity & MEU_ERRNO)
+	{
+		sprintf(buffer, "System error code 0x%d: ", errno);
+		inner_buffer += strlen(buffer);
+		
+		strerror_s(inner_buffer, MEU_SYSTEM_ERROR_STRING_SIZE, errno);
+	}
+	else
+	{
+		sprintf(buffer, "System error code 0x%lX: ", GetLastError());
+		inner_buffer += strlen(buffer);
+		
+		FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), inner_buffer, MEU_SYSTEM_ERROR_STRING_SIZE, NULL);
+	}
 #else
+	
+	/* we use errno in any case */
+	
 	sprintf(buffer, "System error code 0x%d: ", error_code);
 	inner_buffer += strlen(buffer);
 	
 #  if(((_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && !_GNU_SOURCE) || defined(__APPLE__))
 	/* XSI-compliant version */
-	strerror_r(error_code, inner_buffer, MEU_SYSTEM_ERROR_STRING_SIZE);
+	strerror_r(errno, inner_buffer, MEU_SYSTEM_ERROR_STRING_SIZE);
 #  else
 	/* GNU-specific */
-	strcpy(inner_buffer, strerror_r(error_code, inner_buffer, MEU_SYSTEM_ERROR_STRING_SIZE));
+	strcpy(inner_buffer, strerror_r(errno, inner_buffer, MEU_SYSTEM_ERROR_STRING_SIZE));
 #  endif
 #endif
+	
 	*(buffer + strlen(buffer)) = '\n';
+	
 }

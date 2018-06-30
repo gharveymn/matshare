@@ -2,10 +2,10 @@
  * Provides some function declarations for access to shared
  * variable headers.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
  
 #ifndef MATSHARE_MSHHEADERTYPE_H
@@ -156,15 +156,6 @@ int msh_GetIsSparse(SharedVariableHeader_t* hdr_ptr);
 int msh_GetIsNumeric(SharedVariableHeader_t* hdr_ptr);
 
 
-/**
- * Returns the virtual scalar flag.
- *
- * @param hdr_ptr The shared variable header.
- * @return The numeric flag.
- */
-int msh_GetIsVirtualScalar(SharedVariableHeader_t* hdr_ptr);
-
-
 /** setters **/
 
 /**
@@ -303,15 +294,6 @@ void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, int in);
 
 
 /**
- * Returns the virtual scalar flag.
- *
- * @param hdr_ptr The shared variable header.
- * @param in The numeric flag.
- */
-void msh_SetIsVirtualScalar(SharedVariableHeader_t* hdr_ptr, int in);
-
-
-/**
  * Creates a local pointer to the dimensions array.
  *
  * @param hdr_ptr The shared variable header.
@@ -420,7 +402,7 @@ size_t msh_FindSharedSize(const mxArray* in_var);
  * @param in_var The input variable.
  * @return The number of bytes needed to store this variable and its children.
  */
-size_t msh_CopyVariable(void* dest, const mxArray* in_var, int is_top_level);
+size_t msh_CopyVariable(void* dest, const mxArray* in_var);
 
 
 /**

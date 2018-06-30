@@ -1,10 +1,10 @@
 /** mlerrorutils.h
  * Declares functions and macros for mex error utility functions.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
  
 #ifndef MATSHARE_UTILS_H
@@ -32,6 +32,7 @@
 #define MEU_SEVERITY_SYSTEM      1 << 2
 #define MEU_SEVERITY_CORRUPTION  1 << 3
 #define MEU_SEVERITY_FATAL       1 << 4
+#define MEU_ERRNO                1 << 5
 
 #define MEU_FL __FILE__, __LINE__
 
@@ -46,7 +47,7 @@
  * @param error_message The printf message format associated to the error.
  * @param ... The error message params in printf style.
  */
-void meu_PrintMexError(const char* file_name, int line, unsigned int error_severity, errcode_t error_code, const char* error_id, const char* error_message, ...);
+void meu_PrintMexError(const char* file_name, int line, unsigned int error_severity, const char* error_id, const char* error_message, ...);
 
 /**
  * Prints the specified warning message in MATLAB.
@@ -83,13 +84,13 @@ void meu_SetWarningHelpMessage(char* help_message);
  *
  * @param callback_function The callback function. Does nothing if set to NULL.
  */
-void meu_SetErrorCallback(void (* callback_function)(void));
+void meu_SetErrorCallback(void (*callback_function)(int));
 
 /**
  * Sets the warning callback function.
  *
  * @param callback_function The callback function. Does nothing if set to NULL.
  */
-void meu_SetWarningCallback(void (* callback_function)(void));
+void meu_SetWarningCallback(void (*callback_function)(void));
 
 #endif /* MATSHARE_UTILS_H */

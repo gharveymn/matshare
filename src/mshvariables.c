@@ -1,10 +1,10 @@
 /** mshvariables.c
  * Defines functions for variable creation and tracking.
  *
- * Copyright (c) 2018 Gene Harvey
+ * Copyright © 2018 Gene Harvey
  *
  * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
+ * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #include "mex.h"
@@ -30,7 +30,7 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 	
 	if(msh_GetVariableNode(seg_node) != NULL)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, 0, "CreateVariableError", "The segment targeted for variable creation already has a variable attached to it.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "CreateVariableError", "The segment targeted for variable creation already has a variable attached to it.");
 	}
 	
 	/* keep track of the last virtual scalar before the fetch operation */
