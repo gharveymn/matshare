@@ -101,11 +101,10 @@ struct SharedVariableHeader_t
 	int num_fields;       /* the number of fields.  The field string immediately follows the size array */
 	struct class_info_pack_tag
 	{
-		int32_T class_id          : 16;
-		int32_T is_empty          : 4;
-		int32_T is_sparse         : 4;
-		int32_T is_numeric        : 4;
-		int32_T is_virtual_scalar : 4;
+		int32_T class_id          : 8;
+		int32_T is_empty          : 8;
+		int32_T is_sparse         : 8;
+		int32_T is_numeric        : 8;
 	} class_info_pack;
 };
 

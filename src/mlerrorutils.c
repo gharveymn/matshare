@@ -11,6 +11,7 @@
 #include "mex.h"
 #include <stdarg.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #ifndef _WIN32
 #  include <string.h>
@@ -215,7 +216,7 @@ static void meu_WriteSystemErrorString(char* buffer, unsigned int error_severity
 	
 	/* we use errno in any case */
 	
-	sprintf(buffer, "System error code 0x%d: ", error_code);
+	sprintf(buffer, "System error code 0x%d: ", errno);
 	inner_buffer += strlen(buffer);
 	
 #  if(((_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && !_GNU_SOURCE) || defined(__APPLE__))

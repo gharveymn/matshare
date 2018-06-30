@@ -40,9 +40,6 @@
 #  endif
 #endif
 
-#define msh_SHARETYPE_COPY 0
-#define msh_SHARETYPE_OVERWRITE 1
-
 typedef struct UserConfig_t
 {
 	/* these are aligned for lockless assignment */

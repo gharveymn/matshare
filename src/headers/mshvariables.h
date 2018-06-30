@@ -14,7 +14,6 @@
 #include "mshtypes.h"
 #include "mshvariablenode.h"
 
-#define MSH_VIRTUAL_SCALAR_SIGNATURE 0xAA
 
 /**
  * Creates a new MATLAB variable from the specified shared segment.

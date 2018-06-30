@@ -616,8 +616,8 @@ void msh_Config(int num_params, const mxArray** in_params)
 					meu_PrintMexError(MEU_FL,
 					                  MEU_SEVERITY_USER | MEU_SEVERITY_SYSTEM | MEU_ERRNO,
 					                  "RangeError",
-					                  "The input is outside the range of possible values. Please enter a number smaller than "SIZE_FORMAT" and larger than 0.",
-					                  ULONG_MAX);
+					                  "The input for \"%s\" is outside the range of possible values. Please enter a number smaller than "SIZE_FORMAT" and larger than 0.",
+					                  MSH_PARAM_MAX_VARIABLES, ULONG_MAX);
 				}
 			}
 			g_shared_info->user_defined.max_shared_segments = maxvars_temp;
@@ -637,8 +637,8 @@ void msh_Config(int num_params, const mxArray** in_params)
 					meu_PrintMexError(MEU_FL,
 					                  MEU_SEVERITY_USER | MEU_SEVERITY_SYSTEM | MEU_ERRNO,
 					                  "RangeError",
-					                  "The input is outside the range of possible values. Please enter a number smaller than "SIZE_FORMAT" and larger than 0.",
-					                  ULLONG_MAX);
+					                  "The input for \"%s\" is outside the range of possible values. Please enter a number smaller than "SIZE_FORMAT" and larger than 0.",
+					                  MSH_PARAM_MAX_SIZE, ULLONG_MAX);
 				}
 			}
 			g_shared_info->user_defined.max_shared_size = maxsize_temp;
@@ -654,8 +654,8 @@ void msh_Config(int num_params, const mxArray** in_params)
 					meu_PrintMexError(MEU_FL,
 					                  MEU_SEVERITY_USER | MEU_SEVERITY_SYSTEM | MEU_ERRNO,
 					                  "RangeError",
-					                  "The input is outside the range of possible values. Please enter a number smaller than "SIZE_FORMAT" and larger than 0.",
-					                  ULONG_MAX);
+					                  "The input for "%s" is outside the range of possible values. Please enter a number smaller than "SIZE_FORMAT" and larger than 0.",
+					                  MSH_PARAM_MAX_SIZE, ULONG_MAX);
 				}
 			}
 			g_shared_info->user_defined.max_shared_size = maxsize_temp;
