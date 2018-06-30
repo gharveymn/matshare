@@ -63,6 +63,8 @@ num_samples = 1000;
 count = 1;
 total_num_tests = num_maxDepth_tests*num_maxElements_tests*num_maxDims_tests*num_maxChildren_tests*num_typespec_tests;
 
+par_rand_streams = cell(total_num_tests, numworkers);
+
 %% random call combination test
 lents = 0;
 fprintf('Running tests with random combinations of commands...\n');
@@ -91,7 +93,7 @@ for i = 1:num_maxDepth_tests
 					fprintf([repmat('\b',1,lents) timestr]);
 					lents = numel(timestr);
 					parfor o = 1:numworkers
-						testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, observerpid, true);
+						par_rand_streams{count, o} = testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, true);
 					end
 					count = count + 1;
 				end

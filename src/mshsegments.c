@@ -41,6 +41,12 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_s
 static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache, msh_segmentnumber_t seg_num);
 
 
+/**
+ * Increments the revision number; avoids setting it as MSH_INITIAL_STATE.
+ */
+static void msh_IncrementRevisionNumber(void);
+
+
 /** public function definitions **/
 
 SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
@@ -169,7 +175,6 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 		msh_DetachSegment(seg_node);
 		meu_PrintMexError(MEU_FL,
 		                  MEU_SEVERITY_USER,
-		                  0,
 		                  "TooManyVariablesError",
 		                  "The shared variable would exceed the current maximum number of shared variables (currently set as %li). "
 		                  "You may change this limit by using mshconfig. For more information refer to `help mshconfig`.",
@@ -209,7 +214,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 	g_shared_info->update_pid = g_local_info.this_pid;
 	
 	/* update the revision number to indicate other processes to retrieve new segments */
-	g_shared_info->rev_num += 1;
+	msh_IncrementRevisionNumber();
 	
 	msh_ReleaseProcessLock(g_process_lock);
 	
@@ -281,7 +286,7 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 	g_shared_info->num_shared_segments -= 1;
 	
 	/* update the revision number to tell processes to update their segment lists */
-	g_shared_info->rev_num += 1;
+	msh_IncrementRevisionNumber();
 	
 	msh_ReleaseProcessLock(g_process_lock);
 	
@@ -565,7 +570,6 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* seg_info_cache, size_t data_s
 	{
 		meu_PrintMexError(MEU_FL,
 		                  MEU_SEVERITY_USER,
-		                  0,
 		                  "SegmentSizeError",
 		                  "The total size of currently shared memory is " SIZE_FORMAT " bytes. "
 		                  "The variable shared has a size of " SIZE_FORMAT " bytes and will exceed the "
@@ -833,4 +837,11 @@ void msh_UnlockMemory(void* ptr, size_t sz)
 	/* unlock this set of pages */
 	munlock(ptr, sz);
 #endif
+}
+
+
+static void msh_IncrementRevisionNumber(void)
+{
+	/* make sure to avoid setting this as MSH_INITIAL_STATE */
+	g_shared_info->rev_num = (g_shared_info->rev_num == SIZE_MAX)? 1 : g_shared_info->rev_num + 1;
 }

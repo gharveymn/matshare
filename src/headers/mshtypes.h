@@ -40,6 +40,8 @@
 #  endif
 #endif
 
+#define MSH_INITIAL_STATE 0
+
 typedef struct UserConfig_t
 {
 	/* these are aligned for lockless assignment */

@@ -53,11 +53,11 @@ typedef struct mxArray_tag mxArray;
 
 
 #define MSH_DEBUG_LOCAL_FORMAT \
-"g_local_info: \n" \
+"g_local_info:\n" \
 "     rev_num: "SIZE_FORMAT"\n" \
 "     lock_level: %lu\n" \
 "     this_pid: "PID_FORMAT"\n" \
-"     shared_info_wrapper (struct): \n" \
+"     shared_info_wrapper (struct):\n" \
 "          ptr: "SIZE_FORMAT"\n" \
 "          handle: "HANDLE_FORMAT"\n" \
 "     process_lock: "HANDLE_FORMAT"\n" \
@@ -85,12 +85,12 @@ g_local_info.is_deinitialized
 #  define MSH_SECURITY_FORMAT \
 "          security: %i\n"
 #  define MSH_NUM_PROCS_FORMAT \
-"     lock_counter (union): \n" \
-"          span: %li" \
-"          values (struct): \n" \
-"               count: %lu \n" \
-"               flag: %lu \n" \
-"               post: %lu \n"
+"     num_procs (union):\n" \
+"          span: %li\n" \
+"          values (struct):\n" \
+"               count: %lu\n" \
+"               flag: %lu\n" \
+"               post: %lu\n"
 #  define MSH_SECURITY_ARG g_shared_info->user_defined.security,
 #  define MSH_NUM_PROCS_ARG \
 g_shared_info->num_procs.span, \
@@ -100,16 +100,16 @@ g_shared_info->num_procs.values.post,
 #endif
 
 #define MSH_DEBUG_SHARED_FORMAT \
-"g_shared_info: \n" \
+"g_shared_info:\n" \
 "     rev_num: "SIZE_FORMAT"\n" \
 "     total_shared_size: "SIZE_FORMAT"\n" \
-"     user_defined (struct): \n" \
-"          lock_counter (union): \n" \
+"     user_defined (struct):\n" \
+"          lock_counter (union):\n" \
 "               span: %li\n" \
-"               values (struct): \n" \
-"                    count: %lu \n" \
-"                    flag: %lu \n" \
-"                    post: %lu \n" \
+"               values (struct):\n" \
+"                    count: %lu\n" \
+"                    flag: %lu\n" \
+"                    post: %lu\n" \
 "          max_shared_segments: %lu\n" \
 "          max_shared_size: "SIZE_FORMAT"\n" \
 "          will_shared_gc: %lu\n" \
@@ -120,7 +120,7 @@ MSH_SECURITY_FORMAT\
 "     has_fatal_error: %lu\n" \
 "     is_initialized: %lu\n" \
 MSH_NUM_PROCS_FORMAT\
-"     update_pid: "PID_FORMAT" \n"
+"     update_pid: "PID_FORMAT"\n"
 
 #define MSH_DEBUG_SHARED_ARGS \
 g_shared_info->rev_num, \

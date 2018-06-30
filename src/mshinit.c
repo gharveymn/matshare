@@ -123,9 +123,18 @@ static void msh_InitializeSharedInfo(void)
 #ifdef MSH_WIN
 		if(msh_AtomicIncrement(&g_shared_info->num_procs) == 1)
 		{
+			/* this is the global initializer */
+			g_shared_info->rev_num = MSH_INITIAL_STATE;
+			g_shared_info->total_shared_size = 0;
 			g_shared_info->last_seg_num = MSH_INVALID_SEG_NUM;
 			g_shared_info->first_seg_num = MSH_INVALID_SEG_NUM;
+			g_shared_info->num_shared_segments = 0;
+			g_shared_info->has_fatal_error = 0;
+			g_shared_info->update_pid = 0;
+			/* the lockfree mechanism relies on is_initialized being initialized to 0 */
+			
 			msh_InitializeConfiguration();
+			
 			g_shared_info->is_initialized = TRUE;
 		}
 #else
@@ -161,9 +170,18 @@ static void msh_InitializeSharedInfo(void)
 		
 		if(ret_num_procs.values.count == 1)
 		{
+			/* this is the global initializer */
+			g_shared_info->rev_num = MSH_INITIAL_STATE;
+			g_shared_info->total_shared_size = 0;
 			g_shared_info->last_seg_num = MSH_INVALID_SEG_NUM;
 			g_shared_info->first_seg_num = MSH_INVALID_SEG_NUM;
+			g_shared_info->num_shared_segments = 0;
+			g_shared_info->has_fatal_error = 0;
+			g_shared_info->update_pid = 0;
+			/* the lockfree mechanism relies on is_initialized being initialized to 0 */
+			
 			msh_InitializeConfiguration();
+			
 			g_shared_info->is_initialized = TRUE;
 		}
 #endif
@@ -172,7 +190,7 @@ static void msh_InitializeSharedInfo(void)
 		msh_GetTick(&busy_wait_time.old);
 #endif
 		
-		/* wait until the shared memory is initialized to move on */
+		/* busy wait until the shared memory is initialized to move on */
 		while(!g_shared_info->is_initialized);
 
 #ifdef MSH_DEBUG_PERF
@@ -343,6 +361,9 @@ void msh_OnExit(void)
 		g_local_info.process_lock.lock_size = 0;
 	}
 #endif
+	
+	/* make sure this is reset so there aren't any collisions with the shared state */
+	g_local_info.rev_num  = MSH_INITIAL_STATE;
 	
 	g_local_info.is_deinitialized = TRUE;
 	

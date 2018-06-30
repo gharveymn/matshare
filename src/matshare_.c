@@ -33,7 +33,7 @@ char_t* g_msh_error_help_message = "";
 char_t* g_msh_warning_help_message = "";
 
 LocalInfo_t g_local_info = {
-							0,                          /* rev_num */
+		                         MSH_INITIAL_STATE,          /* rev_num */
 							0,                          /* lock_level */
 							0,                          /* this_pid */
 							{
@@ -342,7 +342,6 @@ void msh_Fetch(int nlhs, mxArray** plhs)
 				
 				/* retrieve all segment variables */
 				plhs[1] = mxCreateCellMatrix((size_t)(g_local_seg_list.num_segs != 0), g_local_seg_list.num_segs);
-				
 				
 				for(i = 0, curr_seg_node = g_local_seg_list.first;
 				    		i < g_local_seg_list.num_segs;

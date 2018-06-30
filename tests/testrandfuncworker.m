@@ -1,8 +1,9 @@
-function testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, observerpid, isparallel)
+function rns = testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, isparallel)
 	thispid = feature('getpid');
 	if(isparallel)
 		% only do this if in parallel so we have consistent results otherwise
-		rns = RandStream('mt19937ar', 'Seed', mod(now*10^10, thispid));
+		%rns = RandStream('mt19937ar', 'Seed', mod(now*10^10, thispid));
+		rns = RandStream('mt19937ar', 'Seed', thispid);
 	else
 		rns = RandStream('mt19937ar');
 	end

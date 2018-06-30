@@ -21,8 +21,8 @@
 #  include <unistd.h>
 #  include <fcntl.h>
 #  include <sys/mman.h>
+#  include <sys/stat.h>
 #endif
-
 
 void msh_AcquireProcessLock(ProcessLock_t process_lock)
 {
@@ -119,7 +119,7 @@ void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num)
 {
 	if(seg_num == MSH_INVALID_SEG_NUM)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_FATAL, 0, "InternalLogicError", "There was an internal logic error where matshare lost track of its internal shared memory list. Please"
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_FATAL, "InternalLogicError", "There was an internal logic error where matshare lost track of its internal shared memory list. Please"
 															 "report this if you can.");
 	}
 	sprintf(name_buffer, MSH_SEGMENT_NAME_FORMAT, (unsigned long)seg_num);
