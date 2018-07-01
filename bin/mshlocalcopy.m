@@ -2,11 +2,11 @@ function [latest, newvars, allvars] = mshlocalcopy(in)
 %% MSHLOCALCOPY  Create local deep copies of shared variables.%
 %    LATEST = MSHLOCALCOPY returns the most recently shared variable.
 %
-%    [~,NEWVARS] = MSHLOCALCOPY returns shared variables not currently being 
-%    used by this process.
+%    [~,NEWVARS] = MSHLOCALCOPY returns shared variables not currently 
+%    being used by this process.
 %
-%    [~,~,ALLVARS] = MSHLOCALCOPY returns all variables which are currently in 
-%    shared memory.
+%    [~,~,ALLVARS] = MSHLOCALCOPY returns all variables which are currently 
+%    in shared memory.
 %
 %    COPY = MSHLOCALCOPY(VAR) returns a local deep copy of VAR.
 

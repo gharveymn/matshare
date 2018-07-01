@@ -83,7 +83,7 @@ g_local_info.is_deinitialized
 #  define MSH_NUM_PROCS_ARG g_shared_info->num_procs,
 #else
 #  define MSH_SECURITY_FORMAT \
-"          security: %i\n"
+"          security: %o\n"
 #  define MSH_NUM_PROCS_FORMAT \
 "     num_procs (union):\n" \
 "          span: %li\n" \
@@ -140,6 +140,12 @@ g_shared_info->has_fatal_error, \
 g_shared_info->is_initialized, \
 MSH_NUM_PROCS_ARG \
 g_shared_info->update_pid
+
+#ifdef MSH_UNIX
+/* this will be changed in a future release */
+#  define MSH_FD_HARD_LIMIT 2048
+#endif
+
 
 typedef enum
 {
