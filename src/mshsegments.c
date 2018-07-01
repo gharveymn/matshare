@@ -377,33 +377,41 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 void msh_UpdateLatestSegment(SegmentList_t* seg_list)
 {
 	SegmentNode_t* last_seg_node;
-	if(g_shared_info->last_seg_num != MSH_INVALID_SEG_NUM && !msh_IsUpdated())
+	if(msh_IsUpdated())
+	{
+		return;
+	}
+	
+	if((last_seg_node = msh_FindSegmentNode(&seg_list->seg_table, g_shared_info->last_seg_num)) != NULL)
+	{
+		/* place the segment at the end of the list */
+		msh_PlaceSegmentAtEnd(last_seg_node);
+	}
+	else if(g_shared_info->last_seg_num != MSH_INVALID_SEG_NUM)
 	{
 		msh_AcquireProcessLock(g_process_lock);
 		
-		/* double check volatile flag */
-		if(g_shared_info->last_seg_num != MSH_INVALID_SEG_NUM)
+		/* double check for local segment */
+		if((last_seg_node = msh_FindSegmentNode(&seg_list->seg_table, g_shared_info->last_seg_num)) != NULL)
 		{
-			if((last_seg_node = msh_FindSegmentNode(&seg_list->seg_table, g_shared_info->last_seg_num)) == NULL)
-			{
-				last_seg_node = msh_OpenSegment(g_shared_info->last_seg_num);
-				msh_ReleaseProcessLock(g_process_lock);
-				
-				msh_AddSegmentToList(seg_list, last_seg_node);
-			}
-			else
-			{
-				msh_ReleaseProcessLock(g_process_lock);
-				
-				/* place the segment at the end of the list */
-				msh_PlaceSegmentAtEnd(last_seg_node);
-			}
+			msh_ReleaseProcessLock(g_process_lock);
+			/* place the segment at the end of the list */
+			msh_PlaceSegmentAtEnd(last_seg_node);
+		}
+		else if(g_shared_info->last_seg_num != MSH_INVALID_SEG_NUM)
+		{
+			/* only open if the segment is valid */
+			last_seg_node = msh_OpenSegment(g_shared_info->last_seg_num);
+			msh_ReleaseProcessLock(g_process_lock);
+			
+			msh_AddSegmentToList(seg_list, last_seg_node);
 		}
 		else
 		{
 			msh_ReleaseProcessLock(g_process_lock);
 		}
 	}
+	
 }
 
 
