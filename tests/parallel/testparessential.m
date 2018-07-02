@@ -1,4 +1,4 @@
-addpath(fullfile(mfilefolder(mfilename), '..', 'vargen'));
+addpath(fullfile(fileparts(which(mfilename)), '..', 'vargen'));
 
 %% Type classes
 mxUNKNOWN_CLASS  = 0;

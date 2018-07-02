@@ -14,7 +14,7 @@ if(all(ismember('Parallel Computing Toolbox',installedToolboxes)))
 		numworkers = pp.NumWorkers;
 	end
 else
-	error('No parallel computing toolbox detected, cannot continue.');
+	error('NoParCompToolError', 'No parallel computing toolbox detected, cannot continue.');
 end
 
 workerpids = cell(1, numworkers);
