@@ -33,23 +33,25 @@ char_t* g_msh_error_help_message = "";
 char_t* g_msh_warning_help_message = "";
 
 LocalInfo_t g_local_info = {
-		                         MSH_INITIAL_STATE,          /* rev_num */
-							0,                          /* lock_level */
-							0,                          /* this_pid */
-							{
-								NULL,                  /* ptr */
-								MSH_INVALID_HANDLE     /* handle */
-							},                          /* shared_info_wrapper */
+		                      MSH_INITIAL_STATE,          /* rev_num */
+		                      0,                          /* lock_level */
+		                      0,                          /* this_pid */
+		                      {
+		                           NULL,                  /* ptr */
+		                           MSH_INVALID_HANDLE     /* handle */
+		                      },                          /* shared_info_wrapper */
 #ifdef MSH_WIN
-							MSH_INVALID_HANDLE,         /* process_lock */
+                                MSH_INVALID_HANDLE,         /* process_lock */
 #else
-							MSH_INVALID_HANDLE,         /* process_lock */
-							0,                          /* lock_size */
+		                      {
+		                           MSH_INVALID_HANDLE,         /* process_lock */
+		                           0,                          /* lock_size */
+		                      },
 #endif
-	                              FALSE,                      /* has_fatal_error */
-							FALSE,                      /* is_initialized */
-							TRUE                        /* is_deinitialized */
-						};
+		                      FALSE,                      /* has_fatal_error */
+		                      FALSE,                      /* is_initialized */
+		                      TRUE                        /* is_deinitialized */
+                           };
 
 VariableList_t g_local_var_list = {0};
 VariableList_t g_virtual_scalar_list = {0};
@@ -603,62 +605,72 @@ void msh_Config(int num_params, const mxArray** in_params)
 		}
 		else if(strncmp(param_str_l, MSH_PARAM_MAX_VARIABLES_L, 6) == 0 || strcmp(param_str_l, MSH_PARAM_MAX_VARIABLES_AB) == 0)
 		{
+			/* this can't be negative */
+			if(val_str_l[0] == '-')
+			{
+				meu_PrintMexError(MEU_FL,
+				                  MEU_SEVERITY_USER,
+				                  "NegativeNumVarsError",
+				                  "The maximum number of shared variables must be non-negative.");
+			}
+			
 			errno = 0;
-			if((maxvars_temp = strtoul(val_str_l, NULL, 0)) == 0)
+			maxvars_temp = strtoul(val_str_l, NULL, 0);
+			if(errno)
+			{
+				meu_PrintMexError(MEU_FL,
+				                  MEU_SEVERITY_USER | MEU_SEVERITY_SYSTEM | MEU_ERRNO,
+				                  "MaxVarsParsingError",
+				                  "There was an error parsing the value for the maximum number of shared variables.");
+			}
+			
+			if(maxvars_temp == 0)
 			{
 				meu_PrintMexWarning("ZeroVariablesWarning", "The maximum number of variables has been set to zero. Please verify your input if this was not intentional.");
 			}
-			else if(maxvars_temp == ULONG_MAX)
+
+#ifdef MSH_UNIX
+			if(maxvars_temp > MSH_FD_HARD_LIMIT)
 			{
-				if(errno == ERANGE)
-				{
-					meu_PrintMexError(MEU_FL,
-					                  MEU_SEVERITY_USER | MEU_SEVERITY_SYSTEM | MEU_ERRNO,
-					                  "RangeError",
-					                  "The input for \"%s\" is outside the range of possible values. Please enter a number smaller than "SIZE_FORMAT" and larger than 0.",
-					                  MSH_PARAM_MAX_VARIABLES, ULONG_MAX);
-				}
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER | MEU_SEVERITY_INTERNAL, "MaxVarsRangeError",
+				                  "The value input exceeds the hard limit of %lu shared variables. This limit will be removed in a future update.", MSH_FD_HARD_LIMIT);
 			}
+#endif
 			g_shared_info->user_defined.max_shared_segments = maxvars_temp;
+			
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_MAX_SIZE_L) == 0 || strcmp(param_str_l, MSH_PARAM_MAX_SIZE_AB) == 0)
 		{
+			
+			/* this can't be negative */
+			if(val_str_l[0] == '-')
+			{
+				meu_PrintMexError(MEU_FL,
+				                  MEU_SEVERITY_USER,
+				                  "NegativeSizeError",
+				                  "The maximum total size of shared memory must be non-negative.");
+			}
+			
 			errno = 0;
 #if MSH_BITNESS==64
-			if((maxsize_temp = strtoull(val_str_l, NULL, 0)) == 0)
-			{
-				meu_PrintMexWarning("ZeroSizeWarning", "The maximum size has been set to zero. Please verify your input if this was not intentional.");
-			}
-			else if(maxsize_temp == ULLONG_MAX)
-			{
-				if(errno == ERANGE)
-				{
-					meu_PrintMexError(MEU_FL,
-					                  MEU_SEVERITY_USER | MEU_SEVERITY_SYSTEM | MEU_ERRNO,
-					                  "RangeError",
-					                  "The input for \"%s\" is outside the range of possible values. Please enter a number smaller than "SIZE_FORMAT" and larger than 0.",
-					                  MSH_PARAM_MAX_SIZE, ULLONG_MAX);
-				}
-			}
-			g_shared_info->user_defined.max_shared_size = maxsize_temp;
+			maxsize_temp = strtoull(val_str_l, NULL, 0);
 #elif MSH_BITNESS==32
-			if((maxsize_temp = strtoul(val_str_l, NULL, 0)) == 0)
+			maxsize_temp = strtoul(val_str_l, NULL, 0);
+#endif
+			if(errno)
+			{
+				meu_PrintMexError(MEU_FL,
+				                  MEU_SEVERITY_USER | MEU_SEVERITY_SYSTEM | MEU_ERRNO,
+				                  "MaxSizeParsingError",
+				                  "There was an error parsing the value for the maximum total size of shared memory.");
+			}
+			
+			if(maxsize_temp == 0)
 			{
 				meu_PrintMexWarning("ZeroSizeWarning", "The maximum size has been set to zero. Please verify your input if this was not intentional.");
 			}
-			else if(maxsize_temp == ULONG_MAX)
-			{
-				if(errno == ERANGE)
-				{
-					meu_PrintMexError(MEU_FL,
-					                  MEU_SEVERITY_USER | MEU_SEVERITY_SYSTEM | MEU_ERRNO,
-					                  "RangeError",
-					                  "The input for "%s" is outside the range of possible values. Please enter a number smaller than "SIZE_FORMAT" and larger than 0.",
-					                  MSH_PARAM_MAX_SIZE, ULONG_MAX);
-				}
-			}
 			g_shared_info->user_defined.max_shared_size = maxsize_temp;
-#endif
+			
 		}
 		else if(strncmp(param_str_l, MSH_PARAM_GC_L, 7) == 0 || strcmp(param_str_l, MSH_PARAM_GC_AB) == 0)
 		{

@@ -1,9 +1,9 @@
 %% TESTSUITE
 %  Runs an automated suite of tests
 
-addpath('tests');
-addpath('tests/parallel');
-addpath('scripts');
+addpath(fullfile(fileparts(which(mfilename)),'tests'));
+addpath(fullfile(fileparts(which(mfilename)),'tests', 'parallel'));
+addpath(fullfile(fileparts(which(mfilename)),'scripts'));
 
 %% Parallel pool startup
 mshpoolstartup;

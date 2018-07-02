@@ -1,5 +1,5 @@
-addpath(fullfile(mfilefolder(mfilename), '..', 'params', 'verify'));
-addpath(fullfile(mfilefolder(mfilename), '..', 'vargen'));
+addpath(fullfile(fileparts(which(mfilename)), '..', 'params', 'verify'));
+addpath(fullfile(fileparts(which(mfilename)), '..', 'vargen'));
 
 verifyparams;
 

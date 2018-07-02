@@ -1,5 +1,3 @@
-addpath(fullfile(mfilefolder(mfilename), '..', 'vargen'));
-
 %% Define random call test parameters
 
 % bound of clearing of data

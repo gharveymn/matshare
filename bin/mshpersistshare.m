@@ -3,8 +3,9 @@ function shared = mshpersistshare(in)
 %    MSHSHARE(VAR) copies VAR into shared memory and disables automatic
 %    garbage collection on the variable.
 %
-%    SHARED = MSHSHARE(VAR) copies VAR into shared memory, disables automatic
-%    garbage collection on the variable, and returns a shared copy.
+%    SHARED = MSHSHARE(VAR) copies VAR into shared memory, disables 
+%    automaticgarbage collection on the variable, and returns a shared 
+%    copy.
 %
 %    Note: Unlike mshshare, this does return ans.
 
