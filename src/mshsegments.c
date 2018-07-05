@@ -652,17 +652,8 @@ static void msh_OpenSegmentWorker(SegmentInfo_t* seg_info_cache, msh_segmentnumb
 	/* check if the segment is being unlinked */
 	if(msh_GetCounterFlag(&seg_info_cache->metadata->procs_tracking))
 	{
-
-#ifdef MSH_DEBUG_PERF
-		msh_GetTick(&busy_wait_time.old);
-#endif
 		
 		while(!msh_GetCounterPost(&seg_info_cache->metadata->procs_tracking));
-
-#ifdef MSH_DEBUG_PERF
-		msh_GetTick(&busy_wait_time.new);
-		msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.busy_wait_time, msh_GetTickDifference(&busy_wait_time), SIZE_MAX);
-#endif
 		
 		msh_UnmapMemory(seg_info_cache->metadata, sizeof(SegmentMetadata_t));
 		seg_info_cache->metadata = NULL;

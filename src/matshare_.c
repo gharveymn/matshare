@@ -109,10 +109,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			if(g_local_info.shared_info_wrapper.ptr != NULL)
 			{
 				mexPrintf(MSH_DEBUG_SHARED_FORMAT, MSH_DEBUG_SHARED_ARGS);
-#ifdef MSH_DEBUG_PERF
-				mexPrintf("Total time: " SIZE_FORMAT "\nTime waiting for the lock: " SIZE_FORMAT "\nTime spent in busy wait: " SIZE_FORMAT "\n", g_shared_info->debug_perf.total_time,
-				          g_shared_info->debug_perf.lock_time, g_shared_info->debug_perf.busy_wait_time);
-#endif
 			}
 			return;
 		}
@@ -171,10 +167,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 #endif
 		                 );
 	}
-
-#ifdef MSH_DEBUG_PERF
-	msh_GetTick(&total_time.old);
-#endif
 	
 	/* clean invalid segments out of tracking */
 	msh_CleanSegmentList(&g_local_seg_list, directive == msh_CLEAN);
@@ -274,14 +266,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		}
 	}
-
-#ifdef MSH_DEBUG_PERF
-	if(g_local_info.shared_info_wrapper.ptr != NULL)
-	{
-		msh_GetTick(&total_time.new);
-		msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.total_time, msh_GetTickDifference(&total_time), SIZE_MAX);
-	}
-#endif
 
 }
 

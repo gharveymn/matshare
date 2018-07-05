@@ -76,7 +76,7 @@ try
 			['-DMSH_DEFAULT_MAX_SHARED_SIZE=' mshMaxSize64]}];
 		
 		% delete the previous config file
-		mshconfigpath = fullfile(mshconfigfolder, 'mshconfig');		
+		mshconfigpath = fullfile(mshconfigfolder, 'mshconfig');
 	else
 		mexflags = [mexflags {'-compatibleArrayDims', ...
 			'-DMSH_BITNESS=32', ...
@@ -105,8 +105,6 @@ try
 	if(~verLessThan('matlab', '7.13'))
 		mexflags = [mexflags {'-DMSH_AVX_SUPPORT'}];
 	end
-	
-	%mexflags = [mexflags {'-DMSH_DEBUG_PERF'}];
 	
 	fprintf('-Compiling matshare...')
 	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /Wall"'}];

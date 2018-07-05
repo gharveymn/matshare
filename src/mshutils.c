@@ -30,18 +30,9 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 #ifdef MSH_WIN
 	DWORD status;
 #endif
-
-#ifdef MSH_DEBUG_PERF
-	msh_GetTick(&busy_wait_time.old);
-#endif
 	
 	/* blocks until lock flag operation is finished */
 	while(!msh_GetCounterPost(&g_shared_info->user_defined.lock_counter));
-
-#ifdef MSH_DEBUG_PERF
-	msh_GetTick(&busy_wait_time.new);
-	msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.busy_wait_time, msh_GetTickDifference(&busy_wait_time), SIZE_MAX);
-#endif
 	
 	msh_IncrementCounter(&g_shared_info->user_defined.lock_counter);
 	
@@ -49,10 +40,6 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 	{
 		if(g_local_info.lock_level == 0)
 		{
-
-#ifdef MSH_DEBUG_PERF
-			msh_GetTick(&lock_time.old);
-#endif
 
 #ifdef MSH_WIN
 			status = WaitForSingleObject(process_lock, INFINITE);
@@ -69,11 +56,6 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError", "Failed to acquire the process lock.");
 			}
-#endif
-
-#ifdef MSH_DEBUG_PERF
-			msh_GetTick(&lock_time.new);
-			msh_AtomicAddSizeWithMax(&g_shared_info->debug_perf.lock_time, msh_GetTickDifference(&lock_time), SIZE_MAX);
 #endif
 		
 		}

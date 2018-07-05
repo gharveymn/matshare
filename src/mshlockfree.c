@@ -94,36 +94,6 @@ void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val)
 }
 
 
-#ifdef MSH_DEBUG_PERF
-
-
-void msh_GetTick(msh_tick_t* tick_pointer)
-{
-#  ifdef MSH_WIN
-	QueryPerformanceCounter(tick_pointer);
-#  else
-	*tick_pointer = clock();
-#  endif
-}
-
-
-size_t msh_GetTickDifference(TickTracker_t* tracker)
-{
-#  ifdef MSH_WIN
-	#    if MSH_BITNESS==64
-	return (size_t)(tracker->new.QuadPart - tracker->old.QuadPart);
-#    elif MSH_BITNESS==32
-	return (size_t)(tracker->new.LowPart - tracker->old.LowPart);
-#    endif
-#  else
-	return (size_t)(tracker->new - tracker->old);
-#  endif
-}
-
-
-#endif
-
-
 bool_t msh_AtomicAddSizeWithMax(volatile size_t* dest, size_t add_value, size_t max_value)
 {
 	size_t old_value, new_value;

@@ -36,21 +36,6 @@
 #  define MSH_INVALID_HANDLE (-1)
 #endif
 
-#ifdef MSH_DEBUG_PERF
-#  ifdef MSH_WIN
-     typedef LARGE_INTEGER msh_tick_t;
-#  else
-#    include <time.h>
-     typedef clock_t msh_tick_t;
-#  endif
-typedef struct TickTracker_t
-{
-	msh_tick_t old;
-	msh_tick_t new;
-} TickTracker_t;
-TickTracker_t total_time, lock_time, busy_wait_time;
-#endif
-
 #ifndef FALSE
 #  define FALSE 0
 #endif

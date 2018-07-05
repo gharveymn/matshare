@@ -136,27 +136,4 @@ long msh_AtomicDecrement(volatile long* dest);
 long msh_AtomicCompareSwap(volatile long* dest, long compare_value, long swap_value);
 
 
-#ifdef MSH_DEBUG_PERF
-
-
-/**
- * Gets the current CPU tick.
- *
- * @param tick_pointer A pointer to the value which will be set by this.
- */
-void msh_GetTick(msh_tick_t* tick_pointer);
-
-
-/**
- * Gets the difference in tick values in the tick tracker.
- *
- * @param tracker A CPU tick tracker holding new and old CPU tick values.
- * @return The difference in tick values.
- */
-size_t msh_GetTickDifference(TickTracker_t* tracker);
-
-
-#endif
-
-
 #endif /* MATSHARE_MSHLOCKFREE_H */
