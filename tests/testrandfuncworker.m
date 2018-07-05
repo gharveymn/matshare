@@ -53,22 +53,18 @@ function rns = testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, t
 			
 			tv = variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, false, typespec);
 			
-			switch(ceil(2*randdoubles1(i)))
-				case 1
-					mshshare(tv);
-				case 2
-					data = mshshare(tv);
-			end
+			
+			data = mshshare(tv);
 			
 			switch(ceil(4*randdoubles2(i)))
 				case 1
-					mshfetch;
-				case 2
 					data = mshfetch;
+				case 2
+					data = mshfetch('-r');
 				case 3
-					[data, newvars] = mshfetch;
+					data = mshfetch('-n');
 				case 4
-					[data, newvars, allvars] = mshfetch;
+					data = mshfetch('-a');
 			end
 			
 			if(mod(i, mshclear_iter) == 0)
@@ -83,23 +79,15 @@ function rns = testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, t
 			
 			
 			if(mod(i, mshlocalcopy_iter) == 0)
-				switch(ceil(9*randdoubles2(i)))
+				switch(ceil(4*randdoubles2(i)))
 					case 1
-						mshlocalcopy;
-					case 2
-						data = mshlocalcopy;
-					case 3
-						[data, newvars] = mshlocalcopy;
-					case 4
-						[data, newvars, allvars] = mshlocalcopy;
-					case 5
-						data = mshlocalcopy(data);
-					case 6
-						newvars = mshlocalcopy(newvars);
-					case 7
-						allvars = mshlocalcopy(allvars);
-					case 8
-						mshlocalcopy(data);
+					data = mshlocalcopy;
+				case 2
+					data = mshlocalcopy;
+				case 3
+					data = mshlocalcopy;
+				case 4
+					data = mshlocalcopy;
 				end
 			end
 			

@@ -1,8 +1,9 @@
 function testparvarresult(tv, numworkers)
-	shared = mshshare(tv);
+	mshpersistshare(tv);
 	transfer = cell(numworkers,1);
 	parfor i = 1:numworkers
-		transfer{i} = mshfetch;
+		fetched = mshfetch('-r');
+		transfer{i} = fetched.recent;
 	end
 	
 	for i = 1:numworkers

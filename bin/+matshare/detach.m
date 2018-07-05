@@ -1,6 +1,6 @@
-function mshdetach
-%% MSHDETACH  Detach the process from shared memory.
-%    MSHDETACH will reset any pointers to shared memory and deinitialize
+function detach
+%% DETACH  Detach the process from shared memory.
+%    DETACH will reset any pointers to shared memory and deinitialize
 %    matshare for this process.
 
 %% Copyright © 2018 Gene Harvey

@@ -5,10 +5,12 @@ addpath(output_path)
 
 try
 	
+	
+	mexflags = {'-O', '-v', '-outdir', output_path, ...
+		['-I' fullfile(fileparts(which(mfilename)), 'src', 'headers')]};
+	
 	if(mshDebugMode)
-		mexflags = {'-g', '-O', '-v', '-outdir', output_path};
-	else
-		mexflags = {'-O', '-v', '-outdir', output_path};
+		mexflags = [mexflags {'-g'}];
 	end
 	
 	[comp,maxsz,endi] = computer;
@@ -20,6 +22,7 @@ try
 		'mshinit.c',...
 		'mshvariables.c',...
 		'mshsegments.c',...
+		'mshlockfree.c',...
 		'headers/opaque/mshheader.c',...
 		'headers/opaque/mshexterntypes.c',...
 		'headers/opaque/mshtable.c',...
@@ -56,23 +59,28 @@ try
 		error('Invalid value for compilation parameter mshThreadSafety');
 	end
 	
-	mexflags = [mexflags {['-DMSH_DEFAULT_MAX_SHARED_SEGMENTS=' mshMaxVariables]}];
+	mexflags = [mexflags {['-DMSH_DEFAULT_MAX_SHARED_SEGMENTS=' ...
+		mshMaxVariables]}];
 	
 	if(maxsz > 2^31-1)
 		% R2018a
 		if(verLessThan('matlab','9.4'))
 			mexflags = [mexflags {'-largeArrayDims'}];
 		else
-			warning(['Compiling in compatibility mode; the R2018a MEX api does not support certain functions '...
+			warning(['Compiling in compatibility mode; the R2018a' ...
+				'MEX api does not support certain functions '...
 				'which are integral to this function'])
 			mexflags = [mexflags, {'-R2017b'}];
 		end
-		mexflags = [mexflags, {'-DMSH_BITNESS=64', ['-DMSH_DEFAULT_MAX_SHARED_SIZE=' mshMaxSize64]}];
+		mexflags = [mexflags, {'-DMSH_BITNESS=64', ...
+			['-DMSH_DEFAULT_MAX_SHARED_SIZE=' mshMaxSize64]}];
 		
 		% delete the previous config file
 		mshconfigpath = fullfile(mshconfigfolder, 'mshconfig');		
 	else
-		mexflags = [mexflags {'-compatibleArrayDims', '-DMSH_BITNESS=32', ['-DMSH_DEFAULT_MAX_SHARED_SIZE=' mshMaxSize32]}];
+		mexflags = [mexflags {'-compatibleArrayDims', ...
+			'-DMSH_BITNESS=32', ...
+			['-DMSH_DEFAULT_MAX_SHARED_SIZE=' mshMaxSize32]}];
 		mshconfigpath = fullfile(mshconfigfolder, 'mshconfig32');
 	end
 	
@@ -87,7 +95,8 @@ try
 		fprintf('-Garbage collection is disabled.\n')
 		mexflags = [mexflags {'-DMSH_DEFAULT_SHARED_GC=FALSE'}];
 	else
-		error('Invalid value for compilation parameter mshGarbageCollection');
+		error(['Invalid value for compilation parameter' ...
+			'mshGarbageCollection']);
 	end
 	
 	mexflags = [mexflags {['-DMSH_DEFAULT_SECURITY=' mshSecurity]}];

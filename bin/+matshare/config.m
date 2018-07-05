@@ -1,4 +1,4 @@
-function mshconfig(varargin)
+function config(varargin)
 %% MSHCONFIG  Set or print the current configuration for matshare.
 %    MSHCONFIG prints out the current configuration for matshare.
 %
@@ -54,6 +54,6 @@ function mshconfig(varargin)
 %    This software may be modified and distributed under the terms
 %    of the MIT license. See the LICENSE file for details.
 	
-    matshare_(3, varargin{:});
+    matshare_(3, varargin);
     
 end

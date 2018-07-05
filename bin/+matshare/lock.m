@@ -1,4 +1,4 @@
-function mshlock
+function lock
 %% MSHLOCK  Acquire the matshare interprocess lock.
 %    MSHLOCK acquires the matshare interprocess lock. Release the lock 
 %    by calling mshunlock.
@@ -7,7 +7,7 @@ function mshlock
 %    This software may be modified and distributed under the terms
 %    of the MIT license. See the LICENSE file for details.
 	
-	matshare_(10);
+	matshare_(9);
 	
 end
 

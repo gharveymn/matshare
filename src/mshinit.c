@@ -9,11 +9,12 @@
  
 #include "mex.h"
 
-#include "headers/mshinit.h"
-#include "headers/mlerrorutils.h"
-#include "headers/mshutils.h"
-#include "headers/mshtypes.h"
-#include "headers/mshsegments.h"
+#include "mshinit.h"
+#include "mlerrorutils.h"
+#include "mshutils.h"
+#include "mshtypes.h"
+#include "mshsegments.h"
+#include "mshlockfree.h"
 
 #ifdef MSH_UNIX
 #  include <unistd.h>
@@ -42,6 +43,7 @@ void msh_InitializeMatshare(void)
 		return;
 	}
 	
+	/* init == FALSE, deinit == FALSE */
 	g_local_info.is_deinitialized = FALSE;
 	
 	mexAtExit(msh_OnExit);
@@ -81,6 +83,8 @@ void msh_InitializeMatshare(void)
 	}
 	
 	g_local_info.is_initialized = TRUE;
+	
+	/* init == TRUE, deinit == FALSE */
 	
 }
 
@@ -311,6 +315,8 @@ void msh_OnExit(void)
 	
 	g_local_info.is_initialized = FALSE;
 	
+	/* init == FALSE, deinit == FALSE */
+	
 	msh_DetachSegmentList(&g_local_seg_list);
 	msh_FreeTable(&g_local_seg_list.seg_table);
 	
@@ -366,6 +372,8 @@ void msh_OnExit(void)
 	g_local_info.rev_num  = MSH_INITIAL_STATE;
 	
 	g_local_info.is_deinitialized = TRUE;
+	
+	/* init == FALSE, deinit == TRUE */
 	
 }
 

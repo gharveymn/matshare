@@ -9,12 +9,13 @@
 
 #include "mex.h"
 
-#include "headers/mshvariables.h"
-#include "headers/mshsegments.h"
-#include "headers/mshheader.h"
-#include "headers/mlerrorutils.h"
-#include "headers/mshutils.h"
-#include "headers/mshexterntypes.h"
+#include "mshvariables.h"
+#include "mshsegments.h"
+#include "mshheader.h"
+#include "mlerrorutils.h"
+#include "mshutils.h"
+#include "mshexterntypes.h"
+#include "mshlockfree.h"
 
 /* undocumented function */
 extern mxArray* mxCreateSharedDataCopy(mxArray *);
@@ -141,39 +142,36 @@ void msh_AddVariableToList(VariableList_t* var_list, VariableNode_t* var_node)
 	/* append to the end of the list */
 	var_list->last = var_node;
 	
-	/* increment number of variables */
-	/* var_list->num_vars += 1; */
-	
 }
 
 
-mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node)
+mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node, int will_set_used)
 {
 	
 	mxArray* shared_data_copy,* var = msh_GetVariableData(var_node);
+	void* temp_mem;
+	
+	if(!msh_GetIsUsed(var_node) && will_set_used)
+	{
+		msh_SetIsUsed(var_node, TRUE);
+		msh_AtomicIncrement(&msh_GetSegmentMetadata(msh_GetSegmentNode(var_node))->procs_using);
+	}
 	
 	if(mxIsEmpty(var) && !mxIsSparse(var))
 	{
 		/* temporarily set as non-empty so the shared data copy gets a crosslink */
-		msh_SetVirtualEmpty(var);
-	
-		if(met_GetCrosslink(var) == NULL)
-		{
-			msh_SetIsUsed(var_node, TRUE);
-			msh_AtomicIncrement(&msh_GetSegmentMetadata(msh_GetSegmentNode(var_node))->procs_using);
-		}
+		temp_mem = mxMalloc(1);
+		mxSetData(var, temp_mem);
+		
 		shared_data_copy = mxCreateSharedDataCopy(var);
 	
 		mxSetData(shared_data_copy, NULL);
 		mxSetData(var, NULL);
+		
+		mxFree(temp_mem);
 	}
 	else
 	{
-		if(met_GetCrosslink(var) == NULL)
-		{
-			msh_SetIsUsed(var_node, TRUE);
-			msh_AtomicIncrement(&msh_GetSegmentMetadata(msh_GetSegmentNode(var_node))->procs_using);
-		}
 		shared_data_copy = mxCreateSharedDataCopy(var);
 	}
 	

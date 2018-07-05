@@ -67,7 +67,7 @@ void msh_ClearVariableList(VariableList_t* var_list);
 void msh_CleanVariableList(VariableList_t* var_list);
 
 
-mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node);
+mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node, int will_set_used);
 
 
 

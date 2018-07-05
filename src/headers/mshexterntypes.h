@@ -16,12 +16,6 @@ typedef struct mxArray_tag mxArray;
 /* opaque declaration */
 typedef struct InternalMexStruct_t InternalMexStruct_t;
 
-void met_SetName(mxArray* var, mxArray* name);
-
-void met_SetCrosslink(mxArray* var, mxArray* crosslink);
-
-void* met_GetName(mxArray* var);
-
 /**
  * Fetches the crosslink for the given mxArray.
  *
@@ -29,8 +23,6 @@ void* met_GetName(mxArray* var);
  * @return The crosslink.
  */
 mxArray* met_GetCrosslink(mxArray* var);
-
-int met_PutSharedCopy(const char* workspace_name, const char* variable_name, mxArray* shared_data_copy);
 
 
 #endif /* MATSHARE_EXTERNTYPES_H */

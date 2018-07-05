@@ -7,11 +7,12 @@
  * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#include "headers/mshsegments.h"
-#include "headers/mshvariables.h"
-#include "headers/mlerrorutils.h"
-#include "headers/mshutils.h"
-#include "headers/mshexterntypes.h"
+#include "mshsegments.h"
+#include "mshvariables.h"
+#include "mlerrorutils.h"
+#include "mshutils.h"
+#include "mshexterntypes.h"
+#include "mshlockfree.h"
 
 
 #ifdef MSH_UNIX

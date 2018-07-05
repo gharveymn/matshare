@@ -11,10 +11,10 @@
 
 #include "mex.h"
 
-#include "../mshheader.h"
-#include "../mshvariables.h"
-#include "../mlerrorutils.h"
-#include "../mshexterntypes.h"
+#include "mshheader.h"
+#include "mshvariables.h"
+#include "mlerrorutils.h"
+#include "mshexterntypes.h"
 
 
 #ifdef MSH_UNIX
@@ -51,21 +51,6 @@ typedef struct AllocationHeader_t
 #else
 #  error(matshare is only supported in 64-bit and 32-bit variants.)
 #endif
-
-
-struct
-{
-	AllocationHeader_t alloc_header;
-	size_t data[2];
-} g_virtual_empty =
-		{
-				{
-						ALLOCATION_HEADER_SIZE, ALLOCATION_HEADER_MAGIC_CHECK, DATA_ALIGNMENT, ALLOCATION_HEADER_SIZE
-				},
-				{
-						0,0
-				}
-		};
 
 
 /**
@@ -1164,12 +1149,6 @@ static size_t msh_GetFieldNamesSize(const mxArray* in_var)
 	}
 	
 	return cml_sz;
-}
-
-
-void msh_SetVirtualEmpty(mxArray* dest)
-{
-	mxSetData(dest, g_virtual_empty.data);
 }
 
 

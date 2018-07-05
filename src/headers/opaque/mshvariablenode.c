@@ -9,8 +9,8 @@
 
 #include "mex.h"
 
-#include "../mshvariablenode.h"
-#include "../mshsegmentnode.h"
+#include "mshvariablenode.h"
+#include "mshsegmentnode.h"
 
 
 struct VariableNode_t

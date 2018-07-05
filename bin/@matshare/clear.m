@@ -1,4 +1,4 @@
-function mshclear(varargin)
+function clear(varargin)
 %% MSHCLEAR  Clear variables from shared memory.
 %    MSHCLEAR removes all variables from shared memory.
 %
@@ -9,6 +9,11 @@ function mshclear(varargin)
 %    This software may be modified and distributed under the terms
 %    of the MIT license. See the LICENSE file for details.
 	
-	matshare_(6, varargin{:});
+	input = varargin;
+	for i = 1:nargin
+		input{i} = varargin{i}.shared_data;
+	end
+
+	matshare_(6, input);
 	
 end

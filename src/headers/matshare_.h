@@ -16,8 +16,6 @@
 /* forward declaration to avoid include */
 typedef struct mxArray_tag mxArray;
 
-#define MSHSHARE_RETURN_NAME "shared"
-#define MSHFETCH_RETURN_NAME "latest"
 
 #define MSH_PARAM_THREADSAFETY "ThreadSafety"
 #define MSH_PARAM_THREADSAFETY_L "threadsafety"
@@ -40,15 +38,15 @@ typedef struct mxArray_tag mxArray;
 #define MSH_PARAM_SECURITY_AB "sc"
 
 #define MSH_CONFIG_STRING_FORMAT \
-"Current matshare configuration: \n\
-                                     Current lock count:  %lu\n\
-                                     Thread safety:       '%s'\n\
-                                     Max variables:       %lu\n\
-                                     Max shared size:     "SIZE_FORMAT"\n\
-                                     Garbage collection:  '%s'\n"
+"<strong>Current configuration:</strong>\n"\
+"    Current lock count:  %lu\n" \
+"    Thread safety:       '%s'\n" \
+"    Max variables:       %lu\n" \
+"    Max shared size:     "SIZE_FORMAT"\n" \
+"    Garbage collection:  '%s'\n"
 #ifdef MSH_UNIX
-#define MSH_CONFIG_SECURITY_STRING_FORMAT "\
-                                     Security:            '%o'\n"
+#define MSH_CONFIG_SECURITY_STRING_FORMAT \
+"    Security:            '%o'\n"
 #endif
 
 
@@ -153,16 +151,16 @@ typedef enum
 	msh_FETCH           = 0x0001,  /* fetch shared variables */
 	msh_DETACH          = 0x0002,  /* detach this session from shared memory */
 	msh_CONFIG          = 0x0003,  /* change the configuration */
-	msh_LOCALCOPY       = 0x0004,  /* create a local deepcopy of the variable */
+	msh_COPY            = 0x0004,  /* create a local deepcopy of the variable */
 	msh_DEBUG           = 0x0005,  /* print debug information */
 	msh_CLEAR           = 0x0006,  /* clear segments from shared memory */
 	msh_RESET           = 0x0007,  /* reset the configuration */
 	msh_OVERWRITE       = 0x0008,  /* overwrite the specified variable in-place */
-	msh_SAFEOVERWRITE   = 0x0009,  /* threadsafe overwrite of the variable */
-	msh_LOCK            = 0x000A,  /* acquire the matshare interprocess lock */
-	msh_UNLOCK          = 0x000B,  /* release the interprocess lock */
-	msh_CLEAN           = 0x000C,  /* clean invalid and unused segments */
-	msh_PERSISTSHARE    = 0x000D   /* share a variable persistently */
+	msh_LOCK            = 0x0009,  /* acquire the matshare interprocess lock */
+	msh_UNLOCK          = 0x000A,  /* release the interprocess lock */
+	msh_CLEAN           = 0x000B,  /* clean invalid and unused segments */
+	msh_PSHARE          = 0x000C,  /* share a variable persistently */
+	msh_INFO            = 0x000D   /* print out info about the current state of matshare */
 } msh_directive_t;
 
 
@@ -174,7 +172,7 @@ typedef enum
  * @param num_vars The number of variables to be shared.
  * @param in_vars The variables to be shared.
  */
-void msh_Share(int num_vars, const mxArray** in_vars, int return_expected, msh_directive_t directive);
+void msh_Share(int nlhs, mxArray** plhs, size_t num_vars, const mxArray** in_vars, msh_directive_t directive);
 
 
 /**
@@ -184,7 +182,7 @@ void msh_Share(int num_vars, const mxArray** in_vars, int return_expected, msh_d
  * @param nlhs The number of ouputs. If this is 0 then it fetches the most recent variable; if 1 then all variables not already fetched; if 2 then all variables in shared memory.
  * @param plhs An array of output mxArrays.
  */
-void msh_Fetch(int nlhs, mxArray** plhs);
+void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args);
 
 
 /**
@@ -193,7 +191,7 @@ void msh_Fetch(int nlhs, mxArray** plhs);
  * @param nlhs The number of ouputs. If this is 1 then it fetches the most recent variable; if 2 then all variables not already fetched; if 3 then all variables in shared memory.
  * @param plhs An array of output mxArrays.
  */
-void msh_LocalCopy(int nlhs, mxArray** plhs);
+void msh_Copy(int nlhs, mxArray** plhs, size_t num_inputs, const mxArray** in_vars);
 
 
 /**
@@ -202,7 +200,7 @@ void msh_LocalCopy(int nlhs, mxArray** plhs);
  * @param num_inputs The number of input variables.
  * @param in_vars The variables to be cleared from shared memory.
  */
-void msh_Clear(int num_inputs, const mxArray** in_vars);
+void msh_Clear(size_t num_inputs, const mxArray** in_vars);
 
 
 /**
@@ -213,7 +211,7 @@ void msh_Clear(int num_inputs, const mxArray** in_vars);
  * @param in_var The input variable.
  * @param directive The input directive.
  */
-void msh_Overwrite(const mxArray* dest_var, const mxArray* in_var, msh_directive_t directive);
+void msh_Overwrite(int num_args, const mxArray** in_args);
 
 
 /**
@@ -222,6 +220,6 @@ void msh_Overwrite(const mxArray* dest_var, const mxArray* in_var, msh_directive
  * @param num_params The number of parameters input.
  * @param in_params An array of the parameters and values.
  */
-void msh_Config(int num_params, const mxArray** in_params);
+void msh_Config(size_t num_params, const mxArray** in_params);
 
 #endif /* MATSHARE__H */

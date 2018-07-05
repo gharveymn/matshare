@@ -6,14 +6,12 @@ void callback(void);
 mxArray* persist = NULL;
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
-{
-	
-	mexAtExit(callback);
-	return;
-	
+{	
 	int i;
 	
 	mxArray* x,* link,* shared_data_copy;
+	void* alloc;
+	mwSize dimstmp[2] = {2,1};
 	mwSize dims[2] = {1,1};
 	
 	if(nrhs > 0)
@@ -22,6 +20,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 		do
 		{
 			mexPrintf("addr: %llu\n", link);
+			mxSetDimensions(link, dims, 2);
 			link = met_GetCrosslink(link);
 		} while(link != NULL && link != prhs[0]);
 		if(persist != NULL)
@@ -33,11 +32,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 	
 	if(persist == NULL)
 	{
-		persist = mxCreateSparse(0, 0, 1, mxREAL);
-			
+		persist = mxCreateDoubleMatrix(2, 1, mxREAL);
+		//persist = mxCreateCellMatrix(1, 1);
+		
 		mexMakeArrayPersistent(persist);
 		
-		mexPrintf("%u\n", mxIsEmpty(persist));
+		//mexPrintf("%u\n", mxIsEmpty(persist));
 		
 		//shared_data_copy = mxCreateSharedDataCopy(persist);
 		
@@ -46,7 +46,31 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 		if(nlhs > 0)
 		{
 			plhs[0] = mxCreateCellMatrix(1,1);
-			mxSetCell(plhs[0], 0, mxCreateSharedDataCopy(persist));
+			
+			//alloc = mxMalloc(1);
+			//mxSetData(persist, alloc);
+			
+			shared_data_copy = mxCreateSharedDataCopy(persist);
+			
+			link = shared_data_copy;
+			do
+			{
+				mexPrintf("addr1: %llu\n", link);
+				link = met_GetCrosslink(link);
+			} while(link != NULL && link != shared_data_copy);
+			
+			//mxSetData(persist, NULL);
+			//mxSetData(link, NULL);
+			
+			mxSetCell(plhs[0], 0, shared_data_copy);
+			
+			link = mxGetCell(plhs[0], 0);
+			do
+			{
+				mexPrintf("addr2: %llu\n", link);
+				link = met_GetCrosslink(link);
+			} while(link != NULL && link != shared_data_copy);
+			
 		}
 	}
 	else

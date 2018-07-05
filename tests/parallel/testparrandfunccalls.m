@@ -99,7 +99,7 @@ for i = 1:num_maxDepth_tests
 		end
 	end
 end
-mshclear
-mshdebug
-mshdetach
+mshclear;
+mshdebug;
+mshdetach;
 fprintf('Test successful.\n\n');

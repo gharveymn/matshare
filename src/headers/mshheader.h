@@ -442,7 +442,4 @@ int msh_CompareHeaderSize(SharedVariableHeader_t* shared_header, const mxArray* 
 void msh_DetachVariable(mxArray* ret_var);
 
 
-void msh_SetVirtualEmpty(mxArray* dest);
-
-
 #endif /* MATSHARE_MSHHEADERTYPE_H */

@@ -45,10 +45,11 @@ for i = 1:num_maxDepth_tests
 						
 						% test overwriting in one workspace
 						tv = mshshare(tv);
-						tv2 = variablefromtemplate(rns, tv);
-						mshoverwrite(tv, tv2);
+						tv2 = variablefromtemplate(rns, tv{1});
+						mshoverwrite(tv{1}, tv2);
 						parfor workernum = 1:numworkers
-							transfer{workernum} = mshfetch;
+							fetched = mshfetch('-r');
+							transfer{workernum} = fetched.recent;
 						end
 
 						for workernum = 1:numworkers
@@ -60,8 +61,8 @@ for i = 1:num_maxDepth_tests
 						% test safe overwriting
 						parfor workernum = 1:numworkers
 							tv = mshfetch;
-							tv2 = variablefromtemplate(rns, tv);
-							mshsafeoverwrite(tv, tv2);
+							tv2 = variablefromtemplate(rns, tv.recent);
+							mshsafeoverwrite(tv.recent, tv2);
 						end
 						
 					end

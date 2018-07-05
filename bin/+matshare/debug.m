@@ -1,4 +1,4 @@
-function mshdebug
+function debug
 %% MSHDEBUG  Print out debug information.
 %    MSHDEBUG prints out information about the local state of matshare. If 
 %    the process is attached to shared memory, then it will also print out
