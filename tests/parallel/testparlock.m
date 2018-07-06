@@ -4,53 +4,53 @@ lents = 0;
 locktestnum = 20;
 parlocknumtests = 1000;
 
-mshreset;
+matshare.reset;
 
 fprintf('Testing locked overwriting...\n');
 for i = 1:parlocknumtests
 	
-	res = mshshare(0);
+	res = matshare.share(0);
 	for j = 1:locktestnum
-		iter = mshfetch;
-		mshsafeoverwrite(iter.recent, iter.recent + 1);
+		iter = matshare.fetch('-r');
+		iter.recent.overwrite(iter.recent.data + 1);
 	end
 	
-	if(numel(res{1}) == 0 || res{1} ~= locktestnum)
-		error('Unexpected result using mshsafeoverwrite with a normal variable.');
+	if(numel(res.data) == 0 || res.data ~= locktestnum)
+		error('Unexpected result using matshare.overwrite with a normal variable.');
 	end
 	
-	res = mshshare(sparse(0));
+	res = matshare.share(sparse(0));
 	for j = 1:locktestnum
-		iter = mshfetch;
-		mshsafeoverwrite(iter.recent, iter.recent + sparse(1));
+		iter = matshare.fetch('-r');
+		iter.recent.overwrite(iter.recent.data + sparse(1));
 	end
 	
-	if(numel(res{1}) == 0 || res{1} ~= locktestnum)
-		error('Unexpected result using mshsafeoverwrite with a sparse variable.');
+	if(numel(res.data) == 0 || res.data ~= locktestnum)
+		error('Unexpected result using matshare.overwrite with a sparse variable.');
 	end
 	
-	res{1} = mshshare(0);
+	res = matshare.share(0);
 	parfor workernum = 1:numworkers
-		mshlock;
-		iter = mshfetch;
-		mshsafeoverwrite(iter.recent, iter.recent + 1);
-		mshunlock;
+		matshare.lock;
+		iter = matshare.fetch('-r');
+		iter.recent.overwrite(iter.recent.data + 1, '-u');
+		matshare.unlock;
 	end
 
-	if(numel(res{1}) == 0 || res{1} ~= numworkers)
-		error('Unexpected result using mshoverwrite with a normal variable.');
+	if(numel(res.data) == 0 || res.data ~= numworkers)
+		error('Unexpected result using unsafe matshare.overwrite with a normal variable.');
 	end
 	
-	res = mshshare(sparse(0));
+	res = matshare.share(sparse(0));
 	parfor workernum = 1:numworkers
-		mshlock;
-		iter = mshfetch;
-		mshoverwrite(iter.recent, iter.recent + sparse(1));
-		mshunlock;
+		matshare.lock;
+		iter = matshare.fetch('-r');
+		iter.recent.overwrite(iter.recent.data + sparse(1), '-u');
+		matshare.unlock;
 	end
 
-	if(numel(res{1}) == 0 || res{1} ~= numworkers)
-		error('Unexpected result using mshoverwrite with a sparse variable.');
+	if(numel(res.data) == 0 || res.data ~= numworkers)
+		error('Unexpected result using unsafe matshare.overwrite with a sparse variable.');
 	end
 	
 	timestr = sprintf('Test %d of %d\n', i, parlocknumtests);

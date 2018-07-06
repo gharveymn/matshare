@@ -1,7 +1,7 @@
 function clean
-%% CLEAN  Clean the local segment tracking.
-%    CLEAN runs a cleaning operation on local segment tracking 
-%    to remove invalid and unused segments.
+%% MATSHARE.CLEAN  Clean the local segment tracking.
+%    MATSHARE.CLEAN runs a garbage collection operation on local segment 
+%    tracking to remove invalid and unused variables.
 
 %% Copyright © 2018 Gene Harvey
 %    This software may be modified and distributed under the terms

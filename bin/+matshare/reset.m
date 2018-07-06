@@ -1,6 +1,6 @@
 function reset
-%% MSHRESET  Reset the configuration to default.
-%    MSHRESET removes all variables from shared memory and resets the 
+%% MATSHARE.RESET  Reset the configuration to default.
+%    MATSHARE.RESET removes all variables from shared memory and resets the 
 %    configuration to default.
 
 %% Copyright © 2018 Gene Harvey

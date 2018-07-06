@@ -1,7 +1,7 @@
 function detach
-%% DETACH  Detach the process from shared memory.
-%    DETACH will reset any pointers to shared memory and deinitialize
-%    matshare for this process.
+%% MATSHARE.DETACH  Detach the process from shared memory.
+%    MATSHARE.DETACH will reset any pointers to shared memory and 
+%    deinitialize matshare for this process.
 
 %% Copyright © 2018 Gene Harvey
 %    This software may be modified and distributed under the terms

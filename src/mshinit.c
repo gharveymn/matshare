@@ -172,7 +172,7 @@ static void msh_InitializeSharedInfo(void)
 			g_shared_info->first_seg_num = MSH_INVALID_SEG_NUM;
 			g_shared_info->num_shared_segments = 0;
 			g_shared_info->has_fatal_error = 0;
-			g_shared_info->update_pid = 0;
+			g_shared_info->update_pid = g_local_info.this_pid;
 			/* the lockfree mechanism relies on is_initialized being initialized to 0 */
 			
 			msh_InitializeConfiguration();

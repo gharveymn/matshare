@@ -54,75 +54,61 @@ function rns = testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, t
 			tv = variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, false, typespec);
 			
 			
-			data = mshshare(tv);
+			data = matshare.share(tv);
 			
 			switch(ceil(4*randdoubles2(i)))
 				case 1
-					data = mshfetch;
+					f = matshare.fetch;
 				case 2
-					data = mshfetch('-r');
+					f = matshare.fetch('-r');
 				case 3
-					data = mshfetch('-n');
+					f = matshare.fetch('-n');
 				case 4
-					data = mshfetch('-a');
+					f = matshare.fetch('-a');
 			end
 			
 			if(mod(i, mshclear_iter) == 0)
 				if(randdoubles2(i) < 0.75 || numel(allvars) == 0)
-					mshclear;
+					matshare.clear;
 				else
 					clridx = sort(randi(numel(allvars),[2,1]));
-					mshclear(allvars{clridx(1):clridx(2)});
+					matshare.clear(f.all(clridx(1):clridx(2)));
 				end
 				mshclear_iter = ceil(mshclear_bound*randdoubles3(i));
 			end
 			
 			
 			if(mod(i, mshlocalcopy_iter) == 0)
-				switch(ceil(4*randdoubles2(i)))
-					case 1
-					data = mshlocalcopy;
-				case 2
-					data = mshlocalcopy;
-				case 3
-					data = mshlocalcopy;
-				case 4
-					data = mshlocalcopy;
-				end
+				x = data.copy;
 			end
 			
 			if(mod(i, mshreset_iter) == 0)
-				mshreset;
+				matshare.reset;
 				mshreset_iter = ceil(mshreset_bound*randdoubles3(i));
 			end
 			
 			if(mod(i, mshdetach_iter) == 0)
-				mshdetach;
+				matshare.detach;
 				mshdetach_iter = ceil(mshdetach_bound*randdoubles3(i));
 			end
 			
 			if(mod(i, clear_data_iter) == 0)
-				data = [];
+				f = [];
 				clear_data_iter = ceil(clear_data_bound*randdoubles3(i));
 			end
 			
 			if(mod(i, clear_new_iter) == 0)
-				newvars = [];
+				data = [];
 				clear_new_iter = ceil(clear_new_bound*randdoubles3(i));
 			end
 			
-			if(mod(i, clear_all_iter) == 0)
-				allvars = [];
-				clear_all_iter = ceil(clear_all_bound*randdoubles3(i));
-			end
-			
 			if(mod(i, chpar_gc_on_iter) == 0)
-				mshconfig('GarbageCollection','on');
+				matshare.config('GarbageCollection','on');
 				chpar_gc_on_iter = ceil(chpar_gc_on_bound*randdoubles3(i));
 			end
 			
 			if(mod(i, chpar_gc_off_iter) == 0)
-				mshconfig('GarbageCollection','off');
+				matshare.config('GarbageCollection','off');
 				chpar_gc_off_iter = ceil(chpar_gc_off_bound*randdoubles3(i));
 			end
 			

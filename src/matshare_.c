@@ -112,20 +112,20 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			}
 			return;
 		}
-		case msh_INFO:
+		case msh_STATUS:
 		{
 			mexPrintf("\n<strong>Information on the current state of matshare:</strong>\n");
 			if(g_local_info.is_deinitialized)
 			{
-				mexPrintf("    matshare is fully deinitialized for this process.\n");
+				mexPrintf("    matshare is fully deinitialized for this process.\n\n");
 			}
 			else
 			{
 				if(g_local_info.is_initialized)
 				{
-					mexPrintf("    Current number of shared variables:  %lu\n"
-			                    "    Current total size of shared memory: "SIZE_FORMAT" bytes\n"
-							"    Process ID of the most recent usage: %lu\n",
+					mexPrintf("    Current number of shared variables:     %lu\n"
+			                    "    Current total size of shared memory:    "SIZE_FORMAT" bytes\n"
+							"    Process ID of the most recent revision: %lu\n",
 					          g_shared_info->num_shared_segments,
 					          g_shared_info->total_shared_size,
 					          g_shared_info->update_pid);
@@ -141,7 +141,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 				}
 				else
 				{
-					mexPrintf("    matshare was interrupted in the middle of initialization or deinitialization.\n");
+					mexPrintf("    matshare was interrupted in the middle of initialization or deinitialization.\n\n");
 				}
 			}
 			return;
@@ -193,11 +193,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		case msh_COPY:
 		{
-			if(num_in_args < 1)
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Not enough inputs. Please use the entry functions provided.");
-			}
-			msh_Copy(nlhs, plhs,  mxGetNumberOfElements(in_args[0]), mxGetData(in_args[0]));
+			msh_Copy(nlhs, plhs, num_in_args, in_args);
 			break;
 		}
 		/*
@@ -219,11 +215,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		 */
 		case msh_CLEAR:
 		{
-			if(num_in_args < 1)
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Not enough inputs. Please use the entry functions provided.");
-			}
-			msh_Clear(mxGetNumberOfElements(in_args[0]), mxGetData(in_args[0]));
+			msh_Clear(num_in_args, in_args);
 			break;
 		}
 		case msh_RESET:
@@ -257,7 +249,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		*/
 		/*
-		case msh_INFO:
+		case msh_STATUS:
 			break;
 		*/
 		default:
@@ -306,9 +298,15 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_vars, const mxArray** in_var
 		/* create and set the return */
 		if(input_num < nlhs)
 		{
-			plhs[input_num] = msh_CreateOutput(msh_CreateSharedDataCopy(new_var_node, FALSE));
+			plhs[input_num] = msh_CreateOutput(msh_CreateSharedDataCopy(new_var_node, TRUE));
 		}
 		
+	}
+	
+	/* return to ans */
+	if(nlhs == 0)
+	{
+		plhs[0] = msh_CreateOutput(msh_CreateSharedDataCopy(new_var_node, FALSE));
 	}
 	
 }
@@ -475,23 +473,23 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 	
 }
 
-void msh_Copy(int nlhs, mxArray** plhs, size_t num_inputs, const mxArray** in_vars)
+void msh_Copy(int nlhs, mxArray** plhs, int num_inputs, const mxArray** in_vars)
 {
 	size_t i, j, num_elems;
 	
 	if(num_inputs < 1)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Not enough inputs. Please supply at least one "
-														 "<a href=\"matlab:helpPopup matshare\" style=\"font-weight:bold\">matshare object</a> "
+														 "<a href=\"matlab:helpPopup matshare.object\" style=\"font-weight:bold\">matshare object</a> "
 			                                                        "to copy.");
 	}
 	
 	for(i = 0; i < num_inputs; i++)
 	{
 		
-		if(!mxIsClass(in_vars[i], "matshare"))
+		if(!mxIsClass(in_vars[i], "matshare.object"))
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidInputError", "Invalid input. All arguments for the copy function must be <a href=\"matlab:helpPopup matshare\" "
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidInputError", "Invalid input. All arguments for the copy function must be <a href=\"matlab:helpPopup matshare.object\" "
 													    "style=\"font-weight:bold\">matshare objects</a>.");
 		}
 		
@@ -515,7 +513,7 @@ void msh_Copy(int nlhs, mxArray** plhs, size_t num_inputs, const mxArray** in_va
 }
 
 
-void msh_Clear(size_t num_inputs, const mxArray** in_vars)
+void msh_Clear(int num_inputs, const mxArray** in_vars)
 {
 	
 	VariableNode_t* curr_var_node;
@@ -523,6 +521,8 @@ void msh_Clear(size_t num_inputs, const mxArray** in_vars)
 	const mxArray* clear_var;
 	bool_t found_variable;
 	int input_num;
+	
+	/* TODO remove locking here */
 	
 	msh_AcquireProcessLock(g_process_lock);
 	if(num_inputs > 0)
@@ -532,12 +532,13 @@ void msh_Clear(size_t num_inputs, const mxArray** in_vars)
 		
 		for(input_num = 0; input_num < num_inputs; input_num++)
 		{
-			clear_var = in_vars[input_num];
 			
-			if(!mxIsCell(clear_var) || mxGetNumberOfElements(clear_var) != 1)
+			if(!mxIsCell(in_vars[input_num]) || mxGetNumberOfElements(in_vars[input_num]) != 1)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidInputError", "Invalid input variable. Please use the entry functions provided.");
 			}
+			
+			clear_var = mxGetCell(in_vars[input_num], 0);
 			
 			for(curr_var_node = g_local_var_list.first, found_variable = FALSE; curr_var_node != NULL && !found_variable; curr_var_node = msh_GetNextVariable(curr_var_node))
 			{

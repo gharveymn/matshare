@@ -44,35 +44,35 @@ for i = 1:num_maxDepth_tests
 						testparvarresult(tv, numworkers);
 						
 						% test overwriting in one workspace
-						tv = mshshare(tv);
-						tv2 = variablefromtemplate(rns, tv{1});
-						mshoverwrite(tv{1}, tv2);
+						tv = matshare.share(tv);
+						tv2 = variablefromtemplate(rns, tv.data);
+						tv.overwrite(tv2, '-u');
 						parfor workernum = 1:numworkers
-							fetched = mshfetch('-r');
+							fetched = matshare.fetch('-r');
 							transfer{workernum} = fetched.recent;
 						end
 
 						for workernum = 1:numworkers
-							if(~compstruct(tv2, transfer{workernum}))
-								error('Matshare failed because parallel results were not equal.');
+							if(~compstruct(tv2, transfer{workernum}.data))
+								error('matshare.overwrite failed because parallel results were not equal.');
 							end
 						end
 						
 						% test safe overwriting
 						parfor workernum = 1:numworkers
-							tv = mshfetch;
-							tv2 = variablefromtemplate(rns, tv.recent);
-							mshsafeoverwrite(tv.recent, tv2);
+							tv = matshare.fetch;
+							tv2 = variablefromtemplate(rns, tv.recent.data);
+							tv.recent.overwrite(tv2);
 						end
 						
 					end
-					mshclear;
+					matshare.clear;
 					count = count + 1;
 				end
 			end
 		end
 	end
 end
-mshclear
-mshdetach
+matshare.clear;
+matshare.detach
 fprintf('Test successful.\n\n');

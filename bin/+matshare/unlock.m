@@ -1,7 +1,7 @@
 function unlock
-%% MSHUNLOCK  Release the matshare interprocess lock.
-%    MSHUNLOCK releases the matshare interprocess lock previously acquired
-%    by mshlock.
+%% MATSHARE.UNLOCK  Release the matshare interprocess lock.
+%    MATSHARE.UNLOCK releases the matshare interprocess lock previously 
+%    acquired by MATSHARE.LOCK.
 
 %% Copyright © 2018 Gene Harvey
 %    This software may be modified and distributed under the terms

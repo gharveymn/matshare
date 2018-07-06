@@ -160,7 +160,7 @@ typedef enum
 	msh_UNLOCK          = 0x000A,  /* release the interprocess lock */
 	msh_CLEAN           = 0x000B,  /* clean invalid and unused segments */
 	msh_PSHARE          = 0x000C,  /* share a variable persistently */
-	msh_INFO            = 0x000D   /* print out info about the current state of matshare */
+	msh_STATUS            = 0x000D   /* print out info about the current state of matshare */
 } msh_directive_t;
 
 
@@ -191,7 +191,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
  * @param nlhs The number of ouputs. If this is 1 then it fetches the most recent variable; if 2 then all variables not already fetched; if 3 then all variables in shared memory.
  * @param plhs An array of output mxArrays.
  */
-void msh_Copy(int nlhs, mxArray** plhs, size_t num_inputs, const mxArray** in_vars);
+void msh_Copy(int nlhs, mxArray** plhs, int num_inputs, const mxArray** in_vars);
 
 
 /**
@@ -200,7 +200,7 @@ void msh_Copy(int nlhs, mxArray** plhs, size_t num_inputs, const mxArray** in_va
  * @param num_inputs The number of input variables.
  * @param in_vars The variables to be cleared from shared memory.
  */
-void msh_Clear(size_t num_inputs, const mxArray** in_vars);
+void msh_Clear(int num_inputs, const mxArray** in_vars);
 
 
 /**

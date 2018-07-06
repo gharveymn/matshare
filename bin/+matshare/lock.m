@@ -1,7 +1,7 @@
 function lock
-%% MSHLOCK  Acquire the matshare interprocess lock.
-%    MSHLOCK acquires the matshare interprocess lock. Release the lock 
-%    by calling mshunlock.
+%% MATSHARE.LOCK  Acquire the matshare interprocess lock.
+%    MATSHARE.LOCK acquires the matshare interprocess lock. Release the 
+%    lock by calling MATSHARE.UNLOCK.
 
 %% Copyright © 2018 Gene Harvey
 %    This software may be modified and distributed under the terms

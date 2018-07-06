@@ -1,9 +1,9 @@
 function config(varargin)
-%% MSHCONFIG  Set or print the current configuration for matshare.
-%    MSHCONFIG prints out the current configuration for matshare.
+%% MATSHARE.CONFIG  Set or print the current configuration for matshare.
+%    MATSHARE.CONFIG prints out the current configuration for matshare.
 %
-%    MSHCONFIG(PAR_1,VAL_1,PAR_2,VAL_2,...,PAR_N,VAL_N) sets configuration
-%    parameters PAR_1,PAR_2,...,PAR_N to values VAL_1, VAL_2,..., VAL_N.
+%    MATSHARE.CONFIG(P1,V1,P2,V2,...) sets configuration parameters 
+%    P1,P2,... to values V1,V2,... for all processes.
 %
 %    Note: Parameter names are case-independent. Values must all be 
 %          strings.
@@ -30,10 +30,13 @@ function config(varargin)
 %                   communicate. Thus, make sure this has a value lower 
 %                   than the open fd limit.
 %
-%        ['MaxSize','ms'] -- Set the maximum total size of shared memory.
-%            Values: An unsigned integer less than the maximum size 
-%                             on your system.
+%        ['MaxSize','ms'] -- Set the maximum total size of shared memory in
+%                            bytes.
+%            Values: An unsigned integer less than the maximum size on your 
+%                    system.
 %            Default: '0xFFFFFFFFFFFFF' on 64-bit, '0xFFFFFFFF' on 32-bit
+%            Notes: You may run into problems on Linux. If so, try setting
+%                   lower.
 %      
 %        ['GarbageCollection','gc'] -- Control whether to have matshare 
 %                                      automatically garbage collect unused
@@ -42,7 +45,7 @@ function config(varargin)
 %            Default: 'on'
 %            Notes: If you don't want to disable garbage collection for all 
 %                   variables, but still want a variable to persist you can 
-%                   use `mshpersistshare` which will disable garbage 
+%                   use MATSHARE.PSHARE which will disable garbage 
 %                   collection while sharing the variable.
 %      
 %        ['Security','sc'] -- Set the security of shared memory segments.

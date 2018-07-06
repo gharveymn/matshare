@@ -1,9 +1,9 @@
 function varargout = pshare(varargin)
-%% MSHPERSISTSHARE  Place variables into shared memory with persistence.
-%    SHARED = MSHPERSISTSHARE(VAR_1,VAR_2,...,VAR_N) copies 
-%    VAR_1,VAR_2,...,VAR_N to shared memory and returns a cell array 
-%    containing shared copies. These variables will not be removed by 
-%    garbage collection.
+%% MATSHARE.PSHARE  Place variables into shared memory with persistence.
+%    [S1,S2,...] = MATSHARE.PSHARE(V1,V2,...) copies the argument variables
+%    to shared memory and returns matshare objects containing the shared
+%    versions. These variables will not be removed by garbage collection 
+%    and must be removed via MATSHARE.CLEAR.
 
 
 %% Copyright © 2018 Gene Harvey
@@ -11,10 +11,12 @@ function varargout = pshare(varargin)
 %    of the MIT license. See the LICENSE file for details.
 	
 	if(nargout == 0)
-		varargout{1} = matshare(matshare_(12,varargin));
+		% easiest way to pass ans
+		matshare_(12, varargin);
+		varargout{1} = matshare.object(ans);
 	else
 		[shared_raw{1:nargout}] = matshare_(12, varargin);
-		varargout = num2cell(matshare(shared_raw, nargout));
+		varargout = num2cell(matshare.object(shared_raw, nargout));
 	end
 	
 end

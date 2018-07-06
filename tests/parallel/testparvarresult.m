@@ -1,9 +1,9 @@
 function testparvarresult(tv, numworkers)
-	mshpersistshare(tv);
+	held = matshare.share(tv);
 	transfer = cell(numworkers,1);
 	parfor i = 1:numworkers
-		fetched = mshfetch('-r');
-		transfer{i} = fetched.recent;
+		fetched = matshare.fetch('-r');
+		transfer{i} = fetched.recent.data;
 	end
 	
 	for i = 1:numworkers
@@ -11,5 +11,8 @@ function testparvarresult(tv, numworkers)
 			error('Matshare failed because parallel results were not equal.');
 		end
 	end
+	
+	held.clear;
+	
 end
 
