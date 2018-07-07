@@ -69,10 +69,10 @@ for i = 1:num_maxDepth_tests
 						lents = numel(timestr);
 						
 						tv = randvargen(maxDepth, maxElements, maxDims, maxChildren, true, typespec);
-						mshshare(tv);
-						x = mshfetch;
+						matshare.share(tv);
+						x = matshare.fetch;
 						
-						if(~compstruct(tv, x))
+						if(~compstruct(tv, x.data))
 							error('Matshare failed because results were not equal.');
 						end
 						

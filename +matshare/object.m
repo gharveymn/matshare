@@ -2,28 +2,45 @@ classdef object < matlab.mixin.CustomDisplay
 %% MATSHARE.OBJECT stores the shared memory as an object
 %    This class is designed to store the shared data inside a 
 %    cell array so that shared data pointers are maintained. To
-%    access the data simply create an instance and query the DATA
+%    access the data simply create an instance and query the <a href="matlab:help matshare.object/data">data</a>
 %    property.
 %
-%    Instances of class may only be created via MATSHARE.SHARE,
-%    MATSHARE.PSHARE, and MATSHARE.FETCH.
+%    Methods:
+%        matshare.object.overwrite    - Overwrite the variable in-place
+%        matshare.object.copy         - Copy the variable from shared memory
+%        matshare.object.clear        - Clear the variable from shared memory
+%
+%    Instances of this class should only be created via <a href="matlab:help matshare.share">matshare.share</a>,
+%    <a href="matlab:help matshare.pshare">matshare.pshare</a>, and <a href="matlab:help matshare.fetch">matshare.fetch</a>.
 
 %% Copyright © 2018 Gene Harvey
 %    This software may be modified and distributed under the terms
 %    of the MIT license. See the LICENSE file for details.
 	
 	properties (Hidden, Access = protected)
-		shared_data = {[]}; % stored data pointers
+		shared_data = {[]}; % Shares shared data pointers in a cell.
 	end
 	
 	
 	properties (Dependent, SetAccess = immutable)
-		data % property that users will query
+		data % Query this property to access shared memory.
 	end
 	
 	methods
 		
 		function obj = object(shared_vars, num_objs)
+%% OBJECT  Create matshare objects.
+%    OBJ = OBJECT Creates a scalar matshare object.
+%
+%    OBJ = OBJECT(S) Creates a scalar matshare object storing S as data.
+%
+%    OBJ = OBJECT(S,N) Creates an array of matshare objects interpreting S
+%    as a cell array containing data to be stored with N elements.
+%
+%    Note: Do not call this directly. Use <a href="matlab:help matshare.share">matshare.share</a>,
+%    <a href="matlab:help matshare.pshare">matshare.pshare</a>, and <a href="matlab:help
+%    matshare.fetch">matshare.fetch</a> to create and fetch variables.
+			
 			if(nargin > 0)
 				if(nargin > 1)
 					% if object array is specified use as a cell array
@@ -47,11 +64,11 @@ classdef object < matlab.mixin.CustomDisplay
 		
 		function obj = overwrite(obj, in, option)
 %% OVERWRITE  Overwrite the contents of a variable in-place.
-%    MOOUT = MO.OVERWRITE(IN) recursively overwrites the 
-%    contents of the matshare object MO with IN. The data stored by MO 
+%    OBJ = OBJ.OVERWRITE(IN) recursively overwrites the 
+%    contents of the matshare object OBJ with IN. The data stored by OBJ 
 %    must have exactly the same size as IN.
 %
-%    MOOUT = MO.OVERWRITE(IN,OP) does the same except one may specify if 
+%    OBJ = OBJ.OVERWRITE(IN,OP) does the same except one may specify if 
 %    the operation is to be done in a synchronous manner. To run 
 %    synchronously use the flag '-s', otherwise use the flag '-a'.
 %
@@ -67,7 +84,7 @@ classdef object < matlab.mixin.CustomDisplay
 		
 		function clear(obj)
 %% CLEAR  Clear the matshare object data from shared memory.
-%    MO.CLEAR removes the data assocated to MO from shared memory.		
+%    OBJ.CLEAR removes the data assocated to OBJ from shared memory.		
 			
 			matshare_(6, obj.shared_data);
 			
@@ -75,7 +92,7 @@ classdef object < matlab.mixin.CustomDisplay
 		
 		function out = copy(obj)
 %% COPY  Copy the matshare object data from shared memory.
-%    MO.COPY copies the data assocated to MO from shared memory.
+%    OBJ.COPY copies the data assocated to OBJ from shared memory.
 			
 			out = matshare_(4, obj);
 			
@@ -83,14 +100,34 @@ classdef object < matlab.mixin.CustomDisplay
 		
 	end
 	
-	methods (Access = protected)	
+	methods (Hidden, Access = protected)
 		function header = getHeader(obj)
 			if(isscalar(obj))
+								
 				header = ['<a href="matlab:helpPopup matshare.object" ' ...
 				'style="font-weight:bold">matshare object</a>' ...
-				' storing ' ...
-				'<a href="matlab:helpPopup ' class(obj.data) '" ' ...
-				'style="font-weight:bold">' class(obj.data) '</a>'];
+				' storing '];
+				if(iscell(obj.data))
+					header = [header ...
+							'<a href="matlab:helpPopup cell" ' ...
+							'style="font-weight:bold">cell array</a>'];
+				elseif(ischar(obj.data))
+					header = [header ...
+							'<a href="matlab:helpPopup char" ' ...
+							'style="font-weight:bold">character array</a>'];
+				else
+					if(isscalar(obj.data))
+						header = [header 'scalar '];
+					elseif(isempty(obj.data))
+						header = [header 'empty '];
+					end
+					header = [header ...
+								'<a href="matlab:helpPopup ' class(obj.data) '" ' ...
+								'style="font-weight:bold">' class(obj.data) '</a>'];
+					if(~isscalar(obj.data))
+						header = [header ' array'];
+					end
+				end
 			elseif(isempty(obj))
 				header = ['empty <a href="matlab:helpPopup matshare.object" ' ...
 				'style="font-weight:bold">matshare object</a>' ...
@@ -106,6 +143,18 @@ classdef object < matlab.mixin.CustomDisplay
 			
 		end
 		
+		function groups = getPropertyGroups(obj)
+			groups = getPropertyGroups@matlab.mixin.CustomDisplay(obj);
+		end
+		
+		function s = getFooter(obj)
+			s = getFooter@matlab.mixin.CustomDisplay(obj);
+		end
+		
+		function displayScalarObject(obj)
+			displayScalarObject@matlab.mixin.CustomDisplay(obj);
+		end
+		
 		function displayNonScalarObject(obj)
 			disp(getHeader(obj));
 		end
@@ -113,6 +162,11 @@ classdef object < matlab.mixin.CustomDisplay
 		function displayEmptyObject(obj)
 			disp(getHeader(obj));
 		end
+		
+		function displayScalarHandleToDeletedObject(obj)
+			displayScalarHandleToDeletedObject@matlab.mixin.CustomDisplay(obj);
+		end
+		
 		
 	end
 end

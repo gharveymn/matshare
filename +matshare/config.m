@@ -45,7 +45,7 @@ function config(varargin)
 %            Default: 'on'
 %            Notes: If you don't want to disable garbage collection for all 
 %                   variables, but still want a variable to persist you can 
-%                   use MATSHARE.PSHARE which will disable garbage 
+%                   use <a href="matlab:help matshare.pshare">matshare.pshare</a> which will disable garbage 
 %                   collection while sharing the variable.
 %      
 %        ['Security','sc'] -- Set the security of shared memory segments.

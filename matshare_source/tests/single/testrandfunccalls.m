@@ -1,4 +1,4 @@
-addpath(fullfile(mfilefolder(mfilename), 'vargen'));
+addpath(fullfile(mfilefolder(mfilename), '..', 'vargen'));
 
 %% Define random call test parameters
 
@@ -64,7 +64,7 @@ max_typespec = 0;
 typespecV = linspace(min_typespec, max_typespec, num_typespec_tests);
 
 % number of samples per variable generation model
-num_samples = 10000;
+num_samples = 1000;
 
 count = 1;
 total_num_tests = num_maxDepth_tests*num_maxElements_tests*num_maxDims_tests*num_maxChildren_tests*num_typespec_tests;
