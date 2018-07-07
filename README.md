@@ -28,3 +28,11 @@ Note that this will reset after calling mshdetach in all processes. You may also
 ```matlab
 >> mshconfig(‘ThreadSafety’, ’off’);
 ```
+
+## Future Development
+- Variable identifiers (being able to select shared variables by name)
+- Atomic variable operations (increments, decrements, swaps, etc.)
+- Variable overwriting by index
+- Thread locks on a sub-global level
+- Rewrite in C++ for R2018a+
+- User defined locks
