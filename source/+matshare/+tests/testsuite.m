@@ -1,28 +1,24 @@
 %% TESTSUITE
 %  Runs an automated suite of tests
 
-addpath(fullfile(fileparts(which(mfilename)),'tests'));
-addpath(fullfile(fileparts(which(mfilename)),'tests', 'parallel'));
-addpath(fullfile(fileparts(which(mfilename)),'scripts'));
-
 %% Parallel pool startup
-mshpoolstartup;
+matshare.scripts.poolstartup;
 observerpid = workerpids{1};
 
 % test essential variables
-testparessential;
+matshare.tests.parallel.essential;
 
 % test parallel results
-testparresultverify;
+matshare.tests.parallel.resultverify;
 
 % test random function calls in parallel
-testparrandfunccalls;
+matshare.tests.parallel.randfunccalls;
 
 % parallel function calls
-testparlock;
+matshare.tests.parallel.lock;
 
 % test parallel results
-testparoverwrite;
+matshare.tests.parallel.overwrite;
 
 fprintf('Test suite ran successfully.\n\n');
 

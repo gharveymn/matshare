@@ -1,4 +1,4 @@
-function testparvarresult(tv, numworkers)
+function varresult(tv, numworkers)
 	held = matshare.share(tv);
 	transfer = cell(numworkers,1);
 	parfor i = 1:numworkers
@@ -7,7 +7,7 @@ function testparvarresult(tv, numworkers)
 	end
 	
 	for i = 1:numworkers
-		if(~compstruct(tv, transfer{i}))
+		if(~matshare.scripts.compstruct(tv, transfer{i}))
 			error('Matshare failed because parallel results were not equal.');
 		end
 	end

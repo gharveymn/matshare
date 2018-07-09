@@ -1,4 +1,4 @@
-addpath(fullfile(mfilefolder(mfilename), '..', 'vargen'));
+import matshare.tests.common.*
 
 %% Define random call test parameters
 
@@ -96,7 +96,7 @@ for i = 1:num_maxDepth_tests
 								    m,num_typespec_tests,typespec);
 					fprintf([repmat('\b',1,lents) timestr]);
 					lents = numel(timestr);
-					testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, false);
+					randfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, false);
 					count = count + 1;
 				end
 			end

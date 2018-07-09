@@ -5,7 +5,7 @@
 Note: This is not available for R2018a+ yet because of changes made the the MEX API.
 
 ## Usage
-First pick up the latest [release](https://github.com/gharveymn/matshare/releases). You may need to compile `matshare` if you are running Linux, in which case just navigate to `matshare_source` and run `INSTALL.m`. 
+First pick up the latest [release](https://github.com/gharveymn/matshare/releases). You may need to compile `matshare` if you are running Linux, in which case just navigate to `source` and run `INSTALL.m`. 
 
 Here's a very simple example of how to use `matshare`:
 

@@ -4,12 +4,12 @@ function out = variablefromtemplate(rns, in)
 		fn = fieldnames(out);
 		for i = 1:numel(fn)
 			for j = 1:numel(out)
-				out(j).(fn{i}) = variablefromtemplate(rns, in(j).(fn{i}));
+				out(j).(fn{i}) = matshare.tests.common.vargen.variablefromtemplate(rns, in(j).(fn{i}));
 			end
 		end
 	elseif(iscell(out))
 		for i = 1:numel(out)
-			out{i} = variablefromtemplate(rns, in{i});
+			out{i} = matshare.tests.common.vargen.variablefromtemplate(rns, in{i});
 		end
 	elseif(isnumeric(out))
 		

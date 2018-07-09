@@ -13,7 +13,7 @@
 
 #include "mshbasictypes.h"
 
-/* forward declaration, defined in matshare_source file */
+/* forward declaration, defined in source file */
 typedef struct SegmentNode_t SegmentNode_t;
 
 /* forward declaration, defined in mshvariablenode.h */

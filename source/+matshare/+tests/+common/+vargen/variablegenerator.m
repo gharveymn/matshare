@@ -179,7 +179,7 @@ function [ret] = variablegenerator_(currDepth, rns, maxDepth, maxElems, maxDims,
 			% not sure how to generate, generate an object array instead
 			if(numvarsz ~= 0)
 				cdims = num2cell(dims);
-				ret = BasicClass(randi(rns, intmax),cdims);
+				ret = matshare.tests.common.vargen.BasicClass(randi(rns, intmax),cdims);
 			else
 				ret = [];
 			end
@@ -187,7 +187,7 @@ function [ret] = variablegenerator_(currDepth, rns, maxDepth, maxElems, maxDims,
 			% 	18	mxOBJECT_CLASS,
 			if(numvarsz ~= 0)
 				cdims = num2cell(dims);
-				ret = BasicClass(randi(rns, intmax),cdims);
+				ret = matshare.tests.common.vargen.BasicClass(randi(rns, intmax),cdims);
 			else
 				ret = [];
 			end

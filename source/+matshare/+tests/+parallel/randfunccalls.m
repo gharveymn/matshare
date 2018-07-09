@@ -91,7 +91,7 @@ for i = 1:num_maxDepth_tests
 					fprintf([repmat('\b',1,lents) timestr]);
 					lents = numel(timestr);
 					parfor o = 1:numworkers
-						par_rand_streams{count, o} = testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, true);
+						par_rand_streams{count, o} = matshare.tests.common.randfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, true);
 					end
 					count = count + 1;
 				end

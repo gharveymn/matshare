@@ -1,4 +1,4 @@
-function rns = testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, isparallel)
+function rns = randfuncworker(maxDepth, maxElements, maxDims, maxChildren, typespec, num_samples, bounds, isparallel)
 	thispid = feature('getpid');
 	if(isparallel)
 		% only do this if in parallel so we have consistent results otherwise
@@ -51,7 +51,7 @@ function rns = testrandfuncworker(maxDepth, maxElements, maxDims, maxChildren, t
 	for i = 1:num_samples
 		try
 			
-			tv = variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, false, typespec);
+			tv = matshare.tests.common.vargen.variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, false, typespec);
 			
 			
 			data = matshare.share(tv);

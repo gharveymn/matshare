@@ -17,7 +17,7 @@
 /* forward declaration to avoid include */
 typedef struct mxArray_tag mxArray;
 
-/* forward declaration, defined in matshare_source file */
+/* forward declaration, defined in source file */
 typedef struct VariableNode_t VariableNode_t;
 
 /* forward declaration, definition in mshsegmentnode.h */
