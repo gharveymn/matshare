@@ -331,7 +331,7 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 	msh_segmentnumber_t curr_seg_num;
 	SegmentNode_t* curr_seg_node, * next_seg_node, * new_seg_node, * new_front = NULL;
 	
-	if(msh_IsUpdated())
+	if(g_local_info.rev_num == g_shared_info->rev_num)
 	{
 		/* don't do anything if this is true */
 		return;
@@ -356,7 +356,6 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 		{
 			new_front = new_seg_node;
 		}
-		
 	}
 	
 	/* set this process as up to date */
@@ -378,7 +377,7 @@ void msh_UpdateSegmentTracking(SegmentList_t* seg_list)
 void msh_UpdateLatestSegment(SegmentList_t* seg_list)
 {
 	SegmentNode_t* last_seg_node;
-	if(msh_IsUpdated())
+	if(g_local_info.rev_num == g_shared_info->rev_num)
 	{
 		return;
 	}

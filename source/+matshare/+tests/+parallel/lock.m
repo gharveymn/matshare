@@ -2,7 +2,7 @@
 lents = 0;
 
 locktestnum = 20;
-parlocknumtests = 1000;
+parlocknumtests = 100;
 
 matshare.reset;
 

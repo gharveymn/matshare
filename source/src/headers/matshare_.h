@@ -49,6 +49,22 @@ typedef struct mxArray_tag mxArray;
 "    Security:            '%o'\n"
 #endif
 
+#ifdef MSH_WIN
+#  define MSH_PROCESS_LOCK_FORMAT \
+"     process_lock: "HANDLE_FORMAT"\n"
+
+#  define MSH_PROCESS_LOCK_ARG \
+g_local_info.process_lock,
+#else
+#  define MSH_PROCESS_LOCK_FORMAT \
+"     process_lock (struct):\n" \
+"          lock_handle: "HANDLE_FORMAT"\n" \
+"          lock_size: "SIZE_FORMAT"\n"
+
+#  define MSH_PROCESS_LOCK_ARG \
+g_local_info.process_lock.lock_handle, \
+g_local_info.process_lock.lock_size,
+#endif
 
 #define MSH_DEBUG_LOCAL_FORMAT \
 "g_local_info:\n" \
@@ -58,7 +74,8 @@ typedef struct mxArray_tag mxArray;
 "     shared_info_wrapper (struct):\n" \
 "          ptr: "SIZE_FORMAT"\n" \
 "          handle: "HANDLE_FORMAT"\n" \
-"     process_lock: "HANDLE_FORMAT"\n" \
+MSH_PROCESS_LOCK_FORMAT \
+"     has_fatal_error: %u\n" \
 "     is_initialized: %u\n" \
 "     is_deinitialized: %u\n"
 
@@ -68,7 +85,8 @@ g_local_info.lock_level, \
 g_local_info.this_pid, \
 g_local_info.shared_info_wrapper.ptr, \
 g_local_info.shared_info_wrapper.handle, \
-g_local_info.process_lock, \
+MSH_PROCESS_LOCK_ARG \
+g_local_info.has_fatal_error, \
 g_local_info.is_initialized, \
 g_local_info.is_deinitialized
 
@@ -78,7 +96,8 @@ g_local_info.is_deinitialized
 #  define MSH_NUM_PROCS_FORMAT \
 "     num_procs: %li\n"
 #  define MSH_SECURITY_ARG
-#  define MSH_NUM_PROCS_ARG g_shared_info->num_procs,
+#  define MSH_NUM_PROCS_ARG \
+g_shared_info->num_procs,
 #else
 #  define MSH_SECURITY_FORMAT \
 "          security: %o\n"
@@ -89,7 +108,8 @@ g_local_info.is_deinitialized
 "               count: %lu\n" \
 "               flag: %lu\n" \
 "               post: %lu\n"
-#  define MSH_SECURITY_ARG g_shared_info->user_defined.security,
+#  define MSH_SECURITY_ARG \
+g_shared_info->user_defined.security,
 #  define MSH_NUM_PROCS_ARG \
 g_shared_info->num_procs.span, \
 g_shared_info->num_procs.values.count, \
@@ -111,13 +131,13 @@ g_shared_info->num_procs.values.post,
 "          max_shared_segments: %lu\n" \
 "          max_shared_size: "SIZE_FORMAT"\n" \
 "          will_shared_gc: %lu\n" \
-MSH_SECURITY_FORMAT\
+MSH_SECURITY_FORMAT \
 "     first_seg_num: "MSH_SEG_NUM_FORMAT"\n" \
 "     last_seg_num: "MSH_SEG_NUM_FORMAT"\n" \
 "     num_shared_segments: %lu\n" \
 "     has_fatal_error: %lu\n" \
 "     is_initialized: %lu\n" \
-MSH_NUM_PROCS_FORMAT\
+MSH_NUM_PROCS_FORMAT \
 "     update_pid: "PID_FORMAT"\n"
 
 #define MSH_DEBUG_SHARED_ARGS \

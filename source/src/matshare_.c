@@ -168,38 +168,36 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		                 );
 	}
 	
-	/* clean invalid segments out of tracking */
-	msh_CleanSegmentList(&g_local_seg_list, directive == msh_CLEAN);
-	
 	switch(directive)
 	{
 		case msh_SHARE:
 		case msh_PSHARE:
 		{
-			/* we use varargin in this case and extract the result */
+			/* we use varargin and extract the result */
 			if(num_in_args < 1)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Not enough inputs. Please use the entry functions provided.");
 			}
 			msh_Share(nlhs, plhs, mxGetNumberOfElements(in_args[0]), mxGetData(in_args[0]), directive);
+			
+			msh_CleanSegmentList(&g_local_seg_list, FALSE);
 			break;
 		}
 		case msh_FETCH:
+			/* we use varargin and extract the result */
 			if(num_in_args < 1)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Not enough inputs. Please use the entry functions provided.");
 			}
 			msh_Fetch(nlhs, plhs, mxGetNumberOfElements(in_args[0]), mxGetData(in_args[0]));
+			
+			msh_CleanSegmentList(&g_local_seg_list, FALSE);
 			break;
 		case msh_COPY:
 		{
 			msh_Copy(nlhs, plhs, num_in_args, in_args);
 			break;
 		}
-		/*
-		case msh_DETACH:
-			break;
-		*/
 		case msh_CONFIG:
 		{
 			if(num_in_args < 1)
@@ -209,10 +207,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			msh_Config(mxGetNumberOfElements(in_args[0])/2, mxGetData(in_args[0]));
 			break;
 		}
-		/*
-		case msh_DEBUG:
-			break;
-		 */
 		case msh_CLEAR:
 		{
 			msh_Clear(num_in_args, in_args);
@@ -244,20 +238,16 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			msh_ReleaseProcessLock(g_process_lock);
 			break;
 		}
-		/* operation was performed above
 		case msh_CLEAN:
+			msh_CleanSegmentList(&g_local_seg_list, TRUE);
 			break;
-		*/
-		/*
-		case msh_STATUS:
-			break;
-		*/
 		default:
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
 			break;
 		}
 	}
+	
 
 }
 

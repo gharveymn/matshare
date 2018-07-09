@@ -118,6 +118,4 @@ extern LocalInfo_t g_local_info;
 
 #define g_process_lock (g_local_info.process_lock)
 
-#define msh_IsUpdated() (g_local_info.rev_num == g_shared_info->rev_num)
-
 #endif /* MATSHARE_MSH_TYPES_H */
