@@ -286,7 +286,7 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_vars, const mxArray** in_var
 		msh_AddVariableToList(&g_local_var_list, new_var_node);
 		
 		/* create and set the return */
-		if(input_num < nlhs)
+		if(input_num < (size_t)nlhs)
 		{
 			plhs[input_num] = msh_CreateOutput(msh_CreateSharedDataCopy(new_var_node, TRUE));
 		}
@@ -497,7 +497,8 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 
 void msh_Copy(int nlhs, mxArray** plhs, int num_inputs, const mxArray** in_vars)
 {
-	size_t i, j, num_elems;
+	int i;
+	size_t j, num_elems;
 	
 	if(num_inputs < 1)
 	{
@@ -666,7 +667,8 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 
 void msh_Config(size_t num_params, const mxArray** in_params)
 {
-	int i, j, ps_len, vs_len;
+	size_t i;
+	int j, ps_len, vs_len;
 	char param_str[MSH_MAX_NAME_LEN] = {0}, val_str[MSH_MAX_NAME_LEN] = {0}, param_str_l[MSH_MAX_NAME_LEN] = {0}, val_str_l[MSH_MAX_NAME_LEN] = {0};
 	const mxArray* param, * val;
 	unsigned long maxvars_temp;

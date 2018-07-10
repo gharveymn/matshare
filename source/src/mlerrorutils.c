@@ -71,6 +71,9 @@ static char* meu_warning_help_message = "";
 
 void meu_PrintMexError(const char* file_name, int line, unsigned int error_severity, const char* error_id, const char* error_message, ...)
 {
+	
+	va_list va;
+	
 	char full_message[MEU_FULL_MESSAGE_SIZE] = {0};
 	char error_message_buffer[MEU_ERROR_STRING_SIZE] = {0};
 	char error_severity_buffer[MEU_ERROR_SEVERITY_SIZE] = {0};
@@ -82,7 +85,6 @@ void meu_PrintMexError(const char* file_name, int line, unsigned int error_sever
 		meu_WriteSystemErrorString(system_error_string_buffer, error_severity);
 	}
 	
-	va_list va;
 	va_start(va, error_message);
 	vsprintf(error_message_buffer, error_message, va);
 	va_end(va);
@@ -103,11 +105,11 @@ void meu_PrintMexError(const char* file_name, int line, unsigned int error_sever
 
 void meu_PrintMexWarning(const char* warn_id, const char* warn_message, ...)
 {
+	va_list va;
 	char full_message[MEU_FULL_MESSAGE_SIZE] = {0};
 	char message_prebuffer[MEU_ERROR_STRING_SIZE] = {0};
 	char id_buffer[MEU_ID_BUFFER_SIZE] = {0};
 	
-	va_list va;
 	va_start(va, warn_message);
 	vsprintf(message_prebuffer, warn_message, va);
 	va_end(va);
