@@ -30,11 +30,11 @@ function f = fetch(varargin)
 
 	f = matshare_(1, varargin);
 	if(iscell(f))
-		f = matshare.object(f, numel(f));
+		f = createobject(f, numel(f));
 	else
 		fnames = fieldnames(f);
 		for i = 1:numel(fnames)
-			f.(fnames{i}) = matshare.object(f.(fnames{i}), numel(f.(fnames{i})));
+			f.(fnames{i}) = createobject(f.(fnames{i}), numel(f.(fnames{i})));
 		end
 	end
 	

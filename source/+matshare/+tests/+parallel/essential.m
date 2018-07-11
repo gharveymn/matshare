@@ -36,6 +36,6 @@ tv{10} = [1,2];
 
 fprintf('Testing essential variables... ');
 for i = 1:10
-	varresult(tv{i}, numworkers);
+	matshare.tests.parallel.varresult(tv{i}, numworkers);
 end
 fprintf('Test successful.\n\n');

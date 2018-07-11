@@ -1,9 +1,9 @@
-classdef object < matlab.mixin.CustomDisplay
+classdef compatobject
 %% MATSHARE.OBJECT stores the shared memory as an object
 %    This class is designed to store the shared data inside a 
 %    cell array so that shared data pointers are maintained. To
 %    access the data simply create an instance and query the <a href="matlab:help matshare.object/data">data</a>
-%    property.
+%    property. This is for versions below R2013b
 %
 %    Methods:
 %        matshare.object.overwrite    - Overwrite the variable in-place
@@ -28,13 +28,13 @@ classdef object < matlab.mixin.CustomDisplay
 	
 	methods
 		
-		function obj = object(shared_vars, num_objs)
-%% OBJECT  Create matshare objects.
-%    OBJ = OBJECT Creates a scalar matshare object.
+		function obj = compatobject(shared_vars, num_objs)
+%% COMPATOBJECT  Create matshare objects.
+%    OBJ = COMPATOBJECT Creates a scalar matshare object.
 %
-%    OBJ = OBJECT(S) Creates a scalar matshare object storing S as data.
+%    OBJ = COMPATOBJECT(S) Creates a scalar matshare object storing S as data.
 %
-%    OBJ = OBJECT(S,N) Creates an array of matshare objects interpreting S
+%    OBJ = COMPATOBJECT(S,N) Creates an array of matshare objects interpreting S
 %    as a cell array containing data to be stored with N elements.
 %
 %    Note: Do not call this directly. Use <a href="matlab:help matshare.share">matshare.share</a>,
@@ -97,76 +97,6 @@ classdef object < matlab.mixin.CustomDisplay
 			out = matshare_(4, obj);
 			
 		end
-		
-	end
-	
-	methods (Hidden, Access = protected)
-		function header = getHeader(obj)
-			if(isscalar(obj))
-								
-				header = ['<a href="matlab:helpPopup matshare.object" ' ...
-				'style="font-weight:bold">matshare object</a>' ...
-				' storing '];
-				if(iscell(obj.data))
-					header = [header ...
-							'<a href="matlab:helpPopup cell" ' ...
-							'style="font-weight:bold">cell array</a>'];
-				elseif(ischar(obj.data))
-					header = [header ...
-							'<a href="matlab:helpPopup char" ' ...
-							'style="font-weight:bold">character array</a>'];
-				else
-					if(isscalar(obj.data))
-						header = [header 'scalar '];
-					elseif(isempty(obj.data))
-						header = [header 'empty '];
-					end
-					header = [header ...
-								'<a href="matlab:helpPopup ' class(obj.data) '" ' ...
-								'style="font-weight:bold">' class(obj.data) '</a>'];
-					if(~isscalar(obj.data))
-						header = [header ' array'];
-					end
-				end
-			elseif(isempty(obj))
-				header = ['empty <a href="matlab:helpPopup matshare.object" ' ...
-				'style="font-weight:bold">matshare object</a>' ...
-				' array'];
-			else
-				header = [matlab.mixin.CustomDisplay.convertDimensionsToString(obj) ...
-					' <a href="matlab:helpPopup matshare.object" ' ...
-				'style="font-weight:bold">matshare object</a>' ...
-				' array'];
-			end
-			
-			% This is not a handle class, so no handle case
-			
-		end
-		
-		function groups = getPropertyGroups(obj)
-			groups = getPropertyGroups@matlab.mixin.CustomDisplay(obj);
-		end
-		
-		function s = getFooter(obj)
-			s = getFooter@matlab.mixin.CustomDisplay(obj);
-		end
-		
-		function displayScalarObject(obj)
-			displayScalarObject@matlab.mixin.CustomDisplay(obj);
-		end
-		
-		function displayNonScalarObject(obj)
-			disp(getHeader(obj));
-		end
-		
-		function displayEmptyObject(obj)
-			disp(getHeader(obj));
-		end
-		
-		function displayScalarHandleToDeletedObject(obj)
-			displayScalarHandleToDeletedObject@matlab.mixin.CustomDisplay(obj);
-		end
-		
 		
 	end
 end

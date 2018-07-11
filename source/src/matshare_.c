@@ -286,17 +286,11 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_vars, const mxArray** in_var
 		msh_AddVariableToList(&g_local_var_list, new_var_node);
 		
 		/* create and set the return */
-		if(input_num < (size_t)nlhs)
+		if(input_num < (size_t)nlhs || (nlhs == 0 && input_num == 0))
 		{
 			plhs[input_num] = msh_CreateOutput(msh_CreateSharedDataCopy(new_var_node, TRUE));
 		}
 		
-	}
-	
-	/* return to ans */
-	if(nlhs == 0)
-	{
-		plhs[0] = msh_CreateOutput(msh_CreateSharedDataCopy(new_var_node, FALSE));
 	}
 	
 }

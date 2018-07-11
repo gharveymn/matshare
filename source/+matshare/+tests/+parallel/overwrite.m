@@ -40,7 +40,7 @@ for i = 1:num_maxDepth_tests
 						lents = numel(timestr);
 						
 						tv = vargen.variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, true, typespec);
-						varresult(tv, numworkers);
+						matshare.tests.parallel.varresult(tv, numworkers);
 						
 						% test overwriting in one workspace
 						tv = matshare.share(tv);

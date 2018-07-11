@@ -160,11 +160,11 @@ function [ret] = variablegenerator_(currDepth, rns, maxDepth, maxElems, maxDims,
 		case(14)
 			% 	14	mxINT64_CLASS,
 			% bitshift and bitor to convert into a proper int64        
-			ret = int64(bitor(bitshift(randuint64shifted(rns, dims),32), randuint64shifted(rns, dims)));
+			ret = int64(bitor(bitshift(matshare.tests.common.vargen.randuint64shifted(rns, dims),32), matshare.tests.common.vargen.randuint64shifted(rns, dims)));
 		case(15)
 			% 	15	mxUINT64_CLASS,
 			% bitshift and bitor to convert into a proper uint64        
-			ret = bitor(bitshift(randuint64shifted(rns, dims),32), randuint64shifted(rns, dims));
+			ret = bitor(bitshift(matshare.tests.common.vargen.randuint64shifted(rns, dims),32), matshare.tests.common.vargen.randuint64shifted(rns, dims));
 		case(16)
 			% 	16	mxFUNCTION_CLASS,
 			af1 = @(x) x + 17;

@@ -308,8 +308,8 @@ void msh_DetachSegmentList(SegmentList_t* seg_list)
 
 void msh_ClearSharedSegments(SegmentList_t* seg_cache_list)
 {
-	msh_AcquireProcessLock(g_process_lock);
 	SegmentNode_t* curr_seg_node;
+	msh_AcquireProcessLock(g_process_lock);
 	while(g_shared_info->first_seg_num != MSH_INVALID_SEG_NUM)
 	{
 		if((curr_seg_node = msh_FindSegmentNode(&seg_cache_list->seg_table, g_shared_info->first_seg_num)) == NULL)

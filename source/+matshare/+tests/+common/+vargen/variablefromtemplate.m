@@ -20,9 +20,9 @@ function out = variablefromtemplate(rns, in)
 				if(isa(in, 'double') || isa(in, 'single'))
 					out = rand(rns, size(in), class(in));
 				elseif(isa(in, 'int64'))
-					out = int64(bitor(bitshift(randuint64shifted(rns, size(in)),32), randuint64shifted(rns, size(in))));
+					out = int64(bitor(bitshift(matshare.tests.common.vargen.randuint64shifted(rns, size(in)),32), matshare.tests.common.vargen.randuint64shifted(rns, size(in))));
 				elseif(isa(in, 'uint64'))
-					out = bitor(bitshift(randuint64shifted(rns, size(in)),32), randuint64shifted(rns, size(in)));
+					out = bitor(bitshift(matshare.tests.common.vargen.randuint64shifted(rns, size(in)),32), matshare.tests.common.vargen.randuint64shifted(rns, size(in)));
 				else
 					out = randi(rns, max(in(:)), size(in), class(in));
 				end
