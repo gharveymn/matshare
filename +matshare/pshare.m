@@ -13,10 +13,10 @@ function varargout = pshare(varargin)
 	if(nargout == 0)
 		% easiest way to pass ans
 		matshare_(12, varargin);
-		varargout{1} = createobject(ans);
+		varargout{1} = matshare.object(ans);
 	else
 		[shared_raw{1:nargout}] = matshare_(12, varargin);
-		varargout = num2cell(createobject(shared_raw, nargout));
+		varargout = num2cell(matshare.object(shared_raw, nargout));
 	end
 	
 end

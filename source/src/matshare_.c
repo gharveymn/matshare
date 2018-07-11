@@ -504,7 +504,7 @@ void msh_Copy(int nlhs, mxArray** plhs, int num_inputs, const mxArray** in_vars)
 	for(i = 0; i < num_inputs; i++)
 	{
 		
-		if(!mxIsClass(in_vars[i], "matshare.object"))
+		if(!(mxIsClass(in_vars[i], "matshare.object") || mxIsClass(in_vars[i], "matshare.compatobject")))
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidInputError", "Invalid input. All arguments for the copy function must be <a href=\"matlab:helpPopup matshare.object\" "
 													    "style=\"font-weight:bold\">matshare objects</a>.");
