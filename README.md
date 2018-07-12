@@ -2,7 +2,8 @@
 
 `matshare` is a subsystem for MATLAB R2008b to R2017b which provides functions for creating and operating on shared memory. It has mechanisms for automatic garbage collection, thread safe memory creation, and in-place overwriting.
 
-Note: This is not available for R2018a+ yet because of changes made the the MEX API.
+## Availability
+MATLAB R2008b to R2017b on Windows and Linux. This is not available for R2018a+ yet because of changes made the the MEX API. This is also not available for MacOS partially because of problems with locking files but mainly because I don't own a Mac.
 
 ## Usage
 First pick up the latest [release](https://github.com/gharveymn/matshare/releases). You may need to compile `matshare` if you are running Linux, in which case just navigate to `source` and run `INSTALL.m`. 
@@ -11,16 +12,13 @@ Here's a very simple example of how to use `matshare`:
 
 #### Process 1
 ```matlab
->> [s1,s2,s3] = matshare.share({7,uint32(2)},5,rand(3))
+>> [s1,s2,s3] = matshare.share({7,uint32(2)}, 5, rand(3))
 s1 = 
-matshare object storing cell
-    data: {[7]  [2]}
+matshare object storing 1x2 cell
 s2 = 
-matshare object storing double
-    data: 5
+matshare object storing 1x1 double
 s3 = 
-matshare object storing double
-    data: [3×3 double]
+matshare object storing 3x3 double
 ```
 #### Process 2
 ```matlab
@@ -46,4 +44,4 @@ This is not a finished project by any means. If you wish to contribute or have a
 - Variable overwriting by index
 - Thread locks on a sub-global level
 - Rewrite in C++ for R2018a+
-- User defined locks
+- User defined locks/waits
