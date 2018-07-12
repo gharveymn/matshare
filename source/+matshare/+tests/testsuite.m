@@ -1,6 +1,8 @@
 %% TESTSUITE
 %  Runs an automated suite of tests
 
+addpath('..');
+
 %% Parallel pool startup
 matshare.scripts.poolstartup;
 observerpid = workerpids{1};

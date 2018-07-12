@@ -1,6 +1,6 @@
 # `matshare`
 
-`matshare` is a subsystem for MATLAB R2008b to R2017b which provides functions for creating and operating on shared memory. It has mechanisms for automatic garbage collection, thread safe memory creation, and in-place overwriting.
+`matshare` is a subsystem for MATLAB R2008b to R2017b which provides functions for creating and operating on shared memory. It has mechanisms for automatic garbage collection, thread-safe memory creation, and in-place overwriting.
 
 ## Availability
 MATLAB R2008b to R2017b on Windows and Linux. This is not available for R2018a+ yet because of changes made the the MEX API. This is also not available for MacOS partially because of problems with locking files but mainly because I don't own a Mac.
