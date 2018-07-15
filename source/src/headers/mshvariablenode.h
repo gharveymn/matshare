@@ -99,13 +99,8 @@ mxArray* msh_GetVariableData(VariableNode_t* var_node);
 SegmentNode_t* msh_GetSegmentNode(VariableNode_t* var_node);
 
 
-VariableNode_t* msh_GetFirstVirtualScalar(VariableNode_t* var_node);
-
-
-VariableNode_t* msh_GetLastVirtualScalar(VariableNode_t* var_node);
-
-
 SharedVariableHeader_t* msh_GetSharedHeader(VariableNode_t* var_node);
+
 
 int msh_GetIsUsed(VariableNode_t* var_node);
 
@@ -153,13 +148,6 @@ void msh_SetVariableData(VariableNode_t* var_node, mxArray* var);
  * @param seg_node The segment node.
  */
 void msh_SetSegmentNode(VariableNode_t* var_node, SegmentNode_t* seg_node);
-
-
-void msh_SetFirstVirtualScalar(VariableNode_t* var_node, VariableNode_t* virtual_scalar_node);
-
-
-void msh_SetLastVirtualScalar(VariableNode_t* var_node, VariableNode_t* virtual_scalar_node);
-
 
 void msh_SetSharedHeader(VariableNode_t* var_node, SharedVariableHeader_t* shared_header);
 

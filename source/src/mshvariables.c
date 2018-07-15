@@ -27,32 +27,22 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 {
 	
 	mxArray* new_var;
-	VariableNode_t* last_virtual_scalar,* new_var_node;
 	
 	if(msh_GetVariableNode(seg_node) != NULL)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "CreateVariableError", "The segment targeted for variable creation already has a variable attached to it.");
 	}
 	
-	/* keep track of the last virtual scalar before the fetch operation */
-	last_virtual_scalar = g_virtual_scalar_list.last;
-	
 	new_var = msh_FetchVariable(msh_GetSegmentData(seg_node));
 	mexMakeArrayPersistent(new_var);
 	
-	new_var_node = msh_CreateVariableNode(seg_node, new_var, msh_GetSegmentData(seg_node));
+	return msh_CreateVariableNode(seg_node, new_var, msh_GetSegmentData(seg_node));
 	
-	msh_SetFirstVirtualScalar(new_var_node, ((last_virtual_scalar == NULL)? g_virtual_scalar_list.first : msh_GetNextVariable(last_virtual_scalar)));
-	msh_SetLastVirtualScalar(new_var_node, g_virtual_scalar_list.last);
-	
-	return new_var_node;
 }
 
 
 int msh_DestroyVariable(VariableNode_t* var_node)
 {
-	
-	VariableNode_t* curr_virtual_scalar;
 	SegmentNode_t* seg_node = msh_GetSegmentNode(var_node);
 	int did_remove_segment = FALSE;
 	
@@ -62,15 +52,6 @@ int msh_DestroyVariable(VariableNode_t* var_node)
 	
 	/* remove tracking for this variable */
 	msh_SetVariableNode(seg_node, NULL);
-	
-	/* remove virtual scalar tracking */
-	for(curr_virtual_scalar = msh_GetFirstVirtualScalar(var_node);
-			curr_virtual_scalar != NULL && curr_virtual_scalar != msh_GetNextVariable(msh_GetLastVirtualScalar(var_node));
-			curr_virtual_scalar = msh_GetNextVariable(curr_virtual_scalar))
-	{
-		msh_RemoveVariableFromList(curr_virtual_scalar);
-		msh_DestroyVariableNode(curr_virtual_scalar);
-	}
 
 	if(msh_GetIsUsed(var_node))
 	{

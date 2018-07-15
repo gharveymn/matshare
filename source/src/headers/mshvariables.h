@@ -75,8 +75,4 @@ mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node, int will_set_used);
 extern VariableList_t g_local_var_list;
 
 
-/** global virtual scalar list **/
-extern VariableList_t g_virtual_scalar_list;
-
-
 #endif /* MATSHARE_MSHLISTS_H */
