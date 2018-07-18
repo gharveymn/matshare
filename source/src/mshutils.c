@@ -9,6 +9,7 @@
 
 #include "mex.h"
 
+#include <stdio.h>
 #include "mshtypes.h"
 #include "mshexterntypes.h"
 #include "mshutils.h"

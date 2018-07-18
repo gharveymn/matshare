@@ -9,6 +9,8 @@
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #include "mex.h"
+
+#include <stdio.h>
 #include <stdarg.h>
 #include <fcntl.h>
 #include <errno.h>
