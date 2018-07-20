@@ -87,7 +87,7 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var);
  * @param name_buffer The destination of the segment name.
  * @param seg_num The segment number used by matshare to identify the segment.
  */
-void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num);
+void msh_WriteSegmentName(char* name_buffer, segmentnumber_t seg_num);
 
 
 /**

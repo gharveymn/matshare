@@ -18,6 +18,7 @@
 #include "mshutils.h"
 #include "mshvariables.h"
 #include "mshsegments.h"
+#include "mshtable.h"
 #include "mshinit.h"
 #include "mshlockfree.h"
 
@@ -33,30 +34,46 @@ char_t* g_msh_library_name = "matshare";
 char_t* g_msh_error_help_message = "";
 char_t* g_msh_warning_help_message = "";
 
-LocalInfo_t g_local_info = {
-		                      MSH_INITIAL_STATE,          /* rev_num */
-		                      0,                          /* lock_level */
-		                      0,                          /* this_pid */
-		                      {
-		                           NULL,                  /* ptr */
-		                           MSH_INVALID_HANDLE     /* handle */
-		                      },                          /* shared_info_wrapper */
+LocalInfo_t g_local_info =
+{
+	MSH_INITIAL_STATE,          /* rev_num */
+	0,                          /* lock_level */
+	0,                          /* this_pid */
+	{
+		NULL,                  /* ptr */
+		MSH_INVALID_HANDLE     /* handle */
+	},                          /* shared_info_wrapper */
 #ifdef MSH_WIN
-                                MSH_INVALID_HANDLE,         /* process_lock */
+		MSH_INVALID_HANDLE,         /* process_lock */
 #else
-		                      {
-		                           MSH_INVALID_HANDLE,         /* process_lock */
-		                           0,                          /* lock_size */
-		                      },
+	{
+		MSH_INVALID_HANDLE,         /* process_lock */
+		0,                          /* lock_size */
+	},
 #endif
-		                      FALSE,                      /* has_fatal_error */
-		                      FALSE,                      /* is_initialized */
-		                      TRUE                        /* is_deinitialized */
-                           };
+	FALSE,                      /* has_fatal_error */
+	FALSE,                      /* is_initialized */
+	TRUE                        /* is_deinitialized */
+};
 
-VariableList_t g_local_var_list = {0};
-VariableList_t g_virtual_scalar_list = {0};
-SegmentList_t g_local_seg_list = {0};
+SegmentList_t g_local_seg_list =
+{
+	{
+		NULL,
+		0,
+		msh_GetSegmentHashByNumber,
+		msh_CompareNumericHash
+	},
+	NULL,
+	NULL,
+	0
+};
+
+VariableList_t g_local_var_list =
+{
+	NULL,
+	NULL
+};
 
 static const char s_out_id_recent[] = "recent";
 static const char s_out_id_new[] = "new";

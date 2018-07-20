@@ -14,6 +14,12 @@
 #include "mshtypes.h"
 #include "mshvariablenode.h"
 
+typedef struct VariableList_t
+{
+	VariableNode_t* first;
+	VariableNode_t* last;
+	/* uint32_T num_vars; */
+} VariableList_t;
 
 /**
  * Creates a new MATLAB variable from the specified shared segment.

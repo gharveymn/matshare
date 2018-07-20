@@ -23,14 +23,8 @@ typedef struct VariableNode_t VariableNode_t;
 /* forward declaration, definition in mshsegmentnode.h */
 typedef struct SegmentNode_t SegmentNode_t;
 
-
-typedef struct VariableList_t
-{
-	VariableNode_t* first;
-	VariableNode_t* last;
-	/* uint32_T num_vars; */
-} VariableList_t;
-
+/* forward declaration */
+typedef struct VariableList_t VariableList_t;
 
 /** Forward declaration for SharedVariableHeader_t **/
 typedef struct SharedVariableHeader_t SharedVariableHeader_t;
@@ -43,7 +37,7 @@ typedef struct SharedVariableHeader_t SharedVariableHeader_t;
  * @param new_var The mxArray to be tracked.
  * @return The new variable node.
  */
-VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var, SharedVariableHeader_t* shared_header);
+VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var);
 
 
 /**
@@ -99,9 +93,6 @@ mxArray* msh_GetVariableData(VariableNode_t* var_node);
 SegmentNode_t* msh_GetSegmentNode(VariableNode_t* var_node);
 
 
-SharedVariableHeader_t* msh_GetSharedHeader(VariableNode_t* var_node);
-
-
 int msh_GetIsUsed(VariableNode_t* var_node);
 
 
@@ -149,7 +140,6 @@ void msh_SetVariableData(VariableNode_t* var_node, mxArray* var);
  */
 void msh_SetSegmentNode(VariableNode_t* var_node, SegmentNode_t* seg_node);
 
-void msh_SetSharedHeader(VariableNode_t* var_node, SharedVariableHeader_t* shared_header);
 
 void msh_SetIsUsed(VariableNode_t* var_node, int is_used);
 

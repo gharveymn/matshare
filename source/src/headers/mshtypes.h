@@ -60,8 +60,8 @@ typedef volatile struct SharedInfo_t
 	size_t rev_num;
 	size_t total_shared_size;
 	UserConfig_t user_defined;
-	msh_segmentnumber_t first_seg_num;     /* the first segment number in the list */
-	msh_segmentnumber_t last_seg_num;      /* the last segment number in the list */
+	segmentnumber_t first_seg_num;     /* the first segment number in the list */
+	segmentnumber_t last_seg_num;      /* the last segment number in the list */
 	uint32_T num_shared_segments;
 	alignedbool_t has_fatal_error;
 	alignedbool_t is_initialized;

@@ -36,7 +36,7 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 	new_var = msh_FetchVariable(msh_GetSegmentData(seg_node));
 	mexMakeArrayPersistent(new_var);
 	
-	return msh_CreateVariableNode(seg_node, new_var, msh_GetSegmentData(seg_node));
+	return msh_CreateVariableNode(seg_node, new_var);
 	
 }
 

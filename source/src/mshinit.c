@@ -14,6 +14,7 @@
 #include "mshutils.h"
 #include "mshtypes.h"
 #include "mshsegments.h"
+#include "mshtable.h"
 #include "mshlockfree.h"
 
 #ifdef MSH_UNIX
@@ -300,7 +301,7 @@ void msh_OnExit(void)
 	/* init == FALSE, deinit == FALSE */
 	
 	msh_DetachSegmentList(&g_local_seg_list);
-	msh_FreeTable(&g_local_seg_list.seg_table);
+	msh_DestroyTable(&g_local_seg_list.seg_table);
 	
 	if(g_local_info.shared_info_wrapper.ptr != NULL)
 	{

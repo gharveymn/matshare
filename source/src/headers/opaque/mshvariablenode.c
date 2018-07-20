@@ -24,7 +24,7 @@ struct VariableNode_t
 };
 
 
-VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var, SharedVariableHeader_t* shared_header)
+VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var)
 {
 	VariableNode_t* new_var_node = mxCalloc(1, sizeof(VariableNode_t));
 	mexMakeMemoryPersistent(new_var_node);

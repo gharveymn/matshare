@@ -99,7 +99,7 @@ void msh_ReleaseProcessLock(ProcessLock_t process_lock)
 }
 
 
-void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num)
+void msh_WriteSegmentName(char* name_buffer, segmentnumber_t seg_num)
 {
 	if(seg_num == MSH_INVALID_SEG_NUM)
 	{

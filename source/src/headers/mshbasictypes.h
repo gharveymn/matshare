@@ -59,7 +59,7 @@ typedef char char_t;                     /* characters */
 typedef byte_T byte_t;                  /* reading physical memory */
 typedef int8_T bool_t;                  /* conditionals */
 typedef int32_T alignedbool_t;		/* for word sized alignment */
-typedef int32_T msh_segmentnumber_t; /* segment number identifiers */
+typedef int32_T segmentnumber_t; /* segment number identifiers */
 
 #define MSH_SEG_NUM_FORMAT "%li"
 

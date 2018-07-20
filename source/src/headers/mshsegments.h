@@ -12,9 +12,21 @@
 
 #include "mshbasictypes.h"
 #include "mshsegmentnode.h"
+#include "mshtable.h"
 
 /* forward declaration, definition in mshheader.c */
 typedef struct SharedVariableHeader_t SharedVariableHeader_t;
+
+/* forward declaration */
+typedef struct SegmentTable_t SegmentTable_t;
+
+typedef struct SegmentList_t
+{
+	SegmentTable_t seg_table;
+	SegmentNode_t* first;
+	SegmentNode_t* last;
+	uint32_T num_segs;
+} SegmentList_t;
 
 /**
  * Note: matshare links segments in shared memory by assigning each segment a "segment number."
@@ -67,7 +79,7 @@ SegmentNode_t* msh_CreateSegment(size_t data_size, int is_persistent);
  * @param seg_num The segment number of the shared memory segment (used by matshare to identify the memory segment).
  * @return The new segment node which holds information about the new segment.
  */
-SegmentNode_t* msh_OpenSegment(msh_segmentnumber_t seg_num);
+SegmentNode_t* msh_OpenSegment(segmentnumber_t seg_num);
 
 
 /**
@@ -146,54 +158,6 @@ void msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node);
  * @param seg_node The segment to be removed.
  */
 void msh_RemoveSegmentFromList(SegmentNode_t* seg_node);
-
-
-/**
- * Initializes the segment hash table.
- *
- * @note allocates an array of size MSH_INIT_TABLE_SIZE.
- * @param seg_table A pointer to a segment hash table struct.
- */
-void msh_InitializeTable(SegmentTable_t* seg_table);
-
-
-/**
- * Adds the specified segment node to the hash table with
- * automatic resizing.
- *
- * @param seg_table The hash table to which the segment node will be added to.
- * @param seg_node The segment node to be added.
- */
-void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node);
-
-
-/**
- * Removes the specified segment node from the hash table.
- *
- * @param seg_table The hash table from which the segment node will be removed.
- * @param seg_node The segment node to be removed.
- */
-void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node);
-
-
-/**
- * Frees and resets the table.
- *
- * @note Does not free the pointer that was passed.
- * @param seg_table The table to be reset.
- */
-void msh_FreeTable(SegmentTable_t* seg_table);
-
-
-/**
- * Attempts to find the segment node associated to
- * the segment number specified in the segment table.
- *
- * @param seg_table The segment table to be searched.
- * @param seg_num The segment number.
- * @return The segment node if found, otherwise NULL.
- */
-SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, msh_segmentnumber_t seg_num);
 
 
 /**
@@ -277,6 +241,9 @@ void msh_LockMemory(void* ptr, size_t sz);
  */
 void msh_UnlockMemory(void* ptr, size_t sz);
 
+size_t msh_GetSegmentHashByNumber(SegmentTable_t* seg_table, void* seg_num);
+
+int msh_CompareNumericHash(void* node_seg_num, void* comp_seg_num);
 
 /**
  * Forward declaration of the global segment list.

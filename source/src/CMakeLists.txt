@@ -25,13 +25,13 @@ SET(SOURCE_FILES
 		headers/opaque/mshexterntypes.c
 		mshsegments.c
 		headers/mshsegments.h
-		headers/opaque/mshtable.c
+		mshtable.c
 		headers/opaque/mshvariablenode.c
 		headers/mshvariablenode.h
 		headers/opaque/mshsegmentnode.c
 		headers/mshsegmentnode.h
 		mshlockfree.c
-		headers/mshlockfree.h)
+		headers/mshlockfree.h headers/mshtable.h)
 
 SET_SOURCE_FILES_PROPERTIES(${SOURCE_FILES} PROPERTIES LANGUAGE C)
 
