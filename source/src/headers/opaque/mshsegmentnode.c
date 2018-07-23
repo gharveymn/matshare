@@ -44,16 +44,6 @@ void msh_DestroySegmentNode(SegmentNode_t* seg_node)
 }
 
 
-void msh_InitializeSegmentInfo(SegmentInfo_t* seg_info)
-{
-	seg_info->raw_ptr = NULL;
-	seg_info->metadata = NULL;
-	seg_info->total_segment_size = 0;
-	seg_info->handle = MSH_INVALID_HANDLE;
-	seg_info->seg_num = -1;
-}
-
-
 /** getters **/
 
 SegmentList_t* msh_GetSegmentList(SegmentNode_t* seg_node)

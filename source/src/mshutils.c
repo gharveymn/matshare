@@ -9,11 +9,9 @@
 
 #include "mex.h"
 
-#include <stdio.h>
 #include "mshtypes.h"
 #include "mshexterntypes.h"
 #include "mshutils.h"
-#include "mshsegments.h"
 #include "mshvariables.h"
 #include "mshlockfree.h"
 #include "mlerrorutils.h"
@@ -25,6 +23,7 @@
 #  include <sys/mman.h>
 #  include <sys/stat.h>
 #endif
+
 
 void msh_AcquireProcessLock(ProcessLock_t process_lock)
 {
@@ -46,11 +45,11 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 			status = WaitForSingleObject(process_lock, INFINITE);
 			if(status == WAIT_ABANDONED)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "ProcessLockAbandonedError",  "Another process has failed. Cannot safely continue.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "ProcessLockAbandonedError", "Another process has failed. Cannot safely continue.");
 			}
 			else if(status == WAIT_FAILED)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError",  "Failed to lock acquire the process lock.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError", "Failed to lock acquire the process lock.");
 			}
 #else
 			if(lockf(process_lock.lock_handle, F_LOCK, process_lock.lock_size) != 0)
@@ -103,8 +102,11 @@ void msh_WriteSegmentName(char* name_buffer, segmentnumber_t seg_num)
 {
 	if(seg_num == MSH_INVALID_SEG_NUM)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_FATAL, "InternalLogicError", "There was an internal logic error where matshare lost track of its internal shared memory list. Please"
-															 "report this if you can.");
+		meu_PrintMexError(MEU_FL,
+		                  MEU_SEVERITY_INTERNAL | MEU_SEVERITY_FATAL,
+		                  "InternalLogicError",
+		                  "There was an internal logic error where matshare lost track of its internal shared memory list. Please"
+		                  "report this if you can.");
 	}
 	sprintf(name_buffer, MSH_SEGMENT_NAME_FORMAT, (unsigned long)seg_num);
 }
@@ -195,7 +197,7 @@ char_t* msh_GetConfigurationPath(void)
 {
 	char_t* user_config_folder;
 	char_t* config_path;
-	
+
 #ifdef MSH_WIN
 	
 	/* use NULL check to avoid reliance on _WIN32_WINNT */
@@ -206,8 +208,6 @@ char_t* msh_GetConfigurationPath(void)
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ConfigPathError", "Could not find a suitable configuration path. Please make sure either %LOCALAPPDATA% or %APPDATA% is defined.");
 		}
 	}
-	
-	
 	
 	config_path = mxCalloc(strlen(user_config_folder) + 2 + strlen(MSH_CONFIG_FOLDER_NAME) + 2 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
 	sprintf(config_path, "%s\\%s", user_config_folder, MSH_CONFIG_FOLDER_NAME);
@@ -256,19 +256,6 @@ char_t* msh_GetConfigurationPath(void)
 }
 
 
-void msh_SetDefaultConfiguration(void)
-{
-	msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_DEFAULT_THREAD_SAFETY);
-	msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);                 /** counter is in post state **/
-	g_shared_info->user_defined.max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;
-	g_shared_info->user_defined.max_shared_size = MSH_DEFAULT_MAX_SHARED_SIZE;
-	g_shared_info->user_defined.will_shared_gc = MSH_DEFAULT_SHARED_GC;
-#ifdef MSH_UNIX
-	g_shared_info->user_defined.security = MSH_DEFAULT_SECURITY;
-#endif
-}
-
-
 pid_t msh_GetPid(void)
 {
 #ifdef MSH_WIN
@@ -290,8 +277,8 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
 	mxClassID dest_class_id = mxGetClassID(dest_var);
 	
 	/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
-	if(dest_class_id != mxGetClassID(comp_var) || mxGetNumberOfDimensions(dest_var) != mxGetNumberOfDimensions(comp_var)
-	   || memcmp(mxGetDimensions(dest_var), mxGetDimensions(comp_var), mxGetNumberOfDimensions(dest_var)*sizeof(mwSize)) != 0)
+	if(dest_class_id != mxGetClassID(comp_var) || mxGetNumberOfDimensions(dest_var) != mxGetNumberOfDimensions(comp_var) ||
+	   memcmp(mxGetDimensions(dest_var), mxGetDimensions(comp_var), mxGetNumberOfDimensions(dest_var)*sizeof(mwSize)) != 0)
 	{
 		return FALSE;
 	}
@@ -371,8 +358,10 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
 	else
 	{
 		/* this may occur if the user passes a destination variable which is not in shared memory */
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidTypeError",
-					   "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+		meu_PrintMexError(MEU_FL,
+		                  MEU_SEVERITY_USER,
+		                  "InvalidTypeError",
+		                  "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
 	return TRUE;
@@ -460,9 +449,46 @@ size_t PadToAlignData(size_t curr_sz)
 }
 
 
-mxArray* msh_CreateOutput(mxArray* shared_data_copy)
+/* MurmurHash3, by Austin Appleby (with a few modifications) */
+uint32_T msh_MurmurHash3(const uint8_T* key, size_t len, int seed)
 {
-	mxArray* output = mxCreateCellMatrix(1,1);
-	mxSetCell(output, 0, shared_data_copy);
-	return output;
+	uint32_T h = (uint32_T)seed;
+	if(len > 3)
+	{
+		const uint32_T* key_x4 = (const uint32_T*)key;
+		size_t i = len >> 2u;
+		do
+		{
+			uint32_T k = *key_x4++;
+			k *= 0xcc9e2d51;
+			k = (k << 15u) | (k >> 17u);
+			k *= 0x1b873593;
+			h ^= k;
+			h = (h << 13u) | (h >> 19u);
+			h = (h*5) + 0xe6546b64;
+		} while(--i);
+		key = (const uint8_T*)key_x4;
+	}
+	if(len & 3u)
+	{
+		size_t i = len & 3u;
+		uint32_T k = 0;
+		key = &key[i - 1];
+		do
+		{
+			k <<= 8;
+			k |= *key--;
+		} while(--i);
+		k *= 0xcc9e2d51;
+		k = (k << 15u) | (k >> 17u);
+		k *= 0x1b873593;
+		h ^= k;
+	}
+	h ^= len;
+	h ^= h >> 16u;
+	h *= 0x85ebca6b;
+	h ^= h >> 13u;
+	h *= 0xc2b2ae35;
+	h ^= h >> 16u;
+	return h;
 }

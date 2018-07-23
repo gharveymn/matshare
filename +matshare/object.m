@@ -48,7 +48,7 @@ classdef object
 						obj = matshare.object.empty;
 					else
 						for i = num_objs:-1:1
-							obj(i) = matshare.object(shared_vars{i});
+							obj(i,1) = matshare.object(shared_vars{i});
 						end
 					end
 				else

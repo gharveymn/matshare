@@ -48,12 +48,6 @@ char_t* msh_GetConfigurationPath(void);
 
 
 /**
- * Sets the shared configuration to default.
- */
-void msh_SetDefaultConfiguration(void);
-
-
-/**
  * Gets the PID for the current process.
  *
  * @return The PID for the current process.
@@ -99,6 +93,6 @@ void msh_WriteSegmentName(char* name_buffer, segmentnumber_t seg_num);
  */
 size_t PadToAlignData(size_t curr_sz);
 
-mxArray* msh_CreateOutput(mxArray* shared_data_copy);
+uint32_T msh_MurmurHash3(const uint8_T* key, size_t len, int seed);
 
 #endif /* MATSHARE_MATSHAREUTILS_H */

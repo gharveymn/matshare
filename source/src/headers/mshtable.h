@@ -14,9 +14,9 @@ typedef struct SegmentTableNode_t
 typedef struct SegmentTable_t
 {
 	SegmentTableNode_t** table;
-	size_t table_sz;
-	size_t (*hashfunction)(struct SegmentTable_t* seg_table, void* key);
-	int (*compare)(void* node_key, void* comp_key);
+	uint32_T table_sz;
+	uint32_T (*get_hash)(struct SegmentTable_t*, void*);
+	int (*compare_keys)(void*, void*);
 } SegmentTable_t;
 
 
@@ -49,6 +49,8 @@ void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, v
  */
 SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, void* key);
 
+
+void msh_FindAllSegmentNodes(SegmentTable_t* seg_table, SegmentList_t* seg_list_cache, void* key);
 
 /**
  * Removes the specified segment node from the hash table.

@@ -88,6 +88,7 @@ typedef int32_T segmentnumber_t; /* segment number identifiers */
 #  define DATA_ALIGNMENT_SHIFT (size_t)0x0F
 #endif
 
+#define MSH_NAME_LEN_MAX 64
 #define MSH_SEG_NUM_MAX 0x7FFFFFFF      /* the maximum segment number (which is int32 max) */
 #define MSH_INVALID_SEG_NUM (-1L)
 

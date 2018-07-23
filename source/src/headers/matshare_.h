@@ -17,25 +17,29 @@
 typedef struct mxArray_tag mxArray;
 
 
-#define MSH_PARAM_THREADSAFETY "ThreadSafety"
-#define MSH_PARAM_THREADSAFETY_L "threadsafety"
-#define MSH_PARAM_THREADSAFETY_AB "ts"
+#define MSH_PARAM_THREADSAFETY     "ThreadSafety"
+#define MSH_PARAM_THREADSAFETY_L   "threadsafety"
+#define MSH_PARAM_THREADSAFETY_AB  "ts"
 
-#define MSH_PARAM_MAX_VARIABLES "MaxVariables"
-#define MSH_PARAM_MAX_VARIABLES_L "maxvariables"
+#define MSH_PARAM_MAX_VARIABLES    "MaxVariables"
+#define MSH_PARAM_MAX_VARIABLES_L  "maxvariables"
 #define MSH_PARAM_MAX_VARIABLES_AB "mv"
 
-#define MSH_PARAM_MAX_SIZE "MaxSize"
-#define MSH_PARAM_MAX_SIZE_L "maxsize"
-#define MSH_PARAM_MAX_SIZE_AB "ms"
+#define MSH_PARAM_MAX_SIZE         "MaxSize"
+#define MSH_PARAM_MAX_SIZE_L       "maxsize"
+#define MSH_PARAM_MAX_SIZE_AB      "ms"
 
-#define MSH_PARAM_GC "GarbageCollection"
-#define MSH_PARAM_GC_L "garbagecollection"
-#define MSH_PARAM_GC_AB "gc"
+#define MSH_PARAM_GC               "GarbageCollection"
+#define MSH_PARAM_GC_L             "garbagecollection"
+#define MSH_PARAM_GC_AB            "gc"
 
-#define MSH_PARAM_SECURITY "Security"
-#define MSH_PARAM_SECURITY_L "security"
-#define MSH_PARAM_SECURITY_AB "sc"
+#define MSH_PARAM_SECURITY         "Security"
+#define MSH_PARAM_SECURITY_L       "security"
+#define MSH_PARAM_SECURITY_AB      "sc"
+
+#define MSH_PARAM_FETCH_DEFAULT    "FetchDefault"
+#define MSH_PARAM_FETCH_DEFAULT_L  "fetchdefault"
+#define MSH_PARAM_FETCH_DEFAULT_AB "fd"
 
 #define MSH_CONFIG_STRING_FORMAT \
 "<strong>Current configuration:</strong>\n"\
@@ -192,7 +196,7 @@ typedef enum
  * @param num_vars The number of variables to be shared.
  * @param in_vars The variables to be shared.
  */
-void msh_Share(int nlhs, mxArray** plhs, size_t num_vars, const mxArray** in_vars, msh_directive_t directive);
+void msh_Share(int nlhs, mxArray** plhs, size_t num_vars, const mxArray** in_vars);
 
 
 /**

@@ -78,9 +78,14 @@ void msh_InitializeMatshare(void)
 	}
 #endif
 	
-	if(g_local_seg_list.seg_table.table == NULL)
+	if(g_local_seg_list.seg_table->table == NULL)
 	{
-		msh_InitializeTable(&g_local_seg_list.seg_table);
+		msh_InitializeTable(g_local_seg_list.seg_table);
+	}
+	
+	if(g_local_seg_list.name_table->table == NULL)
+	{
+		msh_InitializeTable(g_local_seg_list.name_table);
 	}
 	
 	g_local_info.is_initialized = TRUE;
@@ -206,7 +211,6 @@ static void msh_InitializeConfiguration(void)
 	
 	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
 	{
-		mxFree(config_path);
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateFileError", "Error opening the config file.");
 	}
 	else
@@ -215,7 +219,6 @@ static void msh_InitializeConfiguration(void)
 		{
 			if(ReadFile(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
-				mxFree(config_path);
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 			}
 		}
@@ -226,14 +229,12 @@ static void msh_InitializeConfiguration(void)
 			
 			if(WriteFile(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
-				mxFree(config_path);
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
 			}
 		}
 		
 		if(CloseHandle(config_handle) == 0)
 		{
-			mxFree(config_path);
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the config file handle.");
 		}
 	}
@@ -242,7 +243,6 @@ static void msh_InitializeConfiguration(void)
 	{
 		if(errno != EEXIST)
 		{
-			mxFree(config_path);
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateFileError", "Error creating the config file.");
 		}
 		else
@@ -250,14 +250,12 @@ static void msh_InitializeConfiguration(void)
 			/* the config file is already created, open it instead */
 			if((config_handle = open(config_path, O_RDONLY | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
 			{
-				mxFree(config_path);
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "OpenFileError", "Error opening the config file.");
 			}
 			else
 			{
 				if(read(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t)) == -1)
 				{
-					mxFree(config_path);
 					meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 				}
 			}
@@ -270,14 +268,12 @@ static void msh_InitializeConfiguration(void)
 		
 		if(write(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t)) == -1)
 		{
-			mxFree(config_path);
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
 		}
 	}
 	
 	if(close(config_handle) == -1)
 	{
-		mxFree(config_path);
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the config file handle.");
 	}
 
@@ -301,7 +297,8 @@ void msh_OnExit(void)
 	/* init == FALSE, deinit == FALSE */
 	
 	msh_DetachSegmentList(&g_local_seg_list);
-	msh_DestroyTable(&g_local_seg_list.seg_table);
+	msh_DestroyTable(g_local_seg_list.seg_table);
+	msh_DestroyTable(g_local_seg_list.name_table);
 	
 	if(g_local_info.shared_info_wrapper.ptr != NULL)
 	{
@@ -358,6 +355,22 @@ void msh_OnExit(void)
 	
 	/* init == FALSE, deinit == TRUE */
 	
+}
+
+
+void msh_SetDefaultConfiguration(void)
+{
+	msh_WaitSetCounter(&g_shared_info->user_defined.lock_counter, TRUE);                        /** wait so that we don't interrupt anything */
+	msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_DEFAULT_THREAD_SAFETY);
+	msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);                        /** counter is in post state **/
+	g_shared_info->user_defined.max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;
+	g_shared_info->user_defined.max_shared_size = MSH_DEFAULT_MAX_SHARED_SIZE;
+	g_shared_info->user_defined.will_shared_gc = MSH_DEFAULT_SHARED_GC;
+#ifdef MSH_UNIX
+	g_shared_info->user_defined.security = MSH_DEFAULT_SECURITY;
+#endif
+	/* should be null terminated since shared memory is initialized */
+	strncpy((char*)g_user_config.fetch_default, MSH_DEFAULT_FETCH_DEFAULT, sizeof(g_user_config.fetch_default)-1);
 }
 
 

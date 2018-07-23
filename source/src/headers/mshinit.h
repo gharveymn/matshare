@@ -27,4 +27,10 @@ void msh_OnError(int error_severity);
  */
 void msh_InitializeMatshare(void);
 
+
+/**
+ * Sets the shared configuration to default.
+ */
+void msh_SetDefaultConfiguration(void);
+
 #endif /* MATSHARE_INIT_H */

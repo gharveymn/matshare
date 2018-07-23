@@ -25,12 +25,13 @@ typedef struct VariableNode_t VariableNode_t;
 typedef struct SegmentMetadata_t
 {
 	/* use these to link together the memory segments */
-	size_t data_size;							/* segment size---this won't change so it's not volatile */
-	volatile alignedbool_t is_persistent;                 /* set to TRUE if the segment will not be automatically garbage collected */
-	volatile alignedbool_t is_invalid;                    /* set to TRUE if this segment is to be freed by all processes */
+	char_t name[MSH_NAME_LEN_MAX];             /* non-volatile */
+	size_t data_size;						/* size without the metadata; non-volatile */
+	volatile alignedbool_t is_persistent;        /* set to TRUE if the segment will not be automatically garbage collected */
+	volatile alignedbool_t is_invalid;           /* set to TRUE if this segment is to be freed by all processes */
 	volatile segmentnumber_t prev_seg_num;
 	volatile segmentnumber_t next_seg_num;
-	volatile long procs_using;             /* number of processes using this variable */
+	volatile long procs_using;                   /* number of processes using this variable */
 	volatile LockFreeCounter_t procs_tracking;
 } SegmentMetadata_t;
 
@@ -43,6 +44,8 @@ typedef struct SegmentInfo_t
 	segmentnumber_t seg_num;
 } SegmentInfo_t;
 
+
+#define msh_HasVariableName(seg_node) (msh_GetSegmentMetadata(seg_node)->name[0] != '\0')
 
 /**
  * Creates a segment node (which is a linked list wrapper for a shared segment).
@@ -59,14 +62,6 @@ SegmentNode_t* msh_CreateSegmentNode(SegmentInfo_t* seg_info_cache);
  * @param seg_node The segment node to be destroyed.
  */
 void msh_DestroySegmentNode(SegmentNode_t* seg_node);
-
-
-/**
- * Initializer for the segment info struct.
- *
- * @param seg_info The segment info struct to initialize.
- */
-void msh_InitializeSegmentInfo(SegmentInfo_t* seg_info);
 
 
 /**

@@ -30,7 +30,7 @@ try
 		};
 	
 	for i = 1:numel(sources)
-		sources{i} = fullfile(pwd,'src',sources{i});
+		sources{i} = fullfile(fileparts(which(mfilename)),'src',sources{i});
 	end
 	
 	if(ispc)
@@ -99,6 +99,8 @@ try
 	end
 	
 	mexflags = [mexflags {['-DMSH_DEFAULT_SECURITY=' mshSecurity]}];
+	
+	mexflags = [mexflags {['-DMSH_DEFAULT_FETCH_DEFAULT=\"' mshFetchDefault '\"']}];
 	
 	% R2011b
 	if(~verLessThan('matlab', '7.13'))

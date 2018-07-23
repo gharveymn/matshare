@@ -21,5 +21,7 @@ mshGarbageCollection = 'on';
 % Set the default security on shared variables and meta information (Linux only)
 mshSecurity = '0600';
 
+mshFetchDefault = '-r';
+
 %% Enable or disable debug mode
 mshDebugMode = true;

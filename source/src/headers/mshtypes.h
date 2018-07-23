@@ -14,8 +14,6 @@
 
 #include "mshbasictypes.h"
 
-#define MSH_MAX_NAME_LEN 64
-
 /* differentiate these in case we have both running at the same time for some reason */
 #if MSH_BITNESS == 64
 #  define MSH_SHARED_INFO_SEGMENT_NAME "/MSH_SHARED_INFO_SEGMENT"
@@ -45,13 +43,15 @@
 typedef struct UserConfig_t
 {
 	/* these are aligned for lockless assignment */
+	LockFreeCounter_t lock_counter;
 	size_t max_shared_size;
-	volatile LockFreeCounter_t lock_counter;
 	unsigned long max_shared_segments;
 	alignedbool_t will_shared_gc;
 #ifdef MSH_UNIX
 	mode_t security;
 #endif
+	/* this is modified behind a lock */
+	char_t fetch_default[MSH_NAME_LEN_MAX];
 } UserConfig_t;
 
 /* structure of shared info about the shared segments */
@@ -117,5 +117,7 @@ extern LocalInfo_t g_local_info;
 #define g_shared_info (g_local_info.shared_info_wrapper.ptr)
 
 #define g_process_lock (g_local_info.process_lock)
+
+#define g_user_config (g_shared_info->user_defined)
 
 #endif /* MATSHARE_MSH_TYPES_H */

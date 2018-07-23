@@ -492,7 +492,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	else
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidTypeError",
-					   "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+					   "Unexpected input type '%s'. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.", mxGetClassName(in_var));
 	}
 	
 	return obj_tree_sz;

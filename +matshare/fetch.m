@@ -1,4 +1,4 @@
-function f = fetch(varargin)
+function varargout = fetch(varargin)
 %% MATSHARE.FETCH  Fetch variables from shared memory.
 %    F = MATSHARE.FETCH fetches all variables from shared memory and stores
 %    them in a struct.
@@ -28,15 +28,25 @@ function f = fetch(varargin)
 %    This software may be modified and distributed under the terms
 %    of the MIT license. See the LICENSE file for details.
 
-	f = matshare_(1, varargin);
-	if(iscell(f))
-		f = matshare.object(f, numel(f));
+	if(nargout == 0)
+		[varargout{1}] = matshare_(1, varargin);
 	else
-		fnames = fieldnames(f);
-		for i = 1:numel(fnames)
-			f.(fnames{i}) = matshare.object(f.(fnames{i}), numel(f.(fnames{i})));
-		end
+		[varargout{1:nargout}] = matshare_(1, varargin);
 	end
 	
+	for i = numel(varargout):-1:1
+		varargout{i} = unwrap(varargout{i});
+	end	
+end
+
+function f = unwrap(f)
+	if(isstruct(f))
+		fnames = fieldnames(f);
+		for i = 1:numel(fnames)
+			f.(fnames{i}) = unwrap(f.(fnames{i}));
+		end
+	else
+		f = matshare.object(f, numel(f));
+	end
 end
 
