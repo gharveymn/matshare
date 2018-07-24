@@ -5,8 +5,8 @@ matshare.clear;
 parfor i = 1:numworkers
 	matshare.share(feature('getpid'));
 end
-f = matshare.fetch;
+f = matshare.fetch('-a');
 
 for i = 1:numworkers
-	disp(['PID of worker ' num2str(i) ': ' num2str(f.all(i).data)]);
+	disp(['PID of worker ' num2str(i) ': ' num2str(f(i).data)]);
 end

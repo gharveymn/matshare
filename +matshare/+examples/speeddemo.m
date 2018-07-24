@@ -18,12 +18,11 @@ toc
 
 % using shared version
 tic;
-shared_copy = matshare.share(Data); % place a copy of data in shared memory
+matshare.share(Data); % place a copy of data in shared memory
 parfor i = 1:numworkers
 	d = matshare.fetch('-r');
 	resultpar(i) = feval(funlist{i}, d.data);
 end
-clear shared_copy
 toc  %Elapsed time will be less.
 
 if(~any(resultpar - result))

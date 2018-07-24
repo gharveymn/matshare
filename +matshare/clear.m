@@ -4,6 +4,9 @@ function clear(varargin)
 %
 %    MATSHARE.CLEAR(MO1,MO2,...) removes the variables associated to the
 %    specified matshare objects from shared memory.
+%
+%    MATSHARE.CLEAR(VARNAME) removes all variables with the given variable
+%    name from shared memory.
 
 %% Copyright © 2018 Gene Harvey
 %    This software may be modified and distributed under the terms
