@@ -183,8 +183,7 @@ typedef enum
 	msh_LOCK            = 0x0009,  /* acquire the matshare interprocess lock */
 	msh_UNLOCK          = 0x000A,  /* release the interprocess lock */
 	msh_CLEAN           = 0x000B,  /* clean invalid and unused segments */
-	msh_PSHARE          = 0x000C,  /* share a variable persistently */
-	msh_STATUS          = 0x000D   /* print out info about the current state of matshare */
+	msh_STATUS          = 0x000C   /* print out info about the current state of matshare */
 } msh_directive_t;
 
 

@@ -57,18 +57,9 @@ SegmentList_t g_local_seg_list = {&g_seg_table, &g_name_table, NULL, NULL, 0, 0}
 
 VariableList_t g_local_var_list = {NULL, NULL};
 
-static const char s_out_id_recent[] = "recent";
-static const char s_out_id_new[] = "new";
-static const char s_out_id_all[] = "all";
-static const char s_out_id_id[] = "identified";
-
 static mxArray* msh_WrapOutput(mxArray* shared_data_copy);
 
 static mxArray* msh_CreateNamedOutput(const char_t* name);
-
-static int msh_RemoveDuplicateNames(const char_t** names, int len);
-
-static int msh_RemoveDuplicateOutput(const char_t** out_names, mxArray** out_vars, int len);
 
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
@@ -176,7 +167,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	switch(directive)
 	{
 		case msh_SHARE:
-		case msh_PSHARE:
 		{
 			/* we use varargin and extract the result */
 			if(num_in_args < 1)
@@ -649,14 +639,15 @@ void msh_Copy(int nlhs, mxArray** plhs, int num_inputs, const mxArray** in_vars)
 
 void msh_Clear(int num_inputs, const mxArray** in_vars)
 {
-	
+	SegmentNode_t* clear_seg_node;
 	VariableNode_t* curr_var_node;
 	mxArray* link;
-	const mxArray* clear_var;
+	const mxArray* clear_var, * curr_in_var;
+	mxChar* wide_input_str;
+	char input_str[MSH_NAME_LEN_MAX];
 	bool_t found_variable;
+	size_t num_str_elems, j;
 	int input_num;
-	
-	/* TODO remove locking here */
 	
 	msh_AcquireProcessLock(g_process_lock);
 	if(num_inputs > 0)
@@ -666,31 +657,57 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 		
 		for(input_num = 0; input_num < num_inputs; input_num++)
 		{
-			
-			if(!mxIsCell(in_vars[input_num]) || mxGetNumberOfElements(in_vars[input_num]) != 1)
+			curr_in_var = in_vars[input_num];
+			if(mxIsCell(curr_in_var))
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidInputError", "Invalid input variable. Please use the entry functions provided.");
-			}
-			
-			clear_var = mxGetCell(in_vars[input_num], 0);
-			
-			for(curr_var_node = g_local_var_list.first, found_variable = FALSE; curr_var_node != NULL && !found_variable; curr_var_node = msh_GetNextVariable(curr_var_node))
-			{
-				/* begin hack */
-				link = msh_GetVariableData(curr_var_node);
-				do
+				clear_var = mxGetCell(curr_in_var, 0);
+				for(curr_var_node = g_local_var_list.first, found_variable = FALSE; curr_var_node != NULL && !found_variable; curr_var_node = msh_GetNextVariable(curr_var_node))
 				{
-					if(link == clear_var)
+					/* begin hack */
+					link = msh_GetVariableData(curr_var_node);
+					do
 					{
-						msh_RemoveSegmentFromSharedList(msh_GetSegmentNode(curr_var_node));
-						msh_RemoveSegmentFromList(msh_GetSegmentNode(curr_var_node));
-						msh_DetachSegment(msh_GetSegmentNode(curr_var_node));
-						found_variable = TRUE;
-						break;
+						if(link == clear_var)
+						{
+							msh_RemoveSegmentFromSharedList(msh_GetSegmentNode(curr_var_node));
+							msh_RemoveSegmentFromList(msh_GetSegmentNode(curr_var_node));
+							msh_DetachSegment(msh_GetSegmentNode(curr_var_node));
+							found_variable = TRUE;
+							break;
+						}
+						link = met_GetCrosslink(link);
+					} while(link != NULL && link != msh_GetVariableData(curr_var_node));
+					/* end hack */
+				}
+			}
+			else if(mxIsChar(curr_in_var))
+			{
+				if(mxIsEmpty(curr_in_var))
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidClearError", "All arguments must have a length more than zero.");
+				}
+				
+				if((num_str_elems = mxGetNumberOfElements(curr_in_var)) > MSH_NAME_LEN_MAX-1)
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidClearError", "All arguments must have length of less than %d characters.", MSH_NAME_LEN_MAX);
+				}
+				
+				wide_input_str = mxGetChars(curr_in_var);
+				for(j = 0; j < num_str_elems; j++)
+				{
+					if(!isalpha(wide_input_str[j]))
+					{
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidClearError", "Variable IDs must consist only of ANSI alphabetic characters.");
 					}
-					link = met_GetCrosslink(link);
-				} while(link != NULL && link != msh_GetVariableData(curr_var_node));
-				/* end hack */
+				}
+				mxGetString(curr_in_var, input_str, sizeof(input_str));
+				
+				while((clear_seg_node = msh_FindSegmentNode(g_local_seg_list.name_table, input_str)) != NULL)
+				{
+					msh_RemoveSegmentFromSharedList(clear_seg_node);
+					msh_RemoveSegmentFromList(clear_seg_node);
+					msh_DetachSegment(clear_seg_node);
+				}
 			}
 		}
 	}
