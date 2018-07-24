@@ -66,12 +66,12 @@ static mxArray* msh_CreateNamedOutput(const char_t* name);
 /* ------------------------------------------------------------------------- */
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 {
-	/* number of inputs other than the msh_directive */
-	int num_in_args = nrhs - 1;
-	
 	/* inputs */
 	const mxArray* in_directive = prhs[0];
 	const mxArray** in_args = prhs + 1;
+	
+	/* number of inputs other than the msh_directive */
+	int num_in_args = nrhs - 1;
 	
 	/* resultant matshare directive */
 	msh_directive_t directive;
@@ -99,7 +99,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* pre-initialization directives */
 	switch(directive)
 	{
-		case msh_DEBUG:
+		case(msh_DEBUG):
 		{
 			/* first print out local information */
 			mexPrintf(MSH_DEBUG_LOCAL_FORMAT, MSH_DEBUG_LOCAL_ARGS);
@@ -111,7 +111,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			}
 			return;
 		}
-		case msh_STATUS:
+		case(msh_STATUS):
 		{
 			mexPrintf("\n<strong>Information on the current state of matshare:</strong>\n");
 			if(g_local_info.is_deinitialized)
@@ -122,17 +122,17 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			{
 				if(g_local_info.is_initialized)
 				{
-					mexPrintf("    Current number of shared variables:     %lu\n"
-					          "    Current total size of shared memory:    "SIZE_FORMAT" bytes\n"
-					          "    Process ID of the most recent revision: %lu\n", g_shared_info->num_shared_segments, g_shared_info->total_shared_size, g_shared_info->update_pid);
+					mexPrintf("    Number of shared variables:      %lu\n"
+					          "    Total size of shared memory:     "SIZE_FORMAT" bytes\n"
+					          "    PID of the most recent revision: %lu\n", g_shared_info->num_shared_segments, g_shared_info->total_shared_size, g_shared_info->update_pid);
 					mexPrintf(MSH_CONFIG_STRING_FORMAT "\n",
-					          msh_GetCounterCount(&g_shared_info->user_defined.lock_counter),
-					          msh_GetCounterFlag(&g_shared_info->user_defined.lock_counter)? "on" : "off",
-					          g_shared_info->user_defined.max_shared_segments,
-					          g_shared_info->user_defined.max_shared_size,
-					          g_shared_info->user_defined.will_shared_gc? "on" : "off");
+					          msh_GetCounterFlag(&g_user_config.lock_counter)? "on" : "off",
+					          g_user_config.max_shared_segments,
+					          g_user_config.max_shared_size,
+					          g_user_config.will_shared_gc? "on" : "off",
+					          g_user_config.fetch_default);
 #ifdef MSH_UNIX
-					mexPrintf(MSH_CONFIG_SECURITY_STRING_FORMAT, g_shared_info->user_defined.security);
+					mexPrintf(MSH_CONFIG_SECURITY_STRING_FORMAT, g_user_config.security);
 #endif
 				}
 				else
@@ -142,7 +142,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			}
 			return;
 		}
-		case msh_DETACH:
+		case(msh_DETACH):
 		{
 			msh_OnExit();
 			return;
@@ -164,36 +164,34 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		                 );
 	}
 	
+	msh_CleanSegmentList(&g_local_seg_list);
+	
 	switch(directive)
 	{
-		case msh_SHARE:
+		case(msh_SHARE):
 		{
 			/* we use varargin and extract the result */
 			if(num_in_args < 1)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Not enough inputs. Please use the entry functions provided.");
 			}
-			msh_Share(nlhs, plhs, (int)mxGetNumberOfElements(in_args[0]), mxGetData(in_args[0]));
-			
-			msh_CleanSegmentList(&g_local_seg_list, FALSE);
+			msh_Share(nlhs, plhs, mxGetNumberOfElements(in_args[0]), mxGetData(in_args[0]));
 			break;
 		}
-		case msh_FETCH:
+		case(msh_FETCH):
 			/* we use varargin and extract the result */
 			if(num_in_args < 1)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Not enough inputs. Please use the entry functions provided.");
 			}
 			msh_Fetch(nlhs, plhs, mxGetNumberOfElements(in_args[0]), mxGetData(in_args[0]));
-			
-			msh_CleanSegmentList(&g_local_seg_list, FALSE);
 			break;
-		case msh_COPY:
+		case(msh_COPY):
 		{
 			msh_Copy(nlhs, plhs, num_in_args, in_args);
 			break;
 		}
-		case msh_CONFIG:
+		case(msh_CONFIG):
 		{
 			if(num_in_args < 1)
 			{
@@ -202,12 +200,12 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			msh_Config(mxGetNumberOfElements(in_args[0])/2, mxGetData(in_args[0]));
 			break;
 		}
-		case msh_CLEAR:
+		case(msh_CLEAR):
 		{
 			msh_Clear(num_in_args, in_args);
 			break;
 		}
-		case msh_RESET:
+		case(msh_RESET):
 		{
 			msh_AcquireProcessLock(g_process_lock);
 			{
@@ -218,23 +216,23 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			msh_ReleaseProcessLock(g_process_lock);
 			break;
 		}
-		case msh_OVERWRITE:
+		case(msh_OVERWRITE):
 		{
 			msh_Overwrite(num_in_args, in_args);
 			break;
 		}
-		case msh_LOCK:
+		case(msh_LOCK):
 		{
 			msh_AcquireProcessLock(g_process_lock);
 			break;
 		}
-		case msh_UNLOCK:
+		case(msh_UNLOCK):
 		{
 			msh_ReleaseProcessLock(g_process_lock);
 			break;
 		}
-		case msh_CLEAN:
-			msh_CleanSegmentList(&g_local_seg_list, TRUE);
+		case(msh_CLEAN):
+			/* do nothing */
 			break;
 		default:
 		{
@@ -243,60 +241,90 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		}
 	}
 	
+	msh_CleanVariableList(&g_local_var_list, directive == msh_CLEAN);
+	
 }
 
 
-void msh_Share(int nlhs, mxArray** plhs, size_t num_vars, const mxArray** in_vars)
+void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args)
 {
+	int i;
 	SegmentNode_t* new_seg_node = NULL;
 	VariableNode_t* new_var_node = NULL;
-	int input_num, will_persist = FALSE, with_names = FALSE;
-	const mxArray* input_var, * input_id = NULL;
+	int will_persist = FALSE, with_names = FALSE;
+	const mxArray* curr_in_var, * input_id = NULL;
+	mxChar* in_opt;
 	
-	if(num_vars > INT_MAX)
+	int num_vars;
+	const mxArray** in_vars;
+	
+	if(num_args > INT_MAX)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NumInputsError", "Too many arguments.");
 	}
 	
 	/* check the inputs */
-	if(num_vars < 1)
+	if(num_args < 1)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NoVariableError", "No variable supplied to share.");
 	}
 	
-	if(mxIsClass(in_vars[0], "matshare.opts"))
+	
+	in_vars = mxMalloc(num_args * sizeof(const mxArray*));
+	for(i = 0, num_vars = 0; i < num_args; i++)
 	{
-		will_persist = (int)mxGetScalar(mxGetProperty(in_vars[0], 0, "persist"));
-		with_names = (int)mxGetScalar(mxGetProperty(in_vars[0], 0, "id"));
-		
-		/* shift the input variables */
-		num_vars -= 1;
-		in_vars += 1;
+		if(mxIsChar(in_args[i])
+		   && mxGetNumberOfElements(in_args[i]) > 1
+		   && (in_opt = mxGetChars(in_args[i]))[0] == '-')
+		{
+			switch(in_opt[1])
+			{
+				case('p'):
+				{
+					will_persist = TRUE;
+					break;
+				}
+				case('n'):
+				{
+					with_names = TRUE;
+					break;
+				}
+				default:
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "ShareOptionError", "Invalid option flag. Note that character vectors longer than 1 starting with '-' are reserved for option flags.");
+				}
+			}
+		}
+		else
+		{
+			in_vars[num_vars] = in_args[i];
+			num_vars += 1;
+		}
 	}
 	
 	if(with_names && num_vars % 2 != 0)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InputError", "Each input must have an identifier when '-i' is specified.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InputError", "Each input must have be preceded by a name when '-n' is specified.");
 	}
 	
-	for(input_num = 0; input_num < num_vars; input_num = (with_names? input_num + 2 : input_num + 1))
+	for(i = 0; i < num_vars; i = (with_names? i + 2 : i + 1))
 	{
 		
 		if(with_names)
 		{
-			input_id = in_vars[input_num];
-			input_var = in_vars[input_num + 1];
+			input_id = in_vars[i];
+			curr_in_var = in_vars[i + 1];
 		}
 		else
 		{
-			input_var = in_vars[input_num];
+			curr_in_var = in_vars[i];
 		}
 		
 		/* scan input data to get required size and create the segment */
-		new_seg_node = msh_CreateSegment(msh_FindSharedSize(input_var), input_id, will_persist);
+		new_seg_node = msh_CreateSegment(msh_FindSharedSize(curr_in_var), input_id, will_persist);
 		
 		/* copy data to the shared memory */
-		msh_CopyVariable(msh_GetSegmentData(new_seg_node), input_var);
+		msh_CopyVariable(msh_GetSegmentData(new_seg_node), curr_in_var);
 		
 		/* segment must also be tracked locally, so do that now */
 		msh_AddSegmentToList(&g_local_seg_list, new_seg_node);
@@ -311,12 +339,18 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_vars, const mxArray** in_var
 		msh_AddVariableToList(&g_local_var_list, new_var_node);
 		
 		/* create and set the return */
-		if(input_num < (size_t)nlhs || (nlhs == 0 && input_num == 0))
+		if(i < nlhs)
 		{
-			plhs[input_num] = msh_WrapOutput(msh_CreateSharedDataCopy(new_var_node, TRUE));
+			plhs[i] = msh_WrapOutput(msh_CreateSharedDataCopy(new_var_node, TRUE));
+		}
+		else if(i == 0 && nlhs == 0)
+		{
+			plhs[i] = msh_WrapOutput(msh_CreateSharedDataCopy(new_var_node, FALSE));
 		}
 		
 	}
+	
+	mxFree((void*)in_vars);
 	
 }
 
@@ -333,7 +367,6 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 	int output_as_struct = FALSE, will_fetch_default = FALSE;
 	
 	char_t* curr_name;
-	
 	char_t* curr_out_name = NULL;
 	mxArray* curr_out_var = NULL;
 	
@@ -362,11 +395,11 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		{
 			switch(wide_input_str[1])
 			{
-				case 's':
+				case(MSH_FETCHOPT_STRUCT):
 					num_out -= 1;
 					output_as_struct = TRUE;
 					break;
-				case 'r':
+				case(MSH_FETCHOPT_RECENT):
 				{
 					/* only update the most recent (fast-track) */
 					if(update_function != msh_UpdateAllSegments)
@@ -375,9 +408,9 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 					}
 					break;
 				}
-				case 'n':
-				case 'a':
-				case 'i':
+				case(MSH_FETCHOPT_NEW):
+				case(MSH_FETCHOPT_ALL):
+				case(MSH_FETCHOPT_NAMED):
 				{
 					update_function = msh_UpdateAllSegments;
 					break;
@@ -481,10 +514,10 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		{
 			switch(input_str[1])
 			{
-				case 's':
+				case(MSH_FETCHOPT_STRUCT):
 					/* do nothing */
 					continue;
-				case 'r':
+				case(MSH_FETCHOPT_RECENT):
 				{
 					curr_out_name = "recent";
 					curr_out_var = mxCreateCellMatrix((size_t)(g_local_seg_list.last != NULL), (size_t)(g_local_seg_list.last != NULL));
@@ -495,7 +528,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 					out_num += 1;
 					break;
 				}
-				case 'n':
+				case(MSH_FETCHOPT_NEW):
 				{
 					/* return the new variables detected */
 					curr_out_name = "new";
@@ -507,7 +540,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 					out_num += 1;
 					break;
 				}
-				case 'a':
+				case(MSH_FETCHOPT_ALL):
 				{
 					/* retrieve all segment variables */
 					curr_out_name = "all";
@@ -519,9 +552,9 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 					out_num += 1;
 					break;
 				}
-				case 'i':
+				case(MSH_FETCHOPT_NAMED):
 				{
-					curr_out_name = "identified";
+					curr_out_name = "named";
 					curr_out_var = mxCreateStructMatrix(1, 1, 0, NULL);
 					for(j = 0, curr_seg_node = g_local_seg_list.first; j < g_local_seg_list.num_named && curr_seg_node != NULL; curr_seg_node = msh_GetNextSegment(curr_seg_node))
 					{
@@ -739,11 +772,11 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 			/* switch for possible future additions */
 			switch(input_option[1])
 			{
-				case 's':
+				case('s'):
 					/* sync */
 					will_sync = TRUE;
 					break;
-				case 'a':
+				case('a'):
 					/* async */
 					will_sync = FALSE;
 					break;
@@ -809,13 +842,13 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 	if(num_params == 0)
 	{
 		mexPrintf(MSH_CONFIG_STRING_FORMAT,
-		          msh_GetCounterCount(&g_shared_info->user_defined.lock_counter),
-		          msh_GetCounterFlag(&g_shared_info->user_defined.lock_counter)? "on" : "off",
-		          g_shared_info->user_defined.max_shared_segments,
-		          g_shared_info->user_defined.max_shared_size,
-		          g_shared_info->user_defined.will_shared_gc? "on" : "off");
+		          msh_GetCounterFlag(&g_user_config.lock_counter)? "on" : "off",
+		          g_user_config.max_shared_segments,
+		          g_user_config.max_shared_size,
+		          g_user_config.will_shared_gc? "on" : "off",
+		          g_user_config.fetch_default);
 #ifdef MSH_UNIX
-		mexPrintf(MSH_CONFIG_SECURITY_STRING_FORMAT, g_shared_info->user_defined.security);
+		mexPrintf(MSH_CONFIG_SECURITY_STRING_FORMAT, g_user_config.security);
 #endif
 	}
 	
@@ -859,11 +892,11 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 		{
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
-				msh_WaitSetCounter(&g_shared_info->user_defined.lock_counter, TRUE);
+				msh_WaitSetCounter(&g_user_config.lock_counter, TRUE);
 			}
 			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
-				msh_WaitSetCounter(&g_shared_info->user_defined.lock_counter, FALSE);
+				msh_WaitSetCounter(&g_user_config.lock_counter, FALSE);
 			}
 			else
 			{
@@ -900,7 +933,7 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 								   "The value input exceeds the hard limit of %lu shared variables. This limit will be removed in a future update.", MSH_FD_HARD_LIMIT);
 				}
 #endif
-			g_shared_info->user_defined.max_shared_segments = maxvars_temp;
+			g_user_config.max_shared_segments = maxvars_temp;
 			
 		}
 		else if(strcmp(param_str_l, MSH_PARAM_MAX_SIZE_L) == 0 || strcmp(param_str_l, MSH_PARAM_MAX_SIZE_AB) == 0)
@@ -930,18 +963,18 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 			{
 				meu_PrintMexWarning("ZeroSizeWarning", "The maximum size has been set to zero. Please verify your input if this was not intentional.");
 			}
-			g_shared_info->user_defined.max_shared_size = maxsize_temp;
+			g_user_config.max_shared_size = maxsize_temp;
 			
 		}
 		else if(strncmp(param_str_l, MSH_PARAM_GC_L, 7) == 0 || strcmp(param_str_l, MSH_PARAM_GC_AB) == 0)
 		{
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
-				g_shared_info->user_defined.will_shared_gc = TRUE;
+				g_user_config.will_shared_gc = TRUE;
 			}
 			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
-				g_shared_info->user_defined.will_shared_gc = FALSE;
+				g_user_config.will_shared_gc = FALSE;
 			}
 			else
 			{
@@ -974,7 +1007,7 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 						meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ChmodError", "There was an error modifying permissions for the data segment.");
 					}
 				}
-				g_shared_info->user_defined.security = sec_temp;
+				g_user_config.security = sec_temp;
 				msh_ReleaseProcessLock(g_process_lock);
 			}
 #else

@@ -70,7 +70,7 @@ void msh_ClearVariableList(VariableList_t* var_list);
  *
  * @param var_list The variable list to be cleaned.
  */
-void msh_CleanVariableList(VariableList_t* var_list);
+void msh_CleanVariableList(VariableList_t* var_list, int shared_gc_override);
 
 
 mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node, int will_set_used);

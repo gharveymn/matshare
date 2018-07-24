@@ -13,7 +13,11 @@ function clear(varargin)
 		matshare_(6);
 	else
 		for i = 1:nargin
-			varargin{i}.clear;
+			if(ischar(varargin{i}))
+				matshare_(6, varargin{i});
+			else
+				varargin{i}.clear;
+			end
 		end
 	end
 end

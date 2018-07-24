@@ -178,7 +178,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 	msh_AcquireProcessLock(g_process_lock);
 	
 	/* update number of segments tracked in shared memory */
-	if(g_shared_info->num_shared_segments >= g_shared_info->user_defined.max_shared_segments)
+	if(g_shared_info->num_shared_segments >= g_user_config.max_shared_segments)
 	{
 		/* too many segments, unload */
 		msh_RemoveSegmentFromList(seg_node);
@@ -188,7 +188,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 		                  "TooManyVariablesError",
 		                  "The shared variable would exceed the current maximum number of shared variables (currently set as %li). "
 		                  "You may change this limit by using mshconfig. For more information refer to `help mshconfig`.",
-		                  g_shared_info->user_defined.max_shared_segments);
+		                  g_user_config.max_shared_segments);
 	}
 	else
 	{
@@ -562,10 +562,9 @@ SegmentNode_t* msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
 }
 
 
-void msh_CleanSegmentList(SegmentList_t* seg_list, int shared_gc_override)
+void msh_CleanSegmentList(SegmentList_t* seg_list)
 {
 	SegmentNode_t* curr_seg_node, * next_seg_node;
-	VariableNode_t* curr_var_node;
 	
 	for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
 	{
@@ -575,22 +574,6 @@ void msh_CleanSegmentList(SegmentList_t* seg_list, int shared_gc_override)
 		{
 			msh_RemoveSegmentFromList(curr_seg_node);
 			msh_DetachSegment(curr_seg_node);
-		}
-		else if((curr_var_node = msh_GetVariableNode(curr_seg_node)) != NULL && met_GetCrosslink(msh_GetVariableData(curr_var_node)) == NULL)
-		{
-			/* does not remove the persistent variable, but does a lazy decrement of procs_using */
-			if(msh_GetIsUsed(curr_var_node))
-			{
-				msh_SetIsUsed(curr_var_node, FALSE);
-				/* decrement number of processes using this variable; if this is the last variable then GC */
-				if(msh_AtomicDecrement(&msh_GetSegmentMetadata(curr_seg_node)->procs_using) == 0 && (g_shared_info->user_defined.will_shared_gc || shared_gc_override) &&
-				   !msh_GetSegmentMetadata(curr_seg_node)->is_persistent)
-				{
-					msh_RemoveSegmentFromSharedList(curr_seg_node);
-					msh_RemoveSegmentFromList(curr_seg_node);
-					msh_DetachSegment(curr_seg_node);
-				}
-			}
 		}
 	}
 	
@@ -647,7 +630,7 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* new_seg_info, size_t data_siz
 	/* create a unique new segment */
 	new_seg_info->seg_num = g_shared_info->last_seg_num;
 	
-	if(!msh_AtomicAddSizeWithMax(&g_shared_info->total_shared_size, new_seg_info->total_segment_size, g_shared_info->user_defined.max_shared_size))
+	if(!msh_AtomicAddSizeWithMax(&g_shared_info->total_shared_size, new_seg_info->total_segment_size, g_user_config.max_shared_size))
 	{
 		meu_PrintMexError(MEU_FL,
 		                  MEU_SEVERITY_USER,
@@ -658,7 +641,7 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* new_seg_info, size_t data_siz
 		                  "For more information refer to `help mshconfig`.",
 		                  g_shared_info->total_shared_size,
 		                  new_seg_info->total_segment_size,
-		                  g_shared_info->user_defined.max_shared_size);
+		                  g_user_config.max_shared_size);
 	}
 	
 	/* the targeted segment number is not guaranteed to be available, so keep retrying */
@@ -782,7 +765,7 @@ handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size)
 	
 	/* errno is not set unless the function fails, so reset it each time */
 	errno = 0;
-	ret_handle = shm_open(segment_name, O_RDWR | O_CREAT | O_EXCL, g_shared_info->user_defined.security);
+	ret_handle = shm_open(segment_name, O_RDWR | O_CREAT | O_EXCL, g_user_config.security);
 	if(ret_handle == -1)
 	{
 		if(errno != EEXIST)
@@ -825,7 +808,7 @@ handle_t msh_OpenSharedMemory(char_t* segment_name)
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "OpenFileError", "Error opening the file mapping.");
 	}
 #else
-	ret_handle = shm_open(segment_name, O_RDWR, g_shared_info->user_defined.security);
+	ret_handle = shm_open(segment_name, O_RDWR, g_user_config.security);
 	if(ret_handle == -1)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "OpenError", "There was an error opening the segment");

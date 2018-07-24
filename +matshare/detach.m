@@ -8,6 +8,7 @@ function detach
 %    of the MIT license. See the LICENSE file for details.
 
 	matshare_(2);
+	clear matshare_
 	
 end
 

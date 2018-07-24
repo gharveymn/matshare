@@ -217,7 +217,7 @@ static void msh_InitializeConfiguration(void)
 	{
 		if(GetLastError() == ERROR_ALREADY_EXISTS)
 		{
-			if(ReadFile(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
+			if(ReadFile(config_handle, (void*)&g_user_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 			}
@@ -227,7 +227,7 @@ static void msh_InitializeConfiguration(void)
 			/* this is a new file */
 			msh_SetDefaultConfiguration();
 			
-			if(WriteFile(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
+			if(WriteFile(config_handle, (void*)&g_user_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
 			}
@@ -254,7 +254,7 @@ static void msh_InitializeConfiguration(void)
 			}
 			else
 			{
-				if(read(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t)) == -1)
+				if(read(config_handle, (void*)&g_user_config, sizeof(UserConfig_t)) == -1)
 				{
 					meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 				}
@@ -266,7 +266,7 @@ static void msh_InitializeConfiguration(void)
 		/* this is a new file */
 		msh_SetDefaultConfiguration();
 		
-		if(write(config_handle, (void*)&g_shared_info->user_defined, sizeof(UserConfig_t)) == -1)
+		if(write(config_handle, (void*)&g_user_config, sizeof(UserConfig_t)) == -1)
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
 		}
@@ -360,14 +360,14 @@ void msh_OnExit(void)
 
 void msh_SetDefaultConfiguration(void)
 {
-	msh_WaitSetCounter(&g_shared_info->user_defined.lock_counter, TRUE);                        /** wait so that we don't interrupt anything */
-	msh_SetCounterFlag(&g_shared_info->user_defined.lock_counter, MSH_DEFAULT_THREAD_SAFETY);
-	msh_SetCounterPost(&g_shared_info->user_defined.lock_counter, TRUE);                        /** counter is in post state **/
-	g_shared_info->user_defined.max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;
-	g_shared_info->user_defined.max_shared_size = MSH_DEFAULT_MAX_SHARED_SIZE;
-	g_shared_info->user_defined.will_shared_gc = MSH_DEFAULT_SHARED_GC;
+	msh_WaitSetCounter(&g_user_config.lock_counter, TRUE);                        /** wait so that we don't interrupt anything */
+	msh_SetCounterFlag(&g_user_config.lock_counter, MSH_DEFAULT_THREAD_SAFETY);
+	msh_SetCounterPost(&g_user_config.lock_counter, TRUE);                        /** counter is in post state **/
+	g_user_config.max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;
+	g_user_config.max_shared_size = MSH_DEFAULT_MAX_SHARED_SIZE;
+	g_user_config.will_shared_gc = MSH_DEFAULT_SHARED_GC;
 #ifdef MSH_UNIX
-	g_shared_info->user_defined.security = MSH_DEFAULT_SECURITY;
+	g_user_config.security = MSH_DEFAULT_SECURITY;
 #endif
 	/* should be null terminated since shared memory is initialized */
 	strncpy((char*)g_user_config.fetch_default, MSH_DEFAULT_FETCH_DEFAULT, sizeof(g_user_config.fetch_default)-1);

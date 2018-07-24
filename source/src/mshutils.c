@@ -32,11 +32,11 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 #endif
 	
 	/* blocks until lock flag operation is finished */
-	while(!msh_GetCounterPost(&g_shared_info->user_defined.lock_counter));
+	while(!msh_GetCounterPost(&g_user_config.lock_counter));
 	
-	msh_IncrementCounter(&g_shared_info->user_defined.lock_counter);
+	msh_IncrementCounter(&g_user_config.lock_counter);
 	
-	if(msh_GetCounterFlag(&g_shared_info->user_defined.lock_counter))
+	if(msh_GetCounterFlag(&g_user_config.lock_counter))
 	{
 		if(g_local_info.lock_level == 0)
 		{
@@ -68,7 +68,7 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 
 void msh_ReleaseProcessLock(ProcessLock_t process_lock)
 {
-	msh_DecrementCounter(&g_shared_info->user_defined.lock_counter, FALSE);
+	msh_DecrementCounter(&g_user_config.lock_counter, FALSE);
 	
 	if(g_local_info.lock_level > 0)
 	{
@@ -123,7 +123,7 @@ void msh_WriteConfiguration(void)
 	
 	
 	handle_t config_handle;
-	UserConfig_t local_config = g_shared_info->user_defined, saved_config;
+	UserConfig_t local_config = g_user_config, saved_config;
 	local_config.lock_counter.values.count = 0;                    /* reset the lock_counter so that it counter values don't roll over */
 	local_config.lock_counter.values.post = TRUE;
 	

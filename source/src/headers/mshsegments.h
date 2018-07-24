@@ -169,7 +169,7 @@ SegmentNode_t* msh_RemoveSegmentFromList(SegmentNode_t* seg_node);
  *
  * @param seg_list The segment list to be cleaned.
  */
-void msh_CleanSegmentList(SegmentList_t* seg_list, int shared_gc_override);
+void msh_CleanSegmentList(SegmentList_t* seg_list);
 
 
 /**

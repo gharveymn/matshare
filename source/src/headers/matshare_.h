@@ -41,17 +41,21 @@ typedef struct mxArray_tag mxArray;
 #define MSH_PARAM_FETCH_DEFAULT_L  "fetchdefault"
 #define MSH_PARAM_FETCH_DEFAULT_AB "fd"
 
-#define MSH_CONFIG_STRING_FORMAT \
-"<strong>Current configuration:</strong>\n"\
-"    Current lock count:  %lu\n" \
-"    Thread safety:       '%s'\n" \
-"    Max variables:       %lu\n" \
-"    Max shared size:     "SIZE_FORMAT"\n" \
-"    Garbage collection:  '%s'\n"
 #ifdef MSH_UNIX
 #define MSH_CONFIG_SECURITY_STRING_FORMAT \
 "    Security:            '%o'\n"
+#else
+#define MSH_CONFIG_SECURITY_STRING_FORMAT \
+""
 #endif
+
+#define MSH_CONFIG_STRING_FORMAT \
+"<strong>Current configuration:</strong>\n"\
+"    Thread safety:       '%s'\n" \
+"    Max variables:       %lu\n" \
+"    Max shared size:     "SIZE_FORMAT"\n" \
+"    Garbage collection:  '%s'\n" \
+"    Fetch default:       '%s'\n"
 
 #ifdef MSH_WIN
 #  define MSH_PROCESS_LOCK_FORMAT \
@@ -113,7 +117,7 @@ g_shared_info->num_procs,
 "               flag: %lu\n" \
 "               post: %lu\n"
 #  define MSH_SECURITY_ARG \
-g_shared_info->user_defined.security,
+g_user_config.security,
 #  define MSH_NUM_PROCS_ARG \
 g_shared_info->num_procs.span, \
 g_shared_info->num_procs.values.count, \
@@ -147,13 +151,13 @@ MSH_NUM_PROCS_FORMAT \
 #define MSH_DEBUG_SHARED_ARGS \
 g_shared_info->rev_num, \
 g_shared_info->total_shared_size, \
-g_shared_info->user_defined.lock_counter.span, \
-g_shared_info->user_defined.lock_counter.values.count, \
-g_shared_info->user_defined.lock_counter.values.flag, \
-g_shared_info->user_defined.lock_counter.values.post, \
-g_shared_info->user_defined.max_shared_segments, \
-g_shared_info->user_defined.max_shared_size, \
-g_shared_info->user_defined.will_shared_gc, \
+g_user_config.lock_counter.span, \
+g_user_config.lock_counter.values.count, \
+g_user_config.lock_counter.values.flag, \
+g_user_config.lock_counter.values.post, \
+g_user_config.max_shared_segments, \
+g_user_config.max_shared_size, \
+g_user_config.will_shared_gc, \
 MSH_SECURITY_ARG \
 g_shared_info->first_seg_num, \
 g_shared_info->last_seg_num, \
@@ -186,16 +190,21 @@ typedef enum
 	msh_STATUS          = 0x000C   /* print out info about the current state of matshare */
 } msh_directive_t;
 
+#define MSH_FETCHOPT_STRUCT 's'
+#define MSH_FETCHOPT_RECENT 'r'
+#define MSH_FETCHOPT_NEW    'w'
+#define MSH_FETCHOPT_ALL    'a'
+#define MSH_FETCHOPT_NAMED  'n'
 
 /**
  * Runs sharing operation. Makes a shared copy of the new variable if requested.
  *
  * @param nlhs The number of outputs. If this is 1 then the function will make a shared copy of the new variable.
  * @param plhs An array of output mxArrays
- * @param num_vars The number of variables to be shared.
- * @param in_vars The variables to be shared.
+ * @param num_args The number of variables to be shared.
+ * @param in_args The variables to be shared.
  */
-void msh_Share(int nlhs, mxArray** plhs, size_t num_vars, const mxArray** in_vars);
+void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args);
 
 
 /**
