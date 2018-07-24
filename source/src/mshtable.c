@@ -9,6 +9,8 @@
  
 #include "mex.h"
 
+#include <string.h>
+
 #include "mlerrorutils.h"
 #include "mshsegments.h"
 #include "mshtable.h"

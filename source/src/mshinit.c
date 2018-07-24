@@ -9,6 +9,8 @@
  
 #include "mex.h"
 
+#include <string.h>
+
 #include "mshinit.h"
 #include "mlerrorutils.h"
 #include "mshutils.h"
@@ -360,7 +362,7 @@ void msh_OnExit(void)
 
 void msh_SetDefaultConfiguration(void)
 {
-	msh_WaitSetCounter(&g_user_config.lock_counter, TRUE);                        /** wait so that we don't interrupt anything */
+	msh_SetCounterPost(&g_user_config.lock_counter, FALSE);
 	msh_SetCounterFlag(&g_user_config.lock_counter, MSH_DEFAULT_THREAD_SAFETY);
 	msh_SetCounterPost(&g_user_config.lock_counter, TRUE);                        /** counter is in post state **/
 	g_user_config.max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;

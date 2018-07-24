@@ -10,6 +10,8 @@
 
 #include "mex.h"
 
+#include <ctype.h>
+
 #include "matshare_.h"
 #include "mshheader.h"
 #include "mshexterntypes.h"
@@ -993,7 +995,7 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 			{
 				msh_AcquireProcessLock(g_process_lock);
 				
-				msh_UpdateSegmentTracking(&g_local_seg_list);
+				msh_UpdateAllSegments(&g_local_seg_list);
 				
 				sec_temp = (mode_t)strtol(val_str_l, NULL, 0);
 				if(fchmod(g_local_info.shared_info_wrapper.handle, sec_temp) != 0)

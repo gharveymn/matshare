@@ -10,6 +10,9 @@
 #include "mex.h"
 
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
 #include "mshsegments.h"
 #include "mshtable.h"
 #include "mshvariables.h"

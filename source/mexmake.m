@@ -109,7 +109,7 @@ try
 	
 	fprintf('-Compiling matshare...')
 	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /Wall"'}];
-	%mexflags = [mexflags {'CFLAGS="$CFLAGS -Wall"'}];
+	%mexflags = [mexflags {'CFLAGS="$CFLAGS --std=c89 -Wall -Werror"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n')
 	if(mshDebugMode)
