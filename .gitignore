@@ -1,6 +1,6 @@
-*
+/*
 !.gitignore
-!+matshare
-!source
+!/+matshare/
+!/source/
 !LICENSE
 !README.md

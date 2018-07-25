@@ -16,6 +16,8 @@ function varargout = fetch(varargin)
 %
 %        <strong>-a</strong>[ll]    -- return all currently shared variables.
 %
+%        <strong>-n</strong>[amed]  -- return all named variables
+%
 %    X = MATSHARE.FETCH(VARNAME) returns a shared variable that you 
 %    previously named. Example:
 %        >> matshare.share('-n', 'myvarname', rand(5));

@@ -62,6 +62,8 @@ bld/
 [Ll]og/
 src/extlib
 CppProperties.json
-tests/precompiled/res
+*.exp
+*.lib
+*.manifest
 _build
 CMakeFiles
