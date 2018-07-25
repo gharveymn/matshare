@@ -362,9 +362,6 @@ void msh_OnExit(void)
 
 void msh_SetDefaultConfiguration(void)
 {
-	msh_SetCounterPost(&g_user_config.lock_counter, FALSE);
-	msh_SetCounterFlag(&g_user_config.lock_counter, MSH_DEFAULT_THREAD_SAFETY);
-	msh_SetCounterPost(&g_user_config.lock_counter, TRUE);                        /** counter is in post state **/
 	g_user_config.max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;
 	g_user_config.max_shared_size = MSH_DEFAULT_MAX_SHARED_SIZE;
 	g_user_config.will_shared_gc = MSH_DEFAULT_SHARED_GC;

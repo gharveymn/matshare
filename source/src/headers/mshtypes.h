@@ -42,8 +42,6 @@
 
 typedef struct UserConfig_t
 {
-	/* these are aligned for lockless assignment */
-	LockFreeCounter_t lock_counter;
 	size_t max_shared_size;
 	unsigned long max_shared_segments;
 	alignedbool_t will_shared_gc;

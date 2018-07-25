@@ -31,44 +31,35 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 	DWORD status;
 #endif
 	
-	/* blocks until lock flag operation is finished */
-	while(!msh_GetCounterPost(&g_user_config.lock_counter));
-	
-	msh_IncrementCounter(&g_user_config.lock_counter);
-	
-	if(msh_GetCounterFlag(&g_user_config.lock_counter))
+	if(g_local_info.lock_level == 0)
 	{
-		if(g_local_info.lock_level == 0)
-		{
 
 #ifdef MSH_WIN
-			status = WaitForSingleObject(process_lock, INFINITE);
-			if(status == WAIT_ABANDONED)
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "ProcessLockAbandonedError", "Another process has failed. Cannot safely continue.");
-			}
-			else if(status == WAIT_FAILED)
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError", "Failed to lock acquire the process lock.");
-			}
-#else
-			if(lockf(process_lock.lock_handle, F_LOCK, process_lock.lock_size) != 0)
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError", "Failed to acquire the process lock.");
-			}
-#endif
-		
+		status = WaitForSingleObject(process_lock, INFINITE);
+		if(status == WAIT_ABANDONED)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "ProcessLockAbandonedError", "Another process has failed. Cannot safely continue.");
 		}
-		
-		g_local_info.lock_level += 1;
-		
+		else if(status == WAIT_FAILED)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError", "Failed to lock acquire the process lock.");
+		}
+#else
+		if(lockf(process_lock.lock_handle, F_LOCK, process_lock.lock_size) != 0)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError", "Failed to acquire the process lock.");
+		}
+#endif
+	
 	}
+	
+	g_local_info.lock_level += 1;
+	
 }
 
 
 void msh_ReleaseProcessLock(ProcessLock_t process_lock)
 {
-	msh_DecrementCounter(&g_user_config.lock_counter, FALSE);
 	
 	if(g_local_info.lock_level > 0)
 	{
@@ -124,8 +115,6 @@ void msh_WriteConfiguration(void)
 	
 	handle_t config_handle;
 	UserConfig_t local_config = g_user_config, saved_config;
-	local_config.lock_counter.values.count = 0;                    /* reset the lock_counter so that it counter values don't roll over */
-	local_config.lock_counter.values.post = TRUE;
 	
 	config_path = msh_GetConfigurationPath();
 

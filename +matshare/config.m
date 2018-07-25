@@ -10,15 +10,6 @@ function config(varargin)
 %
 %    Available configuration parameters:
 %
-%        ['ThreadSafety', 'ts'] -- Control whether matshare will use locks 
-%                                  when dealing with shared memory.
-%            Values: ['on','true','enable'],['off','false','disable']
-%            Default: 'on'
-%            Notes: I do not recommend turning this off since concurrent 
-%                   usage can easily crash your session. Furthermore, 
-%                   matshare is designed to be highly concurrent, so the 
-%                   effect of locks is negligible in most cases.
-%
 %        ['MaxVariables','mv'] -- Set the maximum number of variables 
 %                                 in shared memory. 
 %            Values: An unsigned integer less than 2^32.

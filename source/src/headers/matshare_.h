@@ -51,7 +51,6 @@ typedef struct mxArray_tag mxArray;
 
 #define MSH_CONFIG_STRING_FORMAT \
 "<strong>Current configuration:</strong>\n"\
-"    Thread safety:       '%s'\n" \
 "    Max variables:       %lu\n" \
 "    Max shared size:     "SIZE_FORMAT"\n" \
 "    Garbage collection:  '%s'\n" \
@@ -130,12 +129,6 @@ g_shared_info->num_procs.values.post,
 "     rev_num: "SIZE_FORMAT"\n" \
 "     total_shared_size: "SIZE_FORMAT"\n" \
 "     user_defined (struct):\n" \
-"          lock_counter (union):\n" \
-"               span: %li\n" \
-"               values (struct):\n" \
-"                    count: %lu\n" \
-"                    flag: %lu\n" \
-"                    post: %lu\n" \
 "          max_shared_segments: %lu\n" \
 "          max_shared_size: "SIZE_FORMAT"\n" \
 "          will_shared_gc: %lu\n" \
@@ -151,10 +144,6 @@ MSH_NUM_PROCS_FORMAT \
 #define MSH_DEBUG_SHARED_ARGS \
 g_shared_info->rev_num, \
 g_shared_info->total_shared_size, \
-g_user_config.lock_counter.span, \
-g_user_config.lock_counter.values.count, \
-g_user_config.lock_counter.values.flag, \
-g_user_config.lock_counter.values.post, \
 g_user_config.max_shared_segments, \
 g_user_config.max_shared_size, \
 g_user_config.will_shared_gc, \

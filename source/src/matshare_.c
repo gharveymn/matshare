@@ -128,7 +128,6 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					          "    Total size of shared memory:     "SIZE_FORMAT" bytes\n"
 					          "    PID of the most recent revision: %lu\n", g_shared_info->num_shared_segments, g_shared_info->total_shared_size, g_shared_info->update_pid);
 					mexPrintf(MSH_CONFIG_STRING_FORMAT "\n",
-					          msh_GetCounterFlag(&g_user_config.lock_counter)? "on" : "off",
 					          g_user_config.max_shared_segments,
 					          g_user_config.max_shared_size,
 					          g_user_config.will_shared_gc? "on" : "off",
@@ -478,7 +477,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 	{
 		if(will_fetch_default)
 		{
-			strcpy(input_str, (char*)g_user_config.fetch_default);
+			strcpy(input_str, (char_t*)g_user_config.fetch_default);
 		}
 		else
 		{
@@ -844,7 +843,6 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 	if(num_params == 0)
 	{
 		mexPrintf(MSH_CONFIG_STRING_FORMAT,
-		          msh_GetCounterFlag(&g_user_config.lock_counter)? "on" : "off",
 		          g_user_config.max_shared_segments,
 		          g_user_config.max_shared_size,
 		          g_user_config.will_shared_gc? "on" : "off",
@@ -890,22 +888,7 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 			val_str_l[j] = (char)tolower(val_str[j]);
 		}
 		
-		if(strcmp(param_str_l, MSH_PARAM_THREADSAFETY_L) == 0 || strcmp(param_str_l, MSH_PARAM_THREADSAFETY_AB) == 0)
-		{
-			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
-			{
-				msh_WaitSetCounter(&g_user_config.lock_counter, TRUE);
-			}
-			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
-			{
-				msh_WaitSetCounter(&g_user_config.lock_counter, FALSE);
-			}
-			else
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_THREADSAFETY);
-			}
-		}
-		else if(strncmp(param_str_l, MSH_PARAM_MAX_VARIABLES_L, 6) == 0 || strcmp(param_str_l, MSH_PARAM_MAX_VARIABLES_AB) == 0)
+		if(strncmp(param_str_l, MSH_PARAM_MAX_VARIABLES_L, 6) == 0 || strcmp(param_str_l, MSH_PARAM_MAX_VARIABLES_AB) == 0)
 		{
 			/* this can't be negative */
 			if(val_str_l[0] == '-')
