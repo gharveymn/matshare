@@ -83,9 +83,9 @@ try
 		mshconfigpath = fullfile(mshconfigfolder, 'mshconfig32');
 	end
 	
-	if(exist(mshconfigpath, 'file'))
-		delete(mshconfigpath);
-	end
+% 	if(exist(mshconfigpath, 'file'))
+% 		delete(mshconfigpath);
+% 	end
 	
 	if(strcmp(mshGarbageCollection, 'on'))
 		fprintf('-Garbage collection is enabled.\n')

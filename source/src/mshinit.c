@@ -38,6 +38,9 @@ static void msh_InitializeSharedInfo(void);
 static void msh_InitializeConfiguration(void);
 
 
+static void msh_WriteDefaultConfiguration(handle_t config_handle);
+
+
 void msh_InitializeMatshare(void)
 {
 	
@@ -202,6 +205,8 @@ static void msh_InitializeConfiguration(void)
 {
 #ifdef MSH_WIN
 	DWORD bytes_wr;
+#else
+	struct stat file_stat;
 #endif
 	
 	handle_t config_handle;
@@ -211,28 +216,29 @@ static void msh_InitializeConfiguration(void)
 
 #ifdef MSH_WIN
 	
-	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
+	if((config_handle = CreateFile(config_path, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL)) == INVALID_HANDLE_VALUE)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateFileError", "Error opening the config file.");
 	}
 	else
 	{
-		if(GetLastError() == ERROR_ALREADY_EXISTS)
+		if(GetLastError() == ERROR_ALREADY_EXISTS && GetFileSize(config_handle, NULL) == sizeof(UserConfig_t))
 		{
 			if(ReadFile(config_handle, (void*)&g_user_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 			}
+			
+			if(strcmp((void*)g_user_config.version_string, MSH_VERSION_STRING) != 0)
+			{
+				/* the configuration file was incompatible, so rewrite the file */
+				msh_WriteDefaultConfiguration(config_handle);
+			}
 		}
 		else
 		{
 			/* this is a new file */
-			msh_SetDefaultConfiguration();
-			
-			if(WriteFile(config_handle, (void*)&g_user_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
-			}
+			msh_WriteDefaultConfiguration(config_handle);
 		}
 		
 		if(CloseHandle(config_handle) == 0)
@@ -241,44 +247,37 @@ static void msh_InitializeConfiguration(void)
 		}
 	}
 #else
-	if((config_handle = open(config_path, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
+	if((config_handle = open(config_path, O_RDWR | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
 	{
-		if(errno != EEXIST)
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateFileError", "Error creating the config file.");
+	}
+	
+	if((fstat(config_handle, &file_stat) != 0) || (!S_ISREG(file_stat.st_mode)))
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_INTERNAL, "FileSizeError", "There was an error retrieving the file size.");
+	}
+	
+	if(file_stat.st_size == sizeof(UserConfig_t))
+	{
+		if(read(config_handle, (void*)&g_user_config, sizeof(UserConfig_t)) == -1)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateFileError", "Error creating the config file.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 		}
-		else
+		
+		if(strcmp((void*)g_user_config.version_string, MSH_VERSION_STRING) != 0)
 		{
-			/* the config file is already created, open it instead */
-			if((config_handle = open(config_path, O_RDONLY | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "OpenFileError", "Error opening the config file.");
-			}
-			else
-			{
-				if(read(config_handle, (void*)&g_user_config, sizeof(UserConfig_t)) == -1)
-				{
-					meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
-				}
-			}
+			msh_WriteDefaultConfiguration(config_handle);
 		}
 	}
 	else
 	{
-		/* this is a new file */
-		msh_SetDefaultConfiguration();
-		
-		if(write(config_handle, (void*)&g_user_config, sizeof(UserConfig_t)) == -1)
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
-		}
+		msh_WriteDefaultConfiguration(config_handle);
 	}
 	
 	if(close(config_handle) == -1)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the config file handle.");
 	}
-
 #endif
 	
 	mxFree(config_path);
@@ -362,14 +361,18 @@ void msh_OnExit(void)
 
 void msh_SetDefaultConfiguration(void)
 {
+	strncpy((void*)g_user_config.version_string, MSH_VERSION_STRING, sizeof(g_user_config.version_string));
+	g_user_config.version_string[MSH_VERSION_STRING_LEN-1] = '\0';
+	
 	g_user_config.max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;
 	g_user_config.max_shared_size = MSH_DEFAULT_MAX_SHARED_SIZE;
 	g_user_config.will_shared_gc = MSH_DEFAULT_SHARED_GC;
 #ifdef MSH_UNIX
 	g_user_config.security = MSH_DEFAULT_SECURITY;
 #endif
-	/* should be null terminated since shared memory is initialized */
-	strncpy((char*)g_user_config.fetch_default, MSH_DEFAULT_FETCH_DEFAULT, sizeof(g_user_config.fetch_default)-1);
+	
+	strncpy((void*)g_user_config.fetch_default, MSH_DEFAULT_FETCH_DEFAULT, sizeof(g_user_config.fetch_default));
+	g_user_config.fetch_default[MSH_NAME_LEN_MAX-1] = '\0';
 }
 
 
@@ -390,4 +393,23 @@ void msh_OnError(int error_severity)
 	{
 		msh_ReleaseProcessLock(g_process_lock);
 	}
+}
+
+
+static void msh_WriteDefaultConfiguration(handle_t config_handle)
+{
+#ifdef MSH_WIN
+	DWORD bytes_wr;
+	msh_SetDefaultConfiguration();
+	if(WriteFile(config_handle, (void*)&g_user_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
+	}
+#else
+	msh_SetDefaultConfiguration();
+	if(write(config_handle, (void*)&g_user_config, sizeof(UserConfig_t)) == -1)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
+	}
+#endif
 }
