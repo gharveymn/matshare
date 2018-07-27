@@ -23,6 +23,7 @@
 #  include <unistd.h>
 #  include <fcntl.h>
 #  include <sys/mman.h>
+#  include <sys/stat.h>
 #endif
 
 
@@ -38,6 +39,11 @@ static void msh_InitializeSharedInfo(void);
 static void msh_InitializeConfiguration(void);
 
 
+/**
+ * Write the default configuration to disk.
+ *
+ * @param config_handle A handle to the configuration file.
+ */
 static void msh_WriteDefaultConfiguration(handle_t config_handle);
 
 
