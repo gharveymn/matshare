@@ -51,24 +51,35 @@ typedef struct mxArray_tag mxArray;
 
 #define MSH_CONFIG_STRING_FORMAT \
 "<strong>Current configuration:</strong>\n"\
+"    matshare version:    %s\n" \
 "    Max variables:       %lu\n" \
 "    Max shared size:     "SIZE_FORMAT"\n" \
 "    Garbage collection:  '%s'\n" \
 "    Fetch default:       '%s'\n"
 
+#define MSH_CONFIG_STRING_ARGS \
+MSH_VERSION_STRING, \
+g_user_config.max_shared_segments, \
+g_user_config.max_shared_size, \
+g_user_config.will_shared_gc? "on" : "off", \
+g_user_config.fetch_default
+
 #ifdef MSH_WIN
+
 #  define MSH_PROCESS_LOCK_FORMAT \
 "     process_lock: "HANDLE_FORMAT"\n"
 
-#  define MSH_PROCESS_LOCK_ARG \
+#  define MSH_PROCESS_LOCK_ARGS \
 g_local_info.process_lock,
+
 #else
+
 #  define MSH_PROCESS_LOCK_FORMAT \
 "     process_lock (struct):\n" \
 "          lock_handle: "HANDLE_FORMAT"\n" \
 "          lock_size: "SIZE_FORMAT"\n"
 
-#  define MSH_PROCESS_LOCK_ARG \
+#  define MSH_PROCESS_LOCK_ARGS \
 g_local_info.process_lock.lock_handle, \
 g_local_info.process_lock.lock_size,
 #endif
@@ -92,7 +103,7 @@ g_local_info.lock_level, \
 g_local_info.this_pid, \
 g_local_info.shared_info_wrapper.ptr, \
 g_local_info.shared_info_wrapper.handle, \
-MSH_PROCESS_LOCK_ARG \
+MSH_PROCESS_LOCK_ARGS \
 g_local_info.has_fatal_error, \
 g_local_info.is_initialized, \
 g_local_info.is_deinitialized
@@ -106,8 +117,10 @@ g_local_info.is_deinitialized
 #  define MSH_NUM_PROCS_ARG \
 g_shared_info->num_procs,
 #else
+
 #  define MSH_SECURITY_FORMAT \
 "          security: %o\n"
+
 #  define MSH_NUM_PROCS_FORMAT \
 "     num_procs (union):\n" \
 "          span: %li\n" \
@@ -115,8 +128,10 @@ g_shared_info->num_procs,
 "               count: %lu\n" \
 "               flag: %lu\n" \
 "               post: %lu\n"
+
 #  define MSH_SECURITY_ARG \
 g_user_config.security,
+
 #  define MSH_NUM_PROCS_ARG \
 g_shared_info->num_procs.span, \
 g_shared_info->num_procs.values.count, \

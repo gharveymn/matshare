@@ -54,6 +54,8 @@
 #  define SIZE_FORMAT "%lu"
 #endif
 
+#define MSH_VERSION_STRING "1.1.0"
+
 /** these are basic readability typedefs **/
 typedef char char_t;                     /* characters */
 typedef byte_T byte_t;                  /* reading physical memory */

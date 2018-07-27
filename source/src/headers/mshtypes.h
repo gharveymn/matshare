@@ -40,12 +40,11 @@
 
 #define MSH_INITIAL_STATE 0
 
-#define MSH_VERSION_STRING "1.1.0"
-#define MSH_VERSION_STRING_LEN 16
 typedef struct UserConfig_t
 {
-	char_t version_string[MSH_VERSION_STRING_LEN];
+	/* these are aligned for lockless assignment */
 	size_t max_shared_size;
+	volatile LockFreeCounter_t lock_counter; /* unused, kept for compatibility */
 	unsigned long max_shared_segments;
 	alignedbool_t will_shared_gc;
 #ifdef MSH_UNIX

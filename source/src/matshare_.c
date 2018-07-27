@@ -59,8 +59,21 @@ SegmentList_t g_local_seg_list = {&g_seg_table, &g_name_table, NULL, NULL, 0, 0}
 
 VariableList_t g_local_var_list = {NULL, NULL};
 
+/**
+ * Wraps the output in a 1x1 cell array.
+ *
+ * @param shared_data_copy the output which should be a shared data copy.
+ * @return the wrapped output.
+ */
 static mxArray* msh_WrapOutput(mxArray* shared_data_copy);
 
+
+/**
+ * Creates output for the shared variable of the given name.
+ *
+ * @param name the name of the shared variable.
+ * @return the shared variable(s) as a cell array.
+ */
 static mxArray* msh_CreateNamedOutput(const char_t* name);
 
 /* ------------------------------------------------------------------------- */
@@ -127,11 +140,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 					mexPrintf("    Number of shared variables:      %lu\n"
 					          "    Total size of shared memory:     "SIZE_FORMAT" bytes\n"
 					          "    PID of the most recent revision: %lu\n", g_shared_info->num_shared_segments, g_shared_info->total_shared_size, g_shared_info->update_pid);
-					mexPrintf(MSH_CONFIG_STRING_FORMAT "\n",
-					          g_user_config.max_shared_segments,
-					          g_user_config.max_shared_size,
-					          g_user_config.will_shared_gc? "on" : "off",
-					          g_user_config.fetch_default);
+					mexPrintf(MSH_CONFIG_STRING_FORMAT "\n", MSH_CONFIG_STRING_ARGS);
 #ifdef MSH_UNIX
 					mexPrintf(MSH_CONFIG_SECURITY_STRING_FORMAT, g_user_config.security);
 #endif
@@ -211,7 +220,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			msh_AcquireProcessLock(g_process_lock);
 			{
 				msh_Clear(0, NULL);
-				msh_SetDefaultConfiguration();
+				msh_SetDefaultConfiguration((void*)&g_user_config);
 				msh_WriteConfiguration();
 			}
 			msh_ReleaseProcessLock(g_process_lock);
@@ -842,11 +851,7 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 	
 	if(num_params == 0)
 	{
-		mexPrintf(MSH_CONFIG_STRING_FORMAT,
-		          g_user_config.max_shared_segments,
-		          g_user_config.max_shared_size,
-		          g_user_config.will_shared_gc? "on" : "off",
-		          g_user_config.fetch_default);
+		mexPrintf(MSH_CONFIG_STRING_FORMAT, MSH_CONFIG_STRING_ARGS);
 #ifdef MSH_UNIX
 		mexPrintf(MSH_CONFIG_SECURITY_STRING_FORMAT, g_user_config.security);
 #endif

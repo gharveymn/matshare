@@ -6,6 +6,9 @@
 #  MATLAB_MX_LIBRARY:  path to libmx
 
 SET(MATLAB_FOUND 0)
+
+	MESSAGE (STATUS "Searching for MATLAB at MATLAB_ROOT: $ENV{MATLAB_ROOT}")
+
 IF("$ENV{MATLAB_ROOT}" STREQUAL "")
 	MESSAGE(STATUS "MATLAB_ROOT environment variable not set.")
 	MESSAGE(STATUS "In Linux this can be done in your user .bashrc file by appending the corresponding line, e.g:")
@@ -13,8 +16,6 @@ IF("$ENV{MATLAB_ROOT}" STREQUAL "")
 	MESSAGE(STATUS "In Windows this can be done by adding system variable, e.g:")
 	MESSAGE(STATUS "MATLAB_ROOT=D:\\Program Files\\MATLAB\\R2011a")
 ELSE("$ENV{MATLAB_ROOT}" STREQUAL "")
-
-	MESSAGE (STATUS "Searching for MATLAB at MATLAB_ROOT: $ENV{MATLAB_ROOT}")
 
 	FIND_PATH(MATLAB_INCLUDE_DIR mex.h
 			$ENV{MATLAB_ROOT}/extern/include)

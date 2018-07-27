@@ -10,16 +10,16 @@ funlist = {@(x)sum(x(:))};  % a simple function to highlist the comunications ov
 funlist = repmat(funlist, 1, numworkers);
 
 %standard approach, a full copy of Data on all processes
-tic;
+tic
 parfor i = 1:numel(funlist)
 	result(i) = feval(funlist{i}, Data);
 end
 toc
 
 % using shared version
-tic;
+tic
 matshare.share(Data); % place a copy of data in shared memory
-parfor i = 1:numworkers
+parfor i = 1:numel(funlist)
 	d = matshare.fetch('-r');
 	resultpar(i) = feval(funlist{i}, d.data);
 end
