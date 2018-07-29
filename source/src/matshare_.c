@@ -68,6 +68,18 @@ VariableList_t g_local_var_list = {NULL, NULL};
 static mxArray* msh_WrapOutput(mxArray* shared_data_copy);
 
 
+static mxArray* msh_CreateOutputRecent(void);
+
+
+static mxArray* msh_CreateOutputNew(size_t num_new_vars);
+
+
+static mxArray* msh_CreateOutputAll(void);
+
+
+static mxArray* msh_CreateOutputNamed(void);
+
+
 /**
  * Creates output for the shared variable of the given name.
  *
@@ -367,19 +379,15 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 
 void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args)
 {
-	VariableNode_t* curr_var_node;
 	SegmentNode_t* curr_seg_node;
 	UpdateFunction_t update_function = NULL;
 	mxChar* wide_input_str;
 	char_t input_str[MSH_NAME_LEN_MAX];
-	size_t j, num_new_vars, num_str_elems;
+	size_t j, num_new_vars, num_str_elems, num_op_args;
 	int arg_num, out_num, num_out;
 	int output_as_struct = FALSE, will_fetch_default = FALSE;
 	
-	char_t* curr_name;
-	char_t* curr_out_name = NULL;
-	mxArray* curr_out_var = NULL;
-	
+	const char_t* all_out_names[] = {"recent", "new", "all", "named"};
 	
 	if(nlhs < 1)
 	{
@@ -392,21 +400,44 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 	}
 	
 	/* preprocessing pass */
-	for(arg_num = 0, num_out = (int)num_args; arg_num < num_args; arg_num++)
+	num_out = (int)num_args;
+	for(arg_num = 0, num_op_args = 0; arg_num < num_args; arg_num++)
 	{
-		
+		/* input validation */
 		if(!mxIsChar(in_args[arg_num]))
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InputError", "All inputs must be of type 'char'.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidFetchError", "All arguments must be of type 'char'.");
 		}
 		
+		if(mxIsEmpty(in_args[arg_num]))
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidFetchError", "All arguments must have a length more than zero.");
+		}
+		
+		if((num_str_elems = mxGetNumberOfElements(in_args[arg_num])) > MSH_NAME_LEN_MAX-1)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidFetchError", "All arguments must have length of less than %d characters.", MSH_NAME_LEN_MAX);
+		}
+		
+		/* validate only using ANSI chars */
 		wide_input_str = mxGetChars(in_args[arg_num]);
+		if(wide_input_str[0] != '-')
+		{
+			for(j = 0; j < num_str_elems; j++)
+			{
+				if(!isalpha(wide_input_str[j]))
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIDError", "Variable IDs must consist only of ANSI alphabetic characters.");
+				}
+			}
+		}
+		
 		if(wide_input_str[0] == '-')
 		{
 			switch(wide_input_str[1])
 			{
 				case(MSH_FETCHOPT_STRUCT):
-					num_out -= 1;
+					num_out = 1;
 					output_as_struct = TRUE;
 					break;
 				case(MSH_FETCHOPT_RECENT):
@@ -416,6 +447,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 					{
 						update_function = msh_UpdateLatestSegment;
 					}
+					num_op_args++;
 					break;
 				}
 				case(MSH_FETCHOPT_NEW):
@@ -423,6 +455,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 				case(MSH_FETCHOPT_NAMED):
 				{
 					update_function = msh_UpdateAllSegments;
+					num_op_args++;
 					break;
 				}
 				default:
@@ -435,6 +468,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		else
 		{
 			update_function = msh_UpdateAllSegments;
+			num_op_args++;
 		}
 	}
 	
@@ -456,8 +490,13 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 			update_function = msh_UpdateAllSegments;
 		}
 	}
+	else if(output_as_struct && num_op_args == 0)
+	{
+		/* there weren't any other operators, update everything */
+		update_function = msh_UpdateAllSegments;
+	}
 	
-	if((output_as_struct && nlhs > 1) || nlhs > num_out)
+	if(nlhs > num_out)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "TooManyOutputsError", "Too many outputs requested.");
 	}
@@ -478,139 +517,214 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 	
 	if(output_as_struct)
 	{
-		plhs[0] = mxCreateStructMatrix(1, 1, 0, NULL);
-	}
-	
-	/* create outputs */
-	for(arg_num = 0, out_num = 0; out_num < num_out; arg_num++)
-	{
-		if(will_fetch_default)
-		{
-			strcpy(input_str, (char_t*)g_user_config.fetch_default);
-		}
-		else
-		{
-			if(!mxIsChar(in_args[arg_num]))
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidFetchError", "All arguments must be of type 'char'.");
-			}
-			
-			if(mxIsEmpty(in_args[arg_num]))
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidFetchError", "All arguments must have a length more than zero.");
-			}
-			
-			if((num_str_elems = mxGetNumberOfElements(in_args[arg_num])) > MSH_NAME_LEN_MAX-1)
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidFetchError", "All arguments must have length of less than %d characters.", MSH_NAME_LEN_MAX);
-			}
-			
-			/* validate only using ANSI chars */
-			wide_input_str = mxGetChars(in_args[arg_num]);
-			if(wide_input_str[0] != '-')
-			{
-				for(j = 0; j < num_str_elems; j++)
-				{
-					if(!isalpha(wide_input_str[j]))
-					{
-						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIDError", "Variable IDs must consist only of ANSI alphabetic characters.");
-					}
-				}
-			}
-			mxGetString(in_args[arg_num], input_str, sizeof(input_str));
-		}
 		
-		if(input_str[0] == '-')
+		/* create outputs */
+		if(num_op_args > 0)
 		{
-			switch(input_str[1])
+			plhs[0] = mxCreateStructMatrix(1, 1, 0, NULL);
+			for(arg_num = 0; arg_num < num_args; arg_num++)
 			{
-				case(MSH_FETCHOPT_STRUCT):
-					/* do nothing */
-					continue;
-				case(MSH_FETCHOPT_RECENT):
+				mxGetString(in_args[arg_num], input_str, sizeof(input_str));
+				if(input_str[0] == '-')
 				{
-					curr_out_name = "recent";
-					curr_out_var = mxCreateCellMatrix((size_t)(g_local_seg_list.last != NULL), (size_t)(g_local_seg_list.last != NULL));
-					if(g_local_seg_list.last != NULL)
+					switch(input_str[1])
 					{
-						mxSetCell(curr_out_var, 0, msh_WrapOutput(msh_CreateSharedDataCopy(msh_GetVariableNode(g_local_seg_list.last), TRUE)));
-					}
-					out_num += 1;
-					break;
-				}
-				case(MSH_FETCHOPT_NEW):
-				{
-					/* return the new variables detected */
-					curr_out_name = "new";
-					curr_out_var = mxCreateCellMatrix(num_new_vars, (size_t)(num_new_vars > 0));
-					for(j = 0, curr_var_node = g_local_var_list.last; j < num_new_vars; j++, curr_var_node = msh_GetPreviousVariable(curr_var_node))
-					{
-						mxSetCell(curr_out_var, num_new_vars - 1 - j, msh_WrapOutput(msh_CreateSharedDataCopy(curr_var_node, TRUE)));
-					}
-					out_num += 1;
-					break;
-				}
-				case(MSH_FETCHOPT_ALL):
-				{
-					/* retrieve all segment variables */
-					curr_out_name = "all";
-					curr_out_var = mxCreateCellMatrix(g_local_seg_list.num_segs, (size_t)(g_local_seg_list.num_segs > 0));
-					for(j = 0, curr_seg_node = g_local_seg_list.first; j < g_local_seg_list.num_segs; j++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
-					{
-						mxSetCell(curr_out_var, j, msh_WrapOutput(msh_CreateSharedDataCopy(msh_GetVariableNode(curr_seg_node), TRUE)));
-					}
-					out_num += 1;
-					break;
-				}
-				case(MSH_FETCHOPT_NAMED):
-				{
-					curr_out_name = "named";
-					curr_out_var = mxCreateStructMatrix(1, 1, 0, NULL);
-					for(j = 0, curr_seg_node = g_local_seg_list.first; j < g_local_seg_list.num_named && curr_seg_node != NULL; curr_seg_node = msh_GetNextSegment(curr_seg_node))
-					{
-						if(msh_HasVariableName(curr_seg_node))
+						case(MSH_FETCHOPT_STRUCT):
 						{
-							curr_name = msh_GetSegmentMetadata(curr_seg_node)->name;
-							if(!mxGetField(curr_out_var, 0, curr_name))
+							/* do nothing */
+							break;
+						}
+						case(MSH_FETCHOPT_RECENT):
+						{
+							/* return only the most recent */
+							if(!mxGetField(plhs[0], 0, "recent"))
 							{
-								mxAddField(curr_out_var, curr_name);
-								mxSetField(curr_out_var, 0, curr_name, msh_CreateNamedOutput(curr_name));
+								mxAddField(plhs[0], "recent");
+								mxSetField(plhs[0], 0, "recent", msh_CreateOutputRecent());
 							}
-							j += 1;
+							break;
+						}
+						case(MSH_FETCHOPT_NEW):
+						{
+							/* return the new variables detected */
+							if(!mxGetField(plhs[0], 0, "new"))
+							{
+								mxAddField(plhs[0], "new");
+								mxSetField(plhs[0], 0, "new", msh_CreateOutputNew(num_new_vars));
+							}
+							break;
+						}
+						case(MSH_FETCHOPT_ALL):
+						{
+							/* retrieve all segment variables */
+							if(!mxGetField(plhs[0], 0, "all"))
+							{
+								mxAddField(plhs[0], "all");
+								mxSetField(plhs[0], 0, "all", msh_CreateOutputAll());
+							}
+							break;
+						}
+						case(MSH_FETCHOPT_NAMED):
+						{
+							/* return all named variables */
+							if(!mxGetField(plhs[0], 0, "named"))
+							{
+								mxAddField(plhs[0], "named");
+								mxSetField(plhs[0], 0, "named", msh_CreateOutputNamed());
+							}
+							break;
+						}
+						default:
+						{
+							/* normally the string produced here should be freed, but since we have an error anyway just let MATLAB do the GC */
+							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Unrecognized option \"%s\"", mxArrayToString(in_args[arg_num]));
 						}
 					}
-					out_num += 1;
-					break;
 					
 				}
-				default:
+				else
 				{
-					/* normally the string produced here should be freed, but since we have an error anyway just let MATLAB do the GC */
-					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Unrecognized option \"%s\"", mxArrayToString(in_args[arg_num]));
+					/* find variable by identifier */
+					if(!mxGetField(plhs[0], 0, input_str))
+					{
+						mxAddField(plhs[0], input_str);
+						mxSetField(plhs[0], 0, input_str, msh_CreateNamedOutput(input_str));
+					}
 				}
 			}
 		}
 		else
 		{
-			/* find variable by identifier */
-			
-			curr_out_name = input_str;
-			curr_out_var = msh_CreateNamedOutput(input_str);
-			out_num += 1;
-		}
-		
-		if(output_as_struct && !mxGetField(plhs[0], 0, curr_out_name))
-		{
-			mxAddField(plhs[0], curr_out_name);
-			mxSetField(plhs[0], 0, curr_out_name, curr_out_var);
-		}
-		else
-		{
-			plhs[arg_num] = curr_out_var;
+			/* there weren't any other operation arguments, so output everything */
+			plhs[0] = mxCreateStructMatrix(1, 1, 4, all_out_names);
+			mxSetField(plhs[0], 0, "recent", msh_CreateOutputRecent());
+			mxSetField(plhs[0], 0, "new", msh_CreateOutputNew(num_new_vars));
+			mxSetField(plhs[0], 0, "all", msh_CreateOutputAll());
+			mxSetField(plhs[0], 0, "named", msh_CreateOutputNamed());
 		}
 		
 	}
+	else
+	{
+		/* create outputs */
+		for(arg_num = 0, out_num = 0; out_num < num_out; arg_num++)
+		{
+			if(will_fetch_default)
+			{
+				strcpy(input_str, (char_t*)g_user_config.fetch_default);
+			}
+			else
+			{
+				mxGetString(in_args[arg_num], input_str, sizeof(input_str));
+			}
+			
+			if(input_str[0] == '-')
+			{
+				switch(input_str[1])
+				{
+					case (MSH_FETCHOPT_RECENT):
+					{
+						plhs[out_num] = msh_CreateOutputRecent();
+						out_num += 1;
+						break;
+					}
+					case (MSH_FETCHOPT_NEW):
+					{
+						/* return the new variables detected */
+						plhs[out_num] = msh_CreateOutputNew(num_new_vars);
+						out_num += 1;
+						break;
+					}
+					case (MSH_FETCHOPT_ALL):
+					{
+						/* retrieve all segment variables */
+						plhs[out_num] = msh_CreateOutputAll();
+						out_num += 1;
+						break;
+					}
+					case (MSH_FETCHOPT_NAMED):
+					{
+						plhs[out_num] = msh_CreateOutputNamed();
+						out_num += 1;
+						break;
+					}
+					default:
+					{
+						/* normally the string produced here should be freed, but since we have an error anyway just let MATLAB do the GC */
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Unrecognized option \"%s\"", mxArrayToString(in_args[arg_num]));
+					}
+				}
+			}
+			else
+			{
+				/* find variable by identifier */
+				plhs[arg_num] = msh_CreateNamedOutput(input_str);
+				out_num += 1;
+			}
+			
+		}
+	}
 	
+}
+
+
+static mxArray* msh_CreateOutputRecent(void)
+{
+	mxArray* out = mxCreateCellMatrix((size_t)(g_local_seg_list.last != NULL), (size_t)(g_local_seg_list.last != NULL));
+	if(g_local_seg_list.last != NULL)
+	{
+		mxSetCell(out, 0, msh_WrapOutput(msh_CreateSharedDataCopy(msh_GetVariableNode(g_local_seg_list.last), TRUE)));
+	}
+	return out;
+}
+
+
+static mxArray* msh_CreateOutputNew(size_t num_new_vars)
+{
+	size_t i;
+	VariableNode_t* curr_var_node;
+	mxArray* out = mxCreateCellMatrix(num_new_vars, (size_t)(num_new_vars > 0));
+	for(i = 0, curr_var_node = g_local_var_list.last; i < num_new_vars; i++, curr_var_node = msh_GetPreviousVariable(curr_var_node))
+	{
+		mxSetCell(out, num_new_vars - 1 - i, msh_WrapOutput(msh_CreateSharedDataCopy(curr_var_node, TRUE)));
+	}
+	return out;
+}
+
+
+static mxArray* msh_CreateOutputAll(void)
+{
+	size_t i;
+	SegmentNode_t* curr_seg_node;
+	mxArray* out = mxCreateCellMatrix(g_local_seg_list.num_segs, (size_t)(g_local_seg_list.num_segs > 0));
+	for(i = 0, curr_seg_node = g_local_seg_list.first; i < g_local_seg_list.num_segs; i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
+	{
+		mxSetCell(out, i, msh_WrapOutput(msh_CreateSharedDataCopy(msh_GetVariableNode(curr_seg_node), TRUE)));
+	}
+	return out;
+}
+
+
+static mxArray* msh_CreateOutputNamed(void)
+{
+	int i;
+	SegmentNode_t* curr_seg_node;
+	const char* curr_name;
+	mxArray* out = mxCreateStructMatrix(1, 1, 0, NULL);
+	for(i = 0, curr_seg_node = g_local_seg_list.first; i < g_local_seg_list.num_named && curr_seg_node != NULL; curr_seg_node = msh_GetNextSegment(curr_seg_node))
+	{
+		if(msh_HasVariableName(curr_seg_node))
+		{
+			curr_name = msh_GetSegmentMetadata(curr_seg_node)->name;
+			if(!mxGetField(out, 0, curr_name))
+			{
+				mxAddField(out, curr_name);
+				mxSetField(out, 0, curr_name, msh_CreateNamedOutput(curr_name));
+			}
+			i += 1;
+		}
+	}
+	return out;
 }
 
 

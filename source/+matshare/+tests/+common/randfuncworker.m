@@ -52,10 +52,36 @@ function rns = randfuncworker(maxDepth, maxElements, maxDims, maxChildren, types
 	for i = 1:num_samples			
 		tv = matshare.tests.common.vargen.variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, true, typespec);
 		
-		switch(ceil(4*randdoubles1(i)))
+				
+		switch(ceil(13*randdoubles1(i)))
 			case 1
+				matshare.share(tv)
+			case 2
+				data = matshare.share(tv);
+			case 3
+				[data, data1] = matshare.share(tv,tv);
+			case 4
+				matshare.share(tv,tv);
+			case 5
+				data = matshare.data(tv,tv);
+			case 6
+				matshare.share('-p',tv);
+			case 7
+				matshare.share('-p',tv,tv);
+			case 8
+				matshare.share('-n', 'n1', tv);
+			case 9
+				matshare.share('-n', 'n1', tv, 'n2', tv);
+			case 10
+				matshare.share('-n', 'n1', tv, 'n1', tv);
+			case 11
+				matshare.share('-p','-n','n1',tv);
+			case 12
+				matshare.share('-n','-p','n1',tv);
+			case 13
+				matshare.share('-p','-n','n1', tv,'n2',tv);
+		end
 		
-		data = matshare.share(tv);
 		switch(ceil(8*randdoubles2(i)))
 			case 1
 				f = matshare.fetch;
@@ -68,9 +94,15 @@ function rns = randfuncworker(maxDepth, maxElements, maxDims, maxChildren, types
 			case 5
 				f = matshare.fetch('-s');
 			case 6
-				[f1,f2] = matshare('-r','-n');
+				[f1,f2] = matshare.fetch('-r','-n');
 			case 7
-				f = matshare('-w');
+				f = matshare.fetch('-w');
+			case 8
+				[f1,f2] = matshare.fetch('n1','n2');
+			case 9
+				f = matshare.fetch('-r','-n','-a');
+			case 10
+				f = matshare.fetch('-s','-n');
 				
 		end
 
