@@ -93,7 +93,7 @@ struct SharedVariableHeader_t
 	} class_info_pack;
 };
 
-extern size_t PadToAlignData(size_t curr_sz);
+extern size_t msh_PadToAlignData(size_t curr_sz);
 
 /**
  * Gets the total number of bytes needed to store the fields strings.
@@ -387,7 +387,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	 * want to use SharedVariableHeader_t for anything other than the actual segment. */
 	
 	/* adds the total size of the aligned data */
-#define AddDataSize(obj_sz_, data_sz_) (obj_sz_) = PadToAlignData((obj_sz_) + ALLOCATION_HEADER_SIZE) + (data_sz_);
+#define AddDataSize(obj_sz_, data_sz_) (obj_sz_) = msh_PadToAlignData((obj_sz_) + ALLOCATION_HEADER_SIZE) + (data_sz_);
 	
 	/* counters */
 	size_t idx, count, obj_tree_sz = 0;
@@ -415,7 +415,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 		obj_tree_sz += msh_GetFieldNamesSize(in_var);
 		
 		/* make sure the structure is aligned so we don't have slow access */
-		obj_tree_sz = PadToAlignData(obj_tree_sz);
+		obj_tree_sz = msh_PadToAlignData(obj_tree_sz);
 		
 		/* go through each recursively */
 		for(field_num = 0, count = 0; field_num < mxGetNumberOfFields(in_var); field_num++)          /* each field */
@@ -423,7 +423,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 			for(idx = 0; idx < mxGetNumberOfElements(in_var); idx++, count++)                         /* each element */
 			{
 				/* call recursivley */
-				obj_tree_sz += PadToAlignData(msh_FindSharedSize(mxGetFieldByNumber(in_var, idx, field_num)));
+				obj_tree_sz += msh_PadToAlignData(msh_FindSharedSize(mxGetFieldByNumber(in_var, idx, field_num)));
 			}
 		}
 	}
@@ -434,12 +434,12 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 		obj_tree_sz += mxGetNumberOfElements(in_var)*sizeof(size_t);
 		
 		/* make sure the structure is aligned so we don't have slow access */
-		obj_tree_sz = PadToAlignData(obj_tree_sz);
+		obj_tree_sz = msh_PadToAlignData(obj_tree_sz);
 		
 		/* go through each recursively */
 		for(count = 0; count < mxGetNumberOfElements(in_var); count++)
 		{
-			obj_tree_sz += PadToAlignData(msh_FindSharedSize(mxGetCell(in_var, count)));
+			obj_tree_sz += msh_PadToAlignData(msh_FindSharedSize(mxGetCell(in_var, count)));
 		}
 	}
 	else if(mxIsNumeric(in_var) || mxGetClassID(in_var) == mxLOGICAL_CLASS || mxGetClassID(in_var) == mxCHAR_CLASS)  /* base case */
@@ -553,7 +553,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 		curr_off += msh_GetFieldNamesSize(in_var);
 		
 		/* align this object */
-		curr_off = PadToAlignData(curr_off);
+		curr_off = msh_PadToAlignData(curr_off);
 		
 		/* copy the children recursively */
 		field_name_dest = msh_GetFieldNames(dest);
@@ -571,7 +571,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				msh_GetChildOffsets(dest)[count] = curr_off;
 				
 				/* And fill it */
-				curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetFieldByNumber(in_var, idx, field_num)));
+				curr_off += msh_PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetFieldByNumber(in_var, idx, field_num)));
 				
 			}
 			
@@ -588,7 +588,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 		curr_off += num_elems*sizeof(size_t);
 		
 		/* align this object */
-		curr_off = PadToAlignData(curr_off);
+		curr_off = msh_PadToAlignData(curr_off);
 		
 		/* recurse for each cell element */
 		for(count = 0; count < num_elems; count++)
@@ -597,7 +597,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			msh_GetChildOffsets(dest)[count] = curr_off;
 			
 			/* And fill it */
-			curr_off += PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetCell(in_var, count)));
+			curr_off += msh_PadToAlignData(msh_CopyVariable(msh_GetChildHeader(dest, count), mxGetCell(in_var, count)));
 		}
 		
 	}
@@ -615,7 +615,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			/** begin copy data **/
 			
 			/* make room for the mxMalloc signature */
-			curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
+			curr_off = msh_PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 			
 			/* set the offset of the data */
 			msh_SetDataOffset(dest, curr_off);
@@ -632,7 +632,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			if(mxIsComplex(in_var))
 			{
 				/* make room for the mxMalloc signature */
-				curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
+				curr_off = msh_PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 				
 				/* set the offset of the imaginary data */
 				msh_SetImagDataOffset(dest, curr_off);
@@ -650,7 +650,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			/** begin copy ir **/
 			
 			/* make room for the mxMalloc signature */
-			curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
+			curr_off = msh_PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 			
 			/* set the offset of ir */
 			msh_SetIrOffset(dest, curr_off);
@@ -666,7 +666,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			/** begin copy jc **/
 			
 			/* make room for the mxMalloc signature */
-			curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
+			curr_off = msh_PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 			
 			/* set the offset of jc */
 			msh_SetJcOffset(dest, curr_off);
@@ -689,7 +689,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				/* copy data */
 				
 				/* make room for the mxMalloc signature */
-				curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
+				curr_off = msh_PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 				
 				/* set the offset of the data */
 				msh_SetDataOffset(dest, curr_off);
@@ -708,7 +708,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				if(mxIsComplex(in_var))
 				{
 					/* make room for the mxMalloc signature */
-					curr_off = PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
+					curr_off = msh_PadToAlignData(curr_off + ALLOCATION_HEADER_SIZE);
 					
 					/* set the offset of the imaginary data */
 					msh_SetImagDataOffset(dest, curr_off);

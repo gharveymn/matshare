@@ -45,6 +45,7 @@ void msh_InitializeTable(SegmentTable_t* seg_table)
 	mexMakeMemoryPersistent(seg_table->table);
 }
 
+
 void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, void* key)
 {
 	SegmentTableNode_t* new_table_node;
@@ -66,7 +67,8 @@ void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, v
 	msh_AddNodeToTable(seg_table, new_table_node);
 }
 
-void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, void* key)
+
+void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, void* key)
 {
 	
 	SegmentTableNode_t* curr_table_node,* removed_table_node = NULL;
@@ -78,7 +80,7 @@ void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, void* key)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL | MEU_SEVERITY_FATAL, "TableLogicError", "There was a failure in internal table logic (tried to remove a segment which wasn't in the table).");
 	}
-	else if(seg_table->compare_keys(curr_table_node->key, key))
+	else if(curr_table_node->seg_node == seg_node)
 	{
 		removed_table_node = seg_table->table[removed_seg_hash];
 		seg_table->table[removed_seg_hash] = removed_table_node->next;
@@ -86,7 +88,7 @@ void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, void* key)
 	else
 	{
 		/* find the segment node immediately preceding this segment node in the table */
-		while(!seg_table->compare_keys(curr_table_node->next->key, key))
+		while(curr_table_node->next->seg_node != seg_node)
 		{
 			curr_table_node = curr_table_node->next;
 			if(curr_table_node->next == NULL)

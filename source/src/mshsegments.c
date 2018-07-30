@@ -73,13 +73,13 @@ SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
 	{
 		msh_GetSegmentInfo(seg_node)->raw_ptr = msh_MapMemory(msh_GetSegmentInfo(seg_node)->handle, msh_GetSegmentInfo(seg_node)->total_segment_size);
 	}
-	return (SharedVariableHeader_t*)((byte_t*)msh_GetSegmentInfo(seg_node)->raw_ptr + PadToAlignData(sizeof(SegmentMetadata_t)));
+	return (SharedVariableHeader_t*)((byte_t*)msh_GetSegmentInfo(seg_node)->raw_ptr + msh_PadToAlignData(sizeof(SegmentMetadata_t)));
 }
 
 
 size_t msh_FindSegmentSize(size_t data_size)
 {
-	return PadToAlignData(sizeof(SegmentMetadata_t)) + data_size;
+	return msh_PadToAlignData(sizeof(SegmentMetadata_t)) + data_size;
 }
 
 
@@ -523,12 +523,12 @@ SegmentNode_t* msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
 	/* remove the segment from the table */
 	if(seg_list->seg_table != NULL)
 	{
-		msh_RemoveSegmentFromTable(seg_list->seg_table, (void*)&msh_GetSegmentInfo(seg_node)->seg_num);
+		msh_RemoveSegmentFromTable(seg_list->seg_table, seg_node, (void*)&msh_GetSegmentInfo(seg_node)->seg_num);
 	}
 	
 	if(msh_GetSegmentList(seg_node)->name_table != NULL && msh_HasVariableName(seg_node))
 	{
-		msh_RemoveSegmentFromTable(seg_list->name_table, msh_GetSegmentMetadata(seg_node)->name);
+		msh_RemoveSegmentFromTable(seg_list->name_table, seg_node, msh_GetSegmentMetadata(seg_node)->name);
 		seg_list->num_named -= 1;
 	}
 	
@@ -588,41 +588,13 @@ void msh_CleanSegmentList(SegmentList_t* seg_list)
 
 static void msh_CreateSegmentWorker(SegmentInfo_t* new_seg_info, size_t data_size, const mxArray* name, int is_persistent)
 {
-	int i;
-	size_t num_str_elems;
-	mxChar* var_name_str;
-	char_t var_name[MSH_NAME_LEN_MAX] = {0};
+	char_t var_name_str[MSH_NAME_LEN_MAX] = {0};
 	char_t segment_name[MSH_NAME_LEN_MAX] = {0};
 	
 	if(name != NULL)
 	{
-		if(!mxIsChar(name))
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIDError", "All variable IDs must be of type 'char'.");
-		}
-		
-		if(mxIsEmpty(name))
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIDError", "Variable IDs must have a length more than zero.");
-		}
-		
-		if((num_str_elems = mxGetNumberOfElements(name)) > MSH_NAME_LEN_MAX-1)
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIDError", "Variable IDs must have length of less than %d characters.", MSH_NAME_LEN_MAX);
-		}
-		
-		/* validate only using ANSI chars */
-		var_name_str = mxGetChars(name);
-		for(i = 0; i < num_str_elems; i++)
-		{
-			if(!isalpha(var_name_str[i]))
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIDError", "Variable IDs must consist only of ANSI alphabetic characters.");
-			}
-		}
-		
-		mxGetString(name, var_name, sizeof(var_name));
-		
+		msh_CheckVarname(name);
+		mxGetString(name, var_name_str, sizeof(var_name_str));
 	}
 	
 	msh_InitializeSegmentInfo(new_seg_info);
@@ -659,7 +631,7 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* new_seg_info, size_t data_siz
 	new_seg_info->metadata = msh_MapMemory(new_seg_info->handle, sizeof(SegmentMetadata_t));
 	
 	/* set the variable name */
-	memcpy(new_seg_info->metadata->name, var_name, sizeof(var_name));
+	memcpy(new_seg_info->metadata->name, var_name_str, sizeof(var_name_str));
 	
 	/* set the size of the segment */
 	new_seg_info->metadata->data_size = data_size;

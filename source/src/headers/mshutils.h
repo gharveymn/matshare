@@ -91,7 +91,9 @@ void msh_WriteSegmentName(char* name_buffer, segmentnumber_t seg_num);
  * @param curr_sz The size to pad.
  * @return The padded size.
  */
-size_t PadToAlignData(size_t curr_sz);
+size_t msh_PadToAlignData(size_t curr_sz);
+
+void msh_CheckVarname(const mxArray* varname);
 
 uint32_T msh_MurmurHash3(const uint8_T* key, size_t len, int seed);
 

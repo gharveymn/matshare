@@ -58,7 +58,7 @@ void msh_FindAllSegmentNodes(SegmentTable_t* seg_table, SegmentList_t* seg_list_
  * @param seg_table The hash table from which the segment node will be removed.
  * @param seg_node The segment node to be removed.
  */
-void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, void* key);
+void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, void* key);
 
 
 /**

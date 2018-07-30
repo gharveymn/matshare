@@ -201,7 +201,6 @@ static void meu_WriteSystemErrorString(char* buffer, unsigned int error_severity
 	char* inner_buffer = buffer;
 	
 #ifdef _WIN32
-	
 	if(error_severity & MEU_ERRNO)
 	{
 		sprintf(buffer, "System error code 0x%d: ", errno);

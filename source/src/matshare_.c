@@ -29,35 +29,63 @@
 #  include <sys/stat.h>
 #endif
 
-char_t* g_msh_library_name = "matshare";
-char_t* g_msh_error_help_message = "";
+char_t* g_msh_library_name         = "matshare";
+char_t* g_msh_error_help_message   = "";
 char_t* g_msh_warning_help_message = "";
 
-LocalInfo_t g_local_info = {MSH_INITIAL_STATE,          /* rev_num */
-                            0,                          /* lock_level */
-                            0,                          /* this_pid */
-                            {NULL,                  /* ptr */
-                             MSH_INVALID_HANDLE     /* handle */
-                            },                          /* shared_info_wrapper */
-#ifdef MSH_WIN
-                            MSH_INVALID_HANDLE,         /* process_lock */
-#else
+LocalInfo_t g_local_info =
 {
+	MSH_INITIAL_STATE,          /* rev_num */
+	0,                          /* lock_level */
+	0,                          /* this_pid */
+	{
+		NULL,                  /* ptr */
+		MSH_INVALID_HANDLE     /* handle */
+	},                          /* shared_info_wrapper */
+#ifdef MSH_WIN
 	MSH_INVALID_HANDLE,         /* process_lock */
-	0,                          /* lock_size */
-},
+#else
+	{
+		MSH_INVALID_HANDLE,         /* process_lock */
+		0,                          /* lock_size */
+	},
 #endif
-                            FALSE,                      /* has_fatal_error */
-                            FALSE,                      /* is_initialized */
-                            TRUE                        /* is_deinitialized */
+	FALSE,                      /* has_fatal_error */
+	FALSE,                      /* is_initialized */
+	TRUE                        /* is_deinitialized */
 };
 
-SegmentTable_t g_seg_table = {NULL, 0, msh_GetSegmentHashByNumber, msh_CompareNumericKey};
-SegmentTable_t g_name_table = {NULL, 0, msh_GetSegmentHashByName, msh_CompareStringKey};
+SegmentTable_t g_seg_table =
+{
+	NULL,
+	0,
+	msh_GetSegmentHashByNumber,
+	msh_CompareNumericKey
+};
 
-SegmentList_t g_local_seg_list = {&g_seg_table, &g_name_table, NULL, NULL, 0, 0};
+SegmentTable_t g_name_table =
+{
+	NULL,
+	0,
+	msh_GetSegmentHashByName,
+	msh_CompareStringKey
+};
 
-VariableList_t g_local_var_list = {NULL, NULL};
+SegmentList_t g_local_seg_list =
+{
+	&g_seg_table,
+	&g_name_table,
+	NULL,
+	NULL,
+	0,
+	0
+};
+
+VariableList_t g_local_var_list =
+{
+	NULL,
+	NULL
+};
 
 /**
  * Wraps the output in a 1x1 cell array.
@@ -270,15 +298,16 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
 void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args)
 {
-	int i;
-	SegmentNode_t* new_seg_node = NULL;
-	VariableNode_t* new_var_node = NULL;
-	int will_persist = FALSE, with_names = FALSE;
-	const mxArray* curr_in_var, * input_id = NULL;
-	mxChar* in_opt;
+	int                 i, num_vars;
+	mxChar*             in_opt;
+	const mxArray*      curr_in_var;
+	const mxArray**     in_vars;
 	
-	int num_vars;
-	const mxArray** in_vars;
+	int                 will_persist = FALSE;
+	int                 with_names   = FALSE;
+	SegmentNode_t*      new_seg_node = NULL;
+	VariableNode_t*     new_var_node = NULL;
+	const mxArray*      input_id     = NULL;
 	
 	if(num_args > INT_MAX)
 	{
@@ -379,15 +408,16 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 
 void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args)
 {
-	SegmentNode_t* curr_seg_node;
-	UpdateFunction_t update_function = NULL;
-	mxChar* wide_input_str;
-	char_t input_str[MSH_NAME_LEN_MAX];
-	size_t j, num_new_vars, num_str_elems, num_op_args;
-	int arg_num, out_num, num_out;
-	int output_as_struct = FALSE, will_fetch_default = FALSE;
+	int                 arg_num, out_num, num_out;
+	size_t              num_new_vars, num_op_args;
+	char_t              input_str[MSH_NAME_LEN_MAX];
+	SegmentNode_t*      curr_seg_node;
 	
-	const char_t* all_out_names[] = {"recent", "new", "all", "named"};
+	
+	int                 output_as_struct   = FALSE;
+	int                 will_fetch_default = FALSE;
+	UpdateFunction_t    update_function    = NULL;
+	const char_t*       all_out_names[]    = {"recent", "new", "all", "named"};
 	
 	if(nlhs < 1)
 	{
@@ -414,27 +444,15 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidFetchError", "All arguments must have a length more than zero.");
 		}
 		
-		if((num_str_elems = mxGetNumberOfElements(in_args[arg_num])) > MSH_NAME_LEN_MAX-1)
+		if(mxGetChars(in_args[arg_num])[0] == '-')
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidFetchError", "All arguments must have length of less than %d characters.", MSH_NAME_LEN_MAX);
-		}
-		
-		/* validate only using ANSI chars */
-		wide_input_str = mxGetChars(in_args[arg_num]);
-		if(wide_input_str[0] != '-')
-		{
-			for(j = 0; j < num_str_elems; j++)
+			
+			if(mxGetNumberOfElements(in_args[arg_num]) < 2)
 			{
-				if(!isalpha(wide_input_str[j]))
-				{
-					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIDError", "Variable IDs must consist only of ANSI alphabetic characters.");
-				}
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidFetchError", "Option flags must have length more than 1.");
 			}
-		}
-		
-		if(wide_input_str[0] == '-')
-		{
-			switch(wide_input_str[1])
+			
+			switch(mxGetChars(in_args[arg_num])[1])
 			{
 				case(MSH_FETCHOPT_STRUCT):
 					num_out = 1;
@@ -467,6 +485,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		}
 		else
 		{
+			msh_CheckVarname(in_args[arg_num]);
 			update_function = msh_UpdateAllSegments;
 			num_op_args++;
 		}
@@ -707,7 +726,7 @@ static mxArray* msh_CreateOutputAll(void)
 
 static mxArray* msh_CreateOutputNamed(void)
 {
-	int i;
+	size_t i;
 	SegmentNode_t* curr_seg_node;
 	const char* curr_name;
 	mxArray* out = mxCreateStructMatrix(1, 1, 0, NULL);
@@ -800,10 +819,8 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 	VariableNode_t* curr_var_node;
 	mxArray* link;
 	const mxArray* clear_var, * curr_in_var;
-	mxChar* wide_input_str;
 	char input_str[MSH_NAME_LEN_MAX];
 	bool_t found_variable;
-	size_t num_str_elems, j;
 	int input_num;
 	
 	msh_AcquireProcessLock(g_process_lock);
@@ -839,26 +856,8 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 			}
 			else if(mxIsChar(curr_in_var))
 			{
-				if(mxIsEmpty(curr_in_var))
-				{
-					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidClearError", "All arguments must have a length more than zero.");
-				}
-				
-				if((num_str_elems = mxGetNumberOfElements(curr_in_var)) > MSH_NAME_LEN_MAX-1)
-				{
-					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidClearError", "All arguments must have length of less than %d characters.", MSH_NAME_LEN_MAX);
-				}
-				
-				wide_input_str = mxGetChars(curr_in_var);
-				for(j = 0; j < num_str_elems; j++)
-				{
-					if(!isalpha(wide_input_str[j]))
-					{
-						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidClearError", "Variable IDs must consist only of ANSI alphabetic characters.");
-					}
-				}
+				msh_CheckVarname(curr_in_var);
 				mxGetString(curr_in_var, input_str, sizeof(input_str));
-				
 				while((clear_seg_node = msh_FindSegmentNode(g_local_seg_list.name_table, input_str)) != NULL)
 				{
 					msh_RemoveSegmentFromSharedList(clear_seg_node);
@@ -890,6 +889,16 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 	
 	if(num_args == 3)
 	{
+		if(!mxIsChar(in_args[2]))
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must be of type 'char'.");
+		}
+		
+		if(mxGetNumberOfElements(in_args[2]) < 2)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must have length more than 1.");
+		}
+		
 		input_option = mxGetChars(in_args[2]);
 		if(input_option[0])
 		{

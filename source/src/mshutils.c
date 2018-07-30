@@ -9,6 +9,8 @@
 
 #include "mex.h"
 
+#include <ctype.h>
+
 #include "mshtypes.h"
 #include "mshexterntypes.h"
 #include "mshutils.h"
@@ -432,9 +434,47 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var)
 }
 
 
-size_t PadToAlignData(size_t curr_sz)
+size_t msh_PadToAlignData(size_t curr_sz)
 {
 	return curr_sz + (DATA_ALIGNMENT_SHIFT - ((curr_sz - 1) & DATA_ALIGNMENT_SHIFT));
+}
+
+
+void msh_CheckVarname(const mxArray* varname)
+{
+	size_t i, num_str_elems;
+	mxChar* wide_str;
+	
+	if(!mxIsChar(varname))
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNameError", "All variable IDs must be of type 'char'.");
+	}
+	
+	if(mxIsEmpty(varname))
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNameError", "Variable names must have a length more than zero.");
+	}
+	
+	if((num_str_elems = mxGetNumberOfElements(varname)) > MSH_NAME_LEN_MAX-1)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNameError", "Variable names must have length of less than %d characters.", MSH_NAME_LEN_MAX);
+	}
+	
+	wide_str = mxGetChars(varname);
+	if(wide_str[0] != '-' && isalpha(wide_str[0]))
+	{
+		for(i = 1; i < num_str_elems; i++)
+		{
+			if(!(isalnum(wide_str[i]) || wide_str[i] == '_'))
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNameError", "Variable names must consist only of ANSI alphabetic characters.");
+			}
+		}
+	}
+	else
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNameError", "Variable names must start with an ANSI alphabetic character.");
+	}
 }
 
 
