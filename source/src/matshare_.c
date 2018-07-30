@@ -96,15 +96,36 @@ VariableList_t g_local_var_list =
 static mxArray* msh_WrapOutput(mxArray* shared_data_copy);
 
 
+/**
+ * Creates output for most recently shared variable.
+ *
+ * @return the output for the most recently shared variable.
+ */
 static mxArray* msh_CreateOutputRecent(void);
 
 
+/**
+ * Creates output for all newly tracked variables.
+ *
+ * @param num_new_vars the number of newly tracked variables.
+ * @return the output for the newly tracked variables.
+ */
 static mxArray* msh_CreateOutputNew(size_t num_new_vars);
 
 
+/**
+ * Creates output for all named shared variables.
+ *
+ * @return the output for all named shared variables.
+ */
 static mxArray* msh_CreateOutputAll(void);
 
 
+/**
+ * Creates output for all named variables.
+ *
+ * @return the output for all named variables.
+ */
 static mxArray* msh_CreateOutputNamed(void);
 
 
@@ -298,7 +319,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
 void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args)
 {
-	int                 i, num_vars;
+	unsigned            i, num_vars;
 	mxChar*             in_opt;
 	const mxArray*      curr_in_var;
 	const mxArray**     in_vars;
@@ -390,7 +411,7 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		msh_AddVariableToList(&g_local_var_list, new_var_node);
 		
 		/* create and set the return */
-		if(i < nlhs)
+		if(i < (unsigned)nlhs)
 		{
 			plhs[i] = msh_WrapOutput(msh_CreateSharedDataCopy(new_var_node, TRUE));
 		}
@@ -408,7 +429,7 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 
 void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args)
 {
-	int                 arg_num, out_num, num_out;
+	unsigned            arg_num, out_num, num_out;
 	size_t              num_new_vars, num_op_args;
 	char_t              input_str[MSH_NAME_LEN_MAX];
 	SegmentNode_t*      curr_seg_node;
@@ -515,7 +536,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		update_function = msh_UpdateAllSegments;
 	}
 	
-	if(nlhs > num_out)
+	if(num_out > (unsigned)nlhs)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "TooManyOutputsError", "Too many outputs requested.");
 	}
@@ -961,16 +982,19 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 
 void msh_Config(size_t num_params, const mxArray** in_params)
 {
-	int j;
-	size_t i, ps_len, vs_len;
-	char param_str[MSH_NAME_LEN_MAX] = {0}, val_str[MSH_NAME_LEN_MAX] = {0}, param_str_l[MSH_NAME_LEN_MAX] = {0}, val_str_l[MSH_NAME_LEN_MAX] = {0};
-	const mxArray* param, * val;
-	unsigned long maxvars_temp;
-	size_t maxsize_temp;
+	size_t              i, j, ps_len, vs_len, maxsize_temp;
+	const mxArray*      param;
+	const mxArray*      val;
+	unsigned long       maxvars_temp;
 #ifdef MSH_UNIX
-	mode_t sec_temp;
-	SegmentNode_t* curr_seg_node;
+	mode_t              sec_temp;
+	SegmentNode_t*      curr_seg_node;
 #endif
+	
+	char                param_str[MSH_NAME_LEN_MAX]   = {0};
+	char                val_str[MSH_NAME_LEN_MAX]     = {0};
+	char                param_str_l[MSH_NAME_LEN_MAX] = {0};
+	char                val_str_l[MSH_NAME_LEN_MAX]   = {0};
 	
 	if(num_params == 0)
 	{

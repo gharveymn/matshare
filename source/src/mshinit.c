@@ -332,7 +332,7 @@ void msh_SetDefaultConfiguration(UserConfig_t* user_config)
 #ifdef MSH_UNIX
 	user_config->security = MSH_DEFAULT_SECURITY;
 #endif
-	strncpy((void*)user_config->fetch_default, MSH_DEFAULT_FETCH_DEFAULT, sizeof(g_user_config.fetch_default));
+	strncpy((void*)user_config->fetch_default, STR(MSH_DEFAULT_FETCH_DEFAULT), sizeof(g_user_config.fetch_default));
 	user_config->fetch_default[MSH_NAME_LEN_MAX-1] = '\0';
 }
 

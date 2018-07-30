@@ -54,6 +54,9 @@
 #  define SIZE_FORMAT "%lu"
 #endif
 
+#define XSTR(x) #x
+#define STR(x) XSTR(x)
+
 #define MSH_VERSION_STRING "1.1.0"
 
 /** these are basic readability typedefs **/

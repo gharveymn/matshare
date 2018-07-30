@@ -100,7 +100,7 @@ try
 	
 	mexflags = [mexflags {['-DMSH_DEFAULT_SECURITY=' mshSecurity]}];
 	
-	mexflags = [mexflags {['-DMSH_DEFAULT_FETCH_DEFAULT=\"' mshFetchDefault '\"']}];
+	mexflags = [mexflags {['-DMSH_DEFAULT_FETCH_DEFAULT="' mshFetchDefault '"']}];
 	
 	% R2011b
 	if(~verLessThan('matlab', '7.13'))
