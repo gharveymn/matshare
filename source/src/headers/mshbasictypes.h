@@ -54,12 +54,14 @@
 #  define SIZE_FORMAT "%lu"
 #endif
 
+#define MSH_VERSION_STRING "1.1.0"
+
 /** these are basic readability typedefs **/
 typedef char char_t;                     /* characters */
 typedef byte_T byte_t;                  /* reading physical memory */
 typedef int8_T bool_t;                  /* conditionals */
 typedef int32_T alignedbool_t;		/* for word sized alignment */
-typedef int32_T msh_segmentnumber_t; /* segment number identifiers */
+typedef int32_T segmentnumber_t; /* segment number identifiers */
 
 #define MSH_SEG_NUM_FORMAT "%li"
 
@@ -88,6 +90,7 @@ typedef int32_T msh_segmentnumber_t; /* segment number identifiers */
 #  define DATA_ALIGNMENT_SHIFT (size_t)0x0F
 #endif
 
+#define MSH_NAME_LEN_MAX 64
 #define MSH_SEG_NUM_MAX 0x7FFFFFFF      /* the maximum segment number (which is int32 max) */
 #define MSH_INVALID_SEG_NUM (-1L)
 

@@ -27,32 +27,22 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 {
 	
 	mxArray* new_var;
-	VariableNode_t* last_virtual_scalar,* new_var_node;
 	
 	if(msh_GetVariableNode(seg_node) != NULL)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "CreateVariableError", "The segment targeted for variable creation already has a variable attached to it.");
 	}
 	
-	/* keep track of the last virtual scalar before the fetch operation */
-	last_virtual_scalar = g_virtual_scalar_list.last;
-	
 	new_var = msh_FetchVariable(msh_GetSegmentData(seg_node));
 	mexMakeArrayPersistent(new_var);
 	
-	new_var_node = msh_CreateVariableNode(seg_node, new_var, msh_GetSegmentData(seg_node));
+	return msh_CreateVariableNode(seg_node, new_var);
 	
-	msh_SetFirstVirtualScalar(new_var_node, ((last_virtual_scalar == NULL)? g_virtual_scalar_list.first : msh_GetNextVariable(last_virtual_scalar)));
-	msh_SetLastVirtualScalar(new_var_node, g_virtual_scalar_list.last);
-	
-	return new_var_node;
 }
 
 
 int msh_DestroyVariable(VariableNode_t* var_node)
 {
-	
-	VariableNode_t* curr_virtual_scalar;
 	SegmentNode_t* seg_node = msh_GetSegmentNode(var_node);
 	int did_remove_segment = FALSE;
 	
@@ -62,21 +52,12 @@ int msh_DestroyVariable(VariableNode_t* var_node)
 	
 	/* remove tracking for this variable */
 	msh_SetVariableNode(seg_node, NULL);
-	
-	/* remove virtual scalar tracking */
-	for(curr_virtual_scalar = msh_GetFirstVirtualScalar(var_node);
-			curr_virtual_scalar != NULL && curr_virtual_scalar != msh_GetNextVariable(msh_GetLastVirtualScalar(var_node));
-			curr_virtual_scalar = msh_GetNextVariable(curr_virtual_scalar))
-	{
-		msh_RemoveVariableFromList(curr_virtual_scalar);
-		msh_DestroyVariableNode(curr_virtual_scalar);
-	}
 
 	if(msh_GetIsUsed(var_node))
 	{
 		msh_SetIsUsed(var_node, FALSE);
 		if((msh_AtomicDecrement(&msh_GetSegmentMetadata(seg_node)->procs_using) == 0) &&
-		   g_shared_info->user_defined.will_shared_gc &&
+		   g_user_config.will_shared_gc &&
 		   !msh_GetSegmentMetadata(seg_node)->is_persistent)
 		{
 			msh_RemoveSegmentFromSharedList(seg_node);
@@ -106,17 +87,30 @@ void msh_ClearVariableList(VariableList_t* var_list)
 }
 
 
-void msh_CleanVariableList(VariableList_t* var_list)
+void msh_CleanVariableList(VariableList_t* var_list, int shared_gc_override)
 {
 	VariableNode_t* curr_var_node, * next_var_node;
+	SegmentNode_t* curr_seg_node;
 	
 	for(curr_var_node = var_list->first; curr_var_node != NULL; curr_var_node = next_var_node)
 	{
 		next_var_node = msh_GetNextVariable(curr_var_node);
-		if(met_GetCrosslink(msh_GetVariableData(curr_var_node)) == NULL)
+		if(met_GetCrosslink(msh_GetVariableData(curr_var_node)) == NULL && msh_GetIsUsed(curr_var_node))
 		{
-			msh_RemoveVariableFromList(curr_var_node);
-			msh_DestroyVariable(curr_var_node);
+			curr_seg_node = msh_GetSegmentNode(curr_var_node);
+			
+			/* does not remove the persistent variable, but does a lazy decrement of procs_using */
+			msh_SetIsUsed(curr_var_node, FALSE);
+			
+			/* decrement number of processes using this variable; if this is the last variable then GC */
+			if(msh_AtomicDecrement(&msh_GetSegmentMetadata(curr_seg_node)->procs_using) == 0
+			   && (g_user_config.will_shared_gc || shared_gc_override)
+			   && !msh_GetSegmentMetadata(curr_seg_node)->is_persistent)
+			{
+				msh_RemoveSegmentFromSharedList(curr_seg_node);
+				msh_RemoveSegmentFromList(curr_seg_node);
+				msh_DetachSegment(curr_seg_node);
+			}
 		}
 	}
 }

@@ -3,6 +3,19 @@ function varargout = share(varargin)
 %    [S1,S2,...] = MATSHARE.SHARE(V1,V2,...) copies the argument variables
 %    to shared memory and returns matshare objects containing the shared
 %    versions.
+%
+%    Specify options for MATSHARE.SHARE with character vectors beginning
+%    with '-':
+%        
+%        <strong>-p</strong>[ersist] -- do not subject these variables to garbage 
+%                      collection.
+%        <strong>-n</strong>[amed]   -- supply names to these variables. In this case the 
+%                      syntax is then MATSHARE.SHARE('-n',N1,V1,...)
+%                      where N1 is a name specified by a character vector.
+%
+%    Example using names:
+%        >> matshare.share('-n', 'myvarname', rand(5));
+%        >> x = matshare.fetch('myvarname');
 
 %% Copyright © 2018 Gene Harvey
 %    This software may be modified and distributed under the terms

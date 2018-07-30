@@ -22,15 +22,15 @@ try
 		'mshvariables.c',...
 		'mshsegments.c',...
 		'mshlockfree.c',...
+		'mshtable.c',...
 		'headers/opaque/mshheader.c',...
 		'headers/opaque/mshexterntypes.c',...
-		'headers/opaque/mshtable.c',...
 		'headers/opaque/mshvariablenode.c',...
 		'headers/opaque/mshsegmentnode.c'
 		};
 	
 	for i = 1:numel(sources)
-		sources{i} = fullfile(pwd,'src',sources{i});
+		sources{i} = fullfile(fileparts(which(mfilename)),'src',sources{i});
 	end
 	
 	if(ispc)
@@ -83,9 +83,9 @@ try
 		mshconfigpath = fullfile(mshconfigfolder, 'mshconfig32');
 	end
 	
-	if(exist(mshconfigpath, 'file'))
-		delete(mshconfigpath);
-	end
+% 	if(exist(mshconfigpath, 'file'))
+% 		delete(mshconfigpath);
+% 	end
 	
 	if(strcmp(mshGarbageCollection, 'on'))
 		fprintf('-Garbage collection is enabled.\n')
@@ -100,6 +100,8 @@ try
 	
 	mexflags = [mexflags {['-DMSH_DEFAULT_SECURITY=' mshSecurity]}];
 	
+	mexflags = [mexflags {['-DMSH_DEFAULT_FETCH_DEFAULT=\"' mshFetchDefault '\"']}];
+	
 	% R2011b
 	if(~verLessThan('matlab', '7.13'))
 		mexflags = [mexflags {'-DMSH_AVX_SUPPORT'}];
@@ -107,7 +109,7 @@ try
 	
 	fprintf('-Compiling matshare...')
 	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /Wall"'}];
-	%mexflags = [mexflags {'CFLAGS="$CFLAGS -Wall"'}];
+	%mexflags = [mexflags {'CFLAGS="$CFLAGS --std=c89 -Wall -Werror"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n')
 	if(mshDebugMode)

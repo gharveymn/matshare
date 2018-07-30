@@ -10,6 +10,8 @@
 #ifndef MATSHARE_INIT_H
 #define MATSHARE_INIT_H
 
+#include "mshtypes.h"
+
 /**
  * Runs exit hooks for when MATLAB clears the MEX function.
  */
@@ -26,5 +28,11 @@ void msh_OnError(int error_severity);
  * and loads the configuration.
  */
 void msh_InitializeMatshare(void);
+
+
+/**
+ * Sets the configuration to default.
+ */
+void msh_SetDefaultConfiguration(UserConfig_t* user_config);
 
 #endif /* MATSHARE_INIT_H */

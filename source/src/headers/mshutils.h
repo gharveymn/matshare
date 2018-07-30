@@ -48,12 +48,6 @@ char_t* msh_GetConfigurationPath(void);
 
 
 /**
- * Sets the shared configuration to default.
- */
-void msh_SetDefaultConfiguration(void);
-
-
-/**
  * Gets the PID for the current process.
  *
  * @return The PID for the current process.
@@ -87,7 +81,7 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var);
  * @param name_buffer The destination of the segment name.
  * @param seg_num The segment number used by matshare to identify the segment.
  */
-void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num);
+void msh_WriteSegmentName(char* name_buffer, segmentnumber_t seg_num);
 
 
 /**
@@ -97,8 +91,10 @@ void msh_WriteSegmentName(char* name_buffer, msh_segmentnumber_t seg_num);
  * @param curr_sz The size to pad.
  * @return The padded size.
  */
-size_t PadToAlignData(size_t curr_sz);
+size_t msh_PadToAlignData(size_t curr_sz);
 
-mxArray* msh_CreateOutput(mxArray* shared_data_copy);
+void msh_CheckVarname(const mxArray* varname);
+
+uint32_T msh_MurmurHash3(const uint8_T* key, size_t len, int seed);
 
 #endif /* MATSHARE_MATSHAREUTILS_H */

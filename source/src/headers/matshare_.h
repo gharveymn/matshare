@@ -17,51 +17,69 @@
 typedef struct mxArray_tag mxArray;
 
 
-#define MSH_PARAM_THREADSAFETY "ThreadSafety"
-#define MSH_PARAM_THREADSAFETY_L "threadsafety"
-#define MSH_PARAM_THREADSAFETY_AB "ts"
+#define MSH_PARAM_THREADSAFETY     "ThreadSafety"
+#define MSH_PARAM_THREADSAFETY_L   "threadsafety"
+#define MSH_PARAM_THREADSAFETY_AB  "ts"
 
-#define MSH_PARAM_MAX_VARIABLES "MaxVariables"
-#define MSH_PARAM_MAX_VARIABLES_L "maxvariables"
+#define MSH_PARAM_MAX_VARIABLES    "MaxVariables"
+#define MSH_PARAM_MAX_VARIABLES_L  "maxvariables"
 #define MSH_PARAM_MAX_VARIABLES_AB "mv"
 
-#define MSH_PARAM_MAX_SIZE "MaxSize"
-#define MSH_PARAM_MAX_SIZE_L "maxsize"
-#define MSH_PARAM_MAX_SIZE_AB "ms"
+#define MSH_PARAM_MAX_SIZE         "MaxSize"
+#define MSH_PARAM_MAX_SIZE_L       "maxsize"
+#define MSH_PARAM_MAX_SIZE_AB      "ms"
 
-#define MSH_PARAM_GC "GarbageCollection"
-#define MSH_PARAM_GC_L "garbagecollection"
-#define MSH_PARAM_GC_AB "gc"
+#define MSH_PARAM_GC               "GarbageCollection"
+#define MSH_PARAM_GC_L             "garbagecollection"
+#define MSH_PARAM_GC_AB            "gc"
 
-#define MSH_PARAM_SECURITY "Security"
-#define MSH_PARAM_SECURITY_L "security"
-#define MSH_PARAM_SECURITY_AB "sc"
+#define MSH_PARAM_SECURITY         "Security"
+#define MSH_PARAM_SECURITY_L       "security"
+#define MSH_PARAM_SECURITY_AB      "sc"
 
-#define MSH_CONFIG_STRING_FORMAT \
-"<strong>Current configuration:</strong>\n"\
-"    Current lock count:  %lu\n" \
-"    Thread safety:       '%s'\n" \
-"    Max variables:       %lu\n" \
-"    Max shared size:     "SIZE_FORMAT"\n" \
-"    Garbage collection:  '%s'\n"
+#define MSH_PARAM_FETCH_DEFAULT    "FetchDefault"
+#define MSH_PARAM_FETCH_DEFAULT_L  "fetchdefault"
+#define MSH_PARAM_FETCH_DEFAULT_AB "fd"
+
 #ifdef MSH_UNIX
 #define MSH_CONFIG_SECURITY_STRING_FORMAT \
 "    Security:            '%o'\n"
+#else
+#define MSH_CONFIG_SECURITY_STRING_FORMAT \
+""
 #endif
 
+#define MSH_CONFIG_STRING_FORMAT \
+"<strong>Current configuration:</strong>\n"\
+"    matshare version:    %s\n" \
+"    Max variables:       %lu\n" \
+"    Max shared size:     "SIZE_FORMAT"\n" \
+"    Garbage collection:  '%s'\n" \
+"    Fetch default:       '%s'\n"
+
+#define MSH_CONFIG_STRING_ARGS \
+MSH_VERSION_STRING, \
+g_user_config.max_shared_segments, \
+g_user_config.max_shared_size, \
+g_user_config.will_shared_gc? "on" : "off", \
+g_user_config.fetch_default
+
 #ifdef MSH_WIN
+
 #  define MSH_PROCESS_LOCK_FORMAT \
 "     process_lock: "HANDLE_FORMAT"\n"
 
-#  define MSH_PROCESS_LOCK_ARG \
+#  define MSH_PROCESS_LOCK_ARGS \
 g_local_info.process_lock,
+
 #else
+
 #  define MSH_PROCESS_LOCK_FORMAT \
 "     process_lock (struct):\n" \
 "          lock_handle: "HANDLE_FORMAT"\n" \
 "          lock_size: "SIZE_FORMAT"\n"
 
-#  define MSH_PROCESS_LOCK_ARG \
+#  define MSH_PROCESS_LOCK_ARGS \
 g_local_info.process_lock.lock_handle, \
 g_local_info.process_lock.lock_size,
 #endif
@@ -85,7 +103,7 @@ g_local_info.lock_level, \
 g_local_info.this_pid, \
 g_local_info.shared_info_wrapper.ptr, \
 g_local_info.shared_info_wrapper.handle, \
-MSH_PROCESS_LOCK_ARG \
+MSH_PROCESS_LOCK_ARGS \
 g_local_info.has_fatal_error, \
 g_local_info.is_initialized, \
 g_local_info.is_deinitialized
@@ -99,8 +117,10 @@ g_local_info.is_deinitialized
 #  define MSH_NUM_PROCS_ARG \
 g_shared_info->num_procs,
 #else
+
 #  define MSH_SECURITY_FORMAT \
 "          security: %o\n"
+
 #  define MSH_NUM_PROCS_FORMAT \
 "     num_procs (union):\n" \
 "          span: %li\n" \
@@ -108,8 +128,10 @@ g_shared_info->num_procs,
 "               count: %lu\n" \
 "               flag: %lu\n" \
 "               post: %lu\n"
+
 #  define MSH_SECURITY_ARG \
-g_shared_info->user_defined.security,
+g_user_config.security,
+
 #  define MSH_NUM_PROCS_ARG \
 g_shared_info->num_procs.span, \
 g_shared_info->num_procs.values.count, \
@@ -122,12 +144,6 @@ g_shared_info->num_procs.values.post,
 "     rev_num: "SIZE_FORMAT"\n" \
 "     total_shared_size: "SIZE_FORMAT"\n" \
 "     user_defined (struct):\n" \
-"          lock_counter (union):\n" \
-"               span: %li\n" \
-"               values (struct):\n" \
-"                    count: %lu\n" \
-"                    flag: %lu\n" \
-"                    post: %lu\n" \
 "          max_shared_segments: %lu\n" \
 "          max_shared_size: "SIZE_FORMAT"\n" \
 "          will_shared_gc: %lu\n" \
@@ -143,13 +159,9 @@ MSH_NUM_PROCS_FORMAT \
 #define MSH_DEBUG_SHARED_ARGS \
 g_shared_info->rev_num, \
 g_shared_info->total_shared_size, \
-g_shared_info->user_defined.lock_counter.span, \
-g_shared_info->user_defined.lock_counter.values.count, \
-g_shared_info->user_defined.lock_counter.values.flag, \
-g_shared_info->user_defined.lock_counter.values.post, \
-g_shared_info->user_defined.max_shared_segments, \
-g_shared_info->user_defined.max_shared_size, \
-g_shared_info->user_defined.will_shared_gc, \
+g_user_config.max_shared_segments, \
+g_user_config.max_shared_size, \
+g_user_config.will_shared_gc, \
 MSH_SECURITY_ARG \
 g_shared_info->first_seg_num, \
 g_shared_info->last_seg_num, \
@@ -179,20 +191,24 @@ typedef enum
 	msh_LOCK            = 0x0009,  /* acquire the matshare interprocess lock */
 	msh_UNLOCK          = 0x000A,  /* release the interprocess lock */
 	msh_CLEAN           = 0x000B,  /* clean invalid and unused segments */
-	msh_PSHARE          = 0x000C,  /* share a variable persistently */
-	msh_STATUS          = 0x000D   /* print out info about the current state of matshare */
+	msh_STATUS          = 0x000C   /* print out info about the current state of matshare */
 } msh_directive_t;
 
+#define MSH_FETCHOPT_STRUCT 's'
+#define MSH_FETCHOPT_RECENT 'r'
+#define MSH_FETCHOPT_NEW    'w'
+#define MSH_FETCHOPT_ALL    'a'
+#define MSH_FETCHOPT_NAMED  'n'
 
 /**
  * Runs sharing operation. Makes a shared copy of the new variable if requested.
  *
  * @param nlhs The number of outputs. If this is 1 then the function will make a shared copy of the new variable.
  * @param plhs An array of output mxArrays
- * @param num_vars The number of variables to be shared.
- * @param in_vars The variables to be shared.
+ * @param num_args The number of variables to be shared.
+ * @param in_args The variables to be shared.
  */
-void msh_Share(int nlhs, mxArray** plhs, size_t num_vars, const mxArray** in_vars, msh_directive_t directive);
+void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args);
 
 
 /**

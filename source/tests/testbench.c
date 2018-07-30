@@ -7,12 +7,19 @@ mxArray* persist = NULL;
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {	
+	
 	int i;
 	
 	mxArray* x,* link,* shared_data_copy;
 	void* alloc;
 	mwSize dimstmp[2] = {2,1};
 	mwSize dims[2] = {1,1};
+	const char* fn[] = {"hi, bye, hi"};
+
+	if(nlhs > 0)
+	{
+		plhs[0] = mxCreateStructMatrix(1, 1, 3, fn);
+	}
 	
 	if(nrhs > 0)
 	{

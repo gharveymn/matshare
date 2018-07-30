@@ -58,7 +58,7 @@ for i = 1:num_maxDepth_tests
 						
 						% test safe overwriting
 						parfor workernum = 1:numworkers
-							tv = matshare.fetch;
+							tv = matshare.fetch('-s', '-r');
 							tv2 = matshare.tests.common.vargen.variablefromtemplate(rns, tv.recent.data);
 							tv.recent.overwrite(tv2);
 						end

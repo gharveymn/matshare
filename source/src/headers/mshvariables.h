@@ -14,6 +14,12 @@
 #include "mshtypes.h"
 #include "mshvariablenode.h"
 
+typedef struct VariableList_t
+{
+	VariableNode_t* first;
+	VariableNode_t* last;
+	/* uint32_T num_vars; */
+} VariableList_t;
 
 /**
  * Creates a new MATLAB variable from the specified shared segment.
@@ -64,7 +70,7 @@ void msh_ClearVariableList(VariableList_t* var_list);
  *
  * @param var_list The variable list to be cleaned.
  */
-void msh_CleanVariableList(VariableList_t* var_list);
+void msh_CleanVariableList(VariableList_t* var_list, int shared_gc_override);
 
 
 mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node, int will_set_used);
@@ -73,10 +79,6 @@ mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node, int will_set_used);
 
 /** Forward declaration of the global variable list. **/
 extern VariableList_t g_local_var_list;
-
-
-/** global virtual scalar list **/
-extern VariableList_t g_virtual_scalar_list;
 
 
 #endif /* MATSHARE_MSHLISTS_H */

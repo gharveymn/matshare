@@ -13,6 +13,9 @@
 
 #include "mshbasictypes.h"
 
+/* forward declaration */
+typedef struct SegmentList_t SegmentList_t;
+
 /* forward declaration, defined in source file */
 typedef struct SegmentNode_t SegmentNode_t;
 
@@ -22,12 +25,13 @@ typedef struct VariableNode_t VariableNode_t;
 typedef struct SegmentMetadata_t
 {
 	/* use these to link together the memory segments */
-	size_t data_size;							/* segment size---this won't change so it's not volatile */
-	volatile alignedbool_t is_persistent;                 /* set to TRUE if the segment will not be automatically garbage collected */
-	volatile alignedbool_t is_invalid;                    /* set to TRUE if this segment is to be freed by all processes */
-	volatile msh_segmentnumber_t prev_seg_num;
-	volatile msh_segmentnumber_t next_seg_num;
-	volatile long procs_using;             /* number of processes using this variable */
+	char_t name[MSH_NAME_LEN_MAX];             /* non-volatile */
+	size_t data_size;						/* size without the metadata; non-volatile */
+	volatile alignedbool_t is_persistent;        /* set to TRUE if the segment will not be automatically garbage collected */
+	volatile alignedbool_t is_invalid;           /* set to TRUE if this segment is to be freed by all processes */
+	volatile segmentnumber_t prev_seg_num;
+	volatile segmentnumber_t next_seg_num;
+	volatile long procs_using;                   /* number of processes using this variable */
 	volatile LockFreeCounter_t procs_tracking;
 } SegmentMetadata_t;
 
@@ -37,23 +41,11 @@ typedef struct SegmentInfo_t
 	SegmentMetadata_t* metadata;
 	size_t total_segment_size;
 	handle_t handle;
-	msh_segmentnumber_t seg_num;
+	segmentnumber_t seg_num;
 } SegmentInfo_t;
 
-typedef struct SegmentTable_t
-{
-	SegmentNode_t** table;
-	uint32_T table_sz;
-} SegmentTable_t;
 
-typedef struct SegmentList_t
-{
-	SegmentNode_t* first;
-	SegmentNode_t* last;
-	SegmentTable_t seg_table;
-	uint32_T num_segs;
-} SegmentList_t;
-
+#define msh_HasVariableName(seg_node) (msh_GetSegmentMetadata(seg_node)->name[0] != '\0')
 
 /**
  * Creates a segment node (which is a linked list wrapper for a shared segment).
@@ -70,14 +62,6 @@ SegmentNode_t* msh_CreateSegmentNode(SegmentInfo_t* seg_info_cache);
  * @param seg_node The segment node to be destroyed.
  */
 void msh_DestroySegmentNode(SegmentNode_t* seg_node);
-
-
-/**
- * Initializer for the segment info struct.
- *
- * @param seg_info The segment info struct to initialize.
- */
-void msh_InitializeSegmentInfo(SegmentInfo_t* seg_info);
 
 
 /**
@@ -105,15 +89,6 @@ SegmentNode_t* msh_GetNextSegment(SegmentNode_t* seg_node);
  * @return The previous segment node.
  */
 SegmentNode_t* msh_GetPreviousSegment(SegmentNode_t* seg_node);
-
-
-/**
- * Gets the next segment node in the hash table chain.
- *
- * @param seg_node The segment node.
- * @return The next segment node in the hash table chain.
- */
-SegmentNode_t* msh_GetHashNext(SegmentNode_t* seg_node);
 
 
 /**
@@ -160,15 +135,6 @@ void msh_SetNextSegment(SegmentNode_t* seg_node, SegmentNode_t* next_seg_node);
  * @param previous_seg_node The previous segment node.
  */
 void msh_SetPreviousSegment(SegmentNode_t* seg_node, SegmentNode_t* prev_seg_node);
-
-
-/**
- * Sets the next segment node in the hash table.
- *
- * @param seg_node The segment node.
- * @param hash_next_seg_node The next segment node in the hash table.
- */
-void msh_SetHashNext(SegmentNode_t* seg_node, SegmentNode_t* hash_next_seg_node);
 
 
 /**
