@@ -8,38 +8,61 @@ MATLAB R2008b to R2017b on Windows and Linux. This is not available for R2018a+ 
 ## Usage
 First pick up the latest [release](https://github.com/gharveymn/matshare/releases). You may need to compile `matshare` if you are running Linux, in which case just navigate to `source` and run `INSTALL.m`. 
 
-Here's a very simple example of how to use `matshare`:
 
-#### Process 1
-```matlab
->> [s1,s2,s3] = matshare.share({7,uint32(2)}, 5, rand(3))
-s1 = 
-matshare object storing 1x2 cell
-s2 = 
-matshare object storing 1x1 double
-s3 = 
-matshare object storing 3x3 double
-```
-#### Process 2
-```matlab
->> f = matshare.fetch
-f = 
-  struct with fields:
+### Simple Example
 
-    recent: [1×1 matshare.object]
-       new: [1×3 matshare.object]
-       all: [1×3 matshare.object]
->> disp(f.recent.data)
+##### Process 1
+
+<pre>
+>> matshare.share(rand(3));
+</pre>
+
+##### Process 2
+
+<pre>
+>> fetched = matshare.fetch
+fetched = 
+  <font color="blue"><u>matshare object</u></font> storing <strong>3x3</strong> <font color="blue"><u>double</u></font>:
+    data: [3×3 double]
+>> fetched.data
+ans =
          0.814723686393179         0.913375856139019         0.278498218867048
          0.905791937075619          0.63235924622541         0.546881519204984
-         0.126986816293506        0.0975404049994095         0.957506835434298
-```
+         0.126986816293506        0.0975404049994095         0.957506835434298    
+</pre>
+
+### Named Variables and Overwriting
+
+##### Process 1
+
+<pre>
+>> shared = matshare.share('-n', 'myvarname', 1);
+>> shared.data
+ans =
+     1
+</pre>
+
+##### Process 2
+
+<pre>
+>> fetched = matshare.fetch('myvarname')
+fetched = 
+  <font color="blue"><u>matshare object</u></font> storing <strong>1x1</strong> <font color="blue"><u>double</u></font>:
+    data: 1
+>> fetched.overwrite(2);    
+</pre>
+
+##### Process 1
+<pre>
+>> shared.data
+ans =
+     2
+</pre>
 
 For more details, you can navigate through the documentation with `help matshare` or `help matshare.[command]`, replacing `[command]` with any one of the `matshare` commands.
 
 ## Future Development
 This is not a finished project by any means. If you wish to contribute or have any suggestions feel free to contact me. Currently I plan to implement the following at some point in the future:
-- Variable identifiers (being able to select shared variables by name)
 - Atomic variable operations (increments, decrements, swaps, etc.)
 - Variable overwriting by index
 - Thread locks on a sub-global level
