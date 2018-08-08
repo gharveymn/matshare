@@ -176,6 +176,11 @@ g_shared_info->update_pid
 #  define MSH_FD_HARD_LIMIT 2048
 #endif
 
+#define MSH_FETCHOPT_STRUCT 's'
+#define MSH_FETCHOPT_RECENT 'r'
+#define MSH_FETCHOPT_NEW    'w'
+#define MSH_FETCHOPT_ALL    'a'
+#define MSH_FETCHOPT_NAMED  'n'
 
 typedef enum
 {
@@ -193,12 +198,6 @@ typedef enum
 	msh_CLEAN           = 0x000B,  /* clean invalid and unused segments */
 	msh_STATUS          = 0x000C   /* print out info about the current state of matshare */
 } msh_directive_t;
-
-#define MSH_FETCHOPT_STRUCT 's'
-#define MSH_FETCHOPT_RECENT 'r'
-#define MSH_FETCHOPT_NEW    'w'
-#define MSH_FETCHOPT_ALL    'a'
-#define MSH_FETCHOPT_NAMED  'n'
 
 /**
  * Runs sharing operation. Makes a shared copy of the new variable if requested.

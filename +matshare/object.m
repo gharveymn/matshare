@@ -62,7 +62,7 @@ classdef object
 			ret = obj.shared_data{1};
 		end
 		
-		function obj = overwrite(obj, in, option)
+		function obj = overwrite(obj, in, varargin)
 %% OVERWRITE  Overwrite the contents of a variable in-place.
 %    OBJ = OBJ.OVERWRITE(IN) recursively overwrites the 
 %    contents of the matshare object OBJ with IN. The data stored by OBJ 
@@ -75,7 +75,7 @@ classdef object
 %    This function is asynchronous by default.
 			
 			if(nargin == 3)
-				matshare_(8, obj.shared_data, in, option);
+				matshare_(8, obj.shared_data, in, varargin);
 			else
 				matshare_(8, obj.shared_data, in);
 			end
@@ -96,6 +96,26 @@ classdef object
 			
 			out = matshare_(4, obj);
 			
+		end
+		
+		function B = subsref(obj,S)
+			B = builtin('subsref',obj,S);
+		end
+		
+		function obj = subsasgn(obj,S,B)
+			if(numel(S) == 1 && strcmp(S.type, '()'))
+				obj = builtin('subsasgn',obj,S,B);
+			elseif(S(1).type(1) == '.' && ischar(S(1).subs))
+				if(strcmp(S(1).subs, 'data'))
+					obj.overwrite(B, S(2:end));
+				elseif(strcmp(S(1).subs, 'shared_data'))
+					error('matshare:InaccessiblePropertyError', 'The shared_data property is not directly accessible.');
+				else
+					error('matshare:InvalidPropertyError', ['The property.''' S(1).subs ''' does not exist.']);
+				end
+			else
+				error('matshare:InvalidAccess', 'Could not set the given property or index');
+			end
 		end
 		
 		function disp(obj)

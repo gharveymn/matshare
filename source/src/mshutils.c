@@ -257,21 +257,53 @@ pid_t msh_GetPid(void)
 }
 
 
-int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
+int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var, ParsedIndices_t* parsed_indices)
 {
 	/* for loops */
-	size_t idx, count, dest_num_elems;
+	size_t i, j, idx, dest_num_elems, comp_num_elems;
 	
 	/* for structures */
-	int field_num, dest_num_fields;                /* current field */
+	int field_num, comp_field_num, dest_num_fields, found_field_name;
+	
+	const char_t* curr_field_name;
 	
 	mxClassID dest_class_id = mxGetClassID(dest_var);
 	
-	/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
-	if(dest_class_id != mxGetClassID(comp_var) || mxGetNumberOfDimensions(dest_var) != mxGetNumberOfDimensions(comp_var) ||
-	   memcmp(mxGetDimensions(dest_var), mxGetDimensions(comp_var), mxGetNumberOfDimensions(dest_var)*sizeof(mwSize)) != 0)
+	if(dest_class_id != mxGetClassID(comp_var))
 	{
 		return FALSE;
+	}
+	
+	dest_num_elems = mxGetNumberOfElements(dest_var);
+	comp_num_elems = mxGetNumberOfElements(comp_var);
+	if(parsed_indices == NULL)
+	{
+		/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
+		if(mxGetNumberOfDimensions(dest_var) != mxGetNumberOfDimensions(comp_var) ||
+		   memcmp(mxGetDimensions(dest_var), mxGetDimensions(comp_var), mxGetNumberOfDimensions(dest_var)*sizeof(mwSize)) != 0)
+		{
+			return FALSE;
+		}
+	}
+	else
+	{
+		
+		if(parsed_indices->num_indices < parsed_indices->num_slices)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexParsingError", "The internal index parser failed. Sorry about that.");
+		}
+		
+		for(i = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+		{
+			for(j = 0; j < parsed_indices->num_slices; j++)
+			{
+				if(dest_num_elems < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j]
+				|| (comp_num_elems != 1 && comp_num_elems < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j]))
+				{
+					return FALSE;
+				}
+			}
+		}
 	}
 	
 	/* Structure case */
@@ -286,24 +318,60 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
 			return FALSE;
 		}
 		
-		/* Go through each element */
-		for(field_num = 0, count = 0; field_num < dest_num_fields; field_num++)     /* each field */
+		/* search for each field name */
+		for(field_num = 0; field_num < dest_num_fields; field_num++)
 		{
-			
-			if(strcmp(mxGetFieldNameByNumber(dest_var, field_num), mxGetFieldNameByNumber(comp_var, field_num)) != 0)
+			curr_field_name = mxGetFieldNameByNumber(dest_var, field_num);
+			for(comp_field_num = 0, found_field_name = FALSE; comp_field_num < dest_num_fields; comp_field_num++)
+			{
+				if(strcmp(curr_field_name, mxGetFieldNameByNumber(comp_var, comp_field_num)) == 0)
+				{
+					found_field_name = TRUE;
+					break;
+				}
+			}
+			if(!found_field_name)
 			{
 				return FALSE;
 			}
-			
-			for(idx = 0; idx < dest_num_elems; idx++, count++)
+		}
+		
+		/* Go through each element */
+		if(parsed_indices == NULL)
+		{
+			for(field_num = 0; field_num < dest_num_fields; field_num++)     /* each field */
 			{
-				if(!msh_CompareVariableSize(mxGetFieldByNumber(dest_var, idx, field_num), mxGetFieldByNumber(comp_var, idx, field_num)))
+				curr_field_name = mxGetFieldNameByNumber(dest_var, field_num);
+				for(idx = 0; idx < dest_num_elems; idx++)
 				{
-					return FALSE;
+					if(!msh_CompareVariableSize(mxGetField(dest_var, idx, curr_field_name), mxGetField(comp_var, idx, curr_field_name), NULL))
+					{
+						return FALSE;
+					}
 				}
 			}
-			
 		}
+		else
+		{
+			for(field_num = 0; field_num < dest_num_fields; field_num++)     /* each field */
+			{
+				curr_field_name = mxGetFieldNameByNumber(dest_var, field_num);
+				for(i = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+				{
+					for(j = 0; j < parsed_indices->num_slices; j++)
+					{
+						for(idx = parsed_indices->starting_indices[i+j]; idx < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j]; idx++)
+						{
+							if(!msh_CompareVariableSize(mxGetField(dest_var, idx, curr_field_name), mxGetField(comp_var, idx, curr_field_name), NULL))
+							{
+								return FALSE;
+							}
+						}
+					}
+				}
+			}
+		}
+		
 		
 	}
 	else if(dest_class_id == mxCELL_CLASS) /* Cell case */
@@ -315,11 +383,30 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
 			return FALSE;
 		}
 		
-		for(count = 0; count < dest_num_elems; count++)
+		if(parsed_indices == NULL)
 		{
-			if(!msh_CompareVariableSize(mxGetCell(dest_var, count), mxGetCell(comp_var, count)))
+			for(idx = 0; idx < dest_num_elems; idx++)
 			{
-				return FALSE;
+				if(!msh_CompareVariableSize(mxGetCell(dest_var, idx), mxGetCell(comp_var, idx), NULL))
+				{
+					return FALSE;
+				}
+			}
+		}
+		else
+		{
+			for(i = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+			{
+				for(j = 0; j < parsed_indices->num_slices; j++)
+				{
+					for(idx = parsed_indices->starting_indices[i+j]; idx < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j]; idx++)
+					{
+						if(!msh_CompareVariableSize(mxGetCell(dest_var, idx), mxGetCell(comp_var, idx), NULL))
+						{
+							return FALSE;
+						}
+					}
+				}
 			}
 		}
 	}
@@ -333,6 +420,7 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
 		
 		if(mxIsSparse(dest_var))
 		{
+			return FALSE;
 			if(mxGetNzmax(dest_var) != mxGetNzmax(comp_var) || mxGetN(dest_var) != mxGetN(comp_var) || !mxIsSparse(comp_var))
 			{
 				return FALSE;
@@ -340,7 +428,7 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
 		}
 		else
 		{
-			if(mxGetNumberOfElements(dest_var) != mxGetNumberOfElements(comp_var) || mxIsSparse(comp_var))
+			if(mxIsSparse(comp_var))
 			{
 				return FALSE;
 			}
@@ -359,74 +447,164 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
 }
 
 
-void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var)
+void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, ParsedIndices_t* parsed_indices, int will_sync)
 {
-	size_t idx, count, num_elems, nzmax;
+	byte_t* dest_data, * in_data, * dest_imag_data, * in_imag_data;
 	
-	/* for structures */
-	int field_num, num_fields;                /* current field */
+	/* for iterators */
+	size_t i, j, idx, num_elems, nzmax, elem_size, offset;
+	
+	int field_num, num_fields, is_complex;
+	
+	const char_t* curr_field_name;
 	
 	mxClassID shared_class_id = mxGetClassID(in_var);
+	
+	num_elems = mxGetNumberOfElements(in_var);
 	
 	/* Structure case */
 	if(shared_class_id == mxSTRUCT_CLASS)
 	{
-		num_elems = mxGetNumberOfElements(in_var);
 		num_fields = mxGetNumberOfFields(in_var);
 		
-		/* Go through each element */
-		for(field_num = 0, count = 0; field_num < num_fields; field_num++)     /* each field */
+		/* go through each element */
+		if(parsed_indices == NULL)
 		{
-			for(idx = 0; idx < num_elems; idx++, count++)
+			for(field_num = 0; field_num < num_fields; field_num++)     /* each field */
 			{
-				/* And fill it */
-				msh_OverwriteVariable(mxGetFieldByNumber(dest_var, idx, field_num), mxGetFieldByNumber(in_var, idx, field_num));
+				curr_field_name = mxGetFieldNameByNumber(dest_var, field_num);
+				for(idx = 0; idx < num_elems; idx++)
+				{
+					msh_OverwriteVariable(mxGetField(dest_var, idx, curr_field_name), mxGetField(in_var, idx, curr_field_name), NULL, will_sync);
+				}
+			}
+		}
+		else
+		{
+			for(field_num = 0; field_num < num_fields; field_num++)     /* each field */
+			{
+				curr_field_name = mxGetFieldNameByNumber(dest_var, field_num);
+				for(i = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+				{
+					for(j = 0; j < parsed_indices->num_slices; j++)
+					{
+						for(idx = parsed_indices->starting_indices[i+j]; idx < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j]; idx++)
+						{
+							/* this inner conditional should be optimized out by the compiler */
+							if(num_elems == 1)
+							{
+								msh_OverwriteVariable(mxGetField(dest_var, idx, curr_field_name), mxGetField(in_var, 0, curr_field_name), NULL, will_sync);
+							}
+							else
+							{
+								msh_OverwriteVariable(mxGetField(dest_var, idx, curr_field_name), mxGetField(in_var, idx, curr_field_name), NULL, will_sync);
+							}
+						}
+					}
+				}
 			}
 		}
 	}
 	else if(shared_class_id == mxCELL_CLASS) /* Cell case */
 	{
-		num_elems = mxGetNumberOfElements(in_var);
 		
-		for(count = 0; count < num_elems; count++)
+		/* go through each element */
+		if(parsed_indices == NULL)
 		{
-			/* And fill it */
-			msh_OverwriteVariable(mxGetCell(dest_var, count), mxGetCell(in_var, count));
+			for(idx = 0; idx < num_elems; idx++)
+			{
+				msh_OverwriteVariable(mxGetCell(dest_var, idx), mxGetCell(in_var, idx), NULL, will_sync);
+			}
+		}
+		else
+		{
+			for(i = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+			{
+				for(j = 0; j < parsed_indices->num_slices; j++)
+				{
+					for(idx = parsed_indices->starting_indices[i+j]; idx < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j]; idx++)
+					{
+						/* this inner conditional should be optimized out by the compiler */
+						if(num_elems == 1)
+						{
+							msh_OverwriteVariable(mxGetCell(dest_var, idx), mxGetCell(in_var, 0), NULL, will_sync);
+						}
+						else
+						{
+							msh_OverwriteVariable(mxGetCell(dest_var, idx), mxGetCell(in_var, idx), NULL, will_sync);
+						}
+					}
+				}
+			}
 		}
 	}
 	else     /*base case*/
 	{
 		
-		/* if sparse get a list of the elements */
+		is_complex = mxIsComplex(in_var);
+		
 		if(mxIsSparse(in_var))
 		{
 			
 			nzmax = mxGetNzmax(in_var);
 			
+			if(will_sync) msh_AcquireProcessLock(g_process_lock);
+			
 			memcpy(mxGetIr(dest_var), mxGetIr(in_var), nzmax*sizeof(mwIndex));
 			memcpy(mxGetJc(dest_var), mxGetJc(in_var), (mxGetN(in_var) + 1)*sizeof(mwIndex));
-			
-			/* rewrite real data */
 			memcpy(mxGetData(dest_var), mxGetData(in_var), nzmax*mxGetElementSize(in_var));
+			if(is_complex) memcpy(mxGetImagData(dest_var), mxGetImagData(in_var), nzmax*mxGetElementSize(in_var));
 			
-			/* if complex get a pointer to the complex data */
-			if(mxIsComplex(in_var))
-			{
-				memcpy(mxGetImagData(dest_var), mxGetImagData(in_var), nzmax*mxGetElementSize(in_var));
-			}
+			if(will_sync) msh_ReleaseProcessLock(g_process_lock);
 		}
 		else if(!mxIsEmpty(in_var))
 		{
+			elem_size = mxGetElementSize(in_var);
 			
-			num_elems = mxGetNumberOfElements(in_var);
-			
-			/* rewrite real data */
-			memcpy(mxGetData(dest_var), mxGetData(in_var), num_elems*mxGetElementSize(in_var));
-			
-			/* if complex get a pointer to the complex data */
-			if(mxIsComplex(in_var))
+			if(parsed_indices == NULL)
 			{
-				memcpy(mxGetImagData(dest_var), mxGetImagData(in_var), num_elems*mxGetElementSize(in_var));
+				num_elems = mxGetNumberOfElements(in_var);
+				
+				if(will_sync) msh_AcquireProcessLock(g_process_lock);
+				
+				memcpy(mxGetData(dest_var), mxGetData(in_var), num_elems*elem_size);
+				if(is_complex) memcpy(mxGetImagData(dest_var), mxGetImagData(in_var), num_elems*elem_size);
+				
+				if(will_sync) msh_ReleaseProcessLock(g_process_lock);
+				
+			}
+			else
+			{
+				dest_data = mxGetData(dest_var);
+				in_data = mxGetData(in_var);
+				dest_imag_data = mxGetImagData(dest_var);
+				in_imag_data = mxGetImagData(in_var);
+				for(i = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+				{
+					for(j = 0; j < parsed_indices->num_slices; j++)
+					{
+						offset = parsed_indices->starting_indices[i+j]*elem_size/sizeof(byte_t);
+						
+						if(will_sync) msh_AcquireProcessLock(g_process_lock);
+						
+						/* optimized out */
+						if(num_elems == 1)
+						{
+							for(idx = 0; idx < parsed_indices->slice_lens[j]; idx++)
+							{
+								memcpy(dest_data + offset + idx*elem_size/sizeof(byte_t), in_data, elem_size);
+								if(is_complex) memcpy(dest_imag_data + offset + idx*elem_size/sizeof(byte_t), in_imag_data, elem_size);
+							}
+						}
+						else
+						{
+							memcpy(dest_data + offset, in_data + offset, parsed_indices->slice_lens[j]*elem_size);
+							if(is_complex) memcpy(dest_imag_data + offset, in_imag_data + offset, parsed_indices->slice_lens[j]*elem_size);
+						}
+						
+						if(will_sync) msh_ReleaseProcessLock(g_process_lock);
+					}
+				}
 			}
 		}
 		

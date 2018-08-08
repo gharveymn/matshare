@@ -13,6 +13,13 @@
 
 #include "mshbasictypes.h"
 
+typedef struct ParsedIndices_t
+{
+	mwIndex* starting_indices;
+	size_t   num_indices;
+	mwSize*  slice_lens;
+	size_t   num_slices;
+} ParsedIndices_t;
 
 /**
  * Acquires the specified interprocess lock.
@@ -63,7 +70,7 @@ pid_t msh_GetPid(void);
  * @param comp_var The second variable to be compared.
  * @return Whether they are equal in size.
  */
-int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var);
+int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var, ParsedIndices_t* parsed_indices);
 
 
 /**
@@ -72,7 +79,7 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var);
  * @param dest_var The destination variable.
  * @param in_var The input variable.
  */
-void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var);
+void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, ParsedIndices_t* parsed_indices, int will_sync);
 
 
 /**

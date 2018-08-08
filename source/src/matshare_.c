@@ -137,6 +137,14 @@ static mxArray* msh_CreateOutputNamed(void);
  */
 static mxArray* msh_CreateNamedOutput(const char_t* name);
 
+static void msh_OverwriteWorker(mxArray* dest, const mxArray* in, ParsedIndices_t* parsed_indices, int will_sync);
+
+static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, const mwSize* dims, mwSize num_dims, size_t num_elems);
+
+static size_t msh_ParseIndicesWorker(mxArray* subs_arr, const mwSize* dims, mwSize num_dims, mwIndex* subs, ParsedIndices_t* parsed_indices, size_t curr_dim, size_t base_dim, size_t idx);
+
+static size_t msh_GetIndex(const mwSize* dims, mwSize num_dims, const mwIndex* subs);
+
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
 /* ------------------------------------------------------------------------- */
@@ -898,85 +906,447 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 
 void msh_Overwrite(int num_args, const mxArray** in_args)
 {
-	mxArray* dest;
-	const mxArray* in;
+	ParsedIndices_t parsed_indices = {0};
+	mxArray* dest_var;
+	const mxArray* in_var, * opt;
 	mxChar* input_option;
+	size_t i, j, num_varargin, num_idxs, struct_idx = 0;
 	int will_sync = FALSE; /* asynchronous by default */
+	
+	struct
+	{
+		mxArray* type;
+		mxChar* type_wstr;
+		mxArray* subs;
+		char subs_str[MSH_NAME_LEN_MAX];
+	} idxstruct;
 	
 	if(num_args < 2 || num_args > 3)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NumInputsError", "Too many inputs. The overwrite function takes either 2 or 3 arguments.");
 	}
 	
+	dest_var = mxGetCell(in_args[0], 0);
+	in_var = in_args[1];
+	
 	if(num_args == 3)
 	{
-		if(!mxIsChar(in_args[2]))
+		for(i = 0, num_varargin = mxGetNumberOfElements(in_args[2]); i < num_varargin; i++)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must be of type 'char'.");
-		}
-		
-		if(mxGetNumberOfElements(in_args[2]) < 2)
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must have length more than 1.");
-		}
-		
-		input_option = mxGetChars(in_args[2]);
-		if(input_option[0])
-		{
-			/* switch for possible future additions */
-			switch(input_option[1])
+			opt = mxGetCell(in_args[2], i);
+			if(mxIsStruct(opt))
 			{
-				case('s'):
-					/* sync */
-					will_sync = TRUE;
-					break;
-				case('a'):
-					/* async */
-					will_sync = FALSE;
-					break;
-				default:
+				for(j = 0, num_idxs = mxGetNumberOfElements(opt); j < num_idxs; j++)
 				{
-					goto OPTION_ERROR;
+					idxstruct.type = mxGetField(opt, j, "type");
+					idxstruct.subs = mxGetField(opt, j, "subs");
+					
+					if(idxstruct.type == NULL || mxIsEmpty(idxstruct.type) || !mxIsChar(idxstruct.type))
+					{
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "The struct must have non-empty field 'type' of class 'char'. Use the 'substruct' function to create proper input.");
+					}
+					
+					if(idxstruct.subs == NULL || mxIsEmpty(idxstruct.subs))
+					{
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "The struct must have non-empty field 'subs'. Use the 'substruct' function to create proper input.");
+					}
+					
+					idxstruct.type_wstr = mxGetChars(idxstruct.type);
+					if(idxstruct.type_wstr[0] == '.')
+					{
+						if(!mxIsStruct(dest_var) || mxGetNumberOfElements(dest_var) != 1)
+						{
+							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIndexError", "Variable class 'struct' required for this assignment.");
+						}
+						
+						mxGetString(idxstruct.subs, idxstruct.subs_str, MSH_NAME_LEN_MAX);
+						
+						if((dest_var = mxGetField(dest_var, struct_idx, idxstruct.subs_str)) == NULL)
+						{
+							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "FieldNotFoundError", "Could not find field '%s'.", idxstruct.subs_str);
+						}
+						
+						/* reset the struct index */
+						struct_idx = 0;
+						
+					}
+					else if(idxstruct.type_wstr[0] == '{')
+					{
+						/* this should be a cell array */
+						if(!mxIsCell(dest_var))
+						{
+							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIndexError", "Variable class 'cell' required for this assignment.");
+						}
+						
+						/* if this is not the last indexing then can only proceed if this is a singular index to a cell array */
+						if(j + 1 < num_idxs)
+						{
+							if(mxIsCell(dest_var))
+							{
+								parsed_indices = msh_ParseIndices(idxstruct.subs, mxGetDimensions(dest_var), mxGetNumberOfDimensions(dest_var), mxGetNumberOfElements(dest_var));
+								
+								if(parsed_indices.num_indices == 0 || parsed_indices.num_slices == 0)
+								{
+									meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Expected exactly one output from struct indexing, got zero.");
+								}
+								
+								if(parsed_indices.num_indices > 1 || parsed_indices.num_slices > 1 || parsed_indices.starting_indices[0] > 1)
+								{
+									meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Expected exactly one output from struct indexing.");
+								}
+								dest_var = mxGetCell(dest_var, parsed_indices.starting_indices[0]);
+								mxFree(parsed_indices.starting_indices);
+								mxFree(parsed_indices.slice_lens);
+							}
+							else
+							{
+								meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Cannot index where '{}' for non-cell array.");
+							}
+						}
+						else
+						{
+							parsed_indices = msh_ParseIndices(idxstruct.subs, mxGetDimensions(dest_var), mxGetNumberOfDimensions(dest_var), mxGetNumberOfElements(dest_var));
+						}
+						
+						
+					}
+					else if(idxstruct.type_wstr[0] == '(')
+					{
+						/* if this is not the last indexing then can only proceed if this is a singular index to a struct */
+						if(j + 1 < num_idxs)
+						{
+							if(mxIsStruct(dest_var))
+							{
+								parsed_indices = msh_ParseIndices(idxstruct.subs, mxGetDimensions(dest_var), mxGetNumberOfDimensions(dest_var), mxGetNumberOfElements(dest_var));
+								if(parsed_indices.num_indices == 0 || parsed_indices.num_slices == 0)
+								{
+									meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Expected exactly one output from struct indexing, got zero.");
+								}
+								
+								if(parsed_indices.num_indices > 1 || parsed_indices.num_slices > 1 || parsed_indices.starting_indices[0] > 1)
+								{
+									meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Expected exactly one output from struct indexing.");
+								}
+								struct_idx = parsed_indices.starting_indices[0];
+								mxFree(parsed_indices.starting_indices);
+								mxFree(parsed_indices.slice_lens);
+							}
+							else
+							{
+								meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Cannot index where '()' is not the last argument for non-struct array.");
+							}
+						}
+						else
+						{
+							parsed_indices = msh_ParseIndices(idxstruct.subs, mxGetDimensions(dest_var), mxGetNumberOfDimensions(dest_var), mxGetNumberOfElements(dest_var));
+						}
+					}
+					else
+					{
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedIndexTypeError", "Unrecognized type '%s' for indexing", mxArrayToString(idxstruct.type));
+					}
+					
 				}
 			}
-		}
-		else
-		{
-		OPTION_ERROR:
+			else if(mxIsChar(opt))
 			{
-				/* normally the string produced here should be freed with mxFree, but since we have an error just let MATLAB do the GC */
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Unrecognized option %s", mxArrayToString(in_args[2]));
+				if(mxGetNumberOfElements(opt) < 2)
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must have length more than 1.");
+				}
+				input_option = mxGetChars(opt);
+				if(input_option[0] == '-')
+				{
+					/* switch for possible future additions */
+					switch(input_option[1])
+					{
+						case ('s'):
+							/* sync */
+							will_sync = TRUE;
+							break;
+						case ('a'):
+							/* async */
+							will_sync = FALSE;
+							break;
+						default:
+						{
+							/* normally the string produced here should be freed with mxFree, but since we have an error just let MATLAB do the GC */
+							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Unrecognized option \"%s\"", mxArrayToString(in_args[2]));
+						}
+					}
+				}
+				else
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Input options must start with '-'. Invalid option \"%s\"", mxArrayToString(in_args[2]));
+				}
+			}
+			else
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must be of class 'struct' or 'char'.");
 			}
 		}
 	}
 	
-	if(!mxIsCell(in_args[0]) || mxGetNumberOfElements(in_args[0]) != 1)
+	if(parsed_indices.num_indices > 0)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidInputError", "Invalid input variable. Please use the entry functions provided.");
+		msh_OverwriteWorker(dest_var, in_var, &parsed_indices, will_sync);
+		mxFree(parsed_indices.starting_indices);
+		mxFree(parsed_indices.slice_lens);
+	}
+	else
+	{
+		msh_OverwriteWorker(dest_var, in_var, NULL, will_sync);
 	}
 	
-	dest = mxGetCell(in_args[0], 0);
-	in = in_args[1];
-	
-	if(msh_CompareVariableSize(dest, in))
+}
+
+
+static void msh_OverwriteWorker(mxArray* dest, const mxArray* in, ParsedIndices_t* parsed_indices, int will_sync)
+{
+	if(msh_CompareVariableSize(dest, in, parsed_indices))
 	{
-		if(will_sync)
-		{
-			msh_AcquireProcessLock(g_process_lock);
-			{
-				msh_OverwriteVariable(dest, in);
-			}
-			msh_ReleaseProcessLock(g_process_lock);
-		}
-		else
-		{
-			msh_OverwriteVariable(dest, in);
-		}
+		msh_OverwriteVariable(dest, in, parsed_indices, will_sync);
 	}
 	else
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "VariableSizeError", "The size of the variable to be overwritten is incompatible with the input variable.");
 	}
+}
+
+
+static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, const mwSize* dims, mwSize num_dims, size_t num_elems)
+{
+	double* indices = NULL;
+	double k;
+	mxArray* curr_sub;
+	ParsedIndices_t parsed_indices = {0};
+	size_t i, j, num_subs, num_subs_elems = 0, starting_dim, multiplier = 1;
+	mwIndex* subs;
+	
+	if(!mxIsCell(subs_arr))
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Indexing subscripts be stored in a cell array.");
+	}
+	
+	if((num_subs = mxGetNumberOfElements(subs_arr)) < 1)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Index cell array must have more than one element.");
+	}
+	
+	if(num_dims < 2)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "NotEnoughDimensionsError", "Too few dimensions. Need at least 2 dimensions for assignment.");
+	}
+	
+	/* parse the sections where copies will be contiguous
+	 * double ptr to index array
+	 * slice length array for each of the index arrays
+	 */
+	
+	/* see if we can increase the slice size */
+	for(starting_dim = 0; starting_dim < num_subs && starting_dim < num_dims; multiplier *= dims[starting_dim++])
+	{
+		curr_sub = mxGetCell(subs_arr, starting_dim);
+		if((num_subs_elems = mxGetNumberOfElements(curr_sub)) < 1)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
+		}
+		
+		if(mxIsChar(curr_sub))
+		{
+			/* if all then keep going */
+			if(num_subs_elems != 1 || mxGetChars(curr_sub)[0] != ':')
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_sub));
+			}
+
+			if(starting_dim + 1 == num_subs)
+			{
+				do
+				{
+					multiplier *= dims[starting_dim++];
+				} while(starting_dim < num_dims);
+				break;
+			}
+		}
+		else if(mxIsDouble(curr_sub))
+		{
+			indices = mxGetData(curr_sub);
+			if(num_subs_elems != dims[starting_dim])
+			{
+				break;
+			}
+			for(j = 0; j < num_subs_elems; j++)
+			{
+				if(j != (size_t)indices[j] - 1)
+				{
+					goto BREAK_OUTER;
+				}
+			}
+		}
+		else
+		{
+			/* no logical handling since that will be handled switched to numeric by the entry function */
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+		}
+	}
+
+	BREAK_OUTER:
+	
+	if(starting_dim < num_dims)
+	{
+		if(num_subs_elems == 0 || indices == NULL)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexParsingError", "The passed coordinates were parsed incorrectly. This is an internal error, sorry.");
+		}
+		else
+		{
+			/* get total lengths from the first non-continuous dimension */
+			parsed_indices.slice_lens = mxMalloc(num_subs_elems*sizeof(mwSize));
+			for(i = 0, parsed_indices.num_slices = 0; i < num_subs_elems; parsed_indices.num_slices++)
+			{
+				k = indices[i];
+				parsed_indices.slice_lens[parsed_indices.num_slices] = 0;
+				do
+				{
+					k += 1.0;
+					parsed_indices.slice_lens[parsed_indices.num_slices]++;
+					i++;
+				} while(i < num_subs_elems && k == indices[i]);
+				parsed_indices.slice_lens[parsed_indices.num_slices] *= multiplier;
+			}
+		}
+	}
+	else
+	{
+		parsed_indices.slice_lens = mxMalloc(1*sizeof(mwSize));
+		parsed_indices.slice_lens[0] = num_elems;
+		parsed_indices.num_slices = 1;
+	}
+	
+	/* parse the indices */
+	parsed_indices.num_indices = parsed_indices.num_slices;
+	for(i = starting_dim + 1; i < num_dims && i < num_subs; i++)
+	{
+		curr_sub = mxGetCell(subs_arr, i);
+		if((num_subs_elems = mxGetNumberOfElements(curr_sub)) < 1)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
+		}
+		
+		if(mxIsChar(curr_sub))
+		{
+			/* if all then keep going */
+			if(num_subs_elems != 1 || mxGetChars(curr_sub)[0] != ':')
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_sub));
+			}
+			parsed_indices.num_indices *= dims[i];
+		}
+		else if(mxIsDouble(curr_sub))
+		{
+			parsed_indices.num_indices *= num_subs_elems;
+		}
+		else
+		{
+			/* no logical handling since that will be handled switched to numeric by the entry function */
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+		}
+	}
+	
+	parsed_indices.starting_indices = mxMalloc(parsed_indices.num_indices * sizeof(mwIndex));
+	subs = mxCalloc(num_dims, sizeof(mwIndex));
+	msh_ParseIndicesWorker(subs_arr, dims, num_dims, subs, &parsed_indices, num_dims < num_subs? num_dims - 1 : num_subs - 1, starting_dim, 0);
+	mxFree(subs);
+	
+	return parsed_indices;
+	
+}
+
+
+static size_t msh_ParseIndicesWorker(mxArray* subs_arr, const mwSize* dims, mwSize num_dims, mwIndex* subs, ParsedIndices_t* parsed_indices, size_t curr_dim, size_t base_dim, size_t idx)
+{
+	size_t i, j, num_elems;
+	mxArray* curr_sub = mxGetCell(subs_arr, curr_dim);
+	double* indices;
+	
+	if((num_elems = mxGetNumberOfElements(curr_sub)) < 1)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
+	}
+	
+	if(curr_dim > base_dim)
+	{
+		if(mxIsChar(curr_sub))
+		{
+			if(mxGetNumberOfElements(curr_sub) != 1 || mxGetChars(curr_sub)[0] != ':')
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_sub));
+			}
+			
+			for(i = 0; i < dims[curr_dim]; i++)
+			{
+				subs[curr_dim] = i;
+				idx = msh_ParseIndicesWorker(subs_arr, dims, num_dims, subs, parsed_indices, curr_dim - 1, base_dim, idx);
+			}
+			
+		}
+		else if(mxIsDouble(curr_sub))
+		{
+			indices = mxGetData(curr_sub);
+			for(i = 0; i < num_elems; i++)
+			{
+				subs[curr_dim] = (mwIndex)indices[i] - 1;
+				idx = msh_ParseIndicesWorker(subs_arr, dims, num_dims, subs, parsed_indices, curr_dim - 1, base_dim, idx);
+			}
+		}
+		else
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+		}
+	}
+	else
+	{
+		if(mxIsChar(curr_sub))
+		{
+			if(mxGetNumberOfElements(curr_sub) != 1 || mxGetChars(curr_sub)[0] != ':')
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_sub));
+			}
+			subs[curr_dim] = 0;
+			parsed_indices->starting_indices[idx] = msh_GetIndex(dims, num_dims, subs);
+			idx++;
+		}
+		else if(mxIsDouble(curr_sub))
+		{
+			indices = mxGetData(curr_sub);
+			for(i = 0, j = 0; i < num_elems; idx++, i += parsed_indices->slice_lens[j++])
+			{
+				subs[curr_dim] = (mwIndex)indices[i]-1;
+				parsed_indices->starting_indices[idx] = msh_GetIndex(dims, num_dims, subs);
+			}
+		}
+		else
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+		}
+	}
+	
+	return idx;
+	
+}
+
+
+static size_t msh_GetIndex(const mwSize* dims, mwSize num_dims, const mwIndex* subs)
+{
+	size_t ret = 0;
+	size_t mult = 1;
+	for(int i = 0; i < num_dims; i++)
+	{
+		ret += subs[i]*mult;
+		mult *= dims[i];
+	}
+	return ret;
 }
 
 
