@@ -75,9 +75,9 @@ classdef object
 %    This function is asynchronous by default.
 			
 			if(nargin == 3)
-				matshare_(8, obj.shared_data, in, varargin);
+				matshare_(8, obj.shared_data, cast(in, 'like', obj.data), varargin);
 			else
-				matshare_(8, obj.shared_data, in);
+				matshare_(8, obj.shared_data, cast(in, 'like', obj.data));
 			end
 			
 		end
@@ -107,7 +107,15 @@ classdef object
 				obj = builtin('subsasgn',obj,S,B);
 			elseif(S(1).type(1) == '.' && ischar(S(1).subs))
 				if(strcmp(S(1).subs, 'data'))
-					obj.overwrite(B, S(2:end));
+					
+					% for sparses modify a local copy then overwrite the whole thing
+					if(issparse(obj.data))
+						sparsecopy = subsasgn(obj.data, S(2:end), B);
+						matshare_(8, obj.shared_data, sparsecopy);
+					else
+						matshare_(8, obj.shared_data, cast(B, 'like', obj.data), {S(2:end)});
+					end
+					
 				elseif(strcmp(S(1).subs, 'shared_data'))
 					error('matshare:InaccessiblePropertyError', 'The shared_data property is not directly accessible.');
 				else

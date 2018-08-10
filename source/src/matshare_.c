@@ -1039,6 +1039,11 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 						else
 						{
 							parsed_indices = msh_ParseIndices(idxstruct.subs, mxGetDimensions(dest_var), mxGetNumberOfDimensions(dest_var), mxGetNumberOfElements(dest_var));
+							if(mxIsSparse(dest_var))
+							{
+								/* verify that coordinates are non-zero; we will not be modifying nzmax */
+								
+							}
 						}
 					}
 					else
