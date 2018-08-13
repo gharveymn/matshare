@@ -98,10 +98,6 @@ classdef object
 			
 		end
 		
-		function B = subsref(obj,S)
-			B = builtin('subsref',obj,S);
-		end
-		
 		function obj = subsasgn(obj,S,B)
 			if(numel(S) == 1 && strcmp(S.type, '()'))
 				obj = builtin('subsasgn',obj,S,B);

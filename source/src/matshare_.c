@@ -139,11 +139,9 @@ static mxArray* msh_CreateNamedOutput(const char_t* name);
 
 static void msh_OverwriteWorker(mxArray* dest, const mxArray* in, ParsedIndices_t* parsed_indices, int will_sync);
 
-static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, const mwSize* dims, mwSize num_dims, size_t num_elems);
+static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, mxArray* dest_var, const mxArray* in_var);
 
-static size_t msh_ParseIndicesWorker(mxArray* subs_arr, const mwSize* dims, mwSize num_dims, mwIndex* subs, ParsedIndices_t* parsed_indices, size_t curr_dim, size_t base_dim, size_t idx);
-
-static size_t msh_GetIndex(const mwSize* dims, mwSize num_dims, const mwIndex* subs);
+static size_t msh_ParseIndicesWorker(mxArray* subs_arr, const mwSize* dest_dims, size_t dest_num_dims, ParsedIndices_t* parsed_indices, size_t parsed_idx, size_t curr_dim, size_t base_dim, size_t curr_mult, size_t curr_index);
 
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
@@ -906,13 +904,10 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 
 void msh_Overwrite(int num_args, const mxArray** in_args)
 {
-	ParsedIndices_t parsed_indices = {0};
-	mxArray* dest_var;
-	const mxArray* in_var, * opt;
-	mxChar* input_option;
-	size_t i, j, num_varargin, num_idxs, struct_idx = 0;
-	int will_sync = FALSE; /* asynchronous by default */
-	
+	size_t          i, j, num_varargin, num_idxs;
+	mxChar*         input_option;
+	mxArray*        dest_var;
+	const mxArray*  in_var, * opt;
 	struct
 	{
 		mxArray* type;
@@ -920,6 +915,10 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 		mxArray* subs;
 		char subs_str[MSH_NAME_LEN_MAX];
 	} idxstruct;
+	
+	int             will_sync      = FALSE; /* asynchronous by default */
+	size_t          struct_idx     = 0;
+	ParsedIndices_t parsed_indices = {0};
 	
 	if(num_args < 2 || num_args > 3)
 	{
@@ -983,7 +982,7 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 						{
 							if(mxIsCell(dest_var))
 							{
-								parsed_indices = msh_ParseIndices(idxstruct.subs, mxGetDimensions(dest_var), mxGetNumberOfDimensions(dest_var), mxGetNumberOfElements(dest_var));
+								parsed_indices = msh_ParseIndices(idxstruct.subs, dest_var, in_var);
 								
 								if(parsed_indices.num_indices == 0 || parsed_indices.num_slices == 0)
 								{
@@ -1005,7 +1004,7 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 						}
 						else
 						{
-							parsed_indices = msh_ParseIndices(idxstruct.subs, mxGetDimensions(dest_var), mxGetNumberOfDimensions(dest_var), mxGetNumberOfElements(dest_var));
+							parsed_indices = msh_ParseIndices(idxstruct.subs, dest_var, in_var);
 						}
 						
 						
@@ -1017,7 +1016,7 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 						{
 							if(mxIsStruct(dest_var))
 							{
-								parsed_indices = msh_ParseIndices(idxstruct.subs, mxGetDimensions(dest_var), mxGetNumberOfDimensions(dest_var), mxGetNumberOfElements(dest_var));
+								parsed_indices = msh_ParseIndices(idxstruct.subs, dest_var, in_var);
 								if(parsed_indices.num_indices == 0 || parsed_indices.num_slices == 0)
 								{
 									meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Expected exactly one output from struct indexing, got zero.");
@@ -1038,12 +1037,7 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 						}
 						else
 						{
-							parsed_indices = msh_ParseIndices(idxstruct.subs, mxGetDimensions(dest_var), mxGetNumberOfDimensions(dest_var), mxGetNumberOfElements(dest_var));
-							if(mxIsSparse(dest_var))
-							{
-								/* verify that coordinates are non-zero; we will not be modifying nzmax */
-								
-							}
+							parsed_indices = msh_ParseIndices(idxstruct.subs, dest_var, in_var);
 						}
 					}
 					else
@@ -1119,14 +1113,27 @@ static void msh_OverwriteWorker(mxArray* dest, const mxArray* in, ParsedIndices_
 }
 
 
-static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, const mwSize* dims, mwSize num_dims, size_t num_elems)
+static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, mxArray* dest_var, const mxArray* in_var)
 {
-	double* indices = NULL;
-	double k;
-	mxArray* curr_sub;
+	size_t          i, j, num_subs, base_dim, max_mult, max_dim;
+	size_t          first_sig_dim, last_sig_dim, num_sig_dims;
+	double          dbl_iter;
+	mxArray*        curr_subs;
+	
+	size_t          dest_num_elems = mxGetNumberOfElements(dest_var);
+	size_t          num_subs_elems = 0;
+	size_t          multiplier     = 1;
+	mwSize          dest_num_dims  = mxGetNumberOfDimensions(dest_var);
+	mwSize          in_num_dims    = mxGetNumberOfDimensions(in_var);
 	ParsedIndices_t parsed_indices = {0};
-	size_t i, j, num_subs, num_subs_elems = 0, starting_dim, multiplier = 1;
-	mwIndex* subs;
+	double*         indices        = NULL;
+	const size_t*   dest_dims      = mxGetDimensions(dest_var);
+	const size_t*   in_dims        = mxGetDimensions(in_var);
+	
+	if(mxIsEmpty(in_var))
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NullAssignmentError", "Assignment input must be non-null.");
+	}
 	
 	if(!mxIsCell(subs_arr))
 	{
@@ -1138,9 +1145,185 @@ static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, const mwSize* dims, m
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Index cell array must have more than one element.");
 	}
 	
-	if(num_dims < 2)
+	if(dest_num_dims < 2)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "NotEnoughDimensionsError", "Too few dimensions. Need at least 2 dimensions for assignment.");
+	}
+	
+	if(mxGetNumberOfElements(in_var) > 1)
+	{
+		/* find the first significant dimension */
+		for(first_sig_dim = 0; first_sig_dim < num_subs; first_sig_dim++)
+		{
+			curr_subs = mxGetCell(subs_arr, first_sig_dim);
+			num_subs_elems = mxGetNumberOfElements(curr_subs);
+			
+			if(num_subs_elems < 1)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
+			}
+			
+			if(mxIsChar(curr_subs))
+			{
+				if(num_subs_elems != 1 || mxGetChars(curr_subs)[0] != ':')
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_subs));
+				}
+				
+				if(first_sig_dim < dest_num_dims && dest_dims[first_sig_dim] > 1)
+				{
+					break;
+				}
+			}
+			else if(mxIsDouble(curr_subs))
+			{
+				if(num_subs_elems > 1)
+				{
+					break;
+				}
+			}
+			else
+			{
+				/* no logical handling since that will be handled switched to numeric by the entry function */
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+			}
+		}
+		
+		for(last_sig_dim = num_subs - 1; last_sig_dim > first_sig_dim; last_sig_dim--)
+		{
+			curr_subs = mxGetCell(subs_arr, last_sig_dim);
+			num_subs_elems = mxGetNumberOfElements(curr_subs);
+			
+			if(num_subs_elems < 1)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
+			}
+			
+			if(mxIsChar(curr_subs))
+			{
+				if(num_subs_elems != 1 || mxGetChars(curr_subs)[0] != ':')
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_subs));
+				}
+				
+				if(last_sig_dim < dest_num_dims && dest_dims[last_sig_dim] > 1)
+				{
+					break;
+				}
+			}
+			else if(mxIsDouble(curr_subs))
+			{
+				if(num_subs_elems > 1)
+				{
+					break;
+				}
+			}
+			else
+			{
+				/* no logical handling since that will be handled switched to numeric by the entry function */
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+			}
+		}
+		
+		num_sig_dims = last_sig_dim - first_sig_dim + 1;
+		
+		/* check input validity in between the significant dim ends */
+		for(i = first_sig_dim + 1; i < last_sig_dim; i++)
+		{
+			curr_subs = mxGetCell(subs_arr, first_sig_dim);
+			num_subs_elems = mxGetNumberOfElements(curr_subs);
+			
+			if(num_subs_elems < 1)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
+			}
+			
+			if(mxIsChar(curr_subs) && (num_subs_elems != 1 || mxGetChars(curr_subs)[0] != ':'))
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_subs));
+			}
+			else if(!mxIsDouble(curr_subs))
+			{
+				/* no logical handling since that will be handled switched to numeric by the entry function */
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+			}
+		}
+		
+		for(i = 0; i < in_num_dims; i++)
+		{
+			if(in_dims[i] > 1)
+			{
+				
+				if(in_num_dims - i < num_sig_dims)
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "AssignmentMismatchError", "Assignment input dimension mismatch.");
+				}
+				
+				for(j = first_sig_dim; j <= last_sig_dim; j++, i++)
+				{
+					curr_subs = mxGetCell(subs_arr, first_sig_dim);
+					
+					if(mxIsChar(curr_subs))
+					{
+						if(j < dest_num_dims)
+						{
+							if(in_dims[i] != dest_dims[j])
+							{
+								meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "AssignmentMismatchError", "Assignment input dimension mismatch.");
+							}
+						}
+						else
+						{
+							if(in_dims[i] != 1)
+							{
+								meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "AssignmentMismatchError", "Assignment input dimension mismatch.");
+							}
+						}
+					}
+					else
+					{
+						if(in_dims[i] != mxGetNumberOfElements(curr_subs))
+						{
+							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "AssignmentMismatchError", "Assignment input dimension mismatch.");
+						}
+					}
+				}
+				
+				/* rest of the dimensions must be singleton */
+				for(; i < in_num_dims; i++)
+				{
+					if(in_dims[i] != 1)
+					{
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "AssignmentMismatchError", "Assignment input dimension mismatch.");
+					}
+				}
+				
+			}
+		}
+	}
+	else
+	{
+		/* just check the indexing validity */
+		for(i = 0; i < num_subs; i++)
+		{
+			curr_subs = mxGetCell(subs_arr, i);
+			num_subs_elems = mxGetNumberOfElements(curr_subs);
+			
+			if(num_subs_elems < 1)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
+			}
+			
+			if(mxIsChar(curr_subs) && (num_subs_elems != 1 || mxGetChars(curr_subs)[0] != ':'))
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_subs));
+			}
+			else if(!mxIsDouble(curr_subs))
+			{
+				/* no logical handling since that will be handled switched to numeric by the entry function */
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+			}
+		}
 	}
 	
 	/* parse the sections where copies will be contiguous
@@ -1149,38 +1332,31 @@ static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, const mwSize* dims, m
 	 */
 	
 	/* see if we can increase the slice size */
-	for(starting_dim = 0; starting_dim < num_subs && starting_dim < num_dims; multiplier *= dims[starting_dim++])
+	for(base_dim = 0; base_dim < dest_num_dims && base_dim < num_subs; multiplier *= dest_dims[base_dim++])
 	{
-		curr_sub = mxGetCell(subs_arr, starting_dim);
-		if((num_subs_elems = mxGetNumberOfElements(curr_sub)) < 1)
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
-		}
+		curr_subs = mxGetCell(subs_arr, base_dim);
+		num_subs_elems = mxGetNumberOfElements(curr_subs);
 		
-		if(mxIsChar(curr_sub))
+		if(mxIsChar(curr_subs))
 		{
 			/* if all then keep going */
-			if(num_subs_elems != 1 || mxGetChars(curr_sub)[0] != ':')
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_sub));
-			}
-
-			if(starting_dim + 1 == num_subs)
+			if(base_dim + 1 == num_subs)
 			{
 				do
 				{
-					multiplier *= dims[starting_dim++];
-				} while(starting_dim < num_dims);
+					multiplier *= dest_dims[base_dim++];
+				} while(base_dim < dest_num_dims);
 				break;
 			}
 		}
-		else if(mxIsDouble(curr_sub))
+		else/*if(mxIsDouble(curr_subs))*/
 		{
-			indices = mxGetData(curr_sub);
-			if(num_subs_elems != dims[starting_dim])
+			indices = mxGetData(curr_subs);
+			if(num_subs_elems != dest_dims[base_dim])
 			{
 				break;
 			}
+			
 			for(j = 0; j < num_subs_elems; j++)
 			{
 				if(j != (size_t)indices[j] - 1)
@@ -1189,178 +1365,179 @@ static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, const mwSize* dims, m
 				}
 			}
 		}
-		else
-		{
-			/* no logical handling since that will be handled switched to numeric by the entry function */
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
-		}
 	}
 
 	BREAK_OUTER:
 	
-	if(starting_dim < num_dims)
+	/* these are set in the loop above which is guaranteed to run at least once
+	curr_subs = mxGetCell(subs_arr, base_dim);
+	num_subs_elems = mxGetNumberOfElements(curr_subs);
+	*/
+	
+	if(base_dim < dest_num_dims)
 	{
-		if(num_subs_elems == 0 || indices == NULL)
+		/* get total lengths from the first non-continuous dimension */
+		
+		/* note: this is an oversized allocation */
+		parsed_indices.slice_lens = mxMalloc(num_subs_elems*sizeof(mwSize));
+		for(i = 0, parsed_indices.num_slices = 0; i < num_subs_elems; parsed_indices.num_slices++)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexParsingError", "The passed coordinates were parsed incorrectly. This is an internal error, sorry.");
-		}
-		else
-		{
-			/* get total lengths from the first non-continuous dimension */
-			parsed_indices.slice_lens = mxMalloc(num_subs_elems*sizeof(mwSize));
-			for(i = 0, parsed_indices.num_slices = 0; i < num_subs_elems; parsed_indices.num_slices++)
+			dbl_iter = indices[i];
+			parsed_indices.slice_lens[parsed_indices.num_slices] = 0;
+			do
 			{
-				k = indices[i];
-				parsed_indices.slice_lens[parsed_indices.num_slices] = 0;
-				do
-				{
-					k += 1.0;
-					parsed_indices.slice_lens[parsed_indices.num_slices]++;
-					i++;
-				} while(i < num_subs_elems && k == indices[i]);
-				parsed_indices.slice_lens[parsed_indices.num_slices] *= multiplier;
-			}
+				i += 1;
+				dbl_iter += 1.0;
+				parsed_indices.slice_lens[parsed_indices.num_slices]++;
+			} while(i < num_subs_elems && dbl_iter == indices[i]);
+			parsed_indices.slice_lens[parsed_indices.num_slices] *= multiplier;
 		}
 	}
 	else
 	{
-		parsed_indices.slice_lens = mxMalloc(1*sizeof(mwSize));
-		parsed_indices.slice_lens[0] = num_elems;
 		parsed_indices.num_slices = 1;
+		parsed_indices.slice_lens = mxMalloc(parsed_indices.num_slices*sizeof(mwSize));
+		parsed_indices.slice_lens[0] = dest_num_elems;
 	}
 	
 	/* parse the indices */
 	parsed_indices.num_indices = parsed_indices.num_slices;
-	for(i = starting_dim + 1; i < num_dims && i < num_subs; i++)
+	for(i = base_dim + 1; i < num_subs; i++)
 	{
-		curr_sub = mxGetCell(subs_arr, i);
-		if((num_subs_elems = mxGetNumberOfElements(curr_sub)) < 1)
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
-		}
-		
-		if(mxIsChar(curr_sub))
+		curr_subs = mxGetCell(subs_arr, i);
+		if(mxIsChar(curr_subs))
 		{
 			/* if all then keep going */
-			if(num_subs_elems != 1 || mxGetChars(curr_sub)[0] != ':')
+			if(i < dest_num_dims)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_sub));
+				parsed_indices.num_indices *= dest_dims[i];
 			}
-			parsed_indices.num_indices *= dims[i];
 		}
-		else if(mxIsDouble(curr_sub))
+		else/*if(mxIsDouble(curr_subs))*/
 		{
-			parsed_indices.num_indices *= num_subs_elems;
-		}
-		else
-		{
-			/* no logical handling since that will be handled switched to numeric by the entry function */
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+			parsed_indices.num_indices *= mxGetNumberOfElements(curr_subs);
 		}
 	}
 	
 	parsed_indices.starting_indices = mxMalloc(parsed_indices.num_indices * sizeof(mwIndex));
-	subs = mxCalloc(num_dims, sizeof(mwIndex));
-	msh_ParseIndicesWorker(subs_arr, dims, num_dims, subs, &parsed_indices, num_dims < num_subs? num_dims - 1 : num_subs - 1, starting_dim, 0);
-	mxFree(subs);
+	
+	for(i = 0, max_mult = 1; i < MIN(num_subs, dest_num_dims)-1; i++)
+	{
+		max_mult *= dest_dims[i];
+	}
+	
+	msh_ParseIndicesWorker(subs_arr, dest_dims, dest_num_dims, &parsed_indices, 0, num_subs-1, base_dim, max_mult, 0);
 	
 	return parsed_indices;
 	
 }
 
 
-static size_t msh_ParseIndicesWorker(mxArray* subs_arr, const mwSize* dims, mwSize num_dims, mwIndex* subs, ParsedIndices_t* parsed_indices, size_t curr_dim, size_t base_dim, size_t idx)
+static size_t msh_ParseIndicesWorker(mxArray* subs_arr, const mwSize* dest_dims, size_t dest_num_dims, ParsedIndices_t* parsed_indices, size_t parsed_idx, size_t curr_dim, size_t base_dim, size_t curr_mult, size_t curr_index)
 {
-	size_t i, j, num_elems;
-	mxArray* curr_sub = mxGetCell(subs_arr, curr_dim);
-	double* indices;
+	size_t   i, j, num_elems;
+	double*  indices;
 	
-	if((num_elems = mxGetNumberOfElements(curr_sub)) < 1)
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
-	}
+	mxArray* curr_sub = mxGetCell(subs_arr, curr_dim);
 	
 	if(curr_dim > base_dim)
 	{
 		if(mxIsChar(curr_sub))
 		{
-			if(mxGetNumberOfElements(curr_sub) != 1 || mxGetChars(curr_sub)[0] != ':')
+			if(curr_dim < dest_num_dims)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_sub));
+				for(i = 0; i < dest_dims[curr_dim]; i++)
+				{
+					parsed_idx = msh_ParseIndicesWorker(subs_arr,
+					                                    dest_dims,
+					                                    dest_num_dims,
+					                                    parsed_indices,
+					                                    parsed_idx,
+					                                    curr_dim - 1,
+					                                    base_dim,
+					                                    curr_mult/dest_dims[curr_dim - 1],
+					                                    curr_index + i*curr_mult);
+				}
 			}
-			
-			for(i = 0; i < dims[curr_dim]; i++)
+			else
 			{
-				subs[curr_dim] = i;
-				idx = msh_ParseIndicesWorker(subs_arr, dims, num_dims, subs, parsed_indices, curr_dim - 1, base_dim, idx);
+				parsed_idx = msh_ParseIndicesWorker(subs_arr,
+				                                    dest_dims,
+				                                    dest_num_dims,
+				                                    parsed_indices,
+				                                    parsed_idx,
+				                                    curr_dim-1,
+				                                    base_dim,
+				                                    curr_mult,
+				                                    curr_index);
 			}
-			
 		}
-		else if(mxIsDouble(curr_sub))
+		else/*if(mxIsDouble(curr_sub))*/
 		{
 			indices = mxGetData(curr_sub);
-			for(i = 0; i < num_elems; i++)
+			
+			if(curr_dim < dest_num_dims)
 			{
-				subs[curr_dim] = (mwIndex)indices[i] - 1;
-				idx = msh_ParseIndicesWorker(subs_arr, dims, num_dims, subs, parsed_indices, curr_dim - 1, base_dim, idx);
+				for(i = 0, num_elems = mxGetNumberOfElements(curr_sub); i < num_elems; i++)
+				{
+					parsed_idx = msh_ParseIndicesWorker(subs_arr,
+					                                    dest_dims,
+					                                    dest_num_dims,
+					                                    parsed_indices,
+					                                    parsed_idx,
+					                                    curr_dim-1,
+					                                    base_dim,
+					                                    curr_mult/dest_dims[curr_dim-1],
+					                                    curr_index + ((mwIndex)indices[i]-1)*curr_mult);
+				}
 			}
-		}
-		else
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+			else
+			{
+				for(i = 0, num_elems = mxGetNumberOfElements(curr_sub); i < num_elems; i++)
+				{
+					parsed_idx = msh_ParseIndicesWorker(subs_arr,
+					                                    dest_dims,
+					                                    dest_num_dims,
+					                                    parsed_indices,
+					                                    parsed_idx,
+					                                    curr_dim-1,
+					                                    base_dim,
+					                                    curr_mult,
+					                                    curr_index);
+				}
+			}
 		}
 	}
 	else
 	{
 		if(mxIsChar(curr_sub))
 		{
-			if(mxGetNumberOfElements(curr_sub) != 1 || mxGetChars(curr_sub)[0] != ':')
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_sub));
-			}
-			subs[curr_dim] = 0;
-			parsed_indices->starting_indices[idx] = msh_GetIndex(dims, num_dims, subs);
-			idx++;
+			parsed_indices->starting_indices[parsed_idx] = curr_index;
+			parsed_idx += 1;
 		}
-		else if(mxIsDouble(curr_sub))
+		else/*if(mxIsDouble(curr_sub))*/
 		{
 			indices = mxGetData(curr_sub);
-			for(i = 0, j = 0; i < num_elems; idx++, i += parsed_indices->slice_lens[j++])
+			for(i = 0, j = 0, num_elems = mxGetNumberOfElements(curr_sub); i < num_elems; i += parsed_indices->slice_lens[j++])
 			{
-				subs[curr_dim] = (mwIndex)indices[i]-1;
-				parsed_indices->starting_indices[idx] = msh_GetIndex(dims, num_dims, subs);
+				parsed_indices->starting_indices[parsed_idx] = curr_index + ((mwIndex)indices[i]-1)*curr_mult;
+				parsed_idx += 1;
 			}
 		}
-		else
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
-		}
 	}
 	
-	return idx;
+	return parsed_idx;
 	
-}
-
-
-static size_t msh_GetIndex(const mwSize* dims, mwSize num_dims, const mwIndex* subs)
-{
-	size_t ret = 0;
-	size_t mult = 1;
-	for(int i = 0; i < num_dims; i++)
-	{
-		ret += subs[i]*mult;
-		mult *= dims[i];
-	}
-	return ret;
 }
 
 
 void msh_Config(size_t num_params, const mxArray** in_params)
 {
 	size_t              i, j, ps_len, vs_len, maxsize_temp;
+	unsigned long       maxvars_temp;
 	const mxArray*      param;
 	const mxArray*      val;
-	unsigned long       maxvars_temp;
+	
 #ifdef MSH_UNIX
 	mode_t              sec_temp;
 	SegmentNode_t*      curr_seg_node;

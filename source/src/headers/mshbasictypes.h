@@ -36,12 +36,20 @@
 #  define MSH_INVALID_HANDLE (-1)
 #endif
 
+#ifndef TRUE
+#  define TRUE 1
+#endif
+
 #ifndef FALSE
 #  define FALSE 0
 #endif
 
-#ifndef TRUE
-#  define TRUE 1
+#ifndef MAX
+#  define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef MIN
+#  define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
 #ifndef SIZE_MAX
