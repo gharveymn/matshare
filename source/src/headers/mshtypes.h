@@ -44,7 +44,7 @@ typedef struct UserConfig_t
 {
 	/* these are aligned for lockless assignment */
 	size_t max_shared_size;
-	volatile LockFreeCounter_t lock_counter; /* unused, kept for compatibility */
+	LockFreeCounter_t lock_counter; /* unused, kept for compatibility */
 	unsigned long max_shared_segments;
 	alignedbool_t will_shared_gc;
 #ifdef MSH_UNIX
@@ -52,6 +52,7 @@ typedef struct UserConfig_t
 #endif
 	/* this is modified behind a lock */
 	char_t fetch_default[MSH_NAME_LEN_MAX];
+	alignedbool_t sync_default;
 } UserConfig_t;
 
 /* structure of shared info about the shared segments */

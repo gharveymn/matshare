@@ -908,6 +908,7 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 	mxChar*         input_option;
 	mxArray*        dest_var;
 	const mxArray*  in_var, * opt;
+	ParsedIndices_t parsed_indices;
 	struct
 	{
 		mxArray* type;
@@ -916,9 +917,8 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 		char subs_str[MSH_NAME_LEN_MAX];
 	} idxstruct;
 	
-	int             will_sync      = FALSE; /* asynchronous by default */
+	int             will_sync      = g_user_config.sync_default;
 	size_t          struct_idx     = 0;
-	ParsedIndices_t parsed_indices = {0};
 	
 	if(num_args < 2 || num_args > 3)
 	{
@@ -953,7 +953,7 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 					idxstruct.type_wstr = mxGetChars(idxstruct.type);
 					if(idxstruct.type_wstr[0] == '.')
 					{
-						if(!mxIsStruct(dest_var) || mxGetNumberOfElements(dest_var) != 1)
+						if(!mxIsStruct(dest_var))
 						{
 							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIndexError", "Variable class 'struct' required for this assignment.");
 						}
@@ -999,12 +999,16 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 							}
 							else
 							{
-								meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Cannot index where '{}' for non-cell array.");
+								meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Cannot index '{}' for non-cell array.");
 							}
 						}
 						else
 						{
 							parsed_indices = msh_ParseIndices(idxstruct.subs, dest_var, in_var);
+							msh_OverwriteWorker(dest_var, in_var, &parsed_indices, will_sync);
+							mxFree(parsed_indices.starting_indices);
+							mxFree(parsed_indices.slice_lens);
+							return;
 						}
 						
 						
@@ -1038,13 +1042,16 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 						else
 						{
 							parsed_indices = msh_ParseIndices(idxstruct.subs, dest_var, in_var);
+							msh_OverwriteWorker(dest_var, in_var, &parsed_indices, will_sync);
+							mxFree(parsed_indices.starting_indices);
+							mxFree(parsed_indices.slice_lens);
+							return;
 						}
 					}
 					else
 					{
 						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedIndexTypeError", "Unrecognized type '%s' for indexing", mxArrayToString(idxstruct.type));
 					}
-					
 				}
 			}
 			else if(mxIsChar(opt))
@@ -1086,16 +1093,7 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 		}
 	}
 	
-	if(parsed_indices.num_indices > 0)
-	{
-		msh_OverwriteWorker(dest_var, in_var, &parsed_indices, will_sync);
-		mxFree(parsed_indices.starting_indices);
-		mxFree(parsed_indices.slice_lens);
-	}
-	else
-	{
-		msh_OverwriteWorker(dest_var, in_var, NULL, will_sync);
-	}
+	msh_OverwriteWorker(dest_var, in_var, NULL, will_sync);
 	
 }
 
@@ -1115,7 +1113,7 @@ static void msh_OverwriteWorker(mxArray* dest, const mxArray* in, ParsedIndices_
 
 static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, mxArray* dest_var, const mxArray* in_var)
 {
-	size_t          i, j, num_subs, base_dim, max_mult, max_dim;
+	size_t          i, j, k, num_subs, base_dim, max_mult, exp_num_elems;
 	size_t          first_sig_dim, last_sig_dim, num_sig_dims;
 	double          dbl_iter;
 	mxArray*        curr_subs;
@@ -1261,24 +1259,34 @@ static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, mxArray* dest_var, co
 				
 				for(j = first_sig_dim; j <= last_sig_dim; j++, i++)
 				{
-					curr_subs = mxGetCell(subs_arr, first_sig_dim);
+					curr_subs = mxGetCell(subs_arr, j);
 					
 					if(mxIsChar(curr_subs))
 					{
 						if(j < dest_num_dims)
 						{
-							if(in_dims[i] != dest_dims[j])
+							if(j + 1 == num_subs)
 							{
-								meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "AssignmentMismatchError", "Assignment input dimension mismatch.");
+								for(k = j, exp_num_elems = 1; k < dest_num_dims; k++)
+								{
+									exp_num_elems *= dest_dims[k];
+								}
+							}
+							else
+							{
+								exp_num_elems = dest_dims[j];
 							}
 						}
 						else
 						{
-							if(in_dims[i] != 1)
-							{
-								meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "AssignmentMismatchError", "Assignment input dimension mismatch.");
-							}
+							exp_num_elems = 1;
 						}
+
+						if(in_dims[i] != exp_num_elems)
+						{
+							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "AssignmentMismatchError", "Assignment input dimension mismatch.");
+						}
+
 					}
 					else
 					{
@@ -1707,6 +1715,22 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 		{
 			/* don't use the lowercase string in this case */
 			strcpy((char*)g_user_config.fetch_default, val_str);
+		}
+		else if(strcmp(param_str_l, MSH_PARAM_SYNC_DEFAULT_L) == 0 || strcmp(param_str_l, MSH_PARAM_SYNC_DEFAULT_AB) == 0)
+		{
+			/* don't use the lowercase string in this case */
+			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
+			{
+				g_user_config.sync_default = TRUE;
+			}
+			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
+			{
+				g_user_config.sync_default = FALSE;
+			}
+			else
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_SYNC_DEFAULT);
+			}
 		}
 		else
 		{

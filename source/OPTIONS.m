@@ -3,9 +3,6 @@
 
 %% Default preferences
 
-% Control whether or not to use locks when sharing memory ('on' or 'off')
-mshThreadSafety = 'on';
-
 % Set the default maximum number of segments
 mshMaxVariables = '512';
 
@@ -22,6 +19,8 @@ mshGarbageCollection = 'on';
 mshSecurity = '0600';
 
 mshFetchDefault = '-r';
+
+mshSyncDefault = 'on';
 
 %% Enable or disable debug mode
 mshDebugMode = true;

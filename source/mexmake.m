@@ -48,16 +48,6 @@ try
 	end
 	mshconfigfolder = fullfile(userconfigfolder, 'matshare');
 	
-	if(strcmp(mshThreadSafety, 'on'))
-		fprintf('-Thread safety is enabled.\n')
-		mexflags = [mexflags {'-DMSH_DEFAULT_THREAD_SAFETY=TRUE'}];
-	elseif(strcmp(mshThreadSafety, 'off'))
-		fprintf('-Thread safety is disabled.\n')
-		mexflags = [mexflags {'-DMSH_DEFAULT_THREAD_SAFETY=FALSE'}];
-	else
-		error('Invalid value for compilation parameter mshThreadSafety');
-	end
-	
 	mexflags = [mexflags {['-DMSH_DEFAULT_MAX_SHARED_SEGMENTS=' ...
 		mshMaxVariables]}];
 	
@@ -101,6 +91,16 @@ try
 	mexflags = [mexflags {['-DMSH_DEFAULT_SECURITY=' mshSecurity]}];
 	
 	mexflags = [mexflags {['-DMSH_DEFAULT_FETCH_DEFAULT="' mshFetchDefault '"']}];
+	
+	if(strcmp(mshSyncDefault, 'on'))
+		fprintf('-Synchronized overwriting is enabled by default.\n')
+		mexflags = [mexflags {'-DMSH_DEFAULT_SYNC_DEFAULT=TRUE'}];
+	elseif(strcmp(mshSyncDefault, 'off'))
+		fprintf('-Synchronized overwriting is disabled by default.\n')
+		mexflags = [mexflags {'-DMSH_DEFAULT_SYNC_DEFAULT=FALSE'}];
+	else
+		error('Invalid value for compilation parameter mshSyncDefault');
+	end
 	
 	% R2011b
 	if(~verLessThan('matlab', '7.13'))

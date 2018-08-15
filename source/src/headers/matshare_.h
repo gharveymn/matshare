@@ -41,6 +41,10 @@ typedef struct mxArray_tag mxArray;
 #define MSH_PARAM_FETCH_DEFAULT_L  "fetchdefault"
 #define MSH_PARAM_FETCH_DEFAULT_AB "fd"
 
+#define MSH_PARAM_SYNC_DEFAULT     "SyncDefault"
+#define MSH_PARAM_SYNC_DEFAULT_L   "syncdefault"
+#define MSH_PARAM_SYNC_DEFAULT_AB  "sd"
+
 #ifdef MSH_UNIX
 #define MSH_CONFIG_SECURITY_STRING_FORMAT \
 "    Security:            '%o'\n"

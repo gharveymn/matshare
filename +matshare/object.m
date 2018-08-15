@@ -109,7 +109,30 @@ classdef object
 						sparsecopy = subsasgn(obj.data, S(2:end), B);
 						matshare_(8, obj.shared_data, sparsecopy);
 					else
-						matshare_(8, obj.shared_data, cast(B, 'like', obj.data), {S(2:end)});
+						for i = 2:numel(S)
+							currsubs = S(i);
+							if(iscell(currsubs))
+								for j = 1:numel(currsubs)
+									if(islogical(currsubs{j}))
+										currsubs{j} = find(currsubs{j});
+									else
+										currsubs{j} = full(double(currsubs{j}));
+									end
+								end
+							end
+						end
+						
+						if(numel(S) > 1)
+							if(S(end).type(1) == '{' || S(end).type(1) == '.')
+								B = cast(B, 'like', subsref(obj.data, S(2:end)));
+							else
+								% prevent indexing when casting
+								B = cast(B, 'like', subsref(obj, S(1:end-1)));
+							end
+						else
+							B = cast(B, 'like', obj.data);
+						end
+						matshare_(8, obj.shared_data, B, {S(2:end)});
 					end
 					
 				elseif(strcmp(S(1).subs, 'shared_data'))
@@ -127,12 +150,17 @@ classdef object
 				dispstr = evalc('builtin(''disp'',obj);');
 				dispstr = dispstr(strfind(dispstr, 'data:'):end-1);
 				
-				disp(['  <a href="matlab:helpPopup matshare.object" ' ...
-				'style="font-weight:bold">matshare object</a>' ...
-				' storing <strong>' regexprep(num2str(size(obj.data)), '\s+', 'x') ...
-				'</strong> <a href="matlab:helpPopup ' class(obj.data) '" ' ...
-				'style="font-weight:bold">' class(obj.data) '</a>:' newline ...
-				'    ' dispstr]);
+				fprintf(['  <a href="matlab:helpPopup matshare.object" ' ...
+				'style="font-weight:bold">matshare object</a> storing <strong>' ...
+				'%s' ...
+				'</strong> <a href="matlab:helpPopup ' ...
+				'%s' ...
+				'" style="font-weight:bold">' ...
+				'%s' ...
+				'</a>:\n    ' ...
+				'%s\n'], regexprep(num2str(size(obj.data)), '\s+', 'x'), ...
+				class(obj.data), class(obj.data),dispstr);
+			
 			elseif(isempty(obj))
 				disp(['  <strong>empty</strong> <a href="matlab:helpPopup matshare.object" ' ...
 				'style="font-weight:bold">matshare object</a>' ...

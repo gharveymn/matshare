@@ -201,12 +201,14 @@ static void msh_InitializeSharedInfo(void)
 
 static void msh_InitializeConfiguration(void)
 {
-	long bytes_wr;
+#ifdef MSH_WIN
+	DWORD bytes_wr;
+#endif
 	
 	handle_t config_handle;
 	char_t* config_path;
 	
-	/* set the temporarily and then overwrite with the persistent config */
+	/* set the user config temporarily and then overwrite with the persistent config */
 	msh_SetDefaultConfiguration((void*)&g_user_config);
 	
 	config_path = msh_GetConfigurationPath();
@@ -234,7 +236,7 @@ static void msh_InitializeConfiguration(void)
 	}
 	
 	/* read whatever we can */
-	if((bytes_wr = read(config_handle, (void*)&g_user_config, sizeof(UserConfig_t))) == -1)
+	if(read(config_handle, (void*)&g_user_config, sizeof(UserConfig_t)) == -1)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 	}
@@ -334,6 +336,7 @@ void msh_SetDefaultConfiguration(UserConfig_t* user_config)
 #endif
 	strncpy((void*)user_config->fetch_default, STR(MSH_DEFAULT_FETCH_DEFAULT), sizeof(g_user_config.fetch_default));
 	user_config->fetch_default[MSH_NAME_LEN_MAX-1] = '\0';
+	user_config->sync_default = MSH_DEFAULT_SYNC_DEFAULT;
 }
 
 
