@@ -1,10 +1,11 @@
 function tv = testsubs(tv, f, subs, fcn)
+	
 	if(nargin < 4)
-		tv(subs{:}) = rand(size(tv(subs{:})));
-	else
-		tv(subs{:}) = fcn(size(tv(subs{:})));
+		fcn = @rand;
 	end
-	f.data(subs{:}) = tv(subs{:});
+	
+	tv = subsasgn(tv, subs, fcn(size(subsref(tv, subs))));
+	f = subsasgn(f, [substruct('.','data'), subs], subsref(tv, subs));
 
 	if(~matshare.scripts.compstruct(tv, f.data))
 		error('Subscripted assignment failed because results were not equal.');

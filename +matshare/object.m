@@ -122,16 +122,22 @@ classdef object
 							end
 						end
 						
-						if(numel(S) > 1)
-							if(S(end).type(1) == '{' || S(end).type(1) == '.')
-								B = cast(B, 'like', subsref(obj.data, S(2:end)));
+						if(~isstruct(B) && ~iscell(B))
+							if(numel(S) > 1)
+								if(S(end).type(1) == '{' || S(end).type(1) == '.')
+									% reference will not index
+									castvar = subsref(obj.data, S(2:end));
+								else
+									% prevent indexing when casting
+									castvar = subsref(obj, S(1:end-1));
+								end
 							else
-								% prevent indexing when casting
-								B = cast(B, 'like', subsref(obj, S(1:end-1)));
+								castvar = obj.data;
 							end
-						else
-							B = cast(B, 'like', obj.data);
+						
+							B = cast(B, 'like', castvar);
 						end
+						
 						matshare_(8, obj.shared_data, B, {S(2:end)});
 					end
 					

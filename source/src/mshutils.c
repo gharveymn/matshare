@@ -26,8 +26,6 @@
 #  include <sys/stat.h>
 #endif
 
-static int msh_CheckSparseIndex(const mxArray* dest_var, mwIndex dest_idx, const mxArray* comp_var, mwIndex comp_idx);
-
 void msh_AcquireProcessLock(ProcessLock_t process_lock)
 {
 #ifdef MSH_WIN
@@ -258,63 +256,64 @@ pid_t msh_GetPid(void)
 }
 
 
-int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var, ParsedIndices_t* parsed_indices)
+void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp_var)
 {
-	/* for loops */
-	size_t i, j, dest_idx, comp_idx, dest_num_elems, comp_num_elems;
+	int               field_num, dest_num_fields;
+	size_t            i, j, dest_idx, comp_idx, dest_num_elems, comp_num_elems;
+	const char_t*     curr_field_name;
 	
-	/* for structures */
-	int field_num, comp_field_num, dest_num_fields, found_field_name;
+	IndexedVariable_t sub_variable  = {0};
+	mxClassID         dest_class_id = mxGetClassID(indexed_var->dest_var);
 	
-	const char_t* curr_field_name;
-	
-	mxClassID dest_class_id = mxGetClassID(dest_var);
-	
-	if(mxGetElementSize(dest_var) != mxGetElementSize(comp_var))
+	if(mxGetElementSize(indexed_var->dest_var) != mxGetElementSize(comp_var))
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "InternalSizeError", "Internal element sizes were incompatible.");
 	}
 	
 	if(dest_class_id != mxGetClassID(comp_var))
 	{
-		return FALSE;
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The variable input class '%s' is not compatible with the destination, which is of class '%s'.", mxGetClassName(comp_var), mxGetClassName(indexed_var->dest_var));
 	}
 	
-	dest_num_elems = mxGetNumberOfElements(dest_var);
+	dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
 	comp_num_elems = mxGetNumberOfElements(comp_var);
 	
-	if(parsed_indices == NULL)
+	if(indexed_var->indices.start_idxs == NULL)
 	{
 		/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
-		if(mxGetNumberOfDimensions(dest_var) != mxGetNumberOfDimensions(comp_var) ||
-		   memcmp(mxGetDimensions(dest_var), mxGetDimensions(comp_var), mxGetNumberOfDimensions(dest_var)*sizeof(mwSize)) != 0)
+		if(mxGetNumberOfDimensions(indexed_var->dest_var) != mxGetNumberOfDimensions(comp_var) ||
+		   memcmp(mxGetDimensions(indexed_var->dest_var), mxGetDimensions(comp_var), mxGetNumberOfDimensions(indexed_var->dest_var)*sizeof(mwSize)) != 0)
 		{
-			return FALSE;
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleSizeError", "The input variable was of differing size in comparison to the destination.");
 		}
 	}
 	else
 	{
 		
-		if(parsed_indices->num_indices < parsed_indices->num_slices)
+		if(indexed_var->indices.num_idxs < indexed_var->indices.num_lens)
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexParsingError", "The internal index parser failed. Sorry about that.");
 		}
 		
-		if(mxIsSparse(dest_var))
+		if(mxIsSparse(indexed_var->dest_var))
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "SubscriptedSparseError", "Cannot directly assign sparse matrices through subscripts.");
 		}
 		else
 		{
-			for(i = 0, comp_idx = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+			for(i = 0, comp_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
 			{
-				for(j = 0; j < parsed_indices->num_slices; j++)
+				for(j = 0; j < indexed_var->indices.num_lens; j++)
 				{
-					comp_idx += parsed_indices->slice_lens[j];
-					if(dest_num_elems < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j] ||
-					   (comp_num_elems != 1 && comp_num_elems < comp_idx))
+					if(dest_num_elems < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j])
 					{
-						return FALSE;
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "DestIndexingError", "Index exceeds destination variable size.");
+					}
+					
+					comp_idx += indexed_var->indices.slice_lens[j];
+					if(comp_num_elems != 1 && comp_num_elems < comp_idx)
+					{
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InputIndexingError", "Index exceeds input variable size.");
 					}
 				}
 			}
@@ -325,73 +324,49 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var, Pa
 	if(dest_class_id == mxSTRUCT_CLASS)
 	{
 		
-		dest_num_elems = mxGetNumberOfElements(dest_var);
-		dest_num_fields = mxGetNumberOfFields(dest_var);
+		dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
+		dest_num_fields = mxGetNumberOfFields(indexed_var->dest_var);
 		
 		if(dest_num_fields != mxGetNumberOfFields(comp_var))
 		{
-			return FALSE;
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NumFieldsError", "The number of fields in the input variable (%d) differs from that of the destination (%d).", mxGetNumberOfFields(comp_var), dest_num_fields);
 		}
 		
 		/* search for each field name */
 		for(field_num = 0; field_num < dest_num_fields; field_num++)
 		{
-			curr_field_name = mxGetFieldNameByNumber(dest_var, field_num);
-			for(comp_field_num = 0, found_field_name = FALSE; comp_field_num < dest_num_fields; comp_field_num++)
+			if(mxGetField(comp_var, 0, mxGetFieldNameByNumber(indexed_var->dest_var, field_num)) == NULL)
 			{
-				if(strcmp(curr_field_name, mxGetFieldNameByNumber(comp_var, comp_field_num)) == 0)
-				{
-					found_field_name = TRUE;
-					break;
-				}
-			}
-			if(!found_field_name)
-			{
-				return FALSE;
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "MissingFieldError", "The input variable is missing the field '%s'.", mxGetFieldNameByNumber(indexed_var->dest_var, field_num));
 			}
 		}
 		
 		/* Go through each element */
-		if(parsed_indices == NULL)
+		if(indexed_var->indices.start_idxs == NULL)
 		{
 			for(field_num = 0; field_num < dest_num_fields; field_num++)     /* each field */
 			{
-				curr_field_name = mxGetFieldNameByNumber(dest_var, field_num);
+				curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
 				for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
 				{
-					if(!msh_CompareVariableSize(mxGetField(dest_var, dest_idx, curr_field_name), mxGetField(comp_var, dest_idx, curr_field_name), NULL))
-					{
-						return FALSE;
-					}
+					sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
+					msh_CompareVariableSize(&sub_variable, mxGetField(comp_var, dest_idx, curr_field_name));
 				}
 			}
 		}
 		else
 		{
-			for(field_num = 0, comp_idx = 0; field_num < dest_num_fields; field_num++)     /* each field */
+			for(field_num = 0; field_num < dest_num_fields; field_num++)     /* each field */
 			{
-				curr_field_name = mxGetFieldNameByNumber(dest_var, field_num);
-				for(i = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+				curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
+				for(i = 0, comp_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
 				{
-					for(j = 0; j < parsed_indices->num_slices; j++)
+					for(j = 0; j < indexed_var->indices.num_lens; j++)
 					{
-						for(dest_idx = parsed_indices->starting_indices[i+j]; dest_idx < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j]; dest_idx++)
+						for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, comp_idx++)
 						{
-							if(comp_num_elems == 1)
-							{
-								if(!msh_CompareVariableSize(mxGetField(dest_var, dest_idx, curr_field_name), mxGetField(comp_var, 0, curr_field_name), NULL))
-								{
-									return FALSE;
-								}
-							}
-							else
-							{
-								if(!msh_CompareVariableSize(mxGetField(dest_var, dest_idx, curr_field_name), mxGetField(comp_var, comp_idx, curr_field_name), NULL))
-								{
-									return FALSE;
-								}
-								comp_idx++;
-							}
+							sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
+							msh_CompareVariableSize(&sub_variable, mxGetField(comp_var, (comp_num_elems == 1)? 0 : comp_idx, curr_field_name));
 						}
 					}
 				}
@@ -402,56 +377,36 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var, Pa
 	}
 	else if(dest_class_id == mxCELL_CLASS) /* Cell case */
 	{
-		dest_num_elems = mxGetNumberOfElements(dest_var);
+		dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
 		
-		if(dest_num_elems != mxGetNumberOfElements(comp_var))
-		{
-			return FALSE;
-		}
-		
-		if(parsed_indices == NULL)
+		if(indexed_var->indices.start_idxs == NULL)
 		{
 			for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
 			{
-				if(!msh_CompareVariableSize(mxGetCell(dest_var, dest_idx), mxGetCell(comp_var, dest_idx), NULL))
-				{
-					return FALSE;
-				}
+				sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
+				msh_CompareVariableSize(&sub_variable, mxGetCell(comp_var, dest_idx));
 			}
 		}
 		else
 		{
-			for(i = 0, comp_idx = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+			for(i = 0, comp_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
 			{
-				for(j = 0; j < parsed_indices->num_slices; j++)
+				for(j = 0; j < indexed_var->indices.num_lens; j++)
 				{
-					for(dest_idx = parsed_indices->starting_indices[i+j]; dest_idx < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j]; dest_idx++)
+					for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, comp_idx++)
 					{
-						if(comp_num_elems == 1)
-						{
-							if(!msh_CompareVariableSize(mxGetCell(dest_var, dest_idx), mxGetCell(comp_var, 0), NULL))
-							{
-								return FALSE;
-							}
-						}
-						else
-						{
-							if(!msh_CompareVariableSize(mxGetCell(dest_var, dest_idx), mxGetCell(comp_var, comp_idx), NULL))
-							{
-								return FALSE;
-							}
-							comp_idx++;
-						}
+						sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
+						msh_CompareVariableSize(&sub_variable, mxGetCell(comp_var, (comp_num_elems == 1)? 0 : comp_idx));
 					}
 				}
 			}
 		}
 	}
-	else if(mxIsNumeric(dest_var) || dest_class_id == mxLOGICAL_CLASS || dest_class_id == mxCHAR_CLASS)      /*base case*/
+	else if(mxIsNumeric(indexed_var->dest_var) || dest_class_id == mxLOGICAL_CLASS || dest_class_id == mxCHAR_CLASS)      /*base case*/
 	{
-		if(mxIsComplex(dest_var) != mxIsComplex(comp_var))
+		if(mxIsComplex(indexed_var->dest_var) != mxIsComplex(comp_var))
 		{
-			return FALSE;
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "ComplexityError", "The complexity of the input variable does not match with that of the destination.");
 		}
 	}
 	else
@@ -463,25 +418,19 @@ int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var, Pa
 		                  "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
 	}
 	
-	return TRUE;
-	
 }
 
 
-void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, ParsedIndices_t* parsed_indices, int will_sync)
+void msh_OverwriteVariable(IndexedVariable_t* indexed_var, const mxArray* in_var, int will_sync)
 {
-	byte_t* dest_data, * in_data, * dest_imag_data, * in_imag_data;
+	int               field_num, in_num_fields, is_complex;
+	size_t            i, j, dest_idx, in_idx, nzmax, elem_size, dest_offset, in_offset;
+	byte_t*           dest_data, * in_data, * dest_imag_data, * in_imag_data;
+	const char_t*     curr_field_name;
 	
-	/* for iterators */
-	size_t i, j, dest_idx, comp_idx, in_num_elems, nzmax, elem_size, dest_offset, in_offset;
-	
-	int field_num, in_num_fields, is_complex;
-	
-	const char_t* curr_field_name;
-	
-	mxClassID shared_class_id = mxGetClassID(in_var);
-	
-	in_num_elems = mxGetNumberOfElements(in_var);
+	size_t            in_num_elems    = mxGetNumberOfElements(in_var);
+	mxClassID         shared_class_id = mxGetClassID(in_var);
+	IndexedVariable_t sub_variable    = {0};
 	
 	/* Structure case */
 	if(shared_class_id == mxSTRUCT_CLASS)
@@ -489,14 +438,15 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, Parse
 		in_num_fields = mxGetNumberOfFields(in_var);
 		
 		/* go through each element */
-		if(parsed_indices == NULL)
+		if(indexed_var->indices.start_idxs == NULL)
 		{
 			for(field_num = 0; field_num < in_num_fields; field_num++)     /* each field */
 			{
-				curr_field_name = mxGetFieldNameByNumber(dest_var, field_num);
+				curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
 				for(dest_idx = 0; dest_idx < in_num_elems; dest_idx++)
 				{
-					msh_OverwriteVariable(mxGetField(dest_var, dest_idx, curr_field_name), mxGetField(in_var, dest_idx, curr_field_name), NULL, will_sync);
+					sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
+					msh_OverwriteVariable(&sub_variable, mxGetField(in_var, dest_idx, curr_field_name), will_sync);
 				}
 			}
 		}
@@ -504,23 +454,16 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, Parse
 		{
 			for(field_num = 0; field_num < in_num_fields; field_num++)     /* each field */
 			{
-				curr_field_name = mxGetFieldNameByNumber(dest_var, field_num);
-				for(i = 0, comp_idx = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+				curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
+				for(i = 0, in_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
 				{
-					for(j = 0; j < parsed_indices->num_slices; j++)
+					for(j = 0; j < indexed_var->indices.num_lens; j++)
 					{
-						for(dest_idx = parsed_indices->starting_indices[i+j]; dest_idx < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j]; dest_idx++)
+						for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, in_idx++)
 						{
 							/* this inner conditional should be optimized out by the compiler */
-							if(in_num_elems == 1)
-							{
-								msh_OverwriteVariable(mxGetField(dest_var, dest_idx, curr_field_name), mxGetField(in_var, 0, curr_field_name), NULL, will_sync);
-							}
-							else
-							{
-								msh_OverwriteVariable(mxGetField(dest_var, dest_idx, curr_field_name), mxGetField(in_var, comp_idx, curr_field_name), NULL, will_sync);
-							}
-							comp_idx++;
+							sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
+							msh_OverwriteVariable(&sub_variable, mxGetField(in_var, (in_num_elems == 1)? 0 : in_idx, curr_field_name), will_sync);
 						}
 					}
 				}
@@ -531,31 +474,25 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, Parse
 	{
 		
 		/* go through each element */
-		if(parsed_indices == NULL)
+		if(indexed_var->indices.start_idxs == NULL)
 		{
 			for(dest_idx = 0; dest_idx < in_num_elems; dest_idx++)
 			{
-				msh_OverwriteVariable(mxGetCell(dest_var, dest_idx), mxGetCell(in_var, dest_idx), NULL, will_sync);
+				sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
+				msh_OverwriteVariable(&sub_variable, mxGetCell(in_var, dest_idx), will_sync);
 			}
 		}
 		else
 		{
-			for(i = 0, comp_idx = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+			for(i = 0, in_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
 			{
-				for(j = 0; j < parsed_indices->num_slices; j++)
+				for(j = 0; j < indexed_var->indices.num_lens; j++)
 				{
-					for(dest_idx = parsed_indices->starting_indices[i+j]; dest_idx < parsed_indices->starting_indices[i+j] + parsed_indices->slice_lens[j]; dest_idx++)
+					for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, in_idx++)
 					{
 						/* this inner conditional should be optimized out by the compiler */
-						if(in_num_elems == 1)
-						{
-							msh_OverwriteVariable(mxGetCell(dest_var, dest_idx), mxGetCell(in_var, 0), NULL, will_sync);
-						}
-						else
-						{
-							msh_OverwriteVariable(mxGetCell(dest_var, dest_idx), mxGetCell(in_var, comp_idx), NULL, will_sync);
-						}
-						comp_idx++;
+						sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
+						msh_OverwriteVariable(&sub_variable, mxGetCell(in_var, (in_num_elems == 1)? 0 : in_idx), will_sync);
 					}
 				}
 			}
@@ -573,10 +510,10 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, Parse
 			
 			if(will_sync) msh_AcquireProcessLock(g_process_lock);
 			
-			memcpy(mxGetIr(dest_var), mxGetIr(in_var), nzmax*sizeof(mwIndex));
-			memcpy(mxGetJc(dest_var), mxGetJc(in_var), (mxGetN(in_var) + 1)*sizeof(mwIndex));
-			memcpy(mxGetData(dest_var), mxGetData(in_var), nzmax*mxGetElementSize(in_var));
-			if(is_complex) memcpy(mxGetImagData(dest_var), mxGetImagData(in_var), nzmax*mxGetElementSize(in_var));
+			memcpy(mxGetIr(indexed_var->dest_var), mxGetIr(in_var), nzmax*sizeof(mwIndex));
+			memcpy(mxGetJc(indexed_var->dest_var), mxGetJc(in_var), (mxGetN(in_var) + 1)*sizeof(mwIndex));
+			memcpy(mxGetData(indexed_var->dest_var), mxGetData(in_var), nzmax*mxGetElementSize(in_var));
+			if(is_complex) memcpy(mxGetImagData(indexed_var->dest_var), mxGetImagData(in_var), nzmax*mxGetElementSize(in_var));
 			
 			if(will_sync) msh_ReleaseProcessLock(g_process_lock);
 			
@@ -584,16 +521,16 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, Parse
 		else if(!mxIsEmpty(in_var))
 		{
 			
-			elem_size = mxGetElementSize(dest_var);
+			elem_size = mxGetElementSize(indexed_var->dest_var);
 			
-			if(parsed_indices == NULL)
+			if(indexed_var->indices.start_idxs == NULL)
 			{
 				in_num_elems = mxGetNumberOfElements(in_var);
 				
 				if(will_sync) msh_AcquireProcessLock(g_process_lock);
 				
-				memcpy(mxGetData(dest_var), mxGetData(in_var), in_num_elems*elem_size);
-				if(is_complex) memcpy(mxGetImagData(dest_var), mxGetImagData(in_var), in_num_elems*elem_size);
+				memcpy(mxGetData(indexed_var->dest_var), mxGetData(in_var), in_num_elems*elem_size);
+				if(is_complex) memcpy(mxGetImagData(indexed_var->dest_var), mxGetImagData(in_var), in_num_elems*elem_size);
 				
 				if(will_sync) msh_ReleaseProcessLock(g_process_lock);
 				
@@ -601,24 +538,24 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, Parse
 			else
 			{
 				
-				dest_data = mxGetData(dest_var);
+				dest_data = mxGetData(indexed_var->dest_var);
 				in_data = mxGetData(in_var);
 				
-				dest_imag_data = mxGetImagData(dest_var);
+				dest_imag_data = mxGetImagData(indexed_var->dest_var);
 				in_imag_data = mxGetImagData(in_var);
 				
-				for(i = 0, in_offset = 0; i < parsed_indices->num_indices; i += parsed_indices->num_slices)
+				for(i = 0, in_offset = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
 				{
-					for(j = 0; j < parsed_indices->num_slices; j++)
+					for(j = 0; j < indexed_var->indices.num_lens; j++)
 					{
-						dest_offset = parsed_indices->starting_indices[i+j]*elem_size/sizeof(byte_t);
+						dest_offset = indexed_var->indices.start_idxs[i+j]*elem_size/sizeof(byte_t);
 						
 						if(will_sync) msh_AcquireProcessLock(g_process_lock);
 						
 						/* optimized out */
 						if(in_num_elems == 1)
 						{
-							for(dest_idx = 0; dest_idx < parsed_indices->slice_lens[j]; dest_idx++)
+							for(dest_idx = 0; dest_idx < indexed_var->indices.slice_lens[j]; dest_idx++)
 							{
 								memcpy(dest_data + dest_offset + dest_idx*elem_size/sizeof(byte_t), in_data, elem_size);
 								if(is_complex) memcpy(dest_imag_data + dest_offset + dest_idx*elem_size/sizeof(byte_t), in_imag_data, elem_size);
@@ -626,9 +563,9 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, Parse
 						}
 						else
 						{
-							memcpy(dest_data + dest_offset, in_data + in_offset, parsed_indices->slice_lens[j]*elem_size);
-							if(is_complex) memcpy(dest_imag_data + dest_offset, in_imag_data + in_offset, parsed_indices->slice_lens[j]*elem_size);
-							in_offset += parsed_indices->slice_lens[j]*elem_size/sizeof(byte_t);
+							memcpy(dest_data + dest_offset, in_data + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
+							if(is_complex) memcpy(dest_imag_data + dest_offset, in_imag_data + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
+							in_offset += indexed_var->indices.slice_lens[j]*elem_size/sizeof(byte_t);
 						}
 						
 						if(will_sync) msh_ReleaseProcessLock(g_process_lock);
@@ -639,74 +576,6 @@ void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var, Parse
 		}
 		
 	}
-}
-
-
-static int msh_CheckSparseIndex(const mxArray* dest_var, mwIndex dest_idx, const mxArray* comp_var, mwIndex comp_idx)
-{
-	mwIndex ir_offset;
-	
-	mwIndex* dest_ir  = mxGetIr(dest_var);
-	mwIndex* dest_jc  = mxGetJc(dest_var);
-	mwSize   dest_m   = mxGetM (dest_var);
-	mwSize   dest_n   = mxGetN (dest_var);
-	
-	mwIndex* comp_ir  = mxGetIr(comp_var);
-	mwIndex* comp_jc  = mxGetJc(comp_var);
-	mwSize   comp_m   = mxGetM (comp_var);
-	mwSize   comp_n   = mxGetN (comp_var);
-	
-	/* idx = m*col + row */
-	mwIndex dest_col = dest_idx/dest_m;
-	mwIndex dest_row = dest_idx%dest_m;
-	
-	mwIndex comp_col = comp_idx/comp_m;
-	mwIndex comp_row = comp_idx%comp_m;
-	
-	int dest_is_nz = FALSE;
-	int comp_is_nz = FALSE;
-	
-	if(dest_idx >= dest_m * dest_n)
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIndex", "Invalid destination index.");
-	}
-	
-	if(comp_idx >= comp_m * comp_n)
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidIndex", "Invalid destination index.");
-	}
-	
-	for(ir_offset = dest_jc[dest_col]; ir_offset < dest_jc[dest_col+1]; ir_offset++)
-	{
-		if(dest_ir[ir_offset] == dest_row)
-		{
-			dest_is_nz = TRUE;
-		}
-	}
-	
-	for(ir_offset = comp_jc[comp_col]; ir_offset < comp_jc[comp_col+1]; ir_offset++)
-	{
-		if(comp_ir[ir_offset] == comp_row)
-		{
-			comp_is_nz = TRUE;
-		}
-	}
-	
-	if(dest_is_nz == comp_is_nz)
-	{
-		return 0;
-	}
-	else if(dest_is_nz && !comp_is_nz)
-	{
-		return -1;
-	}
-	else /*if(!dest_is_nz && comp_is_nz)*/
-	{
-		return 1;
-	}
-	
-	return 0;
-	
 }
 
 

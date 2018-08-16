@@ -211,7 +211,7 @@ typedef enum
  * @param num_args The number of variables to be shared.
  * @param in_args The variables to be shared.
  */
-void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args);
+void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args, int return_to_ans);
 
 
 /**

@@ -11,9 +11,8 @@
 #ifndef MATSHARE_MSHBASICTYPES_H
 #define MATSHARE_MSHBASICTYPES_H
 
+#include "mex.h"
 #include <errno.h>
-
-#include "tmwtypes.h"
 
 #if defined(DEBUG_UNIX)
 #  ifndef MSH_UNIX
@@ -65,7 +64,7 @@
 #define XSTR(x) #x
 #define STR(x) XSTR(x)
 
-#define MSH_VERSION_STRING "1.1.0"
+#define MSH_VERSION_STRING "1.1.1"
 
 /** these are basic readability typedefs **/
 typedef char char_t;                     /* characters */
