@@ -25,14 +25,14 @@ typedef struct VariableNode_t VariableNode_t;
 typedef struct SegmentMetadata_t
 {
 	/* use these to link together the memory segments */
-	char_t name[MSH_NAME_LEN_MAX];             /* non-volatile */
+	char_T name[MSH_NAME_LEN_MAX];             /* non-volatile */
 	size_t data_size;						/* size without the metadata; non-volatile */
-	volatile alignedbool_t is_persistent;        /* set to TRUE if the segment will not be automatically garbage collected */
-	volatile alignedbool_t is_invalid;           /* set to TRUE if this segment is to be freed by all processes */
-	volatile segmentnumber_t prev_seg_num;
-	volatile segmentnumber_t next_seg_num;
+	volatile alignedbool_T is_persistent;        /* set to TRUE if the segment will not be automatically garbage collected */
+	volatile alignedbool_T is_invalid;           /* set to TRUE if this segment is to be freed by all processes */
+	volatile segmentnumber_T prev_seg_num;
+	volatile segmentnumber_T next_seg_num;
 	volatile long procs_using;                   /* number of processes using this variable */
-	volatile LockFreeCounter_t procs_tracking;
+	volatile LockFreeCounter_T procs_tracking;
 } SegmentMetadata_t;
 
 typedef struct SegmentInfo_t
@@ -40,8 +40,8 @@ typedef struct SegmentInfo_t
 	void* raw_ptr;
 	SegmentMetadata_t* metadata;
 	size_t total_segment_size;
-	handle_t handle;
-	segmentnumber_t seg_num;
+	handle_T handle;
+	segmentnumber_T seg_num;
 } SegmentInfo_t;
 
 

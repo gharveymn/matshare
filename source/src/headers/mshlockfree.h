@@ -15,7 +15,7 @@ LONG STDCALL InterlockedCompareExchange(LPLONG, LONG, LONG);
  * @param counter The counter.
  * @return The current count.
  */
-unsigned long msh_GetCounterCount(volatile LockFreeCounter_t* counter);
+unsigned long msh_GetCounterCount(volatile LockFreeCounter_T* counter);
 
 
 /**
@@ -24,7 +24,7 @@ unsigned long msh_GetCounterCount(volatile LockFreeCounter_t* counter);
  * @param counter The counter.
  * @return The value of the counter flag.
  */
-unsigned long msh_GetCounterFlag(volatile LockFreeCounter_t* counter);
+unsigned long msh_GetCounterFlag(volatile LockFreeCounter_T* counter);
 
 
 /**
@@ -33,7 +33,7 @@ unsigned long msh_GetCounterFlag(volatile LockFreeCounter_t* counter);
  * @param counter The counter.
  * @return The value of the counter post flag.
  */
-unsigned long msh_GetCounterPost(volatile LockFreeCounter_t* counter);
+unsigned long msh_GetCounterPost(volatile LockFreeCounter_T* counter);
 
 
 /**
@@ -42,7 +42,7 @@ unsigned long msh_GetCounterPost(volatile LockFreeCounter_t* counter);
  * @param counter The counter.
  * @return The counter immediately after the increment.
  */
-LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter);
+LockFreeCounter_T msh_IncrementCounter(volatile LockFreeCounter_T* counter);
 
 
 /**
@@ -53,7 +53,7 @@ LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter);
  * @param set_flag A flag determining whether to set the counter flag to TRUE if the count is 0.
  * @return Whether the counter flipped the counter flag from FALSE to TRUE.
  */
-bool_t msh_DecrementCounter(volatile LockFreeCounter_t* counter, bool_t set_flag);
+bool_T msh_DecrementCounter(volatile LockFreeCounter_T* counter, bool_T set_flag);
 
 
 /**
@@ -62,7 +62,7 @@ bool_t msh_DecrementCounter(volatile LockFreeCounter_t* counter, bool_t set_flag
  * @param counter The counter.
  * @param val The value for the flag.
  */
-void msh_SetCounterFlag(volatile LockFreeCounter_t* counter, unsigned long val);
+void msh_SetCounterFlag(volatile LockFreeCounter_T* counter, unsigned long val);
 
 
 /**
@@ -71,7 +71,7 @@ void msh_SetCounterFlag(volatile LockFreeCounter_t* counter, unsigned long val);
  * @param counter The counter.
  * @param val The value for the post flag.
  */
-void msh_SetCounterPost(volatile LockFreeCounter_t* counter, unsigned long val);
+void msh_SetCounterPost(volatile LockFreeCounter_T* counter, unsigned long val);
 
 
 /**
@@ -81,7 +81,7 @@ void msh_SetCounterPost(volatile LockFreeCounter_t* counter, unsigned long val);
  * @param counter The counter.
  * @param val The value for the flag.
  */
-void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val);
+void msh_WaitSetCounter(volatile LockFreeCounter_T* counter, unsigned long val);
 
 
 /**
@@ -92,7 +92,7 @@ void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val);
  * @param max_value The maximum value of dest.
  * @return Whether the operation succeeded.
  */
-bool_t msh_AtomicAddSizeWithMax(volatile size_t* dest, size_t add_value, size_t max_value);
+bool_T msh_AtomicAddSizeWithMax(volatile size_t* dest, size_t add_value, size_t max_value);
 
 
 /**

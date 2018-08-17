@@ -109,7 +109,7 @@ static size_t msh_GetFieldNamesSize(const mxArray* in_var);
  *
  * @param field_str A pointer to the field string.
  */
-static void msh_GetNextFieldName(const char_t** field_str);
+static void msh_GetNextFieldName(const char_T** field_str);
 
 
 /**
@@ -326,43 +326,43 @@ void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, int in)
 
 mwSize* msh_GetDimensions(SharedVariableHeader_t* hdr_ptr)
 {
-	return (mwSize*)((byte_t*)hdr_ptr + sizeof(SharedVariableHeader_t));
+	return (mwSize*)((byte_T*)hdr_ptr + sizeof(SharedVariableHeader_t));
 }
 
 
 void* msh_GetData(SharedVariableHeader_t* hdr_ptr)
 {
-	return (byte_t*)hdr_ptr + msh_GetDataOffset(hdr_ptr);
+	return (byte_T*)hdr_ptr + msh_GetDataOffset(hdr_ptr);
 }
 
 
 void* msh_GetImagData(SharedVariableHeader_t* hdr_ptr)
 {
-	return (byte_t*)hdr_ptr + msh_GetImagDataOffset(hdr_ptr);
+	return (byte_T*)hdr_ptr + msh_GetImagDataOffset(hdr_ptr);
 }
 
 
 mwIndex* msh_GetIr(SharedVariableHeader_t* hdr_ptr)
 {
-	return (mwIndex*)((byte_t*)hdr_ptr + msh_GetIrOffset(hdr_ptr));
+	return (mwIndex*)((byte_T*)hdr_ptr + msh_GetIrOffset(hdr_ptr));
 }
 
 
-char_t* msh_GetFieldNames(SharedVariableHeader_t* hdr_ptr)
+char_T* msh_GetFieldNames(SharedVariableHeader_t* hdr_ptr)
 {
-	return (char_t*)((byte_t*)hdr_ptr + msh_GetFieldNamesOffset(hdr_ptr));
+	return (char_T*)((byte_T*)hdr_ptr + msh_GetFieldNamesOffset(hdr_ptr));
 }
 
 
 mwIndex* msh_GetJc(SharedVariableHeader_t* hdr_ptr)
 {
-	return (mwIndex*)((byte_t*)hdr_ptr + msh_GetJcOffset(hdr_ptr));
+	return (mwIndex*)((byte_T*)hdr_ptr + msh_GetJcOffset(hdr_ptr));
 }
 
 
 size_t* msh_GetChildOffsets(SharedVariableHeader_t* hdr_ptr)
 {
-	return (size_t*)((byte_t*)hdr_ptr + msh_GetChildOffsOffset(hdr_ptr));
+	return (size_t*)((byte_T*)hdr_ptr + msh_GetChildOffsOffset(hdr_ptr));
 }
 
 
@@ -370,7 +370,7 @@ size_t* msh_GetChildOffsets(SharedVariableHeader_t* hdr_ptr)
 
 SharedVariableHeader_t* msh_GetChildHeader(SharedVariableHeader_t* hdr_ptr, size_t child_num)
 {
-	return (SharedVariableHeader_t*)((byte_t*)hdr_ptr + msh_GetChildOffsets(hdr_ptr)[child_num]);
+	return (SharedVariableHeader_t*)((byte_T*)hdr_ptr + msh_GetChildOffsets(hdr_ptr)[child_num]);
 }
 
 
@@ -504,7 +504,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 	size_t curr_off = 0, idx, copy_sz, alloc_sz, count, num_elems;
 	
 	int field_num, num_fields;
-	const char_t* field_name;
+	const char_T* field_name;
 	char* field_name_dest;
 	
 	/* initialize header info */
@@ -742,8 +742,8 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 	/* for structures */
 	int field_num, num_fields;
 	
-	const char_t** field_names;
-	const char_t* field_name;
+	const char_T** field_names;
+	const char_T* field_name;
 	
 	mxClassID shared_class_id = (mxClassID)msh_GetClassID(shared_header);
 	
@@ -753,7 +753,7 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header)
 		num_elems = msh_GetNumElems(shared_header);
 		num_fields = msh_GetNumFields(shared_header);
 		
-		field_names = mxMalloc(num_fields*sizeof(char_t*));
+		field_names = mxMalloc(num_fields*sizeof(char_T*));
 		field_name = msh_GetFieldNames(shared_header);
 		for(field_num = 0; field_num < num_fields; field_num++, msh_GetNextFieldName(&field_name))
 		{
@@ -951,7 +951,7 @@ int msh_CompareHeaderSize(SharedVariableHeader_t* shared_header, const mxArray* 
 	/* for structures */
 	int field_num, shared_num_fields;                /* current field */
 	
-	const char_t* shared_field_name;
+	const char_T* shared_field_name;
 	
 	mxClassID shared_class_id = (mxClassID)msh_GetClassID(shared_header);
 	
@@ -1135,7 +1135,7 @@ void msh_DetachVariable(mxArray* ret_var)
 
 static size_t msh_GetFieldNamesSize(const mxArray* in_var)
 {
-	const char_t* field_name;
+	const char_T* field_name;
 	int i, num_fields;
 	size_t cml_sz = 0;
 	
@@ -1145,14 +1145,14 @@ static size_t msh_GetFieldNamesSize(const mxArray* in_var)
 	{
 		/* This field */
 		field_name = mxGetFieldNameByNumber(in_var, i);
-		cml_sz += (strlen(field_name) + 1)*sizeof(char_t); /* remember to add the null termination */
+		cml_sz += (strlen(field_name) + 1)*sizeof(char_T); /* remember to add the null termination */
 	}
 	
 	return cml_sz;
 }
 
 
-static void msh_GetNextFieldName(const char_t** field_str)
+static void msh_GetNextFieldName(const char_T** field_str)
 {
 	*field_str = *field_str + strlen(*field_str) + 1;
 }

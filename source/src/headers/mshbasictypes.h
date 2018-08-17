@@ -67,27 +67,25 @@
 #define MSH_VERSION_STRING "1.1.1"
 
 /** these are basic readability typedefs **/
-typedef char char_t;                     /* characters */
-typedef byte_T byte_t;                  /* reading physical memory */
-typedef int8_T bool_t;                  /* conditionals */
-typedef int32_T alignedbool_t;		/* for word sized alignment */
-typedef int32_T segmentnumber_t; /* segment number identifiers */
+typedef int8_T bool_T;                  /* conditionals */
+typedef int32_T alignedbool_T;		/* for word sized alignment */
+typedef int32_T segmentnumber_T; /* segment number identifiers */
 
 #define MSH_SEG_NUM_FORMAT "%li"
 
 #ifdef MSH_WIN
-   typedef HANDLE handle_t;
-   typedef DWORD pid_t;
-   typedef handle_t ProcessLock_t;
+   typedef HANDLE handle_T;
+   typedef DWORD pid_T;
+   typedef handle_T FileLock_T;
 #  define HANDLE_FORMAT SIZE_FORMAT
 #  define PID_FORMAT "%lu"
 #else
-   typedef int handle_t;				 /* give fds a uniform identifier */
-   typedef struct ProcessLock_t
+   typedef int handle_T;				 /* give fds a uniform identifier */
+   typedef struct FileLock_T
    {
-      handle_t lock_handle;
+      handle_T lock_handle;
       size_t lock_size;
-   } ProcessLock_t;
+   } FileLock_T;
 #define HANDLE_FORMAT "%i"
 #define PID_FORMAT "%i"
 #endif
@@ -104,7 +102,7 @@ typedef int32_T segmentnumber_t; /* segment number identifiers */
 #define MSH_SEG_NUM_MAX 0x7FFFFFFF      /* the maximum segment number (which is int32 max) */
 #define MSH_INVALID_SEG_NUM (-1L)
 
-typedef union LockFreeCounter_ut
+typedef union LockFreeCounter_Tag
 {
 	long span;
 	struct values_tag
@@ -113,6 +111,6 @@ typedef union LockFreeCounter_ut
 		unsigned long flag : 1;
 		unsigned long post : 1;
 	} values;
-} LockFreeCounter_t;
+} LockFreeCounter_T;
 
 #endif /* MATSHARE_MSHBASICTYPES_H */

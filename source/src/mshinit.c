@@ -77,7 +77,7 @@ void msh_InitializeMatshare(void)
 	if(g_local_info.process_lock.lock_handle == MSH_INVALID_HANDLE)
 	{
 		g_local_info.process_lock.lock_handle = g_local_info.shared_info_wrapper.handle;
-		g_local_info.process_lock.lock_size = sizeof(SharedInfo_t);
+		g_local_info.process_lock.lock_size = sizeof(SharedInfo_T);
 	}
 #endif
 	
@@ -102,14 +102,14 @@ static void msh_InitializeSharedInfo(void)
 {
 
 #ifdef MSH_UNIX
-	LockFreeCounter_t ret_num_procs;
+	LockFreeCounter_T ret_num_procs;
 #endif
 	
 	if(g_local_info.shared_info_wrapper.handle == MSH_INVALID_HANDLE)
 	{
 		/* note: on both windows and linux, this is guaranteed to be zeroed after creating */
 #ifdef MSH_WIN
-		g_local_info.shared_info_wrapper.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)sizeof(SharedInfo_t), MSH_SHARED_INFO_SEGMENT_NAME);
+		g_local_info.shared_info_wrapper.handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)sizeof(SharedInfo_T), MSH_SHARED_INFO_SEGMENT_NAME);
 		if(g_local_info.shared_info_wrapper.handle == NULL)
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateSharedInfoError", "Could not create or open the shared info segment.");
@@ -121,7 +121,7 @@ static void msh_InitializeSharedInfo(void)
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateError", "There was an error creating the shared info segment.");
 		}
 		
-		if(ftruncate(g_local_info.shared_info_wrapper.handle, sizeof(SharedInfo_t)) != 0)
+		if(ftruncate(g_local_info.shared_info_wrapper.handle, sizeof(SharedInfo_T)) != 0)
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "TruncateError", "There was an error truncating the shared info segment.");
 		}
@@ -131,7 +131,7 @@ static void msh_InitializeSharedInfo(void)
 	if(g_local_info.shared_info_wrapper.ptr == NULL)
 	{
 		
-		g_local_info.shared_info_wrapper.ptr = msh_MapMemory(g_local_info.shared_info_wrapper.handle, sizeof(SharedInfo_t));
+		g_local_info.shared_info_wrapper.ptr = msh_MapMemory(g_local_info.shared_info_wrapper.handle, sizeof(SharedInfo_T));
 
 #ifdef MSH_WIN
 		if(msh_AtomicIncrement(&g_shared_info->num_procs) == 1)
@@ -161,7 +161,7 @@ static void msh_InitializeSharedInfo(void)
 			while(!msh_GetCounterPost(&g_shared_info->num_procs));
 			
 			/* close whatever we just opened and get the new shared memory */
-			msh_UnmapMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
+			msh_UnmapMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_T));
 			g_local_info.shared_info_wrapper.ptr = NULL;
 			
 			msh_CloseSharedMemory(g_local_info.shared_info_wrapper.handle);
@@ -193,7 +193,7 @@ static void msh_InitializeSharedInfo(void)
 		/* busy wait until the shared memory is initialized to move on */
 		while(!g_shared_info->is_initialized);
 		
-		msh_LockMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
+		msh_LockMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_T));
 		
 	}
 }
@@ -205,8 +205,8 @@ static void msh_InitializeConfiguration(void)
 	DWORD bytes_wr;
 #endif
 	
-	handle_t config_handle;
-	char_t* config_path;
+	handle_T config_handle;
+	char_T* config_path;
 	
 	/* set the user config temporarily and then overwrite with the persistent config */
 	msh_SetDefaultConfiguration((void*)&g_user_config);
@@ -220,7 +220,7 @@ static void msh_InitializeConfiguration(void)
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateFileError", "Error opening the config file.");
 	}
 	
-	if(ReadFile(config_handle, (void*)&g_user_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
+	if(ReadFile(config_handle, (void*)&g_user_config, sizeof(UserConfig_T), &bytes_wr, NULL) == 0)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 	}
@@ -236,7 +236,7 @@ static void msh_InitializeConfiguration(void)
 	}
 	
 	/* read whatever we can */
-	if(read(config_handle, (void*)&g_user_config, sizeof(UserConfig_t)) == -1)
+	if(read(config_handle, (void*)&g_user_config, sizeof(UserConfig_T)) == -1)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 	}
@@ -288,8 +288,8 @@ void msh_OnExit(void)
 			msh_SetCounterPost(&g_shared_info->num_procs, TRUE);
 		}
 #endif
-		msh_UnlockMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
-		msh_UnmapMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_t));
+		msh_UnlockMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_T));
+		msh_UnmapMemory((void*)g_local_info.shared_info_wrapper.ptr, sizeof(SharedInfo_T));
 		g_local_info.shared_info_wrapper.ptr = NULL;
 	}
 	
@@ -326,7 +326,7 @@ void msh_OnExit(void)
 }
 
 
-void msh_SetDefaultConfiguration(UserConfig_t* user_config)
+void msh_SetDefaultConfiguration(UserConfig_T* user_config)
 {
 	user_config->max_shared_segments = MSH_DEFAULT_MAX_SHARED_SEGMENTS;
 	user_config->max_shared_size = MSH_DEFAULT_MAX_SHARED_SIZE;

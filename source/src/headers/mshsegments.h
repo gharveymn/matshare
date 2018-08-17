@@ -83,7 +83,7 @@ SegmentNode_t* msh_CreateSegment(size_t data_size, const struct mxArray_tag* id,
  * @param seg_num The segment number of the shared memory segment (used by matshare to identify the memory segment).
  * @return The new segment node which holds information about the new segment.
  */
-SegmentNode_t* msh_OpenSegment(segmentnumber_t seg_num);
+SegmentNode_t* msh_OpenSegment(segmentnumber_T seg_num);
 
 
 /**
@@ -188,7 +188,7 @@ void msh_UpdateLatestSegment(SegmentList_t* seg_list);
  * @param segment_size The size of the new segment.
  * @return A handle to the newly created segment.
  */
-handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size);
+handle_T msh_CreateSharedMemory(char_T* segment_name, size_t segment_size);
 
 
 /**
@@ -197,7 +197,7 @@ handle_t msh_CreateSharedMemory(char_t* segment_name, size_t segment_size);
  * @param segment_name The name of the segment.
  * @return A handle to the segment.
  */
-handle_t msh_OpenSharedMemory(char_t* segment_name);
+handle_T msh_OpenSharedMemory(char_T* segment_name);
 
 
 /**
@@ -208,7 +208,7 @@ handle_t msh_OpenSharedMemory(char_t* segment_name);
  * @param map_sz The size of the map.
  * @return A pointer to the start of the map.
  */
-void* msh_MapMemory(handle_t segment_handle, size_t map_sz);
+void* msh_MapMemory(handle_T segment_handle, size_t map_sz);
 
 
 /**
@@ -225,7 +225,7 @@ void msh_UnmapMemory(void* segment_pointer, size_t map_sz);
  *
  * @param segment_handle The shared memory handle to be closed.
  */
-void msh_CloseSharedMemory(handle_t segment_handle);
+void msh_CloseSharedMemory(handle_T segment_handle);
 
 
 /**

@@ -1,9 +1,9 @@
 #include "mshlockfree.h"
 
 /* returns the state of the flag after the operation */
-LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter)
+LockFreeCounter_T msh_IncrementCounter(volatile LockFreeCounter_T* counter)
 {
-	LockFreeCounter_t old_counter, new_counter;
+	LockFreeCounter_T old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
@@ -15,9 +15,9 @@ LockFreeCounter_t msh_IncrementCounter(volatile LockFreeCounter_t* counter)
 
 
 /* returns whether the decrement changed the flag to TRUE */
-bool_t msh_DecrementCounter(volatile LockFreeCounter_t* counter, bool_t set_flag)
+bool_T msh_DecrementCounter(volatile LockFreeCounter_T* counter, bool_T set_flag)
 {
-	LockFreeCounter_t old_counter, new_counter;
+	LockFreeCounter_T old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
@@ -33,9 +33,9 @@ bool_t msh_DecrementCounter(volatile LockFreeCounter_t* counter, bool_t set_flag
 }
 
 
-void msh_SetCounterFlag(volatile LockFreeCounter_t* counter, unsigned long val)
+void msh_SetCounterFlag(volatile LockFreeCounter_T* counter, unsigned long val)
 {
-	LockFreeCounter_t old_counter, new_counter;
+	LockFreeCounter_T old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
@@ -46,9 +46,9 @@ void msh_SetCounterFlag(volatile LockFreeCounter_t* counter, unsigned long val)
 }
 
 
-void msh_SetCounterPost(volatile LockFreeCounter_t* counter, unsigned long val)
+void msh_SetCounterPost(volatile LockFreeCounter_T* counter, unsigned long val)
 {
-	LockFreeCounter_t old_counter, new_counter;
+	LockFreeCounter_T old_counter, new_counter;
 	do
 	{
 		old_counter.span = counter->span;
@@ -58,27 +58,27 @@ void msh_SetCounterPost(volatile LockFreeCounter_t* counter, unsigned long val)
 }
 
 
-unsigned long msh_GetCounterCount(volatile LockFreeCounter_t* counter)
+unsigned long msh_GetCounterCount(volatile LockFreeCounter_T* counter)
 {
 	return counter->values.count;
 }
 
 
-unsigned long msh_GetCounterFlag(volatile LockFreeCounter_t* counter)
+unsigned long msh_GetCounterFlag(volatile LockFreeCounter_T* counter)
 {
 	return counter->values.flag;
 }
 
 
-unsigned long msh_GetCounterPost(volatile LockFreeCounter_t* counter)
+unsigned long msh_GetCounterPost(volatile LockFreeCounter_T* counter)
 {
 	return counter->values.post;
 }
 
 
-void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val)
+void msh_WaitSetCounter(volatile LockFreeCounter_T* counter, unsigned long val)
 {
-	LockFreeCounter_t old_counter, new_counter;
+	LockFreeCounter_T old_counter, new_counter;
 	
 	msh_SetCounterPost(counter, FALSE);
 	old_counter.values.count = 0;
@@ -94,7 +94,7 @@ void msh_WaitSetCounter(volatile LockFreeCounter_t* counter, unsigned long val)
 }
 
 
-bool_t msh_AtomicAddSizeWithMax(volatile size_t* dest, size_t add_value, size_t max_value)
+bool_T msh_AtomicAddSizeWithMax(volatile size_t* dest, size_t add_value, size_t max_value)
 {
 	size_t old_value, new_value;
 #ifdef MSH_WIN

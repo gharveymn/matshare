@@ -335,7 +335,7 @@ mwIndex* msh_GetIr(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return A local pointer to the field names.
  */
-char_t* msh_GetFieldNames(SharedVariableHeader_t* hdr_ptr);
+char_T* msh_GetFieldNames(SharedVariableHeader_t* hdr_ptr);
 
 
 /**

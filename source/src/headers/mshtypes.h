@@ -44,76 +44,76 @@ typedef struct UserConfig_t
 {
 	/* these are aligned for lockless assignment */
 	size_t max_shared_size;
-	LockFreeCounter_t lock_counter; /* unused, kept for compatibility */
+	LockFreeCounter_T lock_counter; /* unused, kept for compatibility */
 	unsigned long max_shared_segments;
-	alignedbool_t will_shared_gc;
+	alignedbool_T will_shared_gc;
 #ifdef MSH_UNIX
 	mode_t security;
 #endif
 	/* this is modified behind a lock */
-	char_t fetch_default[MSH_NAME_LEN_MAX];
-	alignedbool_t sync_default;
-} UserConfig_t;
+	char_T fetch_default[MSH_NAME_LEN_MAX];
+	alignedbool_T sync_default;
+} UserConfig_T;
 
 /* structure of shared info about the shared segments */
 typedef volatile struct SharedInfo_t
 {
 	size_t rev_num;
 	size_t total_shared_size;
-	UserConfig_t user_defined;
-	segmentnumber_t first_seg_num;     /* the first segment number in the list */
-	segmentnumber_t last_seg_num;      /* the last segment number in the list */
+	UserConfig_T user_defined;
+	segmentnumber_T first_seg_num;     /* the first segment number in the list */
+	segmentnumber_T last_seg_num;      /* the last segment number in the list */
 	uint32_T num_shared_segments;
-	alignedbool_t has_fatal_error;
-	alignedbool_t is_initialized;
+	alignedbool_T has_fatal_error;
+	alignedbool_T is_initialized;
 #ifdef MSH_WIN
 	long num_procs;
 #else
-	LockFreeCounter_t num_procs;
+	LockFreeCounter_T num_procs;
 #endif
-	pid_t update_pid;
-} SharedInfo_t;
+	pid_T update_pid;
+} SharedInfo_T;
 
 
 typedef struct LocalInfo_t
 {
 	size_t rev_num;
 	uint32_T lock_level;
-	pid_t this_pid;
+	pid_T this_pid;
 	
 	struct shared_info_wrapper_tag
 	{
-		SharedInfo_t* ptr;
-		handle_t handle;
+		SharedInfo_T* ptr;
+		handle_T handle;
 	} shared_info_wrapper;
 	
-	ProcessLock_t process_lock;
+	FileLock_T process_lock;
 	
-	bool_t has_fatal_error;
-	bool_t is_initialized;
-	bool_t is_deinitialized;
-} LocalInfo_t;
+	bool_T has_fatal_error;
+	bool_T is_initialized;
+	bool_T is_deinitialized;
+} LocalInfo_T;
 
 /**
  * Forward declaration of the library name.
  */
-extern char_t* g_msh_library_name;
+extern char_T* g_msh_library_name;
 
 /**
  * Forward declaration of the error help message.
  */
-extern char_t* g_msh_error_help_message;
+extern char_T* g_msh_error_help_message;
 
 
 /**
  * Forward declaration of the warning help message.
  */
-extern char_t* g_msh_warning_help_message;
+extern char_T* g_msh_warning_help_message;
 
 /**
  * Forward declaration of the global information struct.
  */
-extern LocalInfo_t g_local_info;
+extern LocalInfo_T g_local_info;
 
 #define g_shared_info (g_local_info.shared_info_wrapper.ptr)
 

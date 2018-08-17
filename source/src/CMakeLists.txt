@@ -31,7 +31,7 @@ SET(SOURCE_FILES
 		headers/opaque/mshsegmentnode.c
 		headers/mshsegmentnode.h
 		mshlockfree.c
-		headers/mshlockfree.h headers/mshtable.h)
+		headers/mshlockfree.h headers/mshtable.h mshvarops.c headers/mshvarops.h)
 
 SET_SOURCE_FILES_PROPERTIES(${SOURCE_FILES} PROPERTIES LANGUAGE C)
 
