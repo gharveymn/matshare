@@ -9,15 +9,7 @@ function varargout = copy(varargin)
 %    This software may be modified and distributed under the terms
 %    of the MIT license. See the LICENSE file for details.	
 	
-	if(nargin == 0)
-		f = matshare.fetch;
-		fnames = fieldnames(f);
-		for i = 1:numel(fnames)
-			if(~isempty(f.(fnames{i})))
-				f.(fnames{i}) = f.(fnames{i}).copy;
-			end
-		end
-	else
+	if(nargin > 0)
 		if(nargout == 0)
 			varargout{1} = varargin{1}.copy;
 		else
@@ -25,6 +17,8 @@ function varargout = copy(varargin)
 				varargout{i} = varargin{i}.copy;
 			end
 		end
+	else
+		error('matshare:copy:InputError', 'At least one argument needed for matshare.copy.');
 	end
 end
 

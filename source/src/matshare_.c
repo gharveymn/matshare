@@ -328,16 +328,16 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 
 void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args, int return_to_ans)
 {
-	unsigned            i, num_vars;
+	size_t              i, j, num_vars;
 	mxChar*             in_opt;
 	const mxArray*      curr_in_var;
+	const mxArray*      input_id;
 	const mxArray**     in_vars;
 	
 	int                 will_persist = FALSE;
 	int                 with_names   = FALSE;
 	SegmentNode_t*      new_seg_node = NULL;
 	VariableNode_t*     new_var_node = NULL;
-	const mxArray*      input_id     = NULL;
 	
 	if(num_args > INT_MAX)
 	{
@@ -383,18 +383,27 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		}
 	}
 	
-	if(with_names && num_vars % 2 != 0)
+	if(with_names)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InputError", "Each input must have be preceded by a name when '-n' is specified.");
+		if(num_vars%2 != 0)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InputError", "Each input must have be preceded by a name when '-n' is specified.");
+		}
+		num_vars/=2;
 	}
 	
-	for(i = 0; i < num_vars; i = (with_names? i + 2 : i + 1))
+	if(num_vars < (size_t)nlhs)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "OutputError", "Too many outputs.");
+	}
+	
+	for(i = 0, j = 0, input_id = NULL; i < num_vars; i++)
 	{
 		
 		if(with_names)
 		{
-			input_id = in_vars[i];
-			curr_in_var = in_vars[i + 1];
+			input_id = in_vars[2*i];
+			curr_in_var = in_vars[2*i + 1];
 		}
 		else
 		{
@@ -420,16 +429,10 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		msh_AddVariableToList(&g_local_var_list, new_var_node);
 		
 		/* create and set the return */
-		if(i < (unsigned)nlhs)
+		if(j < (size_t)nlhs)
 		{
-			if(i == 0 && return_to_ans)
-			{
-				plhs[i] = msh_WrapOutput(msh_CreateSharedDataCopy(new_var_node, FALSE));
-			}
-			else
-			{
-				plhs[i] = msh_WrapOutput(msh_CreateSharedDataCopy(new_var_node, TRUE));
-			}
+			plhs[j] = msh_WrapOutput(msh_CreateSharedDataCopy(new_var_node, j > 0 || !return_to_ans));
+			j += 1;
 		}
 	}
 	
@@ -1334,17 +1337,17 @@ static ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, const mxArray* dest_v
 			
 			if(num_subs_elems < 1)
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexingError", "Subscript must have at least one element.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Subscript must have at least one element.");
 			}
 			
 			if(mxIsChar(curr_subs) && (num_subs_elems != 1 || mxGetChars(curr_subs)[0] != ':'))
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown index value '%s'.", mxArrayToString(curr_subs));
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Unknown index value '%s'.", mxArrayToString(curr_subs));
 			}
 			else if(!mxIsDouble(curr_subs))
 			{
 				/* no logical handling since that will be handled switched to numeric by the entry function */
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownIndexTypeError", "Unknown indexing method.");
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Unknown indexing method.");
 			}
 		}
 	}

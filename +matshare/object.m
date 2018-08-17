@@ -99,15 +99,37 @@ classdef object
 		end
 		
 		function obj = subsasgn(obj,S,B)
-			if(numel(S) == 1 && strcmp(S.type, '()'))
-				obj = builtin('subsasgn',obj,S,B);
-			elseif(S(1).type(1) == '.' && ischar(S(1).subs))
+			
+			switch(S(1).type(1))
+				case '.'
+					asgn_obj = obj;
+				case '('
+					asgn_obj = subsref(obj, S(1));
+					S = S(2:end);
+				otherwise
+					error('matshare:object:IndexingError', ...
+						 'Cannot index into matshare object with ''{}''');
+			end
+			
+			if(~isscalar(asgn_obj))
+				error('matshare:object:NonScalarObjectError', ...
+					 'Assignment to shared memory requires a scalar matshare object');
+			end
+				
+			if(S(1).type(1) == '.' && ischar(S(1).subs))
 				if(strcmp(S(1).subs, 'data'))
 					
+					if(numel(S) < 2)
+						error('matshare:object:DirectAssignmentError', ...
+							 ['Direct assignment to the <strong>data</strong> ' ...
+							  'property is not permitted. To assign all elements ' ...
+							  'use the '':'' operator.']);
+					end
+					
 					% for sparses modify a local copy then overwrite the whole thing
-					if(issparse(obj.data))
-						sparsecopy = subsasgn(obj.data, S(2:end), B);
-						matshare_(8, obj.shared_data, sparsecopy);
+					if(issparse(asgn_obj.data))
+						sparsecopy = subsasgn(asgn_obj.data, S(2:end), B);
+						matshare_(8, asgn_obj.shared_data, sparsecopy);
 					else
 						for i = 2:numel(S)
 							currsubs = S(i);
@@ -122,32 +144,38 @@ classdef object
 							end
 						end
 						
-						if(~isstruct(B) && ~iscell(B))
+						if(isnumeric(B) || ischar(B) || islogical(B))
 							if(numel(S) > 1)
 								if(S(end).type(1) == '{' || S(end).type(1) == '.')
 									% reference will not index
-									castvar = subsref(obj.data, S(2:end));
+									castvar = subsref(asgn_obj.data, S(2:end));
 								else
 									% prevent indexing when casting
-									castvar = subsref(obj, S(1:end-1));
+									castvar = subsref(asgn_obj, S(1:end-1));
 								end
 							else
-								castvar = obj.data;
+								castvar = asgn_obj.data;
 							end
 						
-							B = cast(B, 'like', castvar);
+							% we're gonna forward this error to the 
+							% binary, so don't allow this to fail
+							if(isnumeric(castvar) || ischar(castvar) || islogical(castvar))
+								B = cast(B, 'like', castvar);
+							end
 						end
 						
-						matshare_(8, obj.shared_data, B, {S(2:end)});
+						matshare_(8, asgn_obj.shared_data, B, {S(2:end)});
+						
 					end
 					
 				elseif(strcmp(S(1).subs, 'shared_data'))
-					error('matshare:InaccessiblePropertyError', 'The shared_data property is not directly accessible.');
+					error('matshare:object:InaccessiblePropertyError', 'The shared_data property is not directly accessible.');
 				else
-					error('matshare:InvalidPropertyError', ['The property.''' S(1).subs ''' does not exist.']);
+					error('matshare:object:InvalidPropertyError', ['The property.''' S(1).subs ''' does not exist.']);
 				end
 			else
-				error('matshare:InvalidAccess', 'Could not set the given property or index');
+				error('matshare:object:InvalidAccessError', ['Could not set the given property or index. Access shared memory with the '...
+				'<strong>data</strong> property.']);
 			end
 		end
 		
@@ -156,23 +184,35 @@ classdef object
 				dispstr = evalc('builtin(''disp'',obj);');
 				dispstr = dispstr(strfind(dispstr, 'data:'):end-1);
 				
-				fprintf(['  <a href="matlab:helpPopup matshare.object" ' ...
-				'style="font-weight:bold">matshare object</a> storing <strong>' ...
-				'%s' ...
-				'</strong> <a href="matlab:helpPopup ' ...
-				'%s' ...
-				'" style="font-weight:bold">' ...
-				'%s' ...
-				'</a>:\n    ' ...
-				'%s\n'], regexprep(num2str(size(obj.data)), '\s+', 'x'), ...
-				class(obj.data), class(obj.data),dispstr);
+				if(issparse(obj.data))
+					fprintf([ ...
+					'  <a href="matlab:helpPopup matshare.object" ' ...
+					'style="font-weight:bold">matshare object</a> storing ' ...
+					'<strong>%s</strong> ' ...
+					'<a href="matlab:helpPopup sparse" style="font-weight:bold">sparse</a> ' ...
+					'<a href="matlab:helpPopup %s" style="font-weight:bold">%s</a>' ...
+					':\n    %s\n'], ...
+					regexprep(num2str(size(obj.data)), '\s+', 'x'), ...
+					class(obj.data), class(obj.data), ...
+					dispstr);
+				else
+					fprintf([ ...
+					'  <a href="matlab:helpPopup matshare.object" ' ...
+					'style="font-weight:bold">matshare object</a> storing ' ...
+					'<strong>%s</strong> ' ...
+					'<a href="matlab:helpPopup %s" style="font-weight:bold">%s</a>' ...
+					':\n    %s\n'], ...
+					regexprep(num2str(size(obj.data)), '\s+', 'x'), ...
+					class(obj.data), class(obj.data), ...
+					dispstr);
+				end
 			
 			elseif(isempty(obj))
 				disp(['  <strong>empty</strong> <a href="matlab:helpPopup matshare.object" ' ...
 				'style="font-weight:bold">matshare object</a>' ...
 				' array']);
 			else
-				disp(['  <strong>' regexprep(num2str(size(obj.data)), '\s+', 'x') ...
+				disp(['  <strong>' regexprep(num2str(size(obj)), '\s+', 'x') ...
 					'</strong> <a href="matlab:helpPopup matshare.object" ' ...
 				'style="font-weight:bold">matshare object</a>' ...
 				' array']);

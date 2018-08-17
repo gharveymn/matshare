@@ -171,7 +171,7 @@ static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs)
 	SegmentTable_t new_table;
 	uint32_T curr_seg_hash;
 	
-	if(seg_table->table_sz >= (1 << 31))
+	if(seg_table->table_sz >= (uint32_T)(1 << 31))
 	{
 		/* dont do anything if we approach the max size for some reason */
 		return;

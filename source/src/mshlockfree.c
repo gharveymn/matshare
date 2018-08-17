@@ -144,13 +144,13 @@ size_t msh_AtomicSubtractSize(volatile size_t* dest, size_t subtract_value)
 	{
 		old_value = *dest;
 		new_value = old_value - subtract_value;
-	} while(InterlockedCompareExchange64((volatile long long*)dest, new_value, old_value) != old_value);
+	} while(InterlockedCompareExchange64((volatile long long*)dest, new_value, old_value) != (long long)old_value);
 #  elif MSH_BITNESS==32
 	do
 	{
 		old_value = *dest;
 		new_value = old_value - subtract_value;
-	} while(InterlockedCompareExchange((volatile long*)dest, new_value, old_value) != old_value);
+	} while(InterlockedCompareExchange((volatile long*)dest, new_value, old_value) != (long)old_value);
 #  endif
 	return new_value;
 #else

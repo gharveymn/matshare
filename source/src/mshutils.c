@@ -265,14 +265,14 @@ void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp
 	IndexedVariable_t sub_variable  = {0};
 	mxClassID         dest_class_id = mxGetClassID(indexed_var->dest_var);
 	
-	if(mxGetElementSize(indexed_var->dest_var) != mxGetElementSize(comp_var))
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "InternalSizeError", "Internal element sizes were incompatible.");
-	}
-	
 	if(dest_class_id != mxGetClassID(comp_var))
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The variable input class '%s' is not compatible with the destination, which is of class '%s'.", mxGetClassName(comp_var), mxGetClassName(indexed_var->dest_var));
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(comp_var), mxGetClassName(indexed_var->dest_var));
+	}
+	
+	if(mxGetElementSize(indexed_var->dest_var) != mxGetElementSize(comp_var))
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "ElementSizeError", "Element sizes were incompatible.");
 	}
 	
 	dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
@@ -292,7 +292,7 @@ void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp
 		
 		if(indexed_var->indices.num_idxs < indexed_var->indices.num_lens)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexParsingError", "The internal index parser failed. Sorry about that.");
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "IndexParsingError", "The internal index parser failed.");
 		}
 		
 		if(mxIsSparse(indexed_var->dest_var))
@@ -372,8 +372,6 @@ void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp
 				}
 			}
 		}
-		
-		
 	}
 	else if(dest_class_id == mxCELL_CLASS) /* Cell case */
 	{
@@ -404,6 +402,23 @@ void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp
 	}
 	else if(mxIsNumeric(indexed_var->dest_var) || dest_class_id == mxLOGICAL_CLASS || dest_class_id == mxCHAR_CLASS)      /*base case*/
 	{
+		
+		if(mxIsSparse(indexed_var->dest_var))
+		{
+			/* sparse inputs are always the same size as the destination */
+			if(mxGetNzmax(indexed_var->dest_var) < mxGetNzmax(comp_var))
+			{
+				meu_PrintMexError(MEU_FL,
+				                  MEU_SEVERITY_USER,
+				                  "NzmaxError",
+				                  "The number of non-zero entries in the input variable ("SIZE_FORMAT") is larger than maximum number \n"
+						        "allocated for destination ("SIZE_FORMAT"). This is an error because doing so would change the size \n"
+							   "of shared memory.",
+				                  mxGetNzmax(comp_var),
+				                  mxGetNzmax(indexed_var->dest_var));
+			}
+		}
+		
 		if(mxIsComplex(indexed_var->dest_var) != mxIsComplex(comp_var))
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "ComplexityError", "The complexity of the input variable does not match with that of the destination.");
