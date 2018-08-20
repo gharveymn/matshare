@@ -733,6 +733,13 @@ void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp
 	if(dest_class_id == mxSTRUCT_CLASS)
 	{
 		
+		/* must be struct
+		if(dest_class_id != mxGetClassID(comp_var))
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(comp_var), mxGetClassName(indexed_var->dest_var));
+		}
+		*/
+		
 		dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
 		dest_num_fields = mxGetNumberOfFields(indexed_var->dest_var);
 		
@@ -750,7 +757,6 @@ void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp
 			}
 		}
 		
-		/* Go through each element */
 		if(indexed_var->indices.start_idxs == NULL)
 		{
 			for(field_num = 0; field_num < dest_num_fields; field_num++)     /* each field */
@@ -784,6 +790,13 @@ void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp
 	}
 	else if(dest_class_id == mxCELL_CLASS) /* Cell case */
 	{
+		/* must be cell
+		if(dest_class_id != mxGetClassID(comp_var))
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(comp_var), mxGetClassName(indexed_var->dest_var));
+		}
+		*/
+		
 		dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
 		
 		if(indexed_var->indices.start_idxs == NULL)
@@ -811,6 +824,13 @@ void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp
 	}
 	else if(mxIsNumeric(indexed_var->dest_var) || dest_class_id == mxLOGICAL_CLASS || dest_class_id == mxCHAR_CLASS)      /*base case*/
 	{
+		
+		/* Note: implement this later
+		if(!mxIsNumeric(comp_var) && !mxIsLogical(comp_var) && !mxIsChar(comp_var))
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(comp_var), mxGetClassName(indexed_var->dest_var));
+		}
+		 */
 		
 		if(mxIsSparse(indexed_var->dest_var))
 		{
@@ -856,7 +876,7 @@ void msh_OverwriteVariable(IndexedVariable_t* indexed_var, const mxArray* in_var
 	mxClassID         shared_class_id = mxGetClassID(in_var);
 	IndexedVariable_t sub_variable    = {0};
 	
-	/* Structure case */
+	/* struct case */
 	if(shared_class_id == mxSTRUCT_CLASS)
 	{
 		in_num_fields = mxGetNumberOfFields(in_var);
@@ -894,7 +914,7 @@ void msh_OverwriteVariable(IndexedVariable_t* indexed_var, const mxArray* in_var
 			}
 		}
 	}
-	else if(shared_class_id == mxCELL_CLASS) /* Cell case */
+	else if(shared_class_id == mxCELL_CLASS) /* cell case */
 	{
 		
 		/* go through each element */
@@ -1102,24 +1122,34 @@ void msh_VOAtomicAdd(IndexedVariable_t* indexed_var, const mxArray* in_var, int 
 #define FW_UINT_TYPE(SIZE) uint##SIZE##_T
 #define FW_UINT_MAX(SIZE) UINT##SIZE##_MAX
 
-#define UNARY_OP_RUNNER(RNAME, NAME, TYPE)    \
-static void RNAME(TYPE* in, size_t num_elems) \
-{                                             \
-	size_t i;                                \
-	for(i = 0; i < num_elems; i++, in++)     \
-	{                                        \
-		*in = NAME(*in);                    \
-	}                                        \
+#define UNARY_OP_RUNNER(RNAME, NAME, TYPE_ACCUM)    \
+static void RNAME(TYPE_ACCUM* in, size_t num_elems) \
+{                                                   \
+	size_t i;                                      \
+	for(i = 0; i < num_elems; i++, in++)           \
+	{                                              \
+		*in = NAME(*in);                          \
+	}                                              \
 }
 
-#define BINARY_OP_RUNNER(RNAME, NAME, TYPE)                \
-static void RNAME(TYPE* accum, TYPE* in, size_t num_elems) \
-{                                                          \
-	size_t i;                                             \
-	for(i = 0; i < num_elems; i++, accum++, in++)         \
-	{                                                     \
-		*accum = NAME(*accum, *in);                      \
-	}                                                     \
+#define BINARY_OP_RUNNER(RNAME, NAME, TYPE_ACCUM, TYPE_IN)                               \
+static void RNAME(TYPE_ACCUM* accum, TYPE_IN* in, size_t num_elems, int is_singular_val) \
+{                                                                                        \
+	size_t i;                                                                           \
+	if(is_singular_val)                                                                 \
+	{                                                                                   \
+		for(i = 0; i < num_elems; i++, accum++)	                                       \
+		{                                                                              \
+			*accum = NAME(*accum, *in);                                               \
+		}                                                                              \
+	}                                                                                   \
+	else                                                                                \
+	{                                                                                   \
+		for(i = 0; i < num_elems; i++, accum++, in++)                                  \
+		{                                                                              \
+			*accum = NAME(*accum, *in);                                               \
+		}                                                                              \
+	}                                                                                   \
 }
 
 /** Signed integer arithmetic
@@ -1133,7 +1163,7 @@ static void RNAME(TYPE* accum, TYPE* in, size_t num_elems) \
 UNARY_OP_RUNNER(FW_INT_FCNR_NAME(OP, SIZE), FW_INT_FCN_NAME(OP, SIZE), FW_INT_TYPE(SIZE))
 
 #define BINARY_INT_OP_RUNNER(OP, SIZE) \
-BINARY_OP_RUNNER(FW_INT_FCNR_NAME(OP, SIZE), FW_INT_FCN_NAME(OP, SIZE), FW_INT_TYPE(SIZE))
+BINARY_OP_RUNNER(FW_INT_FCNR_NAME(OP, SIZE), FW_INT_FCN_NAME(OP, SIZE), FW_INT_TYPE(SIZE), FW_INT_TYPE(SIZE))
 
 /** SIGN FUNCTIONS **/
 #define SGNBIT_INT_DEF(NAME, TYPE, UTYPE, SIZEM1) \
@@ -1569,40 +1599,40 @@ NEG_INT_METADEF(64);
 
 /** SIGNED RIGHT SHIFT **/
 
-#define RSH_INT_DEF(NAME, TYPE)          \
+#define SRA_INT_DEF(NAME, TYPE)          \
 static TYPE NAME(TYPE in, int num_shift) \
 {                                        \
 	return in >> num_shift;             \
 }
 
-#define RSH_INT_METADEF(SIZE)                               \
-RSH_INT_DEF(FW_INT_FCN_NAME(Rsh, SIZE), FW_INT_TYPE(SIZE)); \
-BINARY_INT_OP_RUNNER(Rsh, SIZE);
+#define SRA_INT_METADEF(SIZE)                               \
+SRA_INT_DEF(FW_INT_FCN_NAME(SRA, SIZE), FW_INT_TYPE(SIZE)); \
+BINARY_OP_RUNNER(FW_INT_FCNR_NAME(SRA, SIZE), FW_INT_FCN_NAME(SRA, SIZE), FW_INT_TYPE(SIZE), int);
 
-RSH_INT_METADEF(8);
-RSH_INT_METADEF(16);
-RSH_INT_METADEF(32);
+SRA_INT_METADEF(8);
+SRA_INT_METADEF(16);
+SRA_INT_METADEF(32);
 #if MSH_BITNESS==64
-RSH_INT_METADEF(64);
+SRA_INT_METADEF(64);
 #endif
 
 /** SIGNED LEFT SHIFT **/
 
-#define LSH_INT_DEF(NAME, TYPE)          \
+#define SLA_INT_DEF(NAME, TYPE)          \
 static TYPE NAME(TYPE in, int num_shift) \
 {                                        \
 	return in << num_shift;             \
 }
 
-#define LSH_INT_METADEF(SIZE)                               \
-LSH_INT_DEF(FW_INT_FCN_NAME(Lsh, SIZE), FW_INT_TYPE(SIZE)); \
-BINARY_INT_OP_RUNNER(Lsh, SIZE);
+#define SLA_INT_METADEF(SIZE)                               \
+SLA_INT_DEF(FW_INT_FCN_NAME(SLA, SIZE), FW_INT_TYPE(SIZE)); \
+BINARY_OP_RUNNER(FW_INT_FCNR_NAME(SLA, SIZE), FW_INT_FCN_NAME(SLA, SIZE), FW_INT_TYPE(SIZE), int);
 
-LSH_INT_METADEF(8);
-LSH_INT_METADEF(16);
-LSH_INT_METADEF(32);
+SLA_INT_METADEF(8);
+SLA_INT_METADEF(16);
+SLA_INT_METADEF(32);
 #if MSH_BITNESS==64
-LSH_INT_METADEF(64);
+SLA_INT_METADEF(64);
 #endif
 
 /** Unsigned integer arithmetic
@@ -1614,7 +1644,7 @@ LSH_INT_METADEF(64);
 UNARY_OP_RUNNER(FW_UINT_FCNR_NAME(OP, SIZE), FW_UINT_FCN_NAME(OP, SIZE), FW_UINT_TYPE(SIZE))
 
 #define BINARY_UINT_OP_RUNNER(OP, SIZE) \
-BINARY_OP_RUNNER(FW_UINT_FCNR_NAME(OP, SIZE), FW_UINT_FCN_NAME(OP, SIZE), FW_UINT_TYPE(SIZE))
+BINARY_OP_RUNNER(FW_UINT_FCNR_NAME(OP, SIZE), FW_UINT_FCN_NAME(OP, SIZE), FW_UINT_TYPE(SIZE), FW_UINT_TYPE(SIZE))
 
 /** UNSIGNED ADDITION **/
 
@@ -1878,92 +1908,402 @@ NEG_UINT_METADEF(32);
 NEG_UINT_METADEF(64);
 #endif
 
-/** SIGNED RIGHT SHIFT **/
+/** UNSIGNED RIGHT SHIFT **/
 
-#define RSH_UINT_DEF(NAME, TYPE)              \
+#define SRA_UINT_DEF(NAME, TYPE)              \
 static TYPE NAME(TYPE in, unsigned num_shift) \
 {                                             \
 	return in >> num_shift;                  \
 }
 
-#define RSH_UINT_METADEF(SIZE)                                 \
-RSH_UINT_DEF(FW_UINT_FCN_NAME(Rsh, SIZE), FW_UINT_TYPE(SIZE)); \
-BINARY_UINT_OP_RUNNER(Rsh, SIZE);
+#define SRA_UINT_METADEF(SIZE)                                 \
+SRA_UINT_DEF(FW_UINT_FCN_NAME(SRA, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_OP_RUNNER(FW_UINT_FCNR_NAME(SRA, SIZE), FW_UINT_FCN_NAME(SRA, SIZE), FW_UINT_TYPE(SIZE), unsigned);
 
-RSH_UINT_METADEF(8);
-RSH_UINT_METADEF(16);
-RSH_UINT_METADEF(32);
+SRA_UINT_METADEF(8);
+SRA_UINT_METADEF(16);
+SRA_UINT_METADEF(32);
 #if MSH_BITNESS==64
-RSH_UINT_METADEF(64);
+SRA_UINT_METADEF(64);
 #endif
 
-/** SIGNED LEFT SHIFT **/
+/** UNSIGNED LEFT SHIFT **/
 
-#define LSH_UINT_DEF(NAME, TYPE)              \
+#define SLA_UINT_DEF(NAME, TYPE)              \
 static TYPE NAME(TYPE in, unsigned num_shift) \
 {                                             \
 	return in << num_shift;                  \
 }
 
-#define LSH_UINT_METADEF(SIZE)                                 \
-LSH_UINT_DEF(FW_UINT_FCN_NAME(Lsh, SIZE), FW_UINT_TYPE(SIZE)); \
-BINARY_UINT_OP_RUNNER(Lsh, SIZE);
+#define SLA_UINT_METADEF(SIZE)                                 \
+SLA_UINT_DEF(FW_UINT_FCN_NAME(SLA, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_OP_RUNNER(FW_UINT_FCNR_NAME(SLA, SIZE), FW_UINT_FCN_NAME(SLA, SIZE), FW_UINT_TYPE(SIZE), unsigned);
 
-LSH_UINT_METADEF(8);
-LSH_UINT_METADEF(16);
-LSH_UINT_METADEF(32);
+SLA_UINT_METADEF(8);
+SLA_UINT_METADEF(16);
+SLA_UINT_METADEF(32);
 #if MSH_BITNESS==64
-LSH_UINT_METADEF(64);
+SLA_UINT_METADEF(64);
 #endif
 
 
 /** Floating point arithmetic
- * These are just derived directly from C,
- * so no need for the single value functions.
+ * These are just derived directly from stdlib,
+ * so no need for the single value subfunctions.
  */
  
-static void msh_AddSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems)
+/** mxSingle **/
+
+static void msh_AddSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems, int is_singular_val)
 {
 	size_t i;
-	for(i = 0; i < num_elems; i++, accum++, in++)
+	if(is_singular_val)
 	{
-		*accum += *in;
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum += *in;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum += *in;
+		}
 	}
 }
 
-static void msh_SubSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems)
+static void msh_SubSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems, int is_singular_val)
 {
 	size_t i;
-	for(i = 0; i < num_elems; i++, accum++, in++)
+	if(is_singular_val)
 	{
-		*accum -= *in;
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum -= *in;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum -= *in;
+		}
 	}
 }
 
-static void msh_MulSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems)
+static void msh_MulSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems, int is_singular_val)
 {
 	size_t i;
-	for(i = 0; i < num_elems; i++, accum++, in++)
+	if(is_singular_val)
 	{
-		*accum *= *in;
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum *= *in;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum *= *in;
+		}
 	}
 }
 
-static void msh_DivSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems)
+static void msh_DivSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems, int is_singular_val)
 {
 	size_t i;
-	for(i = 0; i < num_elems; i++, accum++, in++)
+	if(is_singular_val)
 	{
-		*accum /= *in;
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum /= *in;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum /= *in;
+		}
 	}
 }
 
-static void msh_RemSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems)
+static void msh_RemSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems, int is_singular_val)
 {
 	size_t i;
-	for(i = 0; i < num_elems; i++, accum++, in++)
+	if(is_singular_val)
 	{
-		*accum = fmod(*accum, *in);
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum = fmodf(*accum, *in);
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum = fmodf(*accum, *in);
+		}
+	}
+}
+
+static void msh_ModSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	mxSingle rem;
+	if(is_singular_val)
+	{
+		if(*in == 0)
+		{
+			return;
+		}
 		
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			rem = fmodf(*accum, *in);
+			*accum = ((rem < 0) != (*in < 0))? rem + *in : *in;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			if(*in != 0)
+			{
+				rem = fmodf(*accum, *in);
+				*accum = ((rem < 0) != (*in < 0))? rem + *in : *in;
+			}
+		}
+	}
+}
+
+static void msh_NegSingleRunner(mxSingle* accum, size_t num_elems)
+{
+	size_t i;
+	for(i = 0; i < num_elems; i++, accum++)
+	{
+		*accum = -*accum;
+	}
+}
+
+static void msh_SRASingleRunner(mxSingle* accum, int* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	mxSingle mult;
+	if(is_singular_val)
+	{
+		mult = powf(2, *in);
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum /= mult;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum /= powf(2, *in);
+		}
+	}
+}
+
+static void msh_SLASingleRunner(mxSingle* accum, int* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	mxSingle mult;
+	if(is_singular_val)
+	{
+		mult = powf(2, *in);
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum *= mult;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum *= powf(2, *in);
+		}
+	}
+}
+
+/** mxDouble **/
+
+static void msh_AddDoubleRunner(mxDouble* accum, mxDouble* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	if(is_singular_val)
+	{
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum += *in;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum += *in;
+		}
+	}
+}
+
+static void msh_SubDoubleRunner(mxDouble* accum, mxDouble* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	if(is_singular_val)
+	{
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum -= *in;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum -= *in;
+		}
+	}
+}
+
+static void msh_MulDoubleRunner(mxDouble* accum, mxDouble* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	if(is_singular_val)
+	{
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum *= *in;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum *= *in;
+		}
+	}
+}
+
+static void msh_DivDoubleRunner(mxDouble* accum, mxDouble* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	if(is_singular_val)
+	{
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum /= *in;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum /= *in;
+		}
+	}
+}
+
+static void msh_RemDoubleRunner(mxDouble* accum, mxDouble* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	if(is_singular_val)
+	{
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum = fmodf(*accum, *in);
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum = fmodf(*accum, *in);
+		}
+	}
+}
+
+static void msh_ModDoubleRunner(mxDouble* accum, mxDouble* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	mxDouble rem;
+	if(is_singular_val)
+	{
+		if(*in == 0)
+		{
+			return;
+		}
+		
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			rem = fmodf(*accum, *in);
+			*accum = ((rem < 0) != (*in < 0))? rem + *in : *in;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			if(*in != 0)
+			{
+				rem = fmodf(*accum, *in);
+				*accum = ((rem < 0) != (*in < 0))? rem + *in : *in;
+			}
+		}
+	}
+}
+
+static void msh_NegDoubleRunner(mxDouble* accum, size_t num_elems)
+{
+	size_t i;
+	for(i = 0; i < num_elems; i++, accum++)
+	{
+		*accum = -*accum;
+	}
+}
+
+static void msh_SRADoubleRunner(mxDouble* accum, int* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	mxDouble mult;
+	if(is_singular_val)
+	{
+		mult = powf(2, *in);
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum /= mult;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum /= powf(2, *in);
+		}
+	}
+}
+
+static void msh_SLADoubleRunner(mxDouble* accum, int* in, size_t num_elems, int is_singular_val)
+{
+	size_t i;
+	mxDouble mult;
+	if(is_singular_val)
+	{
+		mult = powf(2, *in);
+		for(i = 0; i < num_elems; i++, accum++)
+		{
+			*accum *= mult;
+		}
+	}
+	else
+	{
+		for(i = 0; i < num_elems; i++, accum++, in++)
+		{
+			*accum *= powf(2, *in);
+		}
 	}
 }
