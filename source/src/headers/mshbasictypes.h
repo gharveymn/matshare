@@ -81,6 +81,7 @@ typedef int32_T segmentnumber_T; /* segment number identifiers */
 #  define PID_FORMAT "%lu"
 #else
    typedef int handle_T;				 /* give fds a uniform identifier */
+   typedef pid_t pid_T;
    typedef struct FileLock_T
    {
       handle_T lock_handle;
