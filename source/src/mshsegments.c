@@ -35,7 +35,7 @@
  * @note Modifies the shared memory linked list.
  * @param seg_sz The size of the segment to be opened.
  */
-static void msh_CreateSegmentWorker(SegmentInfo_t* new_seg_info, size_t data_size, const mxArray* name, int is_persistent);
+static void msh_CreateSegmentWorker(SegmentInfo_T* new_seg_info, size_t data_size, const mxArray* name, int is_persistent);
 
 
 /**
@@ -45,7 +45,7 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* new_seg_info, size_t data_siz
  * @note Interacts with but does not modify the shared memory linked list.
  * @param seg_num The segment number of the segment to be opened.
  */
-static void msh_OpenSegmentWorker(SegmentInfo_t* new_seg_info, segmentnumber_T seg_num);
+static void msh_OpenSegmentWorker(SegmentInfo_T* new_seg_info, segmentnumber_T seg_num);
 
 
 /**
@@ -59,12 +59,12 @@ static void msh_IncrementRevisionNumber(void);
  *
  * @param seg_info The segment info struct to initialize.
  */
-static void msh_InitializeSegmentInfo(SegmentInfo_t* seg_info);
+static void msh_InitializeSegmentInfo(SegmentInfo_T* seg_info);
 
 
 /** public function definitions **/
 
-SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
+SharedVariableHeader_T* msh_GetSegmentData(SegmentNode_T* seg_node)
 {
 	/* The raw pointer is only mapped if it is actually needed.
 	 * This improves performance of functions only needing the
@@ -73,33 +73,33 @@ SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node)
 	{
 		msh_GetSegmentInfo(seg_node)->raw_ptr = msh_MapMemory(msh_GetSegmentInfo(seg_node)->handle, msh_GetSegmentInfo(seg_node)->total_segment_size);
 	}
-	return (SharedVariableHeader_t*)((byte_T*)msh_GetSegmentInfo(seg_node)->raw_ptr + msh_PadToAlignData(sizeof(SegmentMetadata_t)));
+	return (SharedVariableHeader_T*)((byte_T*)msh_GetSegmentInfo(seg_node)->raw_ptr + msh_PadToAlignData(sizeof(SegmentMetadata_T)));
 }
 
 
 size_t msh_FindSegmentSize(size_t data_size)
 {
-	return msh_PadToAlignData(sizeof(SegmentMetadata_t)) + data_size;
+	return msh_PadToAlignData(sizeof(SegmentMetadata_T)) + data_size;
 }
 
 
-SegmentNode_t* msh_CreateSegment(size_t data_size, const mxArray* id, int is_persistent)
+SegmentNode_T* msh_CreateSegment(size_t data_size, const mxArray* id, int is_persistent)
 {
-	SegmentInfo_t seg_info_cache;
+	SegmentInfo_T seg_info_cache;
 	msh_CreateSegmentWorker(&seg_info_cache, data_size, id, is_persistent);
 	return msh_CreateSegmentNode(&seg_info_cache);
 }
 
 
-SegmentNode_t* msh_OpenSegment(segmentnumber_T seg_num)
+SegmentNode_T* msh_OpenSegment(segmentnumber_T seg_num)
 {
-	SegmentInfo_t seg_info_cache;
+	SegmentInfo_T seg_info_cache;
 	msh_OpenSegmentWorker(&seg_info_cache, seg_num);
 	return msh_CreateSegmentNode(&seg_info_cache);
 }
 
 
-void msh_DetachSegment(SegmentNode_t* seg_node)
+void msh_DetachSegment(SegmentNode_T* seg_node)
 {
 
 #ifdef MSH_UNIX
@@ -109,7 +109,7 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 	LockFreeCounter_T old_counter, new_counter;
 	
 	/* cache the segment info */
-	SegmentInfo_t* seg_info = msh_GetSegmentInfo(seg_node);
+	SegmentInfo_T* seg_info = msh_GetSegmentInfo(seg_node);
 	
 	if(msh_GetVariableNode(seg_node) != NULL)
 	{
@@ -150,7 +150,7 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 			msh_AtomicSubtractSize(&g_shared_info->total_shared_size, seg_info->total_segment_size);
 		}
 		
-		msh_UnmapMemory(seg_info->metadata, sizeof(SegmentMetadata_t));
+		msh_UnmapMemory(seg_info->metadata, sizeof(SegmentMetadata_T));
 		seg_info->metadata = NULL;
 		
 	}
@@ -172,11 +172,11 @@ void msh_DetachSegment(SegmentNode_t* seg_node)
 }
 
 
-void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
+void msh_AddSegmentToSharedList(SegmentNode_T* seg_node)
 {
-	SegmentNode_t* last_seg_node;
-	SegmentList_t* segment_cache_list = msh_GetSegmentList(seg_node) != NULL? msh_GetSegmentList(seg_node) : &g_local_seg_list;
-	SegmentMetadata_t* segment_metadata = msh_GetSegmentMetadata(seg_node);
+	SegmentNode_T* last_seg_node;
+	SegmentList_T* segment_cache_list = msh_GetSegmentList(seg_node) != NULL? msh_GetSegmentList(seg_node) : &g_local_seg_list;
+	SegmentMetadata_T* segment_metadata = msh_GetSegmentMetadata(seg_node);
 	
 	msh_AcquireProcessLock(g_process_lock);
 	
@@ -234,12 +234,12 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node)
 }
 
 
-void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
+void msh_RemoveSegmentFromSharedList(SegmentNode_T* seg_node)
 {
 	
-	SegmentNode_t* prev_seg_node, * next_seg_node;
-	SegmentList_t* segment_cache_list = msh_GetSegmentList(seg_node) != NULL? msh_GetSegmentList(seg_node) : &g_local_seg_list;
-	SegmentMetadata_t* segment_metadata = msh_GetSegmentMetadata(seg_node);
+	SegmentNode_T* prev_seg_node, * next_seg_node;
+	SegmentList_T* segment_cache_list = msh_GetSegmentList(seg_node) != NULL? msh_GetSegmentList(seg_node) : &g_local_seg_list;
+	SegmentMetadata_T* segment_metadata = msh_GetSegmentMetadata(seg_node);
 	
 	if(segment_metadata->is_invalid)
 	{
@@ -306,9 +306,9 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node)
 }
 
 
-void msh_DetachSegmentList(SegmentList_t* seg_list)
+void msh_DetachSegmentList(SegmentList_T* seg_list)
 {
-	SegmentNode_t* curr_seg_node;
+	SegmentNode_T* curr_seg_node;
 	while(seg_list->first != NULL)
 	{
 		curr_seg_node = seg_list->first;
@@ -318,9 +318,9 @@ void msh_DetachSegmentList(SegmentList_t* seg_list)
 }
 
 
-void msh_ClearSharedSegments(SegmentList_t* seg_cache_list)
+void msh_ClearSharedSegments(SegmentList_T* seg_cache_list)
 {
-	SegmentNode_t* curr_seg_node;
+	SegmentNode_T* curr_seg_node;
 	msh_AcquireProcessLock(g_process_lock);
 	while(g_shared_info->first_seg_num != MSH_INVALID_SEG_NUM)
 	{
@@ -337,11 +337,11 @@ void msh_ClearSharedSegments(SegmentList_t* seg_cache_list)
 }
 
 
-void msh_UpdateAllSegments(SegmentList_t* seg_list)
+void msh_UpdateAllSegments(SegmentList_T* seg_list)
 {
 	
 	segmentnumber_T curr_seg_num;
-	SegmentNode_t* curr_seg_node, * next_seg_node, * new_seg_node, * new_front = NULL;
+	SegmentNode_T* curr_seg_node, * next_seg_node, * new_seg_node, * new_front = NULL;
 	
 	if(g_local_info.rev_num == g_shared_info->rev_num)
 	{
@@ -386,9 +386,9 @@ void msh_UpdateAllSegments(SegmentList_t* seg_list)
 }
 
 
-void msh_UpdateLatestSegment(SegmentList_t* seg_list)
+void msh_UpdateLatestSegment(SegmentList_T* seg_list)
 {
-	SegmentNode_t* last_seg_node;
+	SegmentNode_T* last_seg_node;
 	if(g_local_info.rev_num == g_shared_info->rev_num)
 	{
 		return;
@@ -427,7 +427,7 @@ void msh_UpdateLatestSegment(SegmentList_t* seg_list)
 }
 
 
-SegmentNode_t* msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_node)
+SegmentNode_T* msh_AddSegmentToList(SegmentList_T* seg_list, SegmentNode_T* seg_node)
 {
 	
 	/* this will be appended to the end so make sure next points to nothing */
@@ -472,7 +472,7 @@ SegmentNode_t* msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_
 }
 
 
-SegmentNode_t* msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node)
+SegmentNode_T* msh_PlaceSegmentAtEnd(SegmentNode_T* seg_node)
 {
 	/* if it's already at the end do nothing */
 	if(msh_GetSegmentList(seg_node)->last == seg_node)
@@ -510,10 +510,10 @@ SegmentNode_t* msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node)
 }
 
 
-SegmentNode_t* msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
+SegmentNode_T* msh_RemoveSegmentFromList(SegmentNode_T* seg_node)
 {
 	
-	SegmentList_t* seg_list;
+	SegmentList_T* seg_list;
 	
 	if((seg_list = msh_GetSegmentList(seg_node)) == NULL)
 	{
@@ -565,9 +565,9 @@ SegmentNode_t* msh_RemoveSegmentFromList(SegmentNode_t* seg_node)
 }
 
 
-void msh_CleanSegmentList(SegmentList_t* seg_list)
+void msh_CleanSegmentList(SegmentList_T* seg_list)
 {
-	SegmentNode_t* curr_seg_node, * next_seg_node;
+	SegmentNode_T* curr_seg_node, * next_seg_node;
 	
 	for(curr_seg_node = seg_list->first; curr_seg_node != NULL; curr_seg_node = next_seg_node)
 	{
@@ -586,7 +586,7 @@ void msh_CleanSegmentList(SegmentList_t* seg_list)
 /** static function definitions **/
 
 
-static void msh_CreateSegmentWorker(SegmentInfo_t* new_seg_info, size_t data_size, const mxArray* name, int is_persistent)
+static void msh_CreateSegmentWorker(SegmentInfo_T* new_seg_info, size_t data_size, const mxArray* name, int is_persistent)
 {
 	char_T var_name_str[MSH_NAME_LEN_MAX] = {0};
 	char_T segment_name[MSH_NAME_LEN_MAX] = {0};
@@ -628,7 +628,7 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* new_seg_info, size_t data_siz
 	} while((new_seg_info->handle = msh_CreateSharedMemory(segment_name, new_seg_info->total_segment_size)) == MSH_INVALID_HANDLE);
 	
 	/* map the metadata */
-	new_seg_info->metadata = msh_MapMemory(new_seg_info->handle, sizeof(SegmentMetadata_t));
+	new_seg_info->metadata = msh_MapMemory(new_seg_info->handle, sizeof(SegmentMetadata_T));
 	
 	/* set the variable name */
 	memcpy(new_seg_info->metadata->name, var_name_str, sizeof(var_name_str));
@@ -658,7 +658,7 @@ static void msh_CreateSegmentWorker(SegmentInfo_t* new_seg_info, size_t data_siz
 }
 
 
-static void msh_OpenSegmentWorker(SegmentInfo_t* new_seg_info, segmentnumber_T seg_num)
+static void msh_OpenSegmentWorker(SegmentInfo_T* new_seg_info, segmentnumber_T seg_num)
 {
 	char_T segment_name[MSH_NAME_LEN_MAX];
 	
@@ -674,7 +674,7 @@ static void msh_OpenSegmentWorker(SegmentInfo_t* new_seg_info, segmentnumber_T s
 	new_seg_info->handle = msh_OpenSharedMemory(segment_name);
 	
 	/* map the metadata */
-	new_seg_info->metadata = msh_MapMemory(new_seg_info->handle, sizeof(SegmentMetadata_t));
+	new_seg_info->metadata = msh_MapMemory(new_seg_info->handle, sizeof(SegmentMetadata_T));
 	
 	/* tell everyone else that another process is tracking this */
 #ifdef MSH_WIN
@@ -688,7 +688,7 @@ static void msh_OpenSegmentWorker(SegmentInfo_t* new_seg_info, segmentnumber_T s
 		
 		while(!msh_GetCounterPost(&new_seg_info->metadata->procs_tracking));
 		
-		msh_UnmapMemory(new_seg_info->metadata, sizeof(SegmentMetadata_t));
+		msh_UnmapMemory(new_seg_info->metadata, sizeof(SegmentMetadata_T));
 		new_seg_info->metadata = NULL;
 		
 		msh_CloseSharedMemory(new_seg_info->handle);
@@ -873,7 +873,7 @@ void msh_UnlockMemory(void* ptr, size_t sz)
 }
 
 
-uint32_T msh_GetSegmentHashByNumber(SegmentTable_t* seg_table, void* seg_num)
+uint32_T msh_GetSegmentHashByNumber(SegmentTable_T* seg_table, void* seg_num)
 {
 	/* a dumb hash should be fine because segment numbers are generated incrementally */
 	return *((segmentnumber_T*)seg_num) % seg_table->table_sz;
@@ -886,7 +886,7 @@ int msh_CompareNumericKey(void* node_seg_num, void* comp_seg_num)
 }
 
 
-uint32_T msh_GetSegmentHashByName(SegmentTable_t* seg_table, void* varname)
+uint32_T msh_GetSegmentHashByName(SegmentTable_T* seg_table, void* varname)
 {
 	return msh_MurmurHash3(varname, strlen(varname), 'm'+'s'+'h') % seg_table->table_sz;
 }
@@ -898,7 +898,7 @@ int msh_CompareStringKey(void* node_str, void* comp_str)
 }
 
 
-static void msh_InitializeSegmentInfo(SegmentInfo_t* seg_info)
+static void msh_InitializeSegmentInfo(SegmentInfo_T* seg_info)
 {
 	seg_info->raw_ptr = NULL;
 	seg_info->metadata = NULL;

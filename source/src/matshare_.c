@@ -56,7 +56,7 @@ LocalInfo_T g_local_info =
 	TRUE                        /* is_deinitialized */
 };
 
-SegmentTable_t g_seg_table =
+SegmentTable_T g_seg_table =
 {
 	NULL,
 	0,
@@ -64,7 +64,7 @@ SegmentTable_t g_seg_table =
 	msh_CompareNumericKey
 };
 
-SegmentTable_t g_name_table =
+SegmentTable_T g_name_table =
 {
 	NULL,
 	0,
@@ -72,7 +72,7 @@ SegmentTable_t g_name_table =
 	msh_CompareStringKey
 };
 
-SegmentList_t g_local_seg_list =
+SegmentList_T g_local_seg_list =
 {
 	&g_seg_table,
 	&g_name_table,
@@ -82,7 +82,7 @@ SegmentList_t g_local_seg_list =
 	0
 };
 
-VariableList_t g_local_var_list =
+VariableList_T g_local_var_list =
 {
 	NULL,
 	NULL
@@ -151,7 +151,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	int num_in_args = nrhs - 1;
 	
 	/* resultant matshare directive */
-	msh_directive_t directive;
+	msh_directive_T directive;
 	
 	/* check the local struct for fatal errors */
 	if(g_local_info.has_fatal_error)
@@ -170,7 +170,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	}
 	
 	/* get the directive, no check is made since the matshare should not be used without entry functions */
-	directive = (msh_directive_t)mxGetScalar(in_directive);
+	directive = (msh_directive_T)mxGetScalar(in_directive);
 	
 	
 	/* pre-initialization directives */
@@ -328,8 +328,8 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 	
 	int                 will_persist = FALSE;
 	int                 with_names   = FALSE;
-	SegmentNode_t*      new_seg_node = NULL;
-	VariableNode_t*     new_var_node = NULL;
+	SegmentNode_T*      new_seg_node = NULL;
+	VariableNode_T*     new_var_node = NULL;
 	
 	if(num_args > INT_MAX)
 	{
@@ -438,7 +438,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 	unsigned            arg_num, out_num, num_out;
 	size_t              num_new_vars, num_op_args;
 	char_T              input_str[MSH_NAME_LEN_MAX];
-	SegmentNode_t*      curr_seg_node;
+	SegmentNode_T*      curr_seg_node;
 	
 	
 	int                 output_as_struct   = FALSE;
@@ -728,7 +728,7 @@ static mxArray* msh_CreateOutputRecent(void)
 static mxArray* msh_CreateOutputNew(size_t num_new_vars)
 {
 	size_t i;
-	VariableNode_t* curr_var_node;
+	VariableNode_T* curr_var_node;
 	mxArray* out = mxCreateCellMatrix(num_new_vars, (size_t)(num_new_vars > 0));
 	for(i = 0, curr_var_node = g_local_var_list.last; i < num_new_vars; i++, curr_var_node = msh_GetPreviousVariable(curr_var_node))
 	{
@@ -741,7 +741,7 @@ static mxArray* msh_CreateOutputNew(size_t num_new_vars)
 static mxArray* msh_CreateOutputAll(void)
 {
 	size_t i;
-	SegmentNode_t* curr_seg_node;
+	SegmentNode_T* curr_seg_node;
 	mxArray* out = mxCreateCellMatrix(g_local_seg_list.num_segs, (size_t)(g_local_seg_list.num_segs > 0));
 	for(i = 0, curr_seg_node = g_local_seg_list.first; i < g_local_seg_list.num_segs; i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
 	{
@@ -754,7 +754,7 @@ static mxArray* msh_CreateOutputAll(void)
 static mxArray* msh_CreateOutputNamed(void)
 {
 	size_t i;
-	SegmentNode_t* curr_seg_node;
+	SegmentNode_T* curr_seg_node;
 	const char* curr_name;
 	mxArray* out = mxCreateStructMatrix(1, 1, 0, NULL);
 	for(i = 0, curr_seg_node = g_local_seg_list.first; i < g_local_seg_list.num_named && curr_seg_node != NULL; curr_seg_node = msh_GetNextSegment(curr_seg_node))
@@ -777,7 +777,7 @@ static mxArray* msh_CreateOutputNamed(void)
 static mxArray* msh_CreateNamedOutput(const char_T* name)
 {
 	size_t i;
-	SegmentList_t named_var_list;
+	SegmentList_T named_var_list;
 	mxArray* named_var_ret;
 	
 	msh_FindAllSegmentNodes(g_local_seg_list.name_table, &named_var_list, (void*)name);
@@ -842,8 +842,8 @@ void msh_Copy(int nlhs, mxArray** plhs, int num_inputs, const mxArray** in_vars)
 
 void msh_Clear(int num_inputs, const mxArray** in_vars)
 {
-	SegmentNode_t* clear_seg_node;
-	VariableNode_t* curr_var_node;
+	SegmentNode_T* clear_seg_node;
+	VariableNode_T* curr_var_node;
 	mxArray* link;
 	const mxArray* clear_var, * curr_in_var;
 	char input_str[MSH_NAME_LEN_MAX];
@@ -910,7 +910,7 @@ void msh_Overwrite(int num_args, const mxArray** in_args)
 	
 	int               will_sync        = g_user_config.sync_default;
 	int               index_once       = FALSE;
-	IndexedVariable_t indexed_variable = {0};
+	IndexedVariable_T indexed_variable = {0};
 	
 	if(num_args < 2 || num_args > 3)
 	{
@@ -999,7 +999,7 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 	
 #ifdef MSH_UNIX
 	mode_t              sec_temp;
-	SegmentNode_t*      curr_seg_node;
+	SegmentNode_T*      curr_seg_node;
 #endif
 	
 	char                param_str[MSH_NAME_LEN_MAX]   = {0};

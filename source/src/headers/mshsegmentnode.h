@@ -14,15 +14,15 @@
 #include "mshbasictypes.h"
 
 /* forward declaration */
-typedef struct SegmentList_t SegmentList_t;
+typedef struct SegmentList_T SegmentList_T;
 
 /* forward declaration, defined in source file */
-typedef struct SegmentNode_t SegmentNode_t;
+typedef struct SegmentNode_T SegmentNode_T;
 
 /* forward declaration, defined in mshvariablenode.h */
-typedef struct VariableNode_t VariableNode_t;
+typedef struct VariableNode_T VariableNode_T;
 
-typedef struct SegmentMetadata_t
+typedef struct SegmentMetadata_T
 {
 	/* use these to link together the memory segments */
 	char_T name[MSH_NAME_LEN_MAX];             /* non-volatile */
@@ -33,16 +33,16 @@ typedef struct SegmentMetadata_t
 	volatile segmentnumber_T next_seg_num;
 	volatile long procs_using;                   /* number of processes using this variable */
 	volatile LockFreeCounter_T procs_tracking;
-} SegmentMetadata_t;
+} SegmentMetadata_T;
 
-typedef struct SegmentInfo_t
+typedef struct SegmentInfo_T
 {
 	void* raw_ptr;
-	SegmentMetadata_t* metadata;
+	SegmentMetadata_T* metadata;
 	size_t total_segment_size;
 	handle_T handle;
 	segmentnumber_T seg_num;
-} SegmentInfo_t;
+} SegmentInfo_T;
 
 
 #define msh_HasVariableName(seg_node) (msh_GetSegmentMetadata(seg_node)->name[0] != '\0')
@@ -53,7 +53,7 @@ typedef struct SegmentInfo_t
  * @param seg_info_cache The segment info struct used to create the segment.
  * @return The created segment node.
  */
-SegmentNode_t* msh_CreateSegmentNode(SegmentInfo_t* seg_info_cache);
+SegmentNode_T* msh_CreateSegmentNode(SegmentInfo_T* seg_info_cache);
 
 
 /**
@@ -61,7 +61,7 @@ SegmentNode_t* msh_CreateSegmentNode(SegmentInfo_t* seg_info_cache);
  *
  * @param seg_node The segment node to be destroyed.
  */
-void msh_DestroySegmentNode(SegmentNode_t* seg_node);
+void msh_DestroySegmentNode(SegmentNode_T* seg_node);
 
 
 /**
@@ -70,7 +70,7 @@ void msh_DestroySegmentNode(SegmentNode_t* seg_node);
  * @param seg_node The segment node.
  * @return The parent segment list.
  */
-SegmentList_t* msh_GetSegmentList(SegmentNode_t* seg_node);
+SegmentList_T* msh_GetSegmentList(SegmentNode_T* seg_node);
 
 
 /**
@@ -79,7 +79,7 @@ SegmentList_t* msh_GetSegmentList(SegmentNode_t* seg_node);
  * @param seg_node The segment node.
  * @return The next segment node.
  */
-SegmentNode_t* msh_GetNextSegment(SegmentNode_t* seg_node);
+SegmentNode_T* msh_GetNextSegment(SegmentNode_T* seg_node);
 
 
 /**
@@ -88,7 +88,7 @@ SegmentNode_t* msh_GetNextSegment(SegmentNode_t* seg_node);
  * @param seg_node The segment node.
  * @return The previous segment node.
  */
-SegmentNode_t* msh_GetPreviousSegment(SegmentNode_t* seg_node);
+SegmentNode_T* msh_GetPreviousSegment(SegmentNode_T* seg_node);
 
 
 /**
@@ -98,7 +98,7 @@ SegmentNode_t* msh_GetPreviousSegment(SegmentNode_t* seg_node);
  * @param seg_node The segment node.
  * @return A pointer to the segment info.
  */
-SegmentInfo_t* msh_GetSegmentInfo(SegmentNode_t* seg_node);
+SegmentInfo_T* msh_GetSegmentInfo(SegmentNode_T* seg_node);
 
 
 /**
@@ -107,7 +107,7 @@ SegmentInfo_t* msh_GetSegmentInfo(SegmentNode_t* seg_node);
  * @param seg_node The segment node.
  * @return The variable node.
  */
-VariableNode_t* msh_GetVariableNode(SegmentNode_t* seg_node);
+VariableNode_T* msh_GetVariableNode(SegmentNode_T* seg_node);
 
 
 /**
@@ -116,7 +116,7 @@ VariableNode_t* msh_GetVariableNode(SegmentNode_t* seg_node);
  * @param seg_node The segment node.
  * @param seg_list The new parent segment list.
  */
-void msh_SetSegmentList(SegmentNode_t* seg_node, SegmentList_t* seg_list);
+void msh_SetSegmentList(SegmentNode_T* seg_node, SegmentList_T* seg_list);
 
 
 /**
@@ -125,7 +125,7 @@ void msh_SetSegmentList(SegmentNode_t* seg_node, SegmentList_t* seg_list);
  * @param seg_node The segment node.
  * @param next_seg_node The next segment node.
  */
-void msh_SetNextSegment(SegmentNode_t* seg_node, SegmentNode_t* next_seg_node);
+void msh_SetNextSegment(SegmentNode_T* seg_node, SegmentNode_T* next_seg_node);
 
 
 /**
@@ -134,7 +134,7 @@ void msh_SetNextSegment(SegmentNode_t* seg_node, SegmentNode_t* next_seg_node);
  * @param seg_node The segment node.
  * @param previous_seg_node The previous segment node.
  */
-void msh_SetPreviousSegment(SegmentNode_t* seg_node, SegmentNode_t* prev_seg_node);
+void msh_SetPreviousSegment(SegmentNode_T* seg_node, SegmentNode_T* prev_seg_node);
 
 
 /**
@@ -144,7 +144,7 @@ void msh_SetPreviousSegment(SegmentNode_t* seg_node, SegmentNode_t* prev_seg_nod
  * @param seg_node The segment node.
  * @param seg_info The segment info to be copied.
  */
-void msh_SetSegmentInfo(SegmentNode_t* seg_node, SegmentInfo_t* seg_info);
+void msh_SetSegmentInfo(SegmentNode_T* seg_node, SegmentInfo_T* seg_info);
 
 
 /**
@@ -153,6 +153,6 @@ void msh_SetSegmentInfo(SegmentNode_t* seg_node, SegmentInfo_t* seg_info);
  * @param seg_node The segment node.
  * @param var_node The variable node to be linked.
  */
-void msh_SetVariableNode(SegmentNode_t* seg_node, VariableNode_t* var_node);
+void msh_SetVariableNode(SegmentNode_T* seg_node, VariableNode_T* var_node);
 
 #endif /* MATSHARE_MSHSEGMENTNODE_H */

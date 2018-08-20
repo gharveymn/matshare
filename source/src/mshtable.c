@@ -23,10 +23,10 @@
  * @param seg_table The segment table.
  * @param num_segs The number of segments hooked into the table.
  */
-static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs);
+static void msh_ResizeTable(SegmentTable_T* seg_table, uint32_T num_segs);
 
 
-static void msh_AddNodeToTable(SegmentTable_t* seg_table, SegmentTableNode_t* new_table_node);
+static void msh_AddNodeToTable(SegmentTable_T* seg_table, SegmentTableNode_T* new_table_node);
 
 
 /**
@@ -38,22 +38,22 @@ static void msh_AddNodeToTable(SegmentTable_t* seg_table, SegmentTableNode_t* ne
 static uint32_T msh_FindNewTableSize(uint32_T curr_sz);
 
 
-void msh_InitializeTable(SegmentTable_t* seg_table)
+void msh_InitializeTable(SegmentTable_T* seg_table)
 {
 	seg_table->table_sz = MSH_INIT_TABLE_SIZE;
-	seg_table->table = mxCalloc(seg_table->table_sz, sizeof(SegmentTableNode_t*));
+	seg_table->table = mxCalloc(seg_table->table_sz, sizeof(SegmentTableNode_T*));
 	mexMakeMemoryPersistent(seg_table->table);
 }
 
 
-void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, void* key)
+void msh_AddSegmentToTable(SegmentTable_T* seg_table, SegmentNode_T* seg_node, void* key)
 {
-	SegmentTableNode_t* new_table_node;
+	SegmentTableNode_T* new_table_node;
 	
 	/* table must be initialized; don't want spooky initialization here */
 	
 	/* create new table node */
-	new_table_node = mxMalloc(sizeof(SegmentTableNode_t));
+	new_table_node = mxMalloc(sizeof(SegmentTableNode_T));
 	mexMakeMemoryPersistent(new_table_node);
 	new_table_node->seg_node = seg_node;
 	new_table_node->key = key;
@@ -68,10 +68,10 @@ void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, v
 }
 
 
-void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, void* key)
+void msh_RemoveSegmentFromTable(SegmentTable_T* seg_table, SegmentNode_T* seg_node, void* key)
 {
 	
-	SegmentTableNode_t* curr_table_node,* removed_table_node = NULL;
+	SegmentTableNode_T* curr_table_node,* removed_table_node = NULL;
 	uint32_T removed_seg_hash;
 	
 	/* find the segment node immediately preceding this segment node in the table */
@@ -105,9 +105,9 @@ void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_no
 }
 
 
-void msh_DestroyTable(SegmentTable_t* seg_table)
+void msh_DestroyTable(SegmentTable_T* seg_table)
 {
-	SegmentTableNode_t* curr_table_node,* next_table_node;
+	SegmentTableNode_T* curr_table_node,* next_table_node;
 	uint32_T curr_seg_hash;
 	if(seg_table->table != NULL)
 	{
@@ -127,9 +127,9 @@ void msh_DestroyTable(SegmentTable_t* seg_table)
 }
 
 
-SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, void* key)
+SegmentNode_T* msh_FindSegmentNode(SegmentTable_T* seg_table, void* key)
 {
-	SegmentTableNode_t* curr_table_node;
+	SegmentTableNode_T* curr_table_node;
 	if(seg_table->table != NULL)
 	{
 		for(curr_table_node = seg_table->table[seg_table->get_hash(seg_table, key)]; curr_table_node != NULL; curr_table_node = curr_table_node->next)
@@ -144,11 +144,11 @@ SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, void* key)
 }
 
 
-void msh_FindAllSegmentNodes(SegmentTable_t* seg_table, SegmentList_t* seg_list_cache, void* key)
+void msh_FindAllSegmentNodes(SegmentTable_T* seg_table, SegmentList_T* seg_list_cache, void* key)
 {
-	SegmentNode_t* seg_node_copy;
-	SegmentTableNode_t* curr_table_node;
-	memset(seg_list_cache, 0, sizeof(SegmentList_t));
+	SegmentNode_T* seg_node_copy;
+	SegmentTableNode_T* curr_table_node;
+	memset(seg_list_cache, 0, sizeof(SegmentList_T));
 	if(seg_table->table != NULL)
 	{
 		for(curr_table_node = seg_table->table[seg_table->get_hash(seg_table, key)]; curr_table_node != NULL; curr_table_node = curr_table_node->next)
@@ -164,11 +164,11 @@ void msh_FindAllSegmentNodes(SegmentTable_t* seg_table, SegmentList_t* seg_list_
 }
 
 
-static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs)
+static void msh_ResizeTable(SegmentTable_T* seg_table, uint32_T num_segs)
 {
 	
-	SegmentTableNode_t* curr_table_node,* next_table_node;
-	SegmentTable_t new_table;
+	SegmentTableNode_T* curr_table_node,* next_table_node;
+	SegmentTable_T new_table;
 	uint32_T curr_seg_hash;
 	
 	if(seg_table->table_sz >= (uint32_T)(1 << 31))
@@ -180,7 +180,7 @@ static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs)
 	/* copy any immutable members */
 	new_table = *seg_table;
 	new_table.table_sz = msh_FindNewTableSize(num_segs);
-	new_table.table = mxCalloc(new_table.table_sz, sizeof(SegmentTableNode_t*));
+	new_table.table = mxCalloc(new_table.table_sz, sizeof(SegmentTableNode_T*));
 	mexMakeMemoryPersistent(new_table.table);
 	
 	for(curr_seg_hash = 0; curr_seg_hash < seg_table->table_sz; curr_seg_hash++)
@@ -199,9 +199,9 @@ static void msh_ResizeTable(SegmentTable_t* seg_table, uint32_T num_segs)
 }
 
 
-static void msh_AddNodeToTable(SegmentTable_t* seg_table, SegmentTableNode_t* new_table_node)
+static void msh_AddNodeToTable(SegmentTable_T* seg_table, SegmentTableNode_T* new_table_node)
 {
-	SegmentTableNode_t* curr_table_node;
+	SegmentTableNode_T* curr_table_node;
 	uint32_T seg_hash = seg_table->get_hash(seg_table, new_table_node->key);
 	
 	if(seg_table->table[seg_hash] == NULL)

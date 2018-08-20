@@ -14,12 +14,12 @@
 #include "mshtypes.h"
 #include "mshvariablenode.h"
 
-typedef struct VariableList_t
+typedef struct VariableList_T
 {
-	VariableNode_t* first;
-	VariableNode_t* last;
+	VariableNode_T* first;
+	VariableNode_T* last;
 	/* uint32_T num_vars; */
-} VariableList_t;
+} VariableList_T;
 
 /**
  * Creates a new MATLAB variable from the specified shared segment.
@@ -27,7 +27,7 @@ typedef struct VariableList_t
  * @param seg_node The segment node associated to the shared data.
  * @return A variable node containing the new MATLAB variable.
  */
-VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node);
+VariableNode_T* msh_CreateVariable(SegmentNode_T* seg_node);
 
 
 /**
@@ -36,7 +36,7 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node);
  * @param var_node The variable node containing the variable to be destroyed.
  * @return whether the associated segment was also removed.
  */
-int msh_DestroyVariable(VariableNode_t* var_node);
+int msh_DestroyVariable(VariableNode_T* var_node);
 
 
 /**
@@ -45,7 +45,7 @@ int msh_DestroyVariable(VariableNode_t* var_node);
  * @param var_list The variable list to which the variable node will be appended.
  * @param var_node The variable node to append.
  */
-void msh_AddVariableToList(VariableList_t* var_list, VariableNode_t* var_node);
+void msh_AddVariableToList(VariableList_T* var_list, VariableNode_T* var_node);
 
 
 /**
@@ -53,7 +53,7 @@ void msh_AddVariableToList(VariableList_t* var_list, VariableNode_t* var_node);
  *
  * @param var_node The variable node to removed.
  */
-void msh_RemoveVariableFromList(VariableNode_t* var_node);
+void msh_RemoveVariableFromList(VariableNode_T* var_node);
 
 
 /**
@@ -61,7 +61,7 @@ void msh_RemoveVariableFromList(VariableNode_t* var_node);
  *
  * @param var_list The variable list which will be cleared.
  */
-void msh_ClearVariableList(VariableList_t* var_list);
+void msh_ClearVariableList(VariableList_T* var_list);
 
 
 /**
@@ -70,15 +70,15 @@ void msh_ClearVariableList(VariableList_t* var_list);
  *
  * @param var_list The variable list to be cleaned.
  */
-void msh_CleanVariableList(VariableList_t* var_list, int shared_gc_override);
+void msh_CleanVariableList(VariableList_T* var_list, int shared_gc_override);
 
 
-mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node, int will_set_used);
+mxArray* msh_CreateSharedDataCopy(VariableNode_T* var_node, int will_set_used);
 
 
 
 /** Forward declaration of the global variable list. **/
-extern VariableList_t g_local_var_list;
+extern VariableList_T g_local_var_list;
 
 
 #endif /* MATSHARE_MSHLISTS_H */

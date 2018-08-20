@@ -15,22 +15,22 @@
 #include "mshtable.h"
 
 /* forward declaration, definition in mshheader.c */
-typedef struct SharedVariableHeader_t SharedVariableHeader_t;
+typedef struct SharedVariableHeader_T SharedVariableHeader_T;
 
 /* forward declaration */
-typedef struct SegmentTable_t SegmentTable_t;
+typedef struct SegmentTable_T SegmentTable_T;
 
-typedef struct SegmentList_t
+typedef struct SegmentList_T
 {
-	SegmentTable_t* seg_table;
-	SegmentTable_t* name_table;
-	SegmentNode_t* first;
-	SegmentNode_t* last;
+	SegmentTable_T* seg_table;
+	SegmentTable_T* name_table;
+	SegmentNode_T* first;
+	SegmentNode_T* last;
 	uint32_T num_segs;
 	uint32_T num_named;
-} SegmentList_t;
+} SegmentList_T;
 
-typedef void (*UpdateFunction_t)(SegmentList_t*);
+typedef void (*UpdateFunction_t)(SegmentList_T*);
 
 /**
  * Note: matshare links segments in shared memory by assigning each segment a "segment number."
@@ -53,7 +53,7 @@ typedef void (*UpdateFunction_t)(SegmentList_t*);
  * @param seg_node The segment node.
  * @return The segment data.
  */
-SharedVariableHeader_t* msh_GetSegmentData(SegmentNode_t* seg_node);
+SharedVariableHeader_T* msh_GetSegmentData(SegmentNode_T* seg_node);
 
 
 /**
@@ -73,7 +73,7 @@ size_t msh_FindSegmentSize(size_t data_size);
  * @param data_size The size of the new segment.
  * @return The new segment node which holds information about the new segment.
  */
-SegmentNode_t* msh_CreateSegment(size_t data_size, const struct mxArray_tag* id, int is_persistent);
+SegmentNode_T* msh_CreateSegment(size_t data_size, const struct mxArray_tag* id, int is_persistent);
 
 
 /**
@@ -83,7 +83,7 @@ SegmentNode_t* msh_CreateSegment(size_t data_size, const struct mxArray_tag* id,
  * @param seg_num The segment number of the shared memory segment (used by matshare to identify the memory segment).
  * @return The new segment node which holds information about the new segment.
  */
-SegmentNode_t* msh_OpenSegment(segmentnumber_T seg_num);
+SegmentNode_T* msh_OpenSegment(segmentnumber_T seg_num);
 
 
 /**
@@ -92,7 +92,7 @@ SegmentNode_t* msh_OpenSegment(segmentnumber_T seg_num);
  *
  * @param seg_node The segment node containing the segment to detach.
  */
-void msh_DetachSegment(SegmentNode_t* seg_node);
+void msh_DetachSegment(SegmentNode_T* seg_node);
 
 
 /**
@@ -101,7 +101,7 @@ void msh_DetachSegment(SegmentNode_t* seg_node);
  *
  * @param seg_node The segment node containing the segment to append.
  */
-void msh_AddSegmentToSharedList(SegmentNode_t* seg_node);
+void msh_AddSegmentToSharedList(SegmentNode_T* seg_node);
 
 
 /**
@@ -110,7 +110,7 @@ void msh_AddSegmentToSharedList(SegmentNode_t* seg_node);
  *
  * @param seg_node The segment node containing the segment to remove.
  */
-void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node);
+void msh_RemoveSegmentFromSharedList(SegmentNode_T* seg_node);
 
 
 /**
@@ -118,7 +118,7 @@ void msh_RemoveSegmentFromSharedList(SegmentNode_t* seg_node);
  *
  * @param seg_list The segment list for which all segments will be detached.
  */
-void msh_DetachSegmentList(SegmentList_t* seg_list);
+void msh_DetachSegmentList(SegmentList_T* seg_list);
 
 
 /**
@@ -128,7 +128,7 @@ void msh_DetachSegmentList(SegmentList_t* seg_list);
  *
  * @param seg_cache_list The segment list caching previously tracked variables.
  */
-void msh_ClearSharedSegments(SegmentList_t* seg_cache_list);
+void msh_ClearSharedSegments(SegmentList_T* seg_cache_list);
 
 
 /**
@@ -136,7 +136,7 @@ void msh_ClearSharedSegments(SegmentList_t* seg_cache_list);
  *
  * @param seg_list The segment list to be updated.
  */
-void msh_UpdateAllSegments(SegmentList_t* seg_list);
+void msh_UpdateAllSegments(SegmentList_T* seg_list);
 
 
 /**
@@ -145,7 +145,7 @@ void msh_UpdateAllSegments(SegmentList_t* seg_list);
  * @param seg_list The segment list which the segment node will be appended to.
  * @param seg_node The segment node to be appended.
  */
-SegmentNode_t* msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_node);
+SegmentNode_T* msh_AddSegmentToList(SegmentList_T* seg_list, SegmentNode_T* seg_node);
 
 
 /**
@@ -153,7 +153,7 @@ SegmentNode_t* msh_AddSegmentToList(SegmentList_t* seg_list, SegmentNode_t* seg_
  *
  * @param seg_node The segment node to be placed at the end.
  */
-SegmentNode_t* msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node);
+SegmentNode_T* msh_PlaceSegmentAtEnd(SegmentNode_T* seg_node);
 
 
 /**
@@ -161,7 +161,7 @@ SegmentNode_t* msh_PlaceSegmentAtEnd(SegmentNode_t* seg_node);
  *
  * @param seg_node The segment to be removed.
  */
-SegmentNode_t* msh_RemoveSegmentFromList(SegmentNode_t* seg_node);
+SegmentNode_T* msh_RemoveSegmentFromList(SegmentNode_T* seg_node);
 
 
 /**
@@ -169,7 +169,7 @@ SegmentNode_t* msh_RemoveSegmentFromList(SegmentNode_t* seg_node);
  *
  * @param seg_list The segment list to be cleaned.
  */
-void msh_CleanSegmentList(SegmentList_t* seg_list);
+void msh_CleanSegmentList(SegmentList_T* seg_list);
 
 
 /**
@@ -178,7 +178,7 @@ void msh_CleanSegmentList(SegmentList_t* seg_list);
  *
  * @param seg_list The segment list to be updated.
  */
-void msh_UpdateLatestSegment(SegmentList_t* seg_list);
+void msh_UpdateLatestSegment(SegmentList_T* seg_list);
 
 
 /**
@@ -245,17 +245,17 @@ void msh_LockMemory(void* ptr, size_t sz);
  */
 void msh_UnlockMemory(void* ptr, size_t sz);
 
-uint32_T msh_GetSegmentHashByNumber(SegmentTable_t* seg_table, void* seg_num);
+uint32_T msh_GetSegmentHashByNumber(SegmentTable_T* seg_table, void* seg_num);
 
 int msh_CompareNumericKey(void* node_seg_num, void* comp_seg_num);
 
-uint32_T msh_GetSegmentHashByName(SegmentTable_t* seg_table, void* varname);
+uint32_T msh_GetSegmentHashByName(SegmentTable_T* seg_table, void* varname);
 
 int msh_CompareStringKey(void* node_str, void* comp_str);
 
 /**
  * Forward declaration of the global segment list.
  */
-extern SegmentList_t g_local_seg_list;
+extern SegmentList_T g_local_seg_list;
 
 #endif /* MATSHARE_MSHSEGMENTS_H */

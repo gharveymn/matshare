@@ -201,7 +201,7 @@ typedef enum
 	msh_UNLOCK          = 0x000A,  /* release the interprocess lock */
 	msh_CLEAN           = 0x000B,  /* clean invalid and unused segments */
 	msh_STATUS          = 0x000C   /* print out info about the current state of matshare */
-} msh_directive_t;
+} msh_directive_T;
 
 /**
  * Runs sharing operation. Makes a shared copy of the new variable if requested.

@@ -26,16 +26,16 @@
 #  define INT64_MAX 0x7FFFFFFFFFFFFFFF
 #endif
 #ifndef INT8_MIN
-#  define INT8_MIN  -0x80
+#  define INT8_MIN  (-INT8_MAX-1)
 #endif
 #ifndef INT16_MIN
-#  define INT16_MIN -0x8000
+#  define INT16_MIN (-INT16_MAX-1)
 #endif
 #ifndef INT32_MIN
-#  define INT32_MIN -0x80000000
+#  define INT32_MIN (-INT32_MAX-1)
 #endif
 #ifndef INT64_MIN
-#  define INT64_MIN -0x8000000000000000
+#  define INT64_MIN (-INT64_MAX-1)
 #endif
 
 #ifndef UINT8_MAX
@@ -51,23 +51,39 @@
 #  define UINT64_MAX 0xFFFFFFFFFFFFFFFF
 #endif
 
-typedef struct ParsedIndices_t
+typedef enum
+{
+	ABS = 0,
+	ADD = 1,
+	SUB = 2,
+	MUL = 3,
+	DIV = 4,
+	REM = 5,
+	MOD = 6,
+	NEG = 7,
+	SRA = 8,
+	SLA = 9
+} msh_varop_T;
+
+typedef void (*binaryvaropfcn_T)(void*, void*, size_t, int);
+
+typedef struct ParsedIndices_T
 {
 	mwIndex*       start_idxs;
 	size_t         num_idxs;
 	mwSize*        slice_lens;
 	size_t         num_lens;
-} ParsedIndices_t;
+} ParsedIndices_T;
 
-typedef struct IndexedVariable_t
+typedef struct IndexedVariable_T
 {
 	const mxArray* dest_var;
-	ParsedIndices_t indices;
-} IndexedVariable_t;
+	ParsedIndices_T indices;
+} IndexedVariable_T;
 
-void msh_ParseSubscriptStruct(IndexedVariable_t* indexed_var, const mxArray* in_var, const mxArray* substruct);
+void msh_ParseSubscriptStruct(IndexedVariable_T* indexed_var, const mxArray* in_var, const mxArray* substruct);
 
-ParsedIndices_t msh_ParseIndices(mxArray* subs_arr, const mxArray* dest_var, const mxArray* in_var);
+ParsedIndices_T msh_ParseIndices(mxArray* subs_arr, const mxArray* dest_var, const mxArray* in_var);
 
 mwIndex msh_ParseSingleIndex(mxArray* subs_arr, const mxArray* dest_var, const mxArray* in_var);
 
@@ -79,7 +95,7 @@ mwIndex msh_ParseSingleIndex(mxArray* subs_arr, const mxArray* dest_var, const m
  * @param comp_var The second variable to be compared.
  * @return Whether they are equal in size.
  */
-void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp_var);
+void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp_var);
 
 
 /**
@@ -88,6 +104,6 @@ void msh_CompareVariableSize(IndexedVariable_t* indexed_var, const mxArray* comp
  * @param dest_var The destination variable.
  * @param in_var The input variable.
  */
-void msh_OverwriteVariable(IndexedVariable_t* indexed_var, const mxArray* in_var, int will_sync);
+void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, int will_sync);
 
 #endif /* MATSHARE_MSHVAROPS_H */

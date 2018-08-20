@@ -14,7 +14,7 @@
 typedef struct mxArray_tag mxArray;
 
 /* opaque declaration */
-typedef struct InternalMexStruct_t InternalMexStruct_t;
+typedef struct InternalMexStruct_T InternalMexStruct_T;
 
 /**
  * Fetches the crosslink for the given mxArray.

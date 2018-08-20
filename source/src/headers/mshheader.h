@@ -17,7 +17,7 @@
 typedef struct mxArray_tag mxArray;
 
 /** Forward declaration for SharedVariableHeader_t **/
-typedef struct SharedVariableHeader_t SharedVariableHeader_t;
+typedef struct SharedVariableHeader_T SharedVariableHeader_T;
 
 /** getters **/
 
@@ -27,7 +27,7 @@ typedef struct SharedVariableHeader_t SharedVariableHeader_t;
  * @param hdr_ptr The shared variable header.
  * @return The data offset.
  */
-size_t msh_GetDataOffset(SharedVariableHeader_t* hdr_ptr);
+size_t msh_GetDataOffset(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -36,7 +36,7 @@ size_t msh_GetDataOffset(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The imaginary data offset.
  */
-size_t msh_GetImagDataOffset(SharedVariableHeader_t* hdr_ptr);
+size_t msh_GetImagDataOffset(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -45,7 +45,7 @@ size_t msh_GetImagDataOffset(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The ir offset.
  */
-size_t msh_GetIrOffset(SharedVariableHeader_t* hdr_ptr);
+size_t msh_GetIrOffset(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -54,7 +54,7 @@ size_t msh_GetIrOffset(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The field names offset.
  */
-size_t msh_GetFieldNamesOffset(SharedVariableHeader_t* hdr_ptr);
+size_t msh_GetFieldNamesOffset(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -63,7 +63,7 @@ size_t msh_GetFieldNamesOffset(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The jc offset.
  */
-size_t msh_GetJcOffset(SharedVariableHeader_t* hdr_ptr);
+size_t msh_GetJcOffset(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -72,7 +72,7 @@ size_t msh_GetJcOffset(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The offset of the child offsets array.
  */
-size_t msh_GetChildOffsOffset(SharedVariableHeader_t* hdr_ptr);
+size_t msh_GetChildOffsOffset(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -81,7 +81,7 @@ size_t msh_GetChildOffsOffset(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The number of dimensions.
  */
-size_t msh_GetNumDims(SharedVariableHeader_t* hdr_ptr);
+size_t msh_GetNumDims(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -90,7 +90,7 @@ size_t msh_GetNumDims(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The element size.
  */
-size_t msh_GetElemSize(SharedVariableHeader_t* hdr_ptr);
+size_t msh_GetElemSize(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -99,7 +99,7 @@ size_t msh_GetElemSize(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The number of elements
  */
-size_t msh_GetNumElems(SharedVariableHeader_t* hdr_ptr);
+size_t msh_GetNumElems(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -108,7 +108,7 @@ size_t msh_GetNumElems(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The nzmax for this variable.
  */
-size_t msh_GetNzmax(SharedVariableHeader_t* hdr_ptr);
+size_t msh_GetNzmax(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -117,7 +117,7 @@ size_t msh_GetNzmax(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The number of fields.
  */
-int msh_GetNumFields(SharedVariableHeader_t* hdr_ptr);
+int msh_GetNumFields(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -126,7 +126,7 @@ int msh_GetNumFields(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The class ID.
  */
-int msh_GetClassID(SharedVariableHeader_t* hdr_ptr);
+int msh_GetClassID(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -135,7 +135,7 @@ int msh_GetClassID(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The empty flag.
  */
-int msh_GetIsEmpty(SharedVariableHeader_t* hdr_ptr);
+int msh_GetIsEmpty(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -144,7 +144,7 @@ int msh_GetIsEmpty(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The sparsity flag.
  */
-int msh_GetIsSparse(SharedVariableHeader_t* hdr_ptr);
+int msh_GetIsSparse(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -153,7 +153,7 @@ int msh_GetIsSparse(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return The numeric flag.
  */
-int msh_GetIsNumeric(SharedVariableHeader_t* hdr_ptr);
+int msh_GetIsNumeric(SharedVariableHeader_T* hdr_ptr);
 
 
 /** setters **/
@@ -164,7 +164,7 @@ int msh_GetIsNumeric(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @param new_off The data offset.
  */
-void msh_SetDataOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
+void msh_SetDataOffset(SharedVariableHeader_T* hdr_ptr, size_t new_off);
 
 
 /**
@@ -173,7 +173,7 @@ void msh_SetDataOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
  * @param hdr_ptr The shared variable header.
  * @param new_off The imaginary data offset.
  */
-void msh_SetImagDataOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
+void msh_SetImagDataOffset(SharedVariableHeader_T* hdr_ptr, size_t new_off);
 
 
 /**
@@ -182,7 +182,7 @@ void msh_SetImagDataOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
  * @param hdr_ptr The shared variable header.
  * @param new_off The ir offset.
  */
-void msh_SetIrOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
+void msh_SetIrOffset(SharedVariableHeader_T* hdr_ptr, size_t new_off);
 
 
 /**
@@ -191,7 +191,7 @@ void msh_SetIrOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
  * @param hdr_ptr The shared variable header.
  * @param new_off The field names offset.
  */
-void msh_SetFieldNamesOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
+void msh_SetFieldNamesOffset(SharedVariableHeader_T* hdr_ptr, size_t new_off);
 
 
 /**
@@ -200,7 +200,7 @@ void msh_SetFieldNamesOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
  * @param hdr_ptr The shared variable header.
  * @param new_off The jc offset.
  */
-void msh_SetJcOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
+void msh_SetJcOffset(SharedVariableHeader_T* hdr_ptr, size_t new_off);
 
 
 /**
@@ -209,7 +209,7 @@ void msh_SetJcOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
  * @param hdr_ptr The shared variable header.
  * @param new_off The offset of the child offsets array.
  */
-void msh_SetChildOffsOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
+void msh_SetChildOffsOffset(SharedVariableHeader_T* hdr_ptr, size_t new_off);
 
 
 /**
@@ -218,7 +218,7 @@ void msh_SetChildOffsOffset(SharedVariableHeader_t* hdr_ptr, size_t new_off);
  * @param hdr_ptr The shared variable header.
  * @param in The number of dimensions.
  */
-void msh_SetNumDims(SharedVariableHeader_t* hdr_ptr, size_t in);
+void msh_SetNumDims(SharedVariableHeader_T* hdr_ptr, size_t in);
 
 
 /**
@@ -227,7 +227,7 @@ void msh_SetNumDims(SharedVariableHeader_t* hdr_ptr, size_t in);
  * @param hdr_ptr The shared variable header.
  * @param in The element size.
  */
-void msh_SetElemSize(SharedVariableHeader_t* hdr_ptr, size_t in);
+void msh_SetElemSize(SharedVariableHeader_T* hdr_ptr, size_t in);
 
 
 /**
@@ -236,7 +236,7 @@ void msh_SetElemSize(SharedVariableHeader_t* hdr_ptr, size_t in);
  * @param hdr_ptr The shared variable header.
  * @param in The number of elements
  */
-void msh_SetNumElems(SharedVariableHeader_t* hdr_ptr, size_t in);
+void msh_SetNumElems(SharedVariableHeader_T* hdr_ptr, size_t in);
 
 
 /**
@@ -245,7 +245,7 @@ void msh_SetNumElems(SharedVariableHeader_t* hdr_ptr, size_t in);
  * @param hdr_ptr The shared variable header.
  * @param in The nzmax for this variable.
  */
-void msh_SetNzmax(SharedVariableHeader_t* hdr_ptr, size_t in);
+void msh_SetNzmax(SharedVariableHeader_T* hdr_ptr, size_t in);
 
 
 /**
@@ -254,7 +254,7 @@ void msh_SetNzmax(SharedVariableHeader_t* hdr_ptr, size_t in);
  * @param hdr_ptr The shared variable header.
  * @param in The number of fields.
  */
-void msh_SetNumFields(SharedVariableHeader_t* hdr_ptr, int in);
+void msh_SetNumFields(SharedVariableHeader_T* hdr_ptr, int in);
 
 
 /**
@@ -263,7 +263,7 @@ void msh_SetNumFields(SharedVariableHeader_t* hdr_ptr, int in);
  * @param hdr_ptr The shared variable header.
  * @param in The class ID.
  */
-void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, int in);
+void msh_SetClassId(SharedVariableHeader_T* hdr_ptr, int in);
 
 
 /**
@@ -272,7 +272,7 @@ void msh_SetClassId(SharedVariableHeader_t* hdr_ptr, int in);
  * @param hdr_ptr The shared variable header.
  * @param in The empty flag.
  */
-void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, int in);
+void msh_SetIsEmpty(SharedVariableHeader_T* hdr_ptr, int in);
 
 
 /**
@@ -281,7 +281,7 @@ void msh_SetIsEmpty(SharedVariableHeader_t* hdr_ptr, int in);
  * @param hdr_ptr The shared variable header.
  * @param in The sparsity flag.
  */
-void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, int in);
+void msh_SetIsSparse(SharedVariableHeader_T* hdr_ptr, int in);
 
 
 /**
@@ -290,7 +290,7 @@ void msh_SetIsSparse(SharedVariableHeader_t* hdr_ptr, int in);
  * @param hdr_ptr The shared variable header.
  * @param in The numeric flag.
  */
-void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, int in);
+void msh_SetIsNumeric(SharedVariableHeader_T* hdr_ptr, int in);
 
 
 /**
@@ -299,7 +299,7 @@ void msh_SetIsNumeric(SharedVariableHeader_t* hdr_ptr, int in);
  * @param hdr_ptr The shared variable header.
  * @return A local pointer to the dimensions array.
  */
-mwSize* msh_GetDimensions(SharedVariableHeader_t* hdr_ptr);
+mwSize* msh_GetDimensions(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -308,7 +308,7 @@ mwSize* msh_GetDimensions(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return A local pointer to the data segment.
  */
-void* msh_GetData(SharedVariableHeader_t* hdr_ptr);
+void* msh_GetData(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -317,7 +317,7 @@ void* msh_GetData(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return A local pointer to the imaginary data segment.
  */
-void* msh_GetImagData(SharedVariableHeader_t* hdr_ptr);
+void* msh_GetImagData(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -326,7 +326,7 @@ void* msh_GetImagData(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return A local pointer to the ir segment.
  */
-mwIndex* msh_GetIr(SharedVariableHeader_t* hdr_ptr);
+mwIndex* msh_GetIr(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -335,7 +335,7 @@ mwIndex* msh_GetIr(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return A local pointer to the field names.
  */
-char_T* msh_GetFieldNames(SharedVariableHeader_t* hdr_ptr);
+char_T* msh_GetFieldNames(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -344,7 +344,7 @@ char_T* msh_GetFieldNames(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return A local pointer to the jc segment.
  */
-mwIndex* msh_GetJc(SharedVariableHeader_t* hdr_ptr);
+mwIndex* msh_GetJc(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -353,7 +353,7 @@ mwIndex* msh_GetJc(SharedVariableHeader_t* hdr_ptr);
  * @param hdr_ptr The shared variable header.
  * @return A local pointer to the child offsets array.
  */
-size_t* msh_GetChildOffsets(SharedVariableHeader_t* hdr_ptr);
+size_t* msh_GetChildOffsets(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -363,7 +363,7 @@ size_t* msh_GetChildOffsets(SharedVariableHeader_t* hdr_ptr);
  * @param child_num The index of the child.
  * @return A local pointer to the child.
  */
-SharedVariableHeader_t* msh_GetChildHeader(SharedVariableHeader_t* hdr_ptr, size_t child_num);
+SharedVariableHeader_T* msh_GetChildHeader(SharedVariableHeader_T* hdr_ptr, size_t child_num);
 
 
 /**
@@ -373,7 +373,7 @@ SharedVariableHeader_t* msh_GetChildHeader(SharedVariableHeader_t* hdr_ptr, size
  * @param hdr_ptr The shared variable header.
  * @return Whether the variable is complex.
  */
-int msh_GetIsComplex(SharedVariableHeader_t* hdr_ptr);
+int msh_GetIsComplex(SharedVariableHeader_T* hdr_ptr);
 
 
 /**
@@ -411,7 +411,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var);
  * @param shared_header The shared variable header.
  * @return The created mxArray.
  */
-mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header);
+mxArray* msh_FetchVariable(SharedVariableHeader_T* shared_header);
 
 
 /**
@@ -421,7 +421,7 @@ mxArray* msh_FetchVariable(SharedVariableHeader_t* shared_header);
  * @param shared_header The shared variable header.
  * @param in_var The input variable.
  */
-void msh_OverwriteHeader(SharedVariableHeader_t* shared_header, const mxArray* in_var);
+void msh_OverwriteHeader(SharedVariableHeader_T* shared_header, const mxArray* in_var);
 
 
 /**
@@ -431,7 +431,7 @@ void msh_OverwriteHeader(SharedVariableHeader_t* shared_header, const mxArray* i
  * @param comp_var The input comparison variable.
  * @return Whether the variable is the same size.
  */
-int msh_CompareHeaderSize(SharedVariableHeader_t* shared_header, const mxArray* comp_var);
+int msh_CompareHeaderSize(SharedVariableHeader_T* shared_header, const mxArray* comp_var);
 
 
 /**
