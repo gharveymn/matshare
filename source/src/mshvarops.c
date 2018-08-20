@@ -7,6 +7,9 @@
  * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+
+#include <intrin.h>
+
 #include "mshvarops.h"
 #include "mshutils.h"
 #include "mlerrorutils.h"
@@ -966,13 +969,13 @@ void msh_OverwriteVariable(IndexedVariable_t* indexed_var, const mxArray* in_var
 				dest_imag_data = mxGetImagData(indexed_var->dest_var);
 				in_imag_data = mxGetImagData(in_var);
 				
+				if(will_sync) msh_AcquireProcessLock(g_process_lock);
+				
 				for(i = 0, in_offset = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
 				{
 					for(j = 0; j < indexed_var->indices.num_lens; j++)
 					{
 						dest_offset = indexed_var->indices.start_idxs[i+j]*elem_size/sizeof(byte_T);
-						
-						if(will_sync) msh_AcquireProcessLock(g_process_lock);
 						
 						/* optimized out */
 						if(in_num_elems == 1)
@@ -994,8 +997,484 @@ void msh_OverwriteVariable(IndexedVariable_t* indexed_var, const mxArray* in_var
 						
 					}
 				}
+				
+				if(will_sync) msh_ReleaseProcessLock(g_process_lock);
+				
 			}
+		}
+	}
+}
+
+
+void msh_VOAtomicAdd(IndexedVariable_t* indexed_var, const mxArray* in_var, int will_sync)
+{
+	size_t            i, j, dest_idx, nzmax, elem_size, dest_offset, in_offset;
+	byte_T*           dest_data, * in_data, * dest_imag_data, * in_imag_data;
+	
+	int               is_complex = mxIsComplex(in_var);
+	size_t            in_num_elems    = mxGetNumberOfElements(in_var);
+	
+	if(mxIsSparse(in_var))
+	{
+		
+		nzmax = mxGetNzmax(in_var);
+		
+		msh_AcquireProcessLock(g_process_lock);
+		
+		memcpy(mxGetIr(indexed_var->dest_var), mxGetIr(in_var), nzmax*sizeof(mwIndex));
+		memcpy(mxGetJc(indexed_var->dest_var), mxGetJc(in_var), (mxGetN(in_var) + 1)*sizeof(mwIndex));
+		memcpy(mxGetData(indexed_var->dest_var), mxGetData(in_var), nzmax*mxGetElementSize(in_var));
+		if(is_complex) memcpy(mxGetImagData(indexed_var->dest_var), mxGetImagData(in_var), nzmax*mxGetElementSize(in_var));
+		
+		msh_ReleaseProcessLock(g_process_lock);
+		
+	}
+	else if(!mxIsEmpty(in_var))
+	{
+		
+		elem_size = mxGetElementSize(indexed_var->dest_var);
+		
+		if(indexed_var->indices.start_idxs == NULL)
+		{
+			in_num_elems = mxGetNumberOfElements(in_var);
+			
+			msh_AcquireProcessLock(g_process_lock);
+			
+			msh_AddDoubleWorker(mxGetData(indexed_var->dest_var), mxGetData(in_var), in_num_elems);
+			if(is_complex) memcpy(mxGetImagData(indexed_var->dest_var), mxGetImagData(in_var), in_num_elems*elem_size);
+			
+			msh_ReleaseProcessLock(g_process_lock);
+			
+		}
+		else
+		{
+			
+			dest_data = mxGetData(indexed_var->dest_var);
+			in_data = mxGetData(in_var);
+			
+			dest_imag_data = mxGetImagData(indexed_var->dest_var);
+			in_imag_data = mxGetImagData(in_var);
+			
+			msh_AcquireProcessLock(g_process_lock);
+			
+			for(i = 0, in_offset = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
+			{
+				for(j = 0; j < indexed_var->indices.num_lens; j++)
+				{
+					dest_offset = indexed_var->indices.start_idxs[i+j]*elem_size/sizeof(byte_T);
+					
+					msh_AcquireProcessLock(g_process_lock);
+					
+					/* optimized out */
+					if(in_num_elems == 1)
+					{
+						for(dest_idx = 0; dest_idx < indexed_var->indices.slice_lens[j]; dest_idx++)
+						{
+							memcpy(dest_data + dest_offset + dest_idx*elem_size/sizeof(byte_T), in_data, elem_size);
+							if(is_complex) memcpy(dest_imag_data + dest_offset + dest_idx*elem_size/sizeof(byte_T), in_imag_data, elem_size);
+						}
+					}
+					else
+					{
+						memcpy(dest_data + dest_offset, in_data + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
+						if(is_complex) memcpy(dest_imag_data + dest_offset, in_imag_data + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
+						in_offset += indexed_var->indices.slice_lens[j]*elem_size/sizeof(byte_T);
+					}
+					
+				}
+			}
+			
+			msh_ReleaseProcessLock(g_process_lock);
+			
+		}
+	}
+	
+}
+
+/** meta routines **/
+#define FW_INT_FCNR_NAME(OP, SIZE) msh_##OP##Int##SIZE##Runner
+#define FW_INT_FCN_NAME(OP, SIZE) msh_##OP##Int##SIZE
+#define FW_INT_TYPE(SIZE) int##SIZE##_T
+#define FW_INT_MAX(SIZE) INT##SIZE##_MAX
+#define FW_INT_MIN(SIZE) INT##SIZE##_MIN
+
+#define FW_UINT_FCNR_NAME(OP, SIZE) msh_##OP##UInt##SIZE##Runner
+#define FW_UINT_FCN_NAME(OP, SIZE) msh_##OP##UInt##SIZE
+#define FW_UINT_TYPE(SIZE) uint##SIZE##_T
+#define FW_UINT_MAX(SIZE) UINT##SIZE##_MAX
+
+#define UNARY_OP_RUNNER(RNAME, NAME, TYPE) \
+static void RNAME(TYPE* in, size_t num_elems)   \
+{                                              \
+	size_t i;                                 \
+	for(i = 0; i < num_elems; i++, in++)      \
+	{                                         \
+		*in = NAME(*in);                   \
+	}                                         \
+}
+
+#define BINARY_OP_RUNNER(RNAME, NAME, TYPE)              \
+static void RNAME(TYPE* accum, TYPE* in, size_t num_elems) \
+{                                                         \
+	size_t i;                                            \
+	for(i = 0; i < num_elems; i++, accum++, in++)        \
+	{                                                    \
+		*accum = NAME(*accum, *in);                   \
+	}                                                    \
+}
+
+/** Signed integer arithmetic
+ * We assume here that ints are two's complement, and
+ * that right shifts of signed negative integers preserve
+ * the sign bit (thus go to -1). This should be tested
+ * before compilation.
+ */
+ 
+#define UNARY_INT_OP_RUNNER(OP, SIZE) \
+UNARY_OP_RUNNER(FW_INT_FCNR_NAME(OP, SIZE), FW_INT_FCN_NAME(OP, SIZE), FW_INT_TYPE(SIZE))
+
+#define BINARY_INT_OP_RUNNER(OP, SIZE) \
+BINARY_OP_RUNNER(FW_INT_FCNR_NAME(OP, SIZE), FW_INT_FCN_NAME(OP, SIZE), FW_INT_TYPE(SIZE))
+
+
+/* I could make these macros even smaller, but I won't so I can
+ * retain some semblance of maintainability. */
+
+/** ABSOLUTE VALUES **/
+
+#define ABS_SIGNED_INT_WORKER_DEF(NAME, TYPE, SIZEM1, MAX_VAL) \
+static TYPE NAME(TYPE in)                                      \
+{                                                              \
+	TYPE out;                                                 \
+	TYPE mask = in >> SIZEM1;                                 \
+	out = (in ^ mask) - mask;                                 \
+	if(out < 0)                                               \
+	{                                                         \
+		return MAX_VAL;                                      \
+	}                                                         \
+	return out;                                               \
+}
+
+
+#define ABS_SIGNED_INT_METADEF(SIZE) \
+ABS_SIGNED_INT_WORKER_DEF(FW_INT_FCN_NAME(Abs, SIZE), FW_INT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE));           \
+UNARY_INT_OP_RUNNER(Abs, SIZE);
+
+ABS_SIGNED_INT_METADEF(8);
+ABS_SIGNED_INT_METADEF(16);
+ABS_SIGNED_INT_METADEF(32);
+#if MSH_BITNESS==64
+ABS_SIGNED_INT_METADEF(64);
+#endif
+
+/** ADDITION **/
+
+#define ADD_SIGNED_INT_WORKER_DEF(NAME, TYPE, UTYPE, SIZEM1, MAX_VAL) \
+static TYPE NAME(TYPE augend, TYPE addend)                            \
+{                                                                     \
+	TYPE uadd = (UTYPE)augend + (UTYPE)addend;                       \
+	TYPE flip1 = uadd ^ augend;                                      \
+	TYPE flip2 = uadd ^ addend;                                      \
+	if((flip1 & flip2) < 0)                                          \
+	{                                                                \
+		return (TYPE)MAX_VAL  + (~uadd >> SIZEM1);                  \
+	}                                                                \
+	return uadd;                                                     \
+}
+
+#define ADD_SIGNED_INT_METADEF(SIZE) \
+ADD_SIGNED_INT_WORKER_DEF(FW_INT_FCN_NAME(Add, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE));           \
+BINARY_INT_OP_RUNNER(Add, SIZE);
+
+ADD_SIGNED_INT_METADEF(8);
+ADD_SIGNED_INT_METADEF(16);
+ADD_SIGNED_INT_METADEF(32);
+#if MSH_BITNESS==64
+ADD_SIGNED_INT_METADEF(64);
+#endif
+
+/** SUBTRACTION **/
+
+#define SUB_SIGNED_INT_WORKER_DEF(NAME, TYPE, UTYPE, SIZEM1, MAX_VAL) \
+static TYPE NAME(TYPE minuend, TYPE subtrahend)                       \
+{                                                                     \
+	TYPE usub = (UTYPE)minuend - (UTYPE)subtrahend;                  \
+	TYPE flip1 = usub ^ minuend;                                     \
+	TYPE flip2 = usub ^ ~subtrahend;                                 \
+	if((flip1 & flip2) < 0)                                          \
+	{                                                                \
+		return (TYPE)MAX_VAL  + (~usub >> SIZEM1);                  \
+	}                                                                \
+	return usub;                                                     \
+}
+
+#define SUB_SIGNED_INT_METADEF(SIZE) \
+SUB_SIGNED_INT_WORKER_DEF(FW_INT_FCN_NAME(Sub, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE));           \
+BINARY_INT_OP_RUNNER(Sub, SIZE);
+
+SUB_SIGNED_INT_METADEF(8);
+SUB_SIGNED_INT_METADEF(16);
+SUB_SIGNED_INT_METADEF(32);
+#if MSH_BITNESS==64
+  SUB_SIGNED_INT_METADEF(64);
+#endif
+
+/** MULTIPLICATION **/
+
+#define MUL_SIGNED_INT_WORKER_DEF(NAME, TYPE, PTYPE, MAX_VAL, MIN_VAL) \
+static TYPE NAME(TYPE mul1, TYPE mul2)                        \
+{                                                             \
+	PTYPE promoted_mul = (PTYPE)mul1 * (PTYPE)mul2;          \
+	if(promoted_mul > MAX_VAL)                               \
+	{                                                        \
+		return MAX_VAL;                                     \
+	}                                                        \
+	else if(promoted_mul < MIN_VAL)                       \
+	{                                                        \
+		return MIN_VAL;                                  \
+	}                                                        \
+	return (TYPE)promoted_mul;                               \
+}
+
+#define MUL_SIGNED_INT_METADEF(SIZE, PSIZE) \
+MUL_SIGNED_INT_WORKER_DEF(FW_INT_FCN_NAME(Div, SIZE), FW_INT_TYPE(SIZE), FW_INT_TYPE(PSIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE));          \
+BINARY_INT_OP_RUNNER(Div, SIZE);
+
+MUL_SIGNED_INT_METADEF(8, 16);
+MUL_SIGNED_INT_METADEF(16, 32);
+#if MSH_BITNESS==32
+
+static int32_T msh_MulInt32(int32_T m1, int32_T m2)
+{
+	uint32_T uret;
+	uint32_T m1a_l16, m2a_l16;
+	uint32_T m1au_m2al, m1al_m2al, m1al_m2au;
+	
+	int      ret_is_pos   = ((m1 < 0) == (m2 < 0));
+	
+	uint32_T m1_abs       = (uint32_T)msh_AbsInt32(m1);
+	uint32_T m2_abs       = (uint32_T)msh_AbsInt32(m2);
+	
+	uint32_T m1a_u16      = m1_abs >> 16;
+	uint32_T m2a_u16      = m2_abs >> 16;
+	
+	if(m1a_u16)
+	{
+		if(m2a_u16)
+		{
+			return ret_is_pos? INT32_MAX : INT32_MIN;
+		}
+		
+		m2a_l16 = (uint16_T)m2_abs;
+		m1au_m2al = m1a_u16 * m2a_l16;
+		
+		if(m1au_m2al >> 16)
+		{
+			return ret_is_pos? INT32_MAX : INT32_MIN;
+		}
+		
+		m1au_m2al <<= 16;
+		m1a_l16 = (uint16_T)m1_abs;
+		m1al_m2al = m1a_l16 * m2a_l16;
+		uret = m1au_m2al + m1al_m2al;
+		
+		if(uret < m1au_m2al)
+		{
+			return ret_is_pos? INT32_MAX : INT32_MIN;
 		}
 		
 	}
+	else if(m2a_u16)
+	{
+		/* do the opposite of the previous branch */
+		m1a_l16 = (int16_T)m1_abs;
+		m1al_m2au = m1a_l16 * m2a_u16;
+		
+		if(m1al_m2au >> 16)
+		{
+			return ret_is_pos? INT32_MAX : INT32_MIN;
+		}
+		
+		m1al_m2au <<= 16;
+		m2a_l16 = (uint16_T)m2_abs;
+		m1al_m2al = m1a_l16 * m2a_l16;
+		uret = m1al_m2al + m1al_m2au;
+		
+		if(uret < m1al_m2au)
+		{
+			return ret_is_pos? INT32_MAX : INT32_MIN;
+		}
+	}
+	else
+	{
+		
+		uret = m1_abs * m2_abs;
+	}
+	
+	if(ret_is_pos)
+	{
+		if(uret > (uint32_T)INT32_MAX)
+		{
+			return INT32_MAX;
+		}
+		return (int32_T)uret;
+	}
+	else
+	{
+		if(uret > (uint32_T)INT32_MIN)
+		{
+			return INT32_MIN;
+		}
+		
+		/* note: this works for uret == INT32_MIN because negation wraps to itself */
+		return -(int32_T)uret;
+	}
+	
+}
+
+BINARY_INT_OP_RUNNER(32);
+
+#else
+
+MUL_SIGNED_INT_METADEF(32, 64);
+
+static int64_T msh_MulInt64(int64_T m1, int64_T m2)
+{
+	uint64_T uret;
+	uint64_T m1a_l32, m2a_l32;
+	uint64_T m1au_m2al, m1al_m2al, m1al_m2au;
+	
+	int      ret_is_pos   = ((m1 < 0) == (m2 < 0));
+	
+	uint64_T m1_abs       = (uint64_T)msh_AbsInt64(m1);
+	uint64_T m2_abs       = (uint64_T)msh_AbsInt64(m2);
+	
+	uint64_T m1a_u32      = m1_abs >> 32;
+	uint64_T m2a_u32      = m2_abs >> 32;
+	
+	if(m1a_u32)
+	{
+		if(m2a_u32)
+		{
+			return ret_is_pos? INT64_MAX : INT64_MIN;
+		}
+		
+		m2a_l32 = (uint32_T)m2_abs;
+		m1au_m2al = m1a_u32 * m2a_l32;
+		
+		if(m1au_m2al >> 32)
+		{
+			return ret_is_pos? INT64_MAX : INT64_MIN;
+		}
+		
+		m1au_m2al <<= 32;
+		m1a_l32 = (uint32_T)m1_abs;
+		m1al_m2al = m1a_l32 * m2a_l32;
+		uret = m1au_m2al + m1al_m2al;
+		
+		if(uret < m1au_m2al)
+		{
+			return ret_is_pos? INT64_MAX : INT64_MIN;
+		}
+		
+	}
+	else if(m2a_u32)
+	{
+		/* do the opposite of the previous branch */
+		m1a_l32 = (int32_T)m1_abs;
+		m1al_m2au = m1a_l32 * m2a_u32;
+		
+		if(m1al_m2au >> 32)
+		{
+			return ret_is_pos? INT64_MAX : INT64_MIN;
+		}
+		
+		m1al_m2au <<= 32;
+		m2a_l32 = (uint32_T)m2_abs;
+		m1al_m2al = m1a_l32 * m2a_l32;
+		uret = m1al_m2al + m1al_m2au;
+		
+		if(uret < m1al_m2au)
+		{
+			return ret_is_pos? INT64_MAX : INT64_MIN;
+		}
+	}
+	else
+	{
+		
+		uret = m1_abs * m2_abs;
+	}
+	
+	if(ret_is_pos)
+	{
+		if(uret > (uint64_T)INT64_MAX)
+		{
+			return INT64_MAX;
+		}
+		return (int64_T)uret;
+	}
+	else
+	{
+		if(uret > (uint64_T)INT64_MIN)
+		{
+			return INT64_MIN;
+		}
+		
+		/* note: this works for uret == INT64_MIN because negation wraps to itself */
+		return -(int64_T)uret;
+	}
+	
+}
+
+BINARY_INT_OP_RUNNER(Mul, 64);
+
+#endif
+
+
+/** DIVISION **/
+
+#define DIV_SIGNED_INT_WORKER_DEF(NAME, ABSNAME, SIZE, TYPE, MAX_VAL, MIN_VAL) \
+static TYPE NAME(TYPE numer, TYPE denom)                       \
+{ \
+	TYPE ret; \
+	TYPE overflow_check; \
+	if(denom == 0) \
+	{ \
+		if(numer > 0) \
+		{ \
+			return MAX_VAL; \
+		} \
+		else if(numer < 0) \
+		{ \
+			return MIN_VAL; \
+		} \
+		else \
+		{ \
+			return 0; \
+		} \
+	} \
+	else if(denom < 0) \
+	{ \
+		if(denom == -1 && numer == MIN_VAL) \
+		{ \
+			return MAX_VAL; \
+		} \
+		else \
+		{ \
+			ret = numer / denom; \
+			overflow_check = -ABSNAME(numer % denom); \
+			if(overflow_check <= denom - overflow_check) \
+			{ \
+				ret -= 1 - () \
+			} \
+		} \
+	} \
+	
+	TYPE flip1 = usub ^ minuend;                                     \
+	TYPE flip2 = usub ^ ~subtrahend;                                 \
+	if((flip1 & flip2) < 0)                                          \
+	{                                                                \
+		return (TYPE)MAX_VAL  + (~usub >> SIZEM1);                  \
+	}                                                                \
+	return usub;                                                     \
 }

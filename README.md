@@ -63,8 +63,9 @@ For more details, you can navigate through the documentation with `help matshare
 
 ## Future Development
 This is not a finished project by any means. If you wish to contribute or have any suggestions feel free to contact me. Currently I plan to implement the following at some point in the future:
+- ~~Variable identifiers (being able to select shared variables by name)~~
 - Atomic variable operations (increments, decrements, swaps, etc.)
-- Variable overwriting by index
+- ~~Variable overwriting by index~~
 - Thread locks on a sub-global level
 - Rewrite in C++ for R2018a+
 - User defined locks/waits

@@ -12,7 +12,7 @@
 #include "mshexterntypes.h"
 #include "mlerrorutils.h"
 
-/* Credit to James Tursa for the definitions */
+/* Credit to James Tursa and others for the definitions */
 #define MSH_USE_PARTIAL_DEFINITION 1
 #define MSH_USE_DEBUG_DEFINITION 0
 
