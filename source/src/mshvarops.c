@@ -6,9 +6,8 @@
  * This software may be modified and distributed under the terms
  * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-
-
-#include <intrin.h>
+ 
+#include <math.h>
 
 #include "mshvarops.h"
 #include "mshutils.h"
@@ -1103,24 +1102,24 @@ void msh_VOAtomicAdd(IndexedVariable_t* indexed_var, const mxArray* in_var, int 
 #define FW_UINT_TYPE(SIZE) uint##SIZE##_T
 #define FW_UINT_MAX(SIZE) UINT##SIZE##_MAX
 
-#define UNARY_OP_RUNNER(RNAME, NAME, TYPE) \
-static void RNAME(TYPE* in, size_t num_elems)   \
-{                                              \
-	size_t i;                                 \
-	for(i = 0; i < num_elems; i++, in++)      \
-	{                                         \
-		*in = NAME(*in);                   \
-	}                                         \
+#define UNARY_OP_RUNNER(RNAME, NAME, TYPE)    \
+static void RNAME(TYPE* in, size_t num_elems) \
+{                                             \
+	size_t i;                                \
+	for(i = 0; i < num_elems; i++, in++)     \
+	{                                        \
+		*in = NAME(*in);                    \
+	}                                        \
 }
 
-#define BINARY_OP_RUNNER(RNAME, NAME, TYPE)              \
+#define BINARY_OP_RUNNER(RNAME, NAME, TYPE)                \
 static void RNAME(TYPE* accum, TYPE* in, size_t num_elems) \
-{                                                         \
-	size_t i;                                            \
-	for(i = 0; i < num_elems; i++, accum++, in++)        \
-	{                                                    \
-		*accum = NAME(*accum, *in);                   \
-	}                                                    \
+{                                                          \
+	size_t i;                                             \
+	for(i = 0; i < num_elems; i++, accum++, in++)         \
+	{                                                     \
+		*accum = NAME(*accum, *in);                      \
+	}                                                     \
 }
 
 /** Signed integer arithmetic
@@ -1136,40 +1135,51 @@ UNARY_OP_RUNNER(FW_INT_FCNR_NAME(OP, SIZE), FW_INT_FCN_NAME(OP, SIZE), FW_INT_TY
 #define BINARY_INT_OP_RUNNER(OP, SIZE) \
 BINARY_OP_RUNNER(FW_INT_FCNR_NAME(OP, SIZE), FW_INT_FCN_NAME(OP, SIZE), FW_INT_TYPE(SIZE))
 
-
-/* I could make these macros even smaller, but I won't so I can
- * retain some semblance of maintainability. */
-
-/** ABSOLUTE VALUES **/
-
-#define ABS_SIGNED_INT_WORKER_DEF(NAME, TYPE, SIZEM1, MAX_VAL) \
-static TYPE NAME(TYPE in)                                      \
-{                                                              \
-	TYPE out;                                                 \
-	TYPE mask = in >> SIZEM1;                                 \
-	out = (in ^ mask) - mask;                                 \
-	if(out < 0)                                               \
-	{                                                         \
-		return MAX_VAL;                                      \
-	}                                                         \
-	return out;                                               \
+/** SIGN FUNCTIONS **/
+#define SGNBIT_INT_DEF(NAME, TYPE, UTYPE, SIZEM1) \
+static TYPE NAME(TYPE in)                         \
+{                                                 \
+	return (UTYPE)in >> SIZEM1;                  \
 }
 
+#define SGNBIT_INT_METADEF(SIZE) SGNBIT_INT_DEF(FW_INT_FCN_NAME(Sgn, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1));
 
-#define ABS_SIGNED_INT_METADEF(SIZE) \
-ABS_SIGNED_INT_WORKER_DEF(FW_INT_FCN_NAME(Abs, SIZE), FW_INT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE));           \
-UNARY_INT_OP_RUNNER(Abs, SIZE);
-
-ABS_SIGNED_INT_METADEF(8);
-ABS_SIGNED_INT_METADEF(16);
-ABS_SIGNED_INT_METADEF(32);
+SGNBIT_INT_METADEF(8);
+SGNBIT_INT_METADEF(16);
+SGNBIT_INT_METADEF(32);
 #if MSH_BITNESS==64
-ABS_SIGNED_INT_METADEF(64);
+SGNBIT_INT_METADEF(64);
 #endif
 
-/** ADDITION **/
+/** SIGNED ABSOLUTE VALUES **/
 
-#define ADD_SIGNED_INT_WORKER_DEF(NAME, TYPE, UTYPE, SIZEM1, MAX_VAL) \
+#define ABS_INT_DEF(NAME, TYPE, SIZEM1, MAX_VAL) \
+static TYPE NAME(TYPE in)                        \
+{                                                \
+	TYPE out;                                   \
+	TYPE mask = in >> SIZEM1;                   \
+	out = (in ^ mask) - mask;                   \
+	if(out < 0)                                 \
+	{                                           \
+		return MAX_VAL;                        \
+	}                                           \
+	return out;                                 \
+}
+
+#define ABS_INT_METADEF(SIZE)                                                           \
+ABS_INT_DEF(FW_INT_FCN_NAME(Abs, SIZE), FW_INT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
+UNARY_INT_OP_RUNNER(Abs, SIZE);
+
+ABS_INT_METADEF(8);
+ABS_INT_METADEF(16);
+ABS_INT_METADEF(32);
+#if MSH_BITNESS==64
+ABS_INT_METADEF(64);
+#endif
+
+/** SIGNED ADDITION **/
+
+#define ADD_INT_DEF(NAME, TYPE, UTYPE, SIZEM1, MAX_VAL) \
 static TYPE NAME(TYPE augend, TYPE addend)                            \
 {                                                                     \
 	TYPE uadd = (UTYPE)augend + (UTYPE)addend;                       \
@@ -1182,66 +1192,66 @@ static TYPE NAME(TYPE augend, TYPE addend)                            \
 	return uadd;                                                     \
 }
 
-#define ADD_SIGNED_INT_METADEF(SIZE) \
-ADD_SIGNED_INT_WORKER_DEF(FW_INT_FCN_NAME(Add, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE));           \
+#define ADD_INT_METADEF(SIZE)                                                                               \
+ADD_INT_DEF(FW_INT_FCN_NAME(Add, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
 BINARY_INT_OP_RUNNER(Add, SIZE);
 
-ADD_SIGNED_INT_METADEF(8);
-ADD_SIGNED_INT_METADEF(16);
-ADD_SIGNED_INT_METADEF(32);
+ADD_INT_METADEF(8);
+ADD_INT_METADEF(16);
+ADD_INT_METADEF(32);
 #if MSH_BITNESS==64
-ADD_SIGNED_INT_METADEF(64);
+ADD_INT_METADEF(64);
 #endif
 
-/** SUBTRACTION **/
+/** SIGNED SUBTRACTION **/
 
-#define SUB_SIGNED_INT_WORKER_DEF(NAME, TYPE, UTYPE, SIZEM1, MAX_VAL) \
-static TYPE NAME(TYPE minuend, TYPE subtrahend)                       \
-{                                                                     \
-	TYPE usub = (UTYPE)minuend - (UTYPE)subtrahend;                  \
-	TYPE flip1 = usub ^ minuend;                                     \
-	TYPE flip2 = usub ^ ~subtrahend;                                 \
-	if((flip1 & flip2) < 0)                                          \
-	{                                                                \
-		return (TYPE)MAX_VAL  + (~usub >> SIZEM1);                  \
-	}                                                                \
-	return usub;                                                     \
+#define SUB_INT_DEF(NAME, TYPE, UTYPE, SIZEM1, MAX_VAL) \
+static TYPE NAME(TYPE minuend, TYPE subtrahend)         \
+{                                                       \
+	TYPE usub = (UTYPE)minuend - (UTYPE)subtrahend;    \
+	TYPE flip1 = usub ^ minuend;                       \
+	TYPE flip2 = usub ^ ~subtrahend;                   \
+	if((flip1 & flip2) < 0)                            \
+	{                                                  \
+		return (TYPE)MAX_VAL  + (~usub >> SIZEM1);    \
+	}                                                  \
+	return usub;                                       \
 }
 
-#define SUB_SIGNED_INT_METADEF(SIZE) \
-SUB_SIGNED_INT_WORKER_DEF(FW_INT_FCN_NAME(Sub, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE));           \
+#define SUB_INT_METADEF(SIZE)                                                                               \
+SUB_INT_DEF(FW_INT_FCN_NAME(Sub, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
 BINARY_INT_OP_RUNNER(Sub, SIZE);
 
-SUB_SIGNED_INT_METADEF(8);
-SUB_SIGNED_INT_METADEF(16);
-SUB_SIGNED_INT_METADEF(32);
+SUB_INT_METADEF(8);
+SUB_INT_METADEF(16);
+SUB_INT_METADEF(32);
 #if MSH_BITNESS==64
-  SUB_SIGNED_INT_METADEF(64);
+SUB_INT_METADEF(64);
 #endif
 
-/** MULTIPLICATION **/
+/** SIGNED MULTIPLICATION **/
 
-#define MUL_SIGNED_INT_WORKER_DEF(NAME, TYPE, PTYPE, MAX_VAL, MIN_VAL) \
-static TYPE NAME(TYPE mul1, TYPE mul2)                        \
-{                                                             \
-	PTYPE promoted_mul = (PTYPE)mul1 * (PTYPE)mul2;          \
-	if(promoted_mul > MAX_VAL)                               \
-	{                                                        \
-		return MAX_VAL;                                     \
-	}                                                        \
-	else if(promoted_mul < MIN_VAL)                       \
-	{                                                        \
-		return MIN_VAL;                                  \
-	}                                                        \
-	return (TYPE)promoted_mul;                               \
+#define MUL_INT_DEF(NAME, TYPE, PTYPE, MAX_VAL, MIN_VAL) \
+static TYPE NAME(TYPE mul1, TYPE mul2)                   \
+{                                                        \
+	PTYPE promoted_mul = (PTYPE)mul1 * (PTYPE)mul2;     \
+	if(promoted_mul > MAX_VAL)                          \
+	{                                                   \
+		return MAX_VAL;                                \
+	}                                                   \
+	else if(promoted_mul < MIN_VAL)                     \
+	{                                                   \
+		return MIN_VAL;                                \
+	}                                                   \
+	return (TYPE)promoted_mul;                          \
 }
 
-#define MUL_SIGNED_INT_METADEF(SIZE, PSIZE) \
-MUL_SIGNED_INT_WORKER_DEF(FW_INT_FCN_NAME(Div, SIZE), FW_INT_TYPE(SIZE), FW_INT_TYPE(PSIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE));          \
-BINARY_INT_OP_RUNNER(Div, SIZE);
+#define MUL_INT_METADEF(SIZE, PSIZE)                                                                                \
+MUL_INT_DEF(FW_INT_FCN_NAME(Mul, SIZE), FW_INT_TYPE(SIZE), FW_INT_TYPE(PSIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE)); \
+BINARY_INT_OP_RUNNER(Mul, SIZE);
 
-MUL_SIGNED_INT_METADEF(8, 16);
-MUL_SIGNED_INT_METADEF(16, 32);
+MUL_INT_METADEF(8, 16);
+MUL_INT_METADEF(16, 32);
 #if MSH_BITNESS==32
 
 static int32_T msh_MulInt32(int32_T m1, int32_T m2)
@@ -1252,8 +1262,8 @@ static int32_T msh_MulInt32(int32_T m1, int32_T m2)
 	
 	int      ret_is_pos   = ((m1 < 0) == (m2 < 0));
 	
-	uint32_T m1_abs       = (uint32_T)msh_AbsInt32(m1);
-	uint32_T m2_abs       = (uint32_T)msh_AbsInt32(m2);
+	uint32_T m1_abs       = (uint32_T)FW_INT_FCN_NAME(Abs, 32)(m1);
+	uint32_T m2_abs       = (uint32_T)FW_INT_FCN_NAME(Abs, 32)(m2);
 	
 	uint32_T m1a_u16      = m1_abs >> 16;
 	uint32_T m2a_u16      = m2_abs >> 16;
@@ -1287,7 +1297,7 @@ static int32_T msh_MulInt32(int32_T m1, int32_T m2)
 	else if(m2a_u16)
 	{
 		/* do the opposite of the previous branch */
-		m1a_l16 = (int16_T)m1_abs;
+		m1a_l16 = (uint16_T)m1_abs;
 		m1al_m2au = m1a_l16 * m2a_u16;
 		
 		if(m1al_m2au >> 16)
@@ -1336,7 +1346,7 @@ BINARY_INT_OP_RUNNER(32);
 
 #else
 
-MUL_SIGNED_INT_METADEF(32, 64);
+MUL_INT_METADEF(32, 64);
 
 static int64_T msh_MulInt64(int64_T m1, int64_T m2)
 {
@@ -1346,8 +1356,8 @@ static int64_T msh_MulInt64(int64_T m1, int64_T m2)
 	
 	int      ret_is_pos   = ((m1 < 0) == (m2 < 0));
 	
-	uint64_T m1_abs       = (uint64_T)msh_AbsInt64(m1);
-	uint64_T m2_abs       = (uint64_T)msh_AbsInt64(m2);
+	uint64_T m1_abs       = (uint64_T)FW_INT_FCN_NAME(Abs, 64)(m1);
+	uint64_T m2_abs       = (uint64_T)FW_INT_FCN_NAME(Abs, 64)(m2);
 	
 	uint64_T m1a_u32      = m1_abs >> 32;
 	uint64_T m2a_u32      = m2_abs >> 32;
@@ -1381,7 +1391,7 @@ static int64_T msh_MulInt64(int64_T m1, int64_T m2)
 	else if(m2a_u32)
 	{
 		/* do the opposite of the previous branch */
-		m1a_l32 = (int32_T)m1_abs;
+		m1a_l32 = (uint32_T)m1_abs;
 		m1al_m2au = m1a_l32 * m2a_u32;
 		
 		if(m1al_m2au >> 32)
@@ -1431,50 +1441,529 @@ BINARY_INT_OP_RUNNER(Mul, 64);
 #endif
 
 
-/** DIVISION **/
+/** SIGNED DIVISION (ROUNDED) **/
 
-#define DIV_SIGNED_INT_WORKER_DEF(NAME, ABSNAME, SIZE, TYPE, MAX_VAL, MIN_VAL) \
-static TYPE NAME(TYPE numer, TYPE denom)                       \
-{ \
-	TYPE ret; \
-	TYPE overflow_check; \
-	if(denom == 0) \
-	{ \
-		if(numer > 0) \
-		{ \
-			return MAX_VAL; \
-		} \
-		else if(numer < 0) \
-		{ \
-			return MIN_VAL; \
-		} \
-		else \
-		{ \
-			return 0; \
-		} \
-	} \
-	else if(denom < 0) \
-	{ \
-		if(denom == -1 && numer == MIN_VAL) \
-		{ \
-			return MAX_VAL; \
-		} \
-		else \
-		{ \
-			ret = numer / denom; \
-			overflow_check = -ABSNAME(numer % denom); \
-			if(overflow_check <= denom - overflow_check) \
-			{ \
-				ret -= 1 - () \
-			} \
-		} \
-	} \
+#define DIV_INT_DEF(NAME, SIZE, TYPE, MAX_VAL, MIN_VAL)                          \
+static TYPE NAME(TYPE numer, TYPE denom)                                         \
+{                                                                                \
+	TYPE ret, overflow_check;                                                   \
+	if(denom == 0)                                                              \
+	{                                                                           \
+		if(numer > 0)                                                          \
+		{                                                                      \
+			return MAX_VAL;                                                   \
+		}                                                                      \
+		else if(numer < 0)                                                     \
+		{                                                                      \
+			return MIN_VAL;                                                   \
+		}                                                                      \
+		else                                                                   \
+		{                                                                      \
+			return 0;                                                         \
+		}                                                                      \
+	}                                                                           \
+	else if(denom < 0)                                                          \
+	{                                                                           \
+		if(denom == -1 && numer == MIN_VAL)                                    \
+		{                                                                      \
+			return MAX_VAL;                                                   \
+		}                                                                      \
+		else                                                                   \
+		{                                                                      \
+			ret = numer/denom;                                                \
+			overflow_check = -FW_INT_FCN_NAME(Abs, SIZE)(numer % denom);      \
+			if(overflow_check <= denom - overflow_check)                      \
+			{                                                                 \
+				return ret - (1 - (FW_INT_FCN_NAME(Sgn, SIZE)(numer) << 1)); \
+			}                                                                 \
+		}                                                                      \
+	}                                                                           \
+	else                                                                        \
+	{                                                                           \
+		ret = numer/denom;                                                     \
+		overflow_check = FW_INT_FCN_NAME(Abs, SIZE)(numer % denom);            \
+		if(overflow_check >= denom - overflow_check)                           \
+		{                                                                      \
+			return ret + (1 - (FW_INT_FCN_NAME(Sgn, SIZE)(numer) << 1));      \
+		}                                                                      \
+	}                                                                           \
+}
+
+#define DIV_INT_METADEF(SIZE)                                                                         \
+DIV_INT_DEF(FW_INT_FCN_NAME(Div, SIZE), SIZE, FW_INT_TYPE(SIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE)); \
+BINARY_INT_OP_RUNNER(Div, SIZE);
+
+DIV_INT_METADEF(8);
+DIV_INT_METADEF(16);
+DIV_INT_METADEF(32);
+#if MSH_BITNESS==64
+DIV_INT_METADEF(64);
+#endif
+
+/** SIGNED REMAINDER **/
+
+#define REM_INT_DEF(NAME, TYPE)              \
+static TYPE NAME(TYPE numer, TYPE denom)     \
+{                                            \
+	return (denom != 0)? (numer%denom) : 0; \
+}
+
+#define REM_INT_METADEF(SIZE)                               \
+REM_INT_DEF(FW_INT_FCN_NAME(Rem, SIZE), FW_INT_TYPE(SIZE)); \
+BINARY_INT_OP_RUNNER(Rem, SIZE);
+
+REM_INT_METADEF(8);
+REM_INT_METADEF(16);
+REM_INT_METADEF(32);
+#if MSH_BITNESS==64
+REM_INT_METADEF(64);
+#endif
+
+/** SIGNED MODULUS **/
+
+#define MOD_INT_DEF(NAME, TYPE)                                   \
+static TYPE NAME(TYPE numer, TYPE denom)                          \
+{                                                                 \
+	TYPE rem;                                                    \
+	if(denom != 0)                                               \
+	{                                                            \
+		rem = numer%denom;                                      \
+		return ((rem < 0) != (denom < 0))? (rem + denom) : rem; \
+	}                                                            \
+	return numer;                                                \
+}
+
+#define MOD_INT_METADEF(SIZE)                               \
+MOD_INT_DEF(FW_INT_FCN_NAME(Mod, SIZE), FW_INT_TYPE(SIZE)); \
+BINARY_INT_OP_RUNNER(Mod, SIZE);
+
+MOD_INT_METADEF(8);
+MOD_INT_METADEF(16);
+MOD_INT_METADEF(32);
+#if MSH_BITNESS==64
+MOD_INT_METADEF(64);
+#endif
+
+/** SIGNED NEGATION **/
+
+#define NEG_INT_DEF(NAME, TYPE, MAX_VAL, MIN_VAL) \
+static TYPE NAME(TYPE in)                         \
+{                                                 \
+	if(in == MIN_VAL)                            \
+	{                                            \
+		return MAX_VAL;                         \
+	}                                            \
+	return -in;                                  \
+}
+
+#define NEG_INT_METADEF(SIZE)                                                                   \
+NEG_INT_DEF(FW_INT_FCN_NAME(Neg, SIZE), FW_INT_TYPE(SIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE)); \
+UNARY_INT_OP_RUNNER(Neg, SIZE);
+
+NEG_INT_METADEF(8);
+NEG_INT_METADEF(16);
+NEG_INT_METADEF(32);
+#if MSH_BITNESS==64
+NEG_INT_METADEF(64);
+#endif
+
+/** SIGNED RIGHT SHIFT **/
+
+#define RSH_INT_DEF(NAME, TYPE)          \
+static TYPE NAME(TYPE in, int num_shift) \
+{                                        \
+	return in >> num_shift;             \
+}
+
+#define RSH_INT_METADEF(SIZE)                               \
+RSH_INT_DEF(FW_INT_FCN_NAME(Rsh, SIZE), FW_INT_TYPE(SIZE)); \
+BINARY_INT_OP_RUNNER(Rsh, SIZE);
+
+RSH_INT_METADEF(8);
+RSH_INT_METADEF(16);
+RSH_INT_METADEF(32);
+#if MSH_BITNESS==64
+RSH_INT_METADEF(64);
+#endif
+
+/** SIGNED LEFT SHIFT **/
+
+#define LSH_INT_DEF(NAME, TYPE)          \
+static TYPE NAME(TYPE in, int num_shift) \
+{                                        \
+	return in << num_shift;             \
+}
+
+#define LSH_INT_METADEF(SIZE)                               \
+LSH_INT_DEF(FW_INT_FCN_NAME(Lsh, SIZE), FW_INT_TYPE(SIZE)); \
+BINARY_INT_OP_RUNNER(Lsh, SIZE);
+
+LSH_INT_METADEF(8);
+LSH_INT_METADEF(16);
+LSH_INT_METADEF(32);
+#if MSH_BITNESS==64
+LSH_INT_METADEF(64);
+#endif
+
+/** Unsigned integer arithmetic
+ *  The functions here are pretty straightforward, except
+ *  for uint64 multiplication.
+ */
+
+#define UNARY_UINT_OP_RUNNER(OP, SIZE) \
+UNARY_OP_RUNNER(FW_UINT_FCNR_NAME(OP, SIZE), FW_UINT_FCN_NAME(OP, SIZE), FW_UINT_TYPE(SIZE))
+
+#define BINARY_UINT_OP_RUNNER(OP, SIZE) \
+BINARY_OP_RUNNER(FW_UINT_FCNR_NAME(OP, SIZE), FW_UINT_FCN_NAME(OP, SIZE), FW_UINT_TYPE(SIZE))
+
+/** UNSIGNED ADDITION **/
+
+#define ADD_UINT_DEF(NAME, TYPE, MAX_VAL)  \
+static TYPE NAME(TYPE augend, TYPE addend) \
+{                                          \
+	TYPE ret = augend + addend;           \
+	return (ret < augend)? MAX_VAL : ret; \
+}
+
+#define ADD_UINT_METADEF(SIZE)                                                                               \
+ADD_UINT_DEF(FW_UINT_FCN_NAME(Add, SIZE), FW_UINT_TYPE(SIZE), FW_UINT_MAX(SIZE)); \
+BINARY_UINT_OP_RUNNER(Add, SIZE);
+
+ADD_UINT_METADEF(8);
+ADD_UINT_METADEF(16);
+ADD_UINT_METADEF(32);
+#if MSH_BITNESS==64
+ADD_UINT_METADEF(64);
+#endif
+
+/** UNSIGNED SUBTRACTION **/
+
+#define SUB_UINT_DEF(NAME, TYPE)                \
+static TYPE NAME(TYPE minuend, TYPE subtrahend) \
+{                                               \
+	TYPE ret = minuend - subtrahend;           \
+	return (ret > minuend)? 0 : ret;      \
+}
+
+#define SUB_UINT_METADEF(SIZE)                                                                               \
+SUB_UINT_DEF(FW_UINT_FCN_NAME(Sub, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_UINT_OP_RUNNER(Sub, SIZE);
+
+SUB_UINT_METADEF(8);
+SUB_UINT_METADEF(16);
+SUB_UINT_METADEF(32);
+#if MSH_BITNESS==64
+SUB_UINT_METADEF(64);
+#endif
+
+/** UNSIGNED MULTIPLICATION **/
+
+#define MUL_UINT_DEF(NAME, TYPE, PTYPE, MAX_VAL)    \
+static TYPE NAME(TYPE mul1, TYPE mul2)               \
+{                                                    \
+	PTYPE promoted_mul = (PTYPE)mul1 * (PTYPE)mul2; \
+	if(promoted_mul > MAX_VAL)                      \
+	{                                               \
+		return MAX_VAL;                            \
+	}                                               \
+	return (TYPE)promoted_mul;                      \
+}
+
+#define MUL_UINT_METADEF(SIZE, PSIZE)                                                                  \
+MUL_UINT_DEF(FW_UINT_FCN_NAME(Mul, SIZE), FW_UINT_TYPE(SIZE), FW_UINT_TYPE(PSIZE), FW_UINT_MAX(SIZE)); \
+BINARY_UINT_OP_RUNNER(Mul, SIZE);
+
+MUL_UINT_METADEF(8, 16);
+MUL_UINT_METADEF(16, 32);
+#if MSH_BITNESS==32
+
+static uint32_T msh_MulUInt32(uint32_T m1, uint32_T m2)
+{
 	
-	TYPE flip1 = usub ^ minuend;                                     \
-	TYPE flip2 = usub ^ ~subtrahend;                                 \
-	if((flip1 & flip2) < 0)                                          \
-	{                                                                \
-		return (TYPE)MAX_VAL  + (~usub >> SIZEM1);                  \
-	}                                                                \
-	return usub;                                                     \
+	uint32_T m1_l16, m2_l16;
+	uint32_T m1u_m2l, m1l_m2l, m1l_m2u;
+	
+	uint32_T m1_u16      = m1 >> 16;
+	uint32_T m2_u16      = m2 >> 16;
+	
+	if(m1_u16)
+	{
+		if(m2_u16)
+		{
+			return UINT32_MAX;
+		}
+		
+		m2_l16 = (uint16_T)m2;
+		m1u_m2l = m1_u16 * m2_l16;
+		
+		if(m1u_m2l >> 16)
+		{
+			return UINT32_MAX;
+		}
+		
+		m1u_m2l <<= 16;
+		m1_l16 = (uint16_T)m1;
+		m1l_m2l = m1_l16 * m2_l16;
+		
+		return FW_UINT_FCN_NAME(Add, 32)(m1u_m2l, m1l_m2l);
+		
+	}
+	else if(m2_u16)
+	{
+		/* do the opposite of the previous branch */
+		m1_l16 = (uint16_T)m1;
+		m1l_m2u = m1_l16 * m2_u16;
+		
+		if(m1l_m2u >> 16)
+		{
+			return UINT32_MAX;
+		}
+		
+		m1l_m2u <<= 16;
+		m2_l16 = (uint16_T)m2;
+		m1l_m2l = m1_l16 * m2_l16;
+		
+		return FW_UINT_FCN_NAME(Add, 32)(m1l_m2l, m1l_m2u);
+		
+	}
+	else
+	{
+		return m1 * m2;
+	}
+	
+}
+
+#else
+MUL_UINT_METADEF(32, 64);
+
+static uint64_T msh_MulUInt64(uint64_T m1, uint64_T m2)
+{
+	
+	uint64_T m1_l32, m2_l32;
+	uint64_T m1u_m2l, m1l_m2l, m1l_m2u;
+	
+	uint64_T m1_u32      = m1 >> 32;
+	uint64_T m2_u32      = m2 >> 32;
+	
+	if(m1_u32)
+	{
+		if(m2_u32)
+		{
+			return UINT64_MAX;
+		}
+		
+		m2_l32 = (uint32_T)m2;
+		m1u_m2l = m1_u32 * m2_l32;
+		
+		if(m1u_m2l >> 32)
+		{
+			return UINT64_MAX;
+		}
+		
+		m1u_m2l <<= 32;
+		m1_l32 = (uint32_T)m1;
+		m1l_m2l = m1_l32 * m2_l32;
+		
+		return FW_UINT_FCN_NAME(Add, 64)(m1u_m2l, m1l_m2l);
+		
+	}
+	else if(m2_u32)
+	{
+		/* do the opposite of the previous branch */
+		m1_l32 = (uint32_T)m1;
+		m1l_m2u = m1_l32 * m2_u32;
+		
+		if(m1l_m2u >> 32)
+		{
+			return UINT64_MAX;
+		}
+		
+		m1l_m2u <<= 32;
+		m2_l32 = (uint32_T)m2;
+		m1l_m2l = m1_l32 * m2_l32;
+		
+		return FW_UINT_FCN_NAME(Add, 64)(m1l_m2l, m1l_m2u);
+		
+	}
+	else
+	{
+		return m1 * m2;
+	}
+	
+}
+
+#endif
+
+/** UNSIGNED DIVISION (ROUNDED) **/
+
+#define DIV_UINT_DEF(NAME, TYPE, MAX_VAL)        \
+static TYPE NAME(TYPE numer, TYPE denom)         \
+{                                                \
+	TYPE ret, rem;                              \
+	if(denom == 0)                              \
+	{                                           \
+		return numer? MAX_VAL : 0;             \
+	}                                           \
+	ret = numer/denom;                          \
+	rem = numer%denom;                          \
+	return (rem >= denom - rem)? ret + 1 : ret; \
+}
+
+#define DIV_UINT_METADEF(SIZE)                                                                         \
+DIV_UINT_DEF(FW_UINT_FCN_NAME(Div, SIZE), FW_UINT_TYPE(SIZE), FW_UINT_MAX(SIZE)); \
+BINARY_UINT_OP_RUNNER(Div, SIZE);
+
+DIV_UINT_METADEF(8);
+DIV_UINT_METADEF(16);
+DIV_UINT_METADEF(32);
+#if MSH_BITNESS==64
+DIV_UINT_METADEF(64);
+#endif
+
+/** UNSIGNED REMAINDER **/
+
+#define REM_UINT_DEF(NAME, TYPE)              \
+static TYPE NAME(TYPE numer, TYPE denom)     \
+{                                            \
+	return (denom != 0)? (numer%denom) : 0; \
+}
+
+#define REM_UINT_METADEF(SIZE)                               \
+REM_UINT_DEF(FW_UINT_FCN_NAME(Rem, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_UINT_OP_RUNNER(Rem, SIZE);
+
+REM_UINT_METADEF(8);
+REM_UINT_METADEF(16);
+REM_UINT_METADEF(32);
+#if MSH_BITNESS==64
+REM_UINT_METADEF(64);
+#endif
+
+/** UNSIGNED MODULUS **/
+
+#define MOD_UINT_DEF(NAME, TYPE)                 \
+static TYPE NAME(TYPE numer, TYPE denom)         \
+{                                                \
+	return (denom != 0)? (numer%denom) : numer; \
+}
+
+#define MOD_UINT_METADEF(SIZE)                                 \
+MOD_UINT_DEF(FW_UINT_FCN_NAME(Mod, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_UINT_OP_RUNNER(Mod, SIZE);
+
+MOD_UINT_METADEF(8);
+MOD_UINT_METADEF(16);
+MOD_UINT_METADEF(32);
+#if MSH_BITNESS==64
+MOD_UINT_METADEF(64);
+#endif
+
+
+/** UNSIGNED NEGATION **/
+
+#define NEG_UINT_DEF(NAME, TYPE) \
+static TYPE NAME(TYPE in)        \
+{                                \
+	return 0;                   \
+}
+
+#define NEG_UINT_METADEF(SIZE)                                 \
+NEG_UINT_DEF(FW_UINT_FCN_NAME(Neg, SIZE), FW_UINT_TYPE(SIZE)); \
+UNARY_UINT_OP_RUNNER(Neg, SIZE);
+
+NEG_UINT_METADEF(8);
+NEG_UINT_METADEF(16);
+NEG_UINT_METADEF(32);
+#if MSH_BITNESS==64
+NEG_UINT_METADEF(64);
+#endif
+
+/** SIGNED RIGHT SHIFT **/
+
+#define RSH_UINT_DEF(NAME, TYPE)              \
+static TYPE NAME(TYPE in, unsigned num_shift) \
+{                                             \
+	return in >> num_shift;                  \
+}
+
+#define RSH_UINT_METADEF(SIZE)                                 \
+RSH_UINT_DEF(FW_UINT_FCN_NAME(Rsh, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_UINT_OP_RUNNER(Rsh, SIZE);
+
+RSH_UINT_METADEF(8);
+RSH_UINT_METADEF(16);
+RSH_UINT_METADEF(32);
+#if MSH_BITNESS==64
+RSH_UINT_METADEF(64);
+#endif
+
+/** SIGNED LEFT SHIFT **/
+
+#define LSH_UINT_DEF(NAME, TYPE)              \
+static TYPE NAME(TYPE in, unsigned num_shift) \
+{                                             \
+	return in << num_shift;                  \
+}
+
+#define LSH_UINT_METADEF(SIZE)                                 \
+LSH_UINT_DEF(FW_UINT_FCN_NAME(Lsh, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_UINT_OP_RUNNER(Lsh, SIZE);
+
+LSH_UINT_METADEF(8);
+LSH_UINT_METADEF(16);
+LSH_UINT_METADEF(32);
+#if MSH_BITNESS==64
+LSH_UINT_METADEF(64);
+#endif
+
+
+/** Floating point arithmetic
+ * These are just derived directly from C,
+ * so no need for the single value functions.
+ */
+ 
+static void msh_AddSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems)
+{
+	size_t i;
+	for(i = 0; i < num_elems; i++, accum++, in++)
+	{
+		*accum += *in;
+	}
+}
+
+static void msh_SubSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems)
+{
+	size_t i;
+	for(i = 0; i < num_elems; i++, accum++, in++)
+	{
+		*accum -= *in;
+	}
+}
+
+static void msh_MulSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems)
+{
+	size_t i;
+	for(i = 0; i < num_elems; i++, accum++, in++)
+	{
+		*accum *= *in;
+	}
+}
+
+static void msh_DivSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems)
+{
+	size_t i;
+	for(i = 0; i < num_elems; i++, accum++, in++)
+	{
+		*accum /= *in;
+	}
+}
+
+static void msh_RemSingleRunner(mxSingle* accum, mxSingle* in, size_t num_elems)
+{
+	size_t i;
+	for(i = 0; i < num_elems; i++, accum++, in++)
+	{
+		*accum = fmod(*accum, *in);
+		
+	}
 }

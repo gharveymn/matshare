@@ -26,16 +26,16 @@
 #  define INT64_MAX 0x7FFFFFFFFFFFFFFF
 #endif
 #ifndef INT8_MIN
-#  define INT8_MIN  0x80
+#  define INT8_MIN  -0x80
 #endif
 #ifndef INT16_MIN
-#  define INT16_MIN 0x8000
+#  define INT16_MIN -0x8000
 #endif
 #ifndef INT32_MIN
-#  define INT32_MIN 0x80000000
+#  define INT32_MIN -0x80000000
 #endif
 #ifndef INT64_MIN
-#  define INT64_MIN 0x8000000000000000
+#  define INT64_MIN -0x8000000000000000
 #endif
 
 #ifndef UINT8_MAX
