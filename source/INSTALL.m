@@ -127,7 +127,7 @@ function INSTALL
 
 	fprintf('-Compiling matshare...')
 	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /Wall"'}];
-	%mexflags = [mexflags {'CFLAGS="$CFLAGS --std=c89 -Wall -Werror"'}];
+	%mexflags = [mexflags {'CFLAGS="$CFLAGS --std=c89 -Wall -Werror -Wno-unused-function"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n')
 	if(mshDebugMode)
