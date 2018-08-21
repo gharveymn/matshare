@@ -19,7 +19,8 @@ function INSTALL
 	
 	% check if ints are two's complement, and right shifts of signed ints 
 	% preserve the sign bit
-	mex('-silent', fullfile(thisfolder,'tests','intdefcheck.c'));
+	tstdir = fullfile(thisfolder,'tests');
+	mex('-silent', fullfile(tstdir,'intdefcheck.c'), '-outdir', tstdir);
 	addpath(fullfile(thisfolder, 'tests'));
 	
 	if(~intdefcheck())
@@ -28,7 +29,6 @@ function INSTALL
 			  'for right shifts. Please use a different compiler']);
 	end
 	
-
 	[comp,maxsz,endi] = computer;
 
 	sources = {
