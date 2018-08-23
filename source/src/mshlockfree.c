@@ -1,3 +1,15 @@
+/** mshlockfree.c
+ * Defines functions for lock-free mechanisms.
+ *
+ * Copyright © 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license. See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
+#include <intrin.h>
+
 #include "mshlockfree.h"
 
 /* returns the state of the flag after the operation */
@@ -9,7 +21,7 @@ LockFreeCounter_T msh_IncrementCounter(volatile LockFreeCounter_T* counter)
 		old_counter.span = counter->span;
 		new_counter.span = old_counter.span;
 		new_counter.values.count += 1;
-	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+	} while(msh_AtomicCompareSetLong(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 	return new_counter;
 }
 
@@ -27,7 +39,7 @@ bool_T msh_DecrementCounter(volatile LockFreeCounter_T* counter, bool_T set_flag
 		{
 			new_counter.values.flag = TRUE;
 		}
-	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+	} while(msh_AtomicCompareSetLong(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 	
 	return (old_counter.values.flag != new_counter.values.flag);
 }
@@ -41,7 +53,7 @@ void msh_SetCounterFlag(volatile LockFreeCounter_T* counter, unsigned long val)
 		old_counter.span = counter->span;
 		new_counter.span = old_counter.span;
 		new_counter.values.flag = val;
-	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+	} while(msh_AtomicCompareSetLong(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 	
 }
 
@@ -54,7 +66,7 @@ void msh_SetCounterPost(volatile LockFreeCounter_T* counter, unsigned long val)
 		old_counter.span = counter->span;
 		new_counter.span = old_counter.span;
 		new_counter.values.post = val;
-	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+	} while(msh_AtomicCompareSetLong(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 }
 
 
@@ -89,7 +101,7 @@ void msh_WaitSetCounter(volatile LockFreeCounter_T* counter, unsigned long val)
 	do
 	{
 		old_counter.values.flag = counter->values.flag;
-	} while(msh_AtomicCompareSwap(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
+	} while(msh_AtomicCompareSetLong(&counter->span, old_counter.span, new_counter.span) != old_counter.span);
 	/* this also sets post to TRUE */
 }
 
@@ -144,7 +156,7 @@ size_t msh_AtomicSubtractSize(volatile size_t* dest, size_t subtract_value)
 	{
 		old_value = *dest;
 		new_value = old_value - subtract_value;
-	} while(InterlockedCompareExchange64((volatile long long*)dest, new_value, old_value) != (long long)old_value);
+	} while(InterlockedCompareExchange64((volatile __int64*)dest, new_value, old_value) != (__int64)old_value);
 #  elif MSH_BITNESS==32
 	do
 	{
@@ -191,11 +203,191 @@ long msh_AtomicDecrement(volatile long* dest)
 }
 
 
-long msh_AtomicCompareSwap(volatile long* dest, long compare_value, long swap_value)
+long msh_AtomicCompareSetLong(volatile long* dest, long comp_val, long set_val)
 {
 #ifdef MSH_WIN
-	return InterlockedCompareExchange(dest, swap_value, compare_value);
+	return InterlockedCompareExchange(dest, set_val, comp_val);
 #else
-	return __sync_val_compare_and_swap(dest, compare_value, swap_value);
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
 }
+
+
+int8_T msh_AtomicCompareSetInt8(volatile int8_T* dest, int8_T comp_val, int8_T set_val)
+{
+	/* returns the initial value of dest */
+#ifdef MSH_WIN
+	return _InterlockedCompareExchange8((volatile char*)dest, set_val, comp_val);
+#else
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
+#endif
+}
+
+int16_T msh_AtomicCompareSetInt16(volatile int16_T* dest, int16_T comp_val, int16_T set_val)
+{
+	/* returns the initial value of dest */
+#ifdef MSH_WIN
+	return _InterlockedCompareExchange16(dest, set_val, comp_val);
+#else
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
+#endif
+}
+
+
+int32_T msh_AtomicCompareSetInt32(volatile int32_T* dest, int32_T comp_val, int32_T set_val)
+{
+	/* returns the initial value of dest */
+#ifdef MSH_WIN
+	return _InterlockedCompareExchange((volatile long*)dest, set_val, comp_val);
+#else
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
+#endif
+}
+
+#if MSH_BITNESS==64
+int64_T msh_AtomicCompareSetInt64(volatile int64_T* dest, int64_T comp_val, int64_T set_val)
+{
+	/* returns the initial value of dest */
+#ifdef MSH_WIN
+	return _InterlockedCompareExchange64((volatile __int64*)dest, set_val, comp_val);
+#else
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
+#endif
+}
+#endif
+
+
+uint8_T msh_AtomicCompareSetUInt8(volatile uint8_T* dest, uint8_T comp_val, uint8_T set_val)
+{
+	/* returns the initial value of dest */
+#ifdef MSH_WIN
+	return (uint8_T)_InterlockedCompareExchange8((volatile char*)dest, set_val, comp_val);
+#else
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
+#endif
+}
+
+uint16_T msh_AtomicCompareSetUInt16(volatile uint16_T* dest, uint16_T comp_val, uint16_T set_val)
+{
+	/* returns the initial value of dest */
+#ifdef MSH_WIN
+	return (uint16_T)_InterlockedCompareExchange16((volatile short*)dest, set_val, comp_val);
+#else
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
+#endif
+}
+
+
+uint32_T msh_AtomicCompareSetUInt32(volatile uint32_T* dest, uint32_T comp_val, uint32_T set_val)
+{
+	/* returns the initial value of dest */
+#ifdef MSH_WIN
+	return (uint32_T)_InterlockedCompareExchange((volatile long*)dest, (long)set_val, (long)comp_val);
+#else
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
+#endif
+}
+
+#if MSH_BITNESS==64
+uint64_T msh_AtomicCompareSetUInt64(volatile uint64_T* dest, uint64_T comp_val, uint64_T set_val)
+{
+	/* returns the initial value of dest */
+#ifdef MSH_WIN
+	return (uint64_T)_InterlockedCompareExchange64((volatile __int64*)dest, set_val, comp_val);
+#else
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
+#endif
+}
+#endif
+
+
+single msh_AtomicCompareSetSingle(volatile single* dest, single comp_val, single set_val)
+{
+	union singlepun_T
+	{
+		single val;
+		int32_T as_int;
+	};
+	
+	union singlepun_T comp_val_pun = {comp_val};
+	union singlepun_T set_val_pun = {set_val};
+	union singlepun_T ret = {0};
+#ifdef MSH_WIN
+	ret.as_int = _InterlockedCompareExchange((volatile long*)dest, set_val_pun.as_int, comp_val_pun.as_int);
+	return ret.val;
+#else
+	ret.as_int = __sync_val_compare_and_swap((volatile int32_T*)dest, comp_val_pun.as_int, set_val_pun.as_int);
+	return ret.val;
+#endif
+}
+
+double msh_AtomicCompareSetDouble(volatile double* dest, double comp_val, double set_val)
+{
+#ifdef MSH_WIN
+
+#  if MSH_BITNESS==64
+	
+	union doublepun_T
+	{
+		double val;
+		int64_T as_int;
+	};
+	
+	union doublepun_T ret;
+	union doublepun_T comp_val_pun = {comp_val};
+	union doublepun_T set_val_pun = {set_val};
+	ret.as_int = _InterlockedCompareExchange64((volatile long long*)dest, set_val_pun.as_int, comp_val_pun.as_int);
+	return ret.val;
+	
+#  else
+	
+	/* set EDI as dest (pointer)
+	 * load comp_val into EDX:EAX
+	 * load set_val into ECX:EBX
+	 * perform interlocked exchange
+	 * return EDX:EAX which set if not equal
+	 *
+	 * note ret is res here because ret is an asm keyword
+	 */
+	
+	union doublepun_T
+	{
+		double val;
+		struct
+		{
+			uint32_T lower;
+			uint32_T upper;
+		} as_int;
+	};
+	
+	union doublepun_T res;
+	union doublepun_T comp_val_pun = {comp_val};
+	union doublepun_T set_val_pun = {set_val};
+	__asm {
+		mov EDI, dest;
+		mov EAX, comp_val_pun.as_int.lower;
+		mov EDX, comp_val_pun.as_int.upper;
+		mov EBX, set_val_pun.as_int.lower;
+		mov ECX, set_val_pun.as_int.upper;
+		lock cmpxchg8b [EDI];
+		mov DWORD PTR res.as_int.lower, EAX;
+		mov DWORD PTR res.as_int.upper, EDX;
+	};
+	return res.val;
+#  endif
+
+#else
+	union doublepun_T
+	{
+		double val;
+		int64_T as_int;
+	};
+	
+	union doublepun_T ret;
+	union doublepun_T comp_val_pun = {comp_val};
+	union doublepun_T set_val_pun = {set_val};
+	ret.as_int = __sync_val_compare_and_swap((volatile int64_T*)dest, comp_val_pun.as_int, set_val_pun.as_int);
+	return ret.val;
+#endif
+}
+

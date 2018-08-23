@@ -11,6 +11,7 @@
 #define MATSHARE__H
 
 #include "mshbasictypes.h"
+#include "mshvarops.h"
 
 
 /* forward declaration to avoid include */
@@ -196,11 +197,11 @@ typedef enum
 	msh_DEBUG           = 0x0005,  /* print debug information */
 	msh_CLEAR           = 0x0006,  /* clear segments from shared memory */
 	msh_RESET           = 0x0007,  /* reset the configuration */
-	msh_OVERWRITE       = 0x0008,  /* overwrite the specified variable in-place */
+	msh_VAROP           = 0x0008,  /* overwrite the specified variable in-place */
 	msh_LOCK            = 0x0009,  /* acquire the matshare interprocess lock */
 	msh_UNLOCK          = 0x000A,  /* release the interprocess lock */
 	msh_CLEAN           = 0x000B,  /* clean invalid and unused segments */
-	msh_STATUS          = 0x000C   /* print out info about the current state of matshare */
+	msh_STATUS          = 0x000C,  /* print out info about the current state of matshare */
 } msh_directive_T;
 
 /**
@@ -243,21 +244,13 @@ void msh_Clear(int num_inputs, const mxArray** in_vars);
 
 
 /**
- * Overwrite a variable in-place. Does this in a safe or unsafe manner
- * depending on the directive.
- *
- * @param dest_var The destination variable.
- * @param in_var The input variable.
- */
-void msh_Overwrite(int num_args, const mxArray** in_args);
-
-
-/**
  * Changes configuration parameters.
  *
  * @param num_params The number of parameters input.
  * @param in_params An array of the parameters and values.
  */
 void msh_Config(size_t num_params, const mxArray** in_params);
+
+void msh_VarOps(int nlhs, mxArray** plhs, int num_args, const mxArray** in_args, msh_varop_T varop);
 
 #endif /* MATSHARE__H */

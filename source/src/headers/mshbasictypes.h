@@ -103,6 +103,52 @@ typedef int32_T segmentnumber_T; /* segment number identifiers */
 #define MSH_SEG_NUM_MAX 0x7FFFFFFF      /* the maximum segment number (which is int32 max) */
 #define MSH_INVALID_SEG_NUM (-1L)
 
+#if   defined(_MSC_VER)
+#  define MSH_ALIGN(ALIGNMENT) __declspec(align(ALIGNMENT))
+#elif defined(__GNUC__)
+#  define MSH_ALIGN(ALIGNMENT) __attribute__ ((aligned(ALIGNMENT)))
+#endif
+
+typedef float single;
+
+#define ALIGNED_TYPEDEF(TYPE, ALIGNMENT) typedef TYPE MSH_ALIGN(ALIGNMENT)
+
+#ifdef MSH_USE_AVX
+ALIGNED_TYPEDEF(int8_T, 32)   a32_int8_T;
+ALIGNED_TYPEDEF(int16_T, 32)  a32_int16_T;
+ALIGNED_TYPEDEF(int32_T, 32)  a32_int32_T;
+
+ALIGNED_TYPEDEF(uint8_T, 32)  a32_uint8_T;
+ALIGNED_TYPEDEF(uint16_T, 32) a32_uint16_T;
+ALIGNED_TYPEDEF(uint32_T, 32) a32_uint32_T;
+
+#if MSH_BITNESS==64
+ALIGNED_TYPEDEF(int64_T, 32)  a32_int64_T;
+ALIGNED_TYPEDEF(uint64_T, 32) a32_uint64_T;
+#endif
+
+ALIGNED_TYPEDEF(single, 32)    a32_single;
+ALIGNED_TYPEDEF(double, 32)   a32_double;
+#endif
+
+#ifdef MSH_USE_SSE2
+ALIGNED_TYPEDEF(int8_T, 16)   a16_int8_T;
+ALIGNED_TYPEDEF(int16_T, 16)  a16_int16_T;
+ALIGNED_TYPEDEF(int16_T, 16)  a16_int32_T;
+
+ALIGNED_TYPEDEF(uint8_T, 16)  a16_uint8_T;
+ALIGNED_TYPEDEF(uint16_T, 16) a16_uint16_T;
+ALIGNED_TYPEDEF(uint16_T, 16) a16_uint32_T;
+
+#if MSH_BITNESS==64
+ALIGNED_TYPEDEF(int64_T, 16)  a16_int64_T;
+ALIGNED_TYPEDEF(uint64_T, 16) a16_uint64_T;
+#endif
+
+ALIGNED_TYPEDEF(single, 16)    a16_single;
+ALIGNED_TYPEDEF(double, 16)   a16_double;
+#endif
+
 typedef union LockFreeCounter_Tag
 {
 	long span;

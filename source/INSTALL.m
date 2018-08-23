@@ -124,6 +124,18 @@ function INSTALL
 	if(~verLessThan('matlab', '7.13'))
 		mexflags = [mexflags {'-DMSH_AVX_SUPPORT'}];
 	end
+	
+	if(mshUseSSE2)
+		mexflags = [mexflags {'-DMSH_USE_SSE2=TRUE'}];
+	end
+	
+	if(mshUseAVX)
+		mexflags = [mexflags {'-DMSH_USE_AVX=TRUE'}];
+	end
+	
+	if(mshUseAVX2)
+		mexflags = [mexflags {'-DMSH_USE_AVX2=TRUE'}];
+	end
 
 	fprintf('-Compiling matshare...')
 	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /Wall"'}];

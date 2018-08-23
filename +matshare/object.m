@@ -62,7 +62,87 @@ classdef object
 			ret = obj.shared_data{1};
 		end
 		
-		function obj = overwrite(obj, in, varargin)
+		function ret = abs(obj, varargin)
+			if(nargout == 0)
+				matshare_(8, 0, obj.shared_data, {}, varargin);
+			else
+				ret = matshare_(8, 0, obj.shared_data, {}, varargin);
+			end
+		end
+		
+		function ret = add(obj, in, varargin)
+			if(nargout == 0)
+				matshare_(8, 1, obj.shared_data, {in}, varargin);
+			else
+				ret = matshare_(8, 1, obj.shared_data, {in}, varargin);
+			end
+		end
+		
+		function ret = sub(obj, in, varargin)
+			if(nargout == 0)
+				matshare_(8, 2, obj.shared_data, {in}, varargin);
+			else
+				ret = matshare_(8, 2, obj.shared_data, {in}, varargin);
+			end
+		end
+		
+		function ret = mul(obj, in, varargin)
+			if(nargout == 0)
+				matshare_(8, 3, obj.shared_data, {in}, varargin);
+			else
+				ret = matshare_(8, 3, obj.shared_data, {in}, varargin);
+			end
+		end
+		
+		function ret = div(obj, in, varargin)
+			if(nargout == 0)
+				matshare_(8, 4, obj.shared_data, {in}, varargin);
+			else
+				ret = matshare_(8, 4, obj.shared_data, {in}, varargin);
+			end
+		end
+		
+		function ret = rem(obj, in, varargin)
+			if(nargout == 0)
+				matshare_(8, 5, obj.shared_data, {in}, varargin);
+			else
+				ret = matshare_(8, 5, obj.shared_data, {in}, varargin);
+			end
+		end
+		
+		function ret = mod(obj, in, varargin)
+			if(nargout == 0)
+				matshare_(8, 6, obj.shared_data, {in}, varargin);
+			else
+				ret = matshare_(8, 6, obj.shared_data, {in}, varargin);
+			end
+		end
+		
+		function ret = neg(obj, varargin)
+			if(nargout == 0)
+				matshare_(8, 7, obj.shared_data, {}, varargin);
+			else
+				ret = matshare_(8, 7, obj.shared_data, {}, varargin);
+			end
+		end
+		
+		function ret = ars(obj, in, varargin)
+			if(nargout == 0)
+				matshare_(8, 8, obj.shared_data, {in}, varargin);
+			else
+				ret = matshare_(8, 1, obj.shared_data, {in}, varargin);
+			end
+		end
+		
+		function ret = als(obj, in, varargin)
+			if(nargout == 0)
+				matshare_(8, 9, obj.shared_data, {in}, varargin);
+			else
+				ret = matshare_(8, 9, obj.shared_data, {in}, varargin);
+			end
+		end
+		
+		function ret = overwrite(obj, in, varargin)
 %% OVERWRITE  Overwrite the contents of a variable in-place.
 %    OBJ = OBJ.OVERWRITE(IN) recursively overwrites the 
 %    contents of the matshare object OBJ with IN. The data stored by OBJ 
@@ -74,12 +154,11 @@ classdef object
 %
 %    This function is asynchronous by default.
 			
-			if(nargin == 3)
-				matshare_(8, obj.shared_data, cast(in, 'like', obj.data), varargin);
+			if(nargout == 0)
+				matshare_(8, 10, obj.shared_data, {in}, varargin);
 			else
-				matshare_(8, obj.shared_data, cast(in, 'like', obj.data));
-			end
-			
+				ret = matshare_(8, 10, obj.shared_data, {in}, varargin);
+			end			
 		end
 		
 		function clear(obj)
@@ -129,7 +208,7 @@ classdef object
 					% for sparses modify a local copy then overwrite the whole thing
 					if(issparse(asgn_obj.data))
 						sparsecopy = subsasgn(asgn_obj.data, S(2:end), B);
-						matshare_(8, asgn_obj.shared_data, sparsecopy);
+						asgn_obj.overwrite(sparsecopy);
 					else
 						for i = 2:numel(S)
 							currsubs = S(i);
@@ -163,9 +242,7 @@ classdef object
 								B = cast(B, 'like', castvar);
 							end
 						end
-						
-						matshare_(8, asgn_obj.shared_data, B, {S(2:end)});
-						
+						asgn_obj.overwrite(B, S(2:end));
 					end
 					
 				elseif(strcmp(S(1).subs, 'shared_data'))

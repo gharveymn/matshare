@@ -22,5 +22,12 @@ mshFetchDefault = '-r';
 
 mshSyncDefault = 'on';
 
+% must have at least SSE2, AVX/2 is optional
+mshUseSSE2=false;
+
+mshUseAVX=false;
+
+mshUseAVX2=false;
+
 %% Enable or disable debug mode
-mshDebugMode = true;
+mshDebugMode = false;

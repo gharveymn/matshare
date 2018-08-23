@@ -6,7 +6,7 @@
  * This software may be modified and distributed under the terms
  * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-
+ 
 
 #include "mex.h"
 
@@ -166,7 +166,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Minimum input arguments missing. You must supply a directive.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Minimum input arguments missing. Please use the supplied entry functions.");
 	}
 	
 	/* get the directive, no check is made since the matshare should not be used without entry functions */
@@ -288,9 +288,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			msh_ReleaseProcessLock(g_process_lock);
 			break;
 		}
-		case(msh_OVERWRITE):
+		case(msh_VAROP):
 		{
-			msh_Overwrite(num_in_args, in_args);
+			if(nrhs < 2)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "No variable operation supplied. Please use the supplied entry functions.");
+			}
+			msh_VarOps(nlhs, plhs, num_in_args - 1, in_args + 1, (msh_varop_T)mxGetScalar(prhs[1]));
 			break;
 		}
 		case(msh_LOCK):
@@ -304,8 +308,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		}
 		case(msh_CLEAN):
+		{
 			/* do nothing */
 			break;
+		}
 		default:
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
@@ -902,94 +908,6 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 }
 
 
-void msh_Overwrite(int num_args, const mxArray** in_args)
-{
-	size_t            i, num_varargin;
-	mxChar*           input_option;
-	const mxArray*    in_var, * opt;
-	
-	int               will_sync        = g_user_config.sync_default;
-	int               index_once       = FALSE;
-	IndexedVariable_T indexed_variable = {0};
-	
-	if(num_args < 2 || num_args > 3)
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NumInputsError", "Too many inputs. The overwrite function takes either 2 or 3 arguments.");
-	}
-	
-	indexed_variable.dest_var = mxGetCell(in_args[0], 0);
-	in_var = in_args[1];
-	
-	if(num_args == 3)
-	{
-		for(i = 0, num_varargin = mxGetNumberOfElements(in_args[2]); i < num_varargin; i++)
-		{
-			opt = mxGetCell(in_args[2], i);
-			if(mxIsStruct(opt))
-			{
-				if(index_once)
-				{
-					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "MultipleSubsStructError", "Must be only one subscripting struct input.");
-				}
-				index_once = TRUE;
-				
-				msh_ParseSubscriptStruct(&indexed_variable, in_var, opt);
-				
-			}
-			else if(mxIsChar(opt))
-			{
-				if(mxGetNumberOfElements(opt) < 2)
-				{
-					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must have length more than 1.");
-				}
-				input_option = mxGetChars(opt);
-				if(input_option[0] == '-')
-				{
-					/* switch for possible future additions */
-					switch(input_option[1])
-					{
-						case ('s'):
-							/* sync */
-							will_sync = TRUE;
-							break;
-						case ('a'):
-							/* async */
-							will_sync = FALSE;
-							break;
-						default:
-						{
-							/* normally the string produced here should be freed with mxFree, but since we have an error just let MATLAB do the GC */
-							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Unrecognized option \"%s\"", mxArrayToString(in_args[2]));
-						}
-					}
-				}
-				else
-				{
-					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Input options must start with '-'. Invalid option \"%s\"", mxArrayToString(in_args[2]));
-				}
-			}
-			else
-			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must be of class 'struct' or 'char'.");
-			}
-		}
-	}
-	
-	msh_CompareVariableSize(&indexed_variable, in_var);
-	msh_OverwriteVariable(&indexed_variable, in_var, will_sync);
-	
-	if(indexed_variable.indices.start_idxs != NULL)
-	{
-		mxFree(indexed_variable.indices.start_idxs);
-	}
-	
-	if(indexed_variable.indices.slice_lens != NULL)
-	{
-		mxFree(indexed_variable.indices.slice_lens);
-	}
-}
-
-
 void msh_Config(size_t num_params, const mxArray** in_params)
 {
 	size_t              i, j, ps_len, vs_len, maxsize_temp;
@@ -1188,5 +1106,129 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
 	}
+	
+}
+
+void msh_VarOps(int nlhs, mxArray** plhs, int num_args, const mxArray** in_args, msh_varop_T varop)
+{
+	
+	/* input order (including arguments handled by mexFunction)
+	 *
+	 * 0. directive
+	 * 1. varop
+	 * 2. dest_var
+	 * 3. {in_var1, in_var2, ...}
+	 * 4. {substruct, opt1, opt2, ...}
+	 */
+	
+	size_t            i, num_varargin;
+	mxChar*           input_option;
+	mxArray*          opt_input;
+	const mxArray*    parent_var;
+	const mxArray*    in_vars;
+	
+	int               exp_num_in_args = msh_GetNumVarOpArgs(varop)-1;
+	int               index_once      = FALSE;
+	int               opts            = 0;
+	mxArray*          subs_struct     = NULL;
+	
+	if(num_args != 3)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNumberOfArgumentsError", "Too many or too few arguments. Please use the provided entry functions.");
+	}
+	
+	parent_var = mxGetCell(in_args[0], 0);
+	in_vars = in_args[1];
+	
+	if(mxIsCell(in_vars) && mxGetNumberOfElements(in_vars) != exp_num_in_args)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNumberOfInputsError", "Too many or too few inputs.");
+	}
+	
+	/*
+	 * check dest compared to subscripting while
+	 * check input compared to subscripting and dest variable
+	 */
+	
+	if(num_args == 3)
+	{
+		for(i = 0, num_varargin = mxGetNumberOfElements(in_args[2]); i < num_varargin; i++)
+		{
+			opt_input = mxGetCell(in_args[2], i);
+			if(mxIsStruct(opt_input))
+			{
+				if(index_once)
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "MultipleSubsStructError", "Must be only one subscripting struct input.");
+				}
+				index_once = TRUE;
+				
+				subs_struct = opt_input;
+				
+			}
+			else if(mxIsChar(opt_input))
+			{
+				if(mxGetNumberOfElements(opt_input) < 2)
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must have length more than 1.");
+				}
+				input_option = mxGetChars(opt_input);
+				if(input_option[0] == '-')
+				{
+					/* switch for possible future additions */
+					switch(input_option[1])
+					{
+						case('s'):
+						{
+							/* sync */
+							opts |= MSH_IS_SYNCHRONOUS;
+							break;
+						}
+						case('a'):
+						{
+							/* async */
+							opts &= ~MSH_IS_SYNCHRONOUS;
+							break;
+						}
+						case('t'):
+						{
+							/* atomic */
+							opts |= MSH_USE_ATOMIC_OPS;
+							break;
+						}
+						case('n'):
+						{
+							/* non-atomic */
+							opts &= ~MSH_USE_ATOMIC_OPS;
+							break;
+						}
+						default:
+						{
+							/* normally the string produced here should be freed with mxFree, but since we have an error just let MATLAB do the GC */
+							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Unrecognized option \"%s\"", mxArrayToString(in_args[2]));
+						}
+					}
+				}
+				else
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Input options must start with '-'. Invalid option \"%s\"", mxArrayToString(in_args[2]));
+				}
+			}
+			else
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must be of class 'struct' or 'char'.");
+			}
+		}
+	}
+	
+	
+	if(nlhs > 1)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "TooManyOutputsError", "Too many outputs");
+	}
+	
+	
+	/* returns output only if requested to save time and memory */
+	msh_VariableOperation(parent_var, in_vars, subs_struct, varop, opts, (nlhs==1)? plhs : NULL);
 	
 }

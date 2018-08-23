@@ -51,24 +51,30 @@
 #  define UINT64_MAX 0xFFFFFFFFFFFFFFFF
 #endif
 
+#define MSH_IS_SYNCHRONOUS 0x0001
+#define MSH_USE_ATOMIC_OPS 0x0002
+
 typedef enum
 {
-	ABS = 0,
-	ADD = 1,
-	SUB = 2,
-	MUL = 3,
-	DIV = 4,
-	REM = 5,
-	MOD = 6,
-	NEG = 7,
-	SRA = 8,
-	SLA = 9
+	VAROP_ABS = 0x0000,
+	VAROP_ADD = 0x0001,
+	VAROP_SUB = 0x0002,
+	VAROP_MUL = 0x0003,
+	VAROP_DIV = 0x0004,
+	VAROP_REM = 0x0005,
+	VAROP_MOD = 0x0006,
+	VAROP_NEG = 0x0007,
+	VAROP_ARS = 0x0008,
+	VAROP_ALS = 0x0009,
+	VAROP_CPY = 0x000A
 } msh_varop_T;
 
-typedef void (*binaryvaropfcn_T)(void*, void*, size_t, int);
+typedef void (*unaryvaropfcn_T)(void*,int);
+typedef void (*binaryvaropfcn_T)(void*,void*,int);
 
 typedef struct ParsedIndices_T
 {
+	const mxArray* subs_struct;
 	mwIndex*       start_idxs;
 	size_t         num_idxs;
 	mwSize*        slice_lens;
@@ -81,11 +87,13 @@ typedef struct IndexedVariable_T
 	ParsedIndices_T indices;
 } IndexedVariable_T;
 
-void msh_ParseSubscriptStruct(IndexedVariable_T* indexed_var, const mxArray* in_var, const mxArray* substruct);
+IndexedVariable_T msh_ParseSubscriptStruct(const mxArray* parent_var, const mxArray* subs_struct);
 
-ParsedIndices_T msh_ParseIndices(mxArray* subs_arr, const mxArray* dest_var, const mxArray* in_var);
+ParsedIndices_T msh_ParseIndices(mxArray* subs_arr, const mxArray* dest_var);
 
-mwIndex msh_ParseSingleIndex(mxArray* subs_arr, const mxArray* dest_var, const mxArray* in_var);
+mwIndex msh_ParseSingleIndex(mxArray* subs_arr, const mxArray* dest_var);
+
+void msh_CheckValidInput(IndexedVariable_T* indexed_var, const mxArray* in_var);
 
 /**
  * Compares the size of the two mxArrays. Returns TRUE if
@@ -105,5 +113,12 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp
  * @param in_var The input variable.
  */
 void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, int will_sync);
+
+int msh_GetNumVarOpArgs(msh_varop_T varop);
+
+void msh_UnaryVariableOperation(IndexedVariable_T* indexed_var, msh_varop_T varop, int opts, mxArray** output);
+void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop, int opts, mxArray** output);
+
+void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, const mxArray* subs_struct, msh_varop_T varop, int opts, mxArray** output);
 
 #endif /* MATSHARE_MSHVAROPS_H */

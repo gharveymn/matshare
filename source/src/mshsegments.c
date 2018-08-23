@@ -135,7 +135,7 @@ void msh_DetachSegment(SegmentNode_T* seg_node)
 				msh_RemoveSegmentFromSharedList(seg_node);
 				new_counter.values.flag = TRUE;
 			}
-		} while(msh_AtomicCompareSwap(&seg_info->metadata->procs_tracking.span, old_counter.span, new_counter.span) != old_counter.span);
+		} while(msh_AtomicCompareSetLong(&seg_info->metadata->procs_tracking.span, old_counter.span, new_counter.span) != old_counter.span);
 		
 		if(old_counter.values.flag != new_counter.values.flag)
 		{

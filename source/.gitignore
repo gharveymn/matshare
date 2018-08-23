@@ -67,3 +67,5 @@ CppProperties.json
 *.manifest
 _build
 CMakeFiles
+build
+.vscode

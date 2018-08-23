@@ -70,3 +70,6 @@ This is not a finished project by any means. If you wish to contribute or have a
 - Rewrite in C++ for R2018a+
 - User defined locks/waits
 - Direct usage of matshare objects without the 'data' property
+
+## License
+This project is licensed under the MIT license.

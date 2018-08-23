@@ -300,7 +300,7 @@ void msh_CheckVarname(const mxArray* varname)
 }
 
 
-/* MurmurHash3, by Austin Appleby (with a few modifications) */
+/* MurmurHash3, by Austin Appleby (public domain---thanks, Austin!) */
 uint32_T msh_MurmurHash3(const uint8_T* key, size_t len, int seed)
 {
 	uint32_T h = (uint32_T)seed;

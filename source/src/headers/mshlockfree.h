@@ -1,3 +1,12 @@
+/** mshlockfree.h
+ * Declares functions for lock-free mechanisms.
+ *
+ * Copyright © 2018 Gene Harvey
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license. See the LICENSE file for details.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
 #ifndef MATSHARE_MSHLOCKFREE_H
 #define MATSHARE_MSHLOCKFREE_H
 
@@ -129,11 +138,25 @@ long msh_AtomicDecrement(volatile long* dest);
  * the same.
  *
  * @param dest A pointer to the destination.
- * @param compare_value The value to compare with the value at the destination.
- * @param swap_value The value to set the destination if the comparison is true.
+ * @param comp The value to compare with the value at the destination.
+ * @param set_val The value to set the destination if the comparison is true.
  * @return The value of the destination during comparison.
  */
-long msh_AtomicCompareSwap(volatile long* dest, long compare_value, long swap_value);
+long msh_AtomicCompareSetLong(volatile long* dest, long comp, long set_val);
+
+
+int8_T msh_AtomicCompareSetInt8(volatile int8_T* dest, int8_T comp_val, int8_T set_val);
+int16_T msh_AtomicCompareSetInt16(volatile int16_T* dest, int16_T comp_val, int16_T set_val);
+int32_T msh_AtomicCompareSetInt32(volatile int32_T* dest, int32_T comp_val, int32_T set_val);
+int64_T msh_AtomicCompareSetInt64(volatile int64_T* dest, int64_T comp_val, int64_T set_val);
+
+uint8_T msh_AtomicCompareSetUInt8(volatile uint8_T* dest, uint8_T comp_val, uint8_T set_val);
+uint16_T msh_AtomicCompareSetUInt16(volatile uint16_T* dest, uint16_T comp_val, uint16_T set_val);
+uint32_T msh_AtomicCompareSetUInt32(volatile uint32_T* dest, uint32_T comp_val, uint32_T set_val);
+uint64_T msh_AtomicCompareSetUInt64(volatile uint64_T* dest, uint64_T comp_val, uint64_T set_val);
+
+single msh_AtomicCompareSetSingle(volatile single* dest, single comp_val, single set_val);
+double msh_AtomicCompareSetDouble(volatile double* dest, double comp_val, double set_val);
 
 
 #endif /* MATSHARE_MSHLOCKFREE_H */
