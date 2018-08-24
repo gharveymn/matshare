@@ -253,9 +253,18 @@ uint32_T msh_GetSegmentHashByName(SegmentTable_T* seg_table, void* varname);
 
 int msh_CompareStringKey(void* node_str, void* comp_str);
 
+uint32_T msh_GetSegmentHashByDataAddress(SegmentTable_T* seg_table, void* data_address);
+
+int msh_CompareDataAddressKey(void* data_address, void* comp_data_address);
+
 /**
  * Forward declaration of the global segment list.
  */
 extern SegmentList_T g_local_seg_list;
+
+/**
+ * Foward declaration of the global MATLAB variable tracking table
+ */
+extern SegmentTable_T g_mvar_table;
 
 #endif /* MATSHARE_MSHSEGMENTS_H */

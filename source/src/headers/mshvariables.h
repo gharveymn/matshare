@@ -13,9 +13,11 @@
 
 #include "mshtypes.h"
 #include "mshvariablenode.h"
+#include "mshtable.h"
 
 typedef struct VariableList_T
 {
+	SegmentTable_T* mvar_table;
 	VariableNode_T* first;
 	VariableNode_T* last;
 	/* uint32_T num_vars; */
@@ -79,6 +81,5 @@ mxArray* msh_CreateSharedDataCopy(VariableNode_T* var_node, int will_set_used);
 
 /** Forward declaration of the global variable list. **/
 extern VariableList_T g_local_var_list;
-
 
 #endif /* MATSHARE_MSHLISTS_H */

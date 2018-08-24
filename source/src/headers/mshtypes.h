@@ -52,7 +52,8 @@ typedef struct UserConfig_t
 #endif
 	/* this is modified behind a lock */
 	char_T fetch_default[MSH_NAME_LEN_MAX];
-	alignedbool_T sync_default;
+	long varop_opts_default;
+	long version;
 } UserConfig_T;
 
 /* structure of shared info about the shared segments */

@@ -69,8 +69,8 @@ typedef enum
 	VAROP_CPY = 0x000A
 } msh_varop_T;
 
-typedef void (*unaryvaropfcn_T)(void*,int);
-typedef void (*binaryvaropfcn_T)(void*,void*,int);
+typedef void (*unaryvaropfcn_T)(void*,long);
+typedef void (*binaryvaropfcn_T)(void*,void*,long);
 
 typedef struct ParsedIndices_T
 {
@@ -112,13 +112,13 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp
  * @param dest_var The destination variable.
  * @param in_var The input variable.
  */
-void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, int will_sync);
+void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, long opts, mxArray** output);
 
 int msh_GetNumVarOpArgs(msh_varop_T varop);
 
-void msh_UnaryVariableOperation(IndexedVariable_T* indexed_var, msh_varop_T varop, int opts, mxArray** output);
-void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop, int opts, mxArray** output);
+void msh_UnaryVariableOperation(IndexedVariable_T* indexed_var, msh_varop_T varop, long opts, mxArray** output);
+void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop, long opts, mxArray** output);
 
-void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, const mxArray* subs_struct, msh_varop_T varop, int opts, mxArray** output);
+void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, const mxArray* subs_struct, msh_varop_T varop, long opts, mxArray** output);
 
 #endif /* MATSHARE_MSHVAROPS_H */

@@ -520,16 +520,16 @@ SegmentNode_T* msh_RemoveSegmentFromList(SegmentNode_T* seg_node)
 		return seg_node;
 	}
 	
-	/* remove the segment from the table */
-	if(seg_list->seg_table != NULL)
-	{
-		msh_RemoveSegmentFromTable(seg_list->seg_table, seg_node, (void*)&msh_GetSegmentInfo(seg_node)->seg_num);
-	}
-	
 	if(msh_GetSegmentList(seg_node)->name_table != NULL && msh_HasVariableName(seg_node))
 	{
 		msh_RemoveSegmentFromTable(seg_list->name_table, seg_node, msh_GetSegmentMetadata(seg_node)->name);
 		seg_list->num_named -= 1;
+	}
+	
+	/* remove the segment from the table */
+	if(seg_list->seg_table != NULL)
+	{
+		msh_RemoveSegmentFromTable(seg_list->seg_table, seg_node, (void*)&msh_GetSegmentInfo(seg_node)->seg_num);
 	}
 	
 	/* reset local pointers */
@@ -895,6 +895,19 @@ uint32_T msh_GetSegmentHashByName(SegmentTable_T* seg_table, void* varname)
 int msh_CompareStringKey(void* node_str, void* comp_str)
 {
 	return strcmp(node_str, comp_str) == 0;
+}
+
+
+uint32_T msh_GetSegmentHashByDataAddress(SegmentTable_T* seg_table, void* data_address)
+{
+	/* dumb hash because I don't see any other way of doing it */
+	return (uint32_T)((size_t)data_address % seg_table->table_sz);
+}
+
+
+int msh_CompareDataAddressKey(void* data_address, void* comp_data_address)
+{
+	return (size_t)data_address == (size_t)comp_data_address;
 }
 
 

@@ -16,6 +16,7 @@
 #include "mshutils.h"
 #include "mshtypes.h"
 #include "mshsegments.h"
+#include "mshvariables.h"
 #include "mshtable.h"
 #include "mshlockfree.h"
 
@@ -89,6 +90,11 @@ void msh_InitializeMatshare(void)
 	if(g_local_seg_list.name_table->table == NULL)
 	{
 		msh_InitializeTable(g_local_seg_list.name_table);
+	}
+	
+	if(g_local_var_list.mvar_table->table == NULL)
+	{
+		msh_InitializeTable(g_local_var_list.mvar_table);
 	}
 	
 	g_local_info.is_initialized = TRUE;
@@ -267,6 +273,7 @@ void msh_OnExit(void)
 	msh_DetachSegmentList(&g_local_seg_list);
 	msh_DestroyTable(g_local_seg_list.seg_table);
 	msh_DestroyTable(g_local_seg_list.name_table);
+	msh_DestroyTable(g_local_var_list.mvar_table);
 	
 	if(g_local_info.shared_info_wrapper.ptr != NULL)
 	{
@@ -336,7 +343,8 @@ void msh_SetDefaultConfiguration(UserConfig_T* user_config)
 #endif
 	strncpy((void*)user_config->fetch_default, STR(MSH_DEFAULT_FETCH_DEFAULT), sizeof(g_user_config.fetch_default));
 	user_config->fetch_default[MSH_NAME_LEN_MAX-1] = '\0';
-	user_config->sync_default = MSH_DEFAULT_SYNC_DEFAULT;
+	user_config->varop_opts_default = MSH_DEFAULT_VAROP_OPTS_DEFAULT;
+	user_config->version = MSH_VERSION_NUM;
 }
 
 

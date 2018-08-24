@@ -65,6 +65,7 @@
 #define STR(x) XSTR(x)
 
 #define MSH_VERSION_STRING "1.1.1"
+#define MSH_VERSION_NUM    010101
 
 /** these are basic readability typedefs **/
 typedef int8_T bool_T;                  /* conditionals */

@@ -4,7 +4,7 @@ function INSTALL
 %
 %    Thanks for downloading!
 
-	OPTIONS;
+	opts = OPTIONS;
 	
 	thisfolder = fileparts(which(mfilename));
 	
@@ -13,7 +13,7 @@ function INSTALL
 	mexflags = {'-O', '-v', '-outdir', output_path, ...
 		['-I' fullfile(thisfolder, 'src', 'headers')]};
 
-	if(mshDebugMode)
+	if(opts.mshDebugMode)
 		mexflags = [mexflags {'-g'}];
 	end
 	
@@ -67,7 +67,7 @@ function INSTALL
 	mshconfigfolder = fullfile(userconfigfolder, 'matshare');
 
 	mexflags = [mexflags {['-DMSH_DEFAULT_MAX_SHARED_SEGMENTS=' ...
-		mshMaxVariables]}];
+		opts.mshMaxVariables]}];
 
 	if(maxsz > 2^31-1)
 		% R2018a
@@ -80,7 +80,7 @@ function INSTALL
 			mexflags = [mexflags, {'-R2017b'}];
 		end
 		mexflags = [mexflags, {'-DMSH_BITNESS=64', ...
-			['-DMSH_DEFAULT_MAX_SHARED_SIZE=' mshMaxSize64]}];
+			['-DMSH_DEFAULT_MAX_SHARED_SIZE=' opts.mshMaxSize64]}];
 
 		% delete the previous config file
 		mshconfigpath = fullfile(mshconfigfolder, 'mshconfig');
@@ -95,10 +95,10 @@ function INSTALL
 % 		delete(mshconfigpath);
 % 	end
 
-	if(strcmp(mshGarbageCollection, 'on'))
+	if(strcmp(opts.mshGarbageCollection, 'on'))
 		fprintf('-Garbage collection is enabled.\n')
 		mexflags = [mexflags {'-DMSH_DEFAULT_SHARED_GC=TRUE'}];
-	elseif(strcmp(mshGarbageCollection, 'off'))
+	elseif(strcmp(opts.mshGarbageCollection, 'off'))
 		fprintf('-Garbage collection is disabled.\n')
 		mexflags = [mexflags {'-DMSH_DEFAULT_SHARED_GC=FALSE'}];
 	else
@@ -106,14 +106,14 @@ function INSTALL
 			'mshGarbageCollection']);
 	end
 
-	mexflags = [mexflags {['-DMSH_DEFAULT_SECURITY=' mshSecurity]}];
+	mexflags = [mexflags {['-DMSH_DEFAULT_SECURITY=' opts.mshSecurity]}];
 
-	mexflags = [mexflags {['-DMSH_DEFAULT_FETCH_DEFAULT="' mshFetchDefault '"']}];
+	mexflags = [mexflags {['-DMSH_DEFAULT_FETCH_DEFAULT="' opts.mshFetchDefault '"']}];
 
-	if(strcmp(mshSyncDefault, 'on'))
+	if(strcmp(opts.mshSyncDefault, 'on'))
 		fprintf('-Synchronized overwriting is enabled by default.\n')
 		mexflags = [mexflags {'-DMSH_DEFAULT_SYNC_DEFAULT=TRUE'}];
-	elseif(strcmp(mshSyncDefault, 'off'))
+	elseif(strcmp(opts.mshSyncDefault, 'off'))
 		fprintf('-Synchronized overwriting is disabled by default.\n')
 		mexflags = [mexflags {'-DMSH_DEFAULT_SYNC_DEFAULT=FALSE'}];
 	else
@@ -125,24 +125,42 @@ function INSTALL
 		mexflags = [mexflags {'-DMSH_AVX_SUPPORT'}];
 	end
 	
-	if(mshUseSSE2)
+	if(opts.mshUseSSE2)
 		mexflags = [mexflags {'-DMSH_USE_SSE2=TRUE'}];
 	end
 	
-	if(mshUseAVX)
+	if(opts.mshUseAVX)
 		mexflags = [mexflags {'-DMSH_USE_AVX=TRUE'}];
 	end
 	
-	if(mshUseAVX2)
+	if(opts.mshUseAVX2)
 		mexflags = [mexflags {'-DMSH_USE_AVX2=TRUE'}];
 	end
+	
+	varopoptsstr = '0';
+	for i = 1:numel(opts.mshVarOpsOptsDefault)
+		curropt = opts.mshVarOpsOptsDefault{i};
+		if(strcmp(curropt , '-s'))
+			varopoptsstr = [varopoptsstr '|MSH_IS_SYNCHRONOUS'];
+		elseif(strcmp(curropt, '-a'))
+			varopoptsstr = [varopoptsstr '&~MSH_IS_SYNCHRONOUS'];
+		elseif(strcmp(curropt, '-t'))
+			varopoptsstr = [varopoptsstr '|MSH_USE_ATOMIC_OPTS'];
+		elseif(strcmp(curropt, '-n'))
+			varopoptsstr = [varopoptsstr '&~MSH_USE_ATOMIC_OPTS'];
+		else
+			error('Invalid value for compilation parameter mshVarOpsOptsDefault');
+		end
+	end
+	
+	mexflags = [mexflags {['-DMSH_DEFAULT_VAROP_OPTS_DEFAULT=' varopoptsstr]}];
 
 	fprintf('-Compiling matshare...')
 	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /Wall"'}];
 	%mexflags = [mexflags {'CFLAGS="$CFLAGS --std=c89 -Wall -Werror -Wno-unused-function"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n')
-	if(mshDebugMode)
+	if(opts.mshDebugMode)
 		fprintf('-Compiled for DEBUGGING.\n');
 	else
 		fprintf('-Compiled for RELEASE.\n');

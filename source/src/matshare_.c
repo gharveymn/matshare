@@ -56,6 +56,20 @@ LocalInfo_T g_local_info =
 	TRUE                        /* is_deinitialized */
 };
 
+/**
+ * MATLAB variable tracking table
+ */
+SegmentTable_T g_mvar_table =
+{
+	NULL,
+	0,
+	msh_GetSegmentHashByDataAddress,
+	msh_CompareDataAddressKey
+};
+
+/**
+ * Segment tracking table via segment numbers
+ */
 SegmentTable_T g_seg_table =
 {
 	NULL,
@@ -64,6 +78,9 @@ SegmentTable_T g_seg_table =
 	msh_CompareNumericKey
 };
 
+/**
+ * Segment table of variable names
+ */
 SegmentTable_T g_name_table =
 {
 	NULL,
@@ -84,6 +101,7 @@ SegmentList_T g_local_seg_list =
 
 VariableList_T g_local_var_list =
 {
+	&g_mvar_table,
 	NULL,
 	NULL
 };
@@ -548,7 +566,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		update_function = msh_UpdateAllSegments;
 	}
 	
-	if(num_out > (unsigned)nlhs)
+	if((unsigned)nlhs > num_out)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "TooManyOutputsError", "Too many outputs requested.");
 	}
@@ -1090,11 +1108,11 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 			/* don't use the lowercase string in this case */
 			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
 			{
-				g_user_config.sync_default = TRUE;
+				g_user_config.varop_opts_default = TRUE;
 			}
 			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
 			{
-				g_user_config.sync_default = FALSE;
+				g_user_config.varop_opts_default = FALSE;
 			}
 			else
 			{
@@ -1129,7 +1147,7 @@ void msh_VarOps(int nlhs, mxArray** plhs, int num_args, const mxArray** in_args,
 	
 	int               exp_num_in_args = msh_GetNumVarOpArgs(varop)-1;
 	int               index_once      = FALSE;
-	int               opts            = 0;
+	long              opts            = g_user_config.varop_opts_default;
 	mxArray*          subs_struct     = NULL;
 	
 	if(num_args != 3)
