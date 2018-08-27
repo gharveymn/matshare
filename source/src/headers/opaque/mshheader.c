@@ -24,7 +24,6 @@
 #if MSH_BITNESS == 64
 #  define ALLOCATION_HEADER_MAGIC_CHECK 0xFEEDFACE
 #  define ALLOCATION_HEADER_SIZE 0x10
-#  define ALLOCATION_HEADER_SIZE_SHIFT 0x0F
 
 typedef struct AllocationHeader_t
 {
@@ -128,7 +127,7 @@ static void msh_MakeAllocationHeader(AllocationHeader_T* alloc_hdr, size_t copy_
  * @param copy_sz The size of the data copy.
  * @return The padded size.
  */
-static size_t FindPaddedDataSize(size_t copy_sz);
+static size_t msh_FindPaddedDataSize(size_t copy_sz);
 
 
 /** offset Get functions **/
@@ -387,7 +386,7 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 	 * want to use SharedVariableHeader_T for anything other than the actual segment. */
 	
 	/* adds the total size of the aligned data */
-#define AddDataSize(obj_sz_, data_sz_) (obj_sz_) = msh_PadToAlignData((obj_sz_) + ALLOCATION_HEADER_SIZE) + (data_sz_);
+#define msh_AddAlignedDataSize(CURR_OBJ_SZ, DATA_SZ) (CURR_OBJ_SZ) = msh_PadToAlignData((CURR_OBJ_SZ) + ALLOCATION_HEADER_SIZE) + msh_PadToAlignData(DATA_SZ);
 	
 	/* counters */
 	size_t idx, count, obj_tree_sz = 0;
@@ -450,14 +449,14 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 			/* len(data)==nzmax, len(imag_data)==nzmax, len(ir)=nzmax, len(jc)==N+1 */
 			
 			/* add the size of the real data */
-			AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNzmax(in_var));
+			msh_AddAlignedDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNzmax(in_var));
 			if(mxIsComplex(in_var))
 			{
 				/* and the imaginary data */
-				AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNzmax(in_var));
+				msh_AddAlignedDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNzmax(in_var));
 			}
-			AddDataSize(obj_tree_sz, sizeof(mwIndex)*mxGetNzmax(in_var));          /* ir */
-			AddDataSize(obj_tree_sz, sizeof(mwIndex)*(mxGetN(in_var) + 1)); /* jc */
+			msh_AddAlignedDataSize(obj_tree_sz, sizeof(mwIndex)*mxGetNzmax(in_var));          /* ir */
+			msh_AddAlignedDataSize(obj_tree_sz, sizeof(mwIndex)*(mxGetN(in_var) + 1)); /* jc */
 			
 		}
 		else
@@ -468,21 +467,21 @@ size_t msh_FindSharedSize(const mxArray* in_var)
 				/* add the size of the real data */
 				if(mxGetNumberOfElements(in_var) == 1)
 				{
-					AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*2);
+					msh_AddAlignedDataSize(obj_tree_sz, mxGetElementSize(in_var)*2);
 					if(mxIsComplex(in_var))
 					{
 						/* and the imaginary data */
-						AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*2);
+						msh_AddAlignedDataSize(obj_tree_sz, mxGetElementSize(in_var)*2);
 					}
 					
 				}
 				else
 				{
-					AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNumberOfElements(in_var));
+					msh_AddAlignedDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNumberOfElements(in_var));
 					if(mxIsComplex(in_var))
 					{
 						/* and the imaginary data */
-						AddDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNumberOfElements(in_var));
+						msh_AddAlignedDataSize(obj_tree_sz, mxGetElementSize(in_var)*mxGetNumberOfElements(in_var));
 					}
 				}
 			}
@@ -626,7 +625,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			memcpy(msh_GetData(dest), mxGetData(in_var), copy_sz);
 			
 			/* shift to end of the data */
-			curr_off += alloc_sz;
+			curr_off += msh_PadToAlignData(alloc_sz);
 			
 			/** begin copy imag_data **/
 			if(mxIsComplex(in_var))
@@ -642,7 +641,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				memcpy(msh_GetImagData(dest), mxGetImagData(in_var), copy_sz);
 				
 				/* shift to end of the imaginary data */
-				curr_off += alloc_sz;
+				curr_off += msh_PadToAlignData(alloc_sz);
 				
 			}
 			
@@ -661,7 +660,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			memcpy(msh_GetIr(dest), mxGetIr(in_var), copy_sz);
 			
 			/* shift to end of ir */
-			curr_off += alloc_sz;
+			curr_off += msh_PadToAlignData(alloc_sz);
 			
 			/** begin copy jc **/
 			
@@ -677,7 +676,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 			memcpy(msh_GetJc(dest), mxGetJc(in_var), copy_sz);
 			
 			/* shift to the end of jc */
-			curr_off += alloc_sz;
+			curr_off += msh_PadToAlignData(alloc_sz);
 			
 		}
 		else
@@ -702,7 +701,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 				memcpy(msh_GetData(dest), mxGetData(in_var), copy_sz);
 				
 				/* shift to end of the data */
-				curr_off += alloc_sz;
+				curr_off += msh_PadToAlignData(alloc_sz);
 				
 				/* copy imag_data */
 				if(mxIsComplex(in_var))
@@ -718,7 +717,7 @@ size_t msh_CopyVariable(void* dest, const mxArray* in_var)
 					memcpy(msh_GetImagData(dest), mxGetImagData(in_var), copy_sz);
 					
 					/* shift to end of the imaginary data */
-					curr_off += alloc_sz;
+					curr_off += msh_PadToAlignData(alloc_sz);
 					
 				}
 			}
@@ -1172,15 +1171,15 @@ static void msh_MakeAllocationHeader(AllocationHeader_T* alloc_hdr, size_t copy_
 	 * 		bytes 14-15 - the offset from the original pointer to the newly aligned pointer (should be 16 or 32)
 	 */
 	
-	alloc_hdr->aligned_size = (copy_sz > 0)? FindPaddedDataSize(copy_sz) : 0;
+	alloc_hdr->aligned_size = msh_FindPaddedDataSize(copy_sz);
 	alloc_hdr->check = ALLOCATION_HEADER_MAGIC_CHECK;
-	alloc_hdr->alignment = DATA_ALIGNMENT;
+	alloc_hdr->alignment = MATLAB_ALIGNMENT;
 	alloc_hdr->offset = ALLOCATION_HEADER_SIZE;
 	
 }
 
 
-static size_t FindPaddedDataSize(size_t copy_sz)
+static size_t msh_FindPaddedDataSize(size_t copy_sz)
 {
-	return copy_sz + (ALLOCATION_HEADER_SIZE_SHIFT - ((copy_sz - 1) & ALLOCATION_HEADER_SIZE_SHIFT));
+	return copy_sz + ((ALLOCATION_HEADER_SIZE-1) - ((copy_sz - 1) & (ALLOCATION_HEADER_SIZE-1)));
 }

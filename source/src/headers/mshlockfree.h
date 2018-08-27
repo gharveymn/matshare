@@ -12,6 +12,13 @@
 
 #include "mshbasictypes.h"
 
+#define VO_FCN_CASNAME_(TYPEN) msh_AtomicCompareSet##TYPEN
+#define VO_FCN_CASNAME(TYPEN) VO_FCN_CASNAME_(TYPEN)
+
+#define VO_FCN_SNAME_(TYPEN) msh_AtomicSet##TYPEN
+#define VO_FCN_SNAME(TYPEN) VO_FCN_SNAME_(TYPEN)
+
+
 /* for lcc compatibility --- matshare requires at least Windows XP */
 #if defined(MSH_WIN) && defined(__LCC__)
 /*LONG __cdecl InterlockedCompareExchange(_Inout_ LONG volatile *Destination, _In_ LONG Exchange, _In_ LONG Comparand);*/
@@ -145,18 +152,39 @@ long msh_AtomicDecrement(volatile long* dest);
 long msh_AtomicCompareSetLong(volatile long* dest, long comp, long set_val);
 
 
-int8_T msh_AtomicCompareSetInt8(volatile int8_T* dest, int8_T comp_val, int8_T set_val);
-int16_T msh_AtomicCompareSetInt16(volatile int16_T* dest, int16_T comp_val, int16_T set_val);
-int32_T msh_AtomicCompareSetInt32(volatile int32_T* dest, int32_T comp_val, int32_T set_val);
-int64_T msh_AtomicCompareSetInt64(volatile int64_T* dest, int64_T comp_val, int64_T set_val);
+int8_T  VO_FCN_CASNAME(Int8)(volatile int8_T* dest, int8_T comp_val, int8_T set_val);
+int16_T VO_FCN_CASNAME(Int16)(volatile int16_T* dest, int16_T comp_val, int16_T set_val);
+int32_T VO_FCN_CASNAME(Int32)(volatile int32_T* dest, int32_T comp_val, int32_T set_val);
 
-uint8_T msh_AtomicCompareSetUInt8(volatile uint8_T* dest, uint8_T comp_val, uint8_T set_val);
-uint16_T msh_AtomicCompareSetUInt16(volatile uint16_T* dest, uint16_T comp_val, uint16_T set_val);
-uint32_T msh_AtomicCompareSetUInt32(volatile uint32_T* dest, uint32_T comp_val, uint32_T set_val);
-uint64_T msh_AtomicCompareSetUInt64(volatile uint64_T* dest, uint64_T comp_val, uint64_T set_val);
+uint8_T  VO_FCN_CASNAME(UInt8)(volatile uint8_T* dest, uint8_T comp_val, uint8_T set_val);
+uint16_T VO_FCN_CASNAME(UInt16)(volatile uint16_T* dest, uint16_T comp_val, uint16_T set_val);
+uint32_T VO_FCN_CASNAME(UInt32)(volatile uint32_T* dest, uint32_T comp_val, uint32_T set_val);
 
-single msh_AtomicCompareSetSingle(volatile single* dest, single comp_val, single set_val);
-double msh_AtomicCompareSetDouble(volatile double* dest, double comp_val, double set_val);
+#if MSH_BITNESS==64
+int64_T VO_FCN_CASNAME(Int64)(volatile int64_T* dest, int64_T comp_val, int64_T set_val);
+uint64_T VO_FCN_CASNAME(UInt64)(volatile uint64_T* dest, uint64_T comp_val, uint64_T set_val);
+#endif
+
+single VO_FCN_CASNAME(Single)(volatile single* dest, single comp_val, single set_val);
+double VO_FCN_CASNAME(Double)(volatile double* dest, double comp_val, double set_val);
+
+int8_T  VO_FCN_SNAME(Int8)(volatile int8_T* dest, int8_T set_val);
+int16_T VO_FCN_SNAME(Int16)(volatile int16_T* dest, int16_T set_val);
+int32_T VO_FCN_SNAME(Int32)(volatile int32_T* dest, int32_T set_val);
+
+uint8_T  VO_FCN_SNAME(UInt8)(volatile uint8_T* dest, uint8_T set_val);
+uint16_T VO_FCN_SNAME(UInt16)(volatile uint16_T* dest, uint16_T set_val);
+uint32_T VO_FCN_SNAME(UInt32)(volatile uint32_T* dest, uint32_T set_val);
+
+#if MSH_BITNESS==64
+int64_T VO_FCN_SNAME(Int64)(volatile int64_T* dest, int64_T set_val);
+uint64_T VO_FCN_SNAME(UInt64)(volatile uint64_T* dest, uint64_T set_val);
+#endif
+
+single VO_FCN_SNAME(Single)(volatile single* dest, single set_val);
+double VO_FCN_SNAME(Double)(volatile double* dest, double set_val);
+
+size_t msh_AtomicSetSize(volatile size_t* dest, size_t set_val);
 
 
 #endif /* MATSHARE_MSHLOCKFREE_H */

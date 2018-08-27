@@ -7,8 +7,9 @@
  * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-
+#ifdef MSH_WIN
 #include <intrin.h>
+#endif
 
 #include "mshlockfree.h"
 
@@ -213,43 +214,47 @@ long msh_AtomicCompareSetLong(volatile long* dest, long comp_val, long set_val)
 }
 
 
-int8_T msh_AtomicCompareSetInt8(volatile int8_T* dest, int8_T comp_val, int8_T set_val)
+int8_T VO_FCN_CASNAME(Int8)(volatile int8_T* dest, int8_T comp_val, int8_T set_val)
 {
 	/* returns the initial value of dest */
 #ifdef MSH_WIN
+#  ifdef _MSC_VER
 	return _InterlockedCompareExchange8((volatile char*)dest, set_val, comp_val);
+#  else
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
+#  endif
 #else
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
 }
 
-int16_T msh_AtomicCompareSetInt16(volatile int16_T* dest, int16_T comp_val, int16_T set_val)
+int16_T VO_FCN_CASNAME(Int16)(volatile int16_T* dest, int16_T comp_val, int16_T set_val)
 {
 	/* returns the initial value of dest */
 #ifdef MSH_WIN
-	return _InterlockedCompareExchange16(dest, set_val, comp_val);
+	return InterlockedCompareExchange16(dest, set_val, comp_val);
 #else
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
 }
 
 
-int32_T msh_AtomicCompareSetInt32(volatile int32_T* dest, int32_T comp_val, int32_T set_val)
+int32_T VO_FCN_CASNAME(Int32)(volatile int32_T* dest, int32_T comp_val, int32_T set_val)
 {
 	/* returns the initial value of dest */
 #ifdef MSH_WIN
-	return _InterlockedCompareExchange((volatile long*)dest, set_val, comp_val);
+	return InterlockedCompareExchange((volatile long*)dest, set_val, comp_val);
 #else
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
 }
 
 #if MSH_BITNESS==64
-int64_T msh_AtomicCompareSetInt64(volatile int64_T* dest, int64_T comp_val, int64_T set_val)
+int64_T VO_FCN_CASNAME(Int64)(volatile int64_T* dest, int64_T comp_val, int64_T set_val)
 {
 	/* returns the initial value of dest */
 #ifdef MSH_WIN
-	return _InterlockedCompareExchange64((volatile __int64*)dest, set_val, comp_val);
+	return InterlockedCompareExchange64((volatile __int64*)dest, set_val, comp_val);
 #else
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
@@ -257,43 +262,47 @@ int64_T msh_AtomicCompareSetInt64(volatile int64_T* dest, int64_T comp_val, int6
 #endif
 
 
-uint8_T msh_AtomicCompareSetUInt8(volatile uint8_T* dest, uint8_T comp_val, uint8_T set_val)
+uint8_T VO_FCN_CASNAME(UInt8)(volatile uint8_T* dest, uint8_T comp_val, uint8_T set_val)
 {
 	/* returns the initial value of dest */
 #ifdef MSH_WIN
+#  ifdef _MSC_VER
 	return (uint8_T)_InterlockedCompareExchange8((volatile char*)dest, set_val, comp_val);
+#  else
+	return __sync_val_compare_and_swap(dest, comp_val, set_val);
+#  endif
 #else
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
 }
 
-uint16_T msh_AtomicCompareSetUInt16(volatile uint16_T* dest, uint16_T comp_val, uint16_T set_val)
+uint16_T VO_FCN_CASNAME(UInt16)(volatile uint16_T* dest, uint16_T comp_val, uint16_T set_val)
 {
 	/* returns the initial value of dest */
 #ifdef MSH_WIN
-	return (uint16_T)_InterlockedCompareExchange16((volatile short*)dest, set_val, comp_val);
+	return (uint16_T)InterlockedCompareExchange16((volatile short*)dest, set_val, comp_val);
 #else
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
 }
 
 
-uint32_T msh_AtomicCompareSetUInt32(volatile uint32_T* dest, uint32_T comp_val, uint32_T set_val)
+uint32_T VO_FCN_CASNAME(UInt32)(volatile uint32_T* dest, uint32_T comp_val, uint32_T set_val)
 {
 	/* returns the initial value of dest */
 #ifdef MSH_WIN
-	return (uint32_T)_InterlockedCompareExchange((volatile long*)dest, (long)set_val, (long)comp_val);
+	return (uint32_T)InterlockedCompareExchange((volatile long*)dest, (long)set_val, (long)comp_val);
 #else
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
 }
 
 #if MSH_BITNESS==64
-uint64_T msh_AtomicCompareSetUInt64(volatile uint64_T* dest, uint64_T comp_val, uint64_T set_val)
+uint64_T VO_FCN_CASNAME(UInt64)(volatile uint64_T* dest, uint64_T comp_val, uint64_T set_val)
 {
 	/* returns the initial value of dest */
 #ifdef MSH_WIN
-	return (uint64_T)_InterlockedCompareExchange64((volatile __int64*)dest, set_val, comp_val);
+	return (uint64_T)InterlockedCompareExchange64((volatile __int64*)dest, set_val, comp_val);
 #else
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
@@ -301,7 +310,7 @@ uint64_T msh_AtomicCompareSetUInt64(volatile uint64_T* dest, uint64_T comp_val, 
 #endif
 
 
-single msh_AtomicCompareSetSingle(volatile single* dest, single comp_val, single set_val)
+single VO_FCN_CASNAME(Single)(volatile single* dest, single comp_val, single set_val)
 {
 	union singlepun_T
 	{
@@ -309,9 +318,9 @@ single msh_AtomicCompareSetSingle(volatile single* dest, single comp_val, single
 		int32_T as_int;
 	};
 	
+	union singlepun_T ret = {0};
 	union singlepun_T comp_val_pun = {comp_val};
 	union singlepun_T set_val_pun = {set_val};
-	union singlepun_T ret = {0};
 #ifdef MSH_WIN
 	ret.as_int = _InterlockedCompareExchange((volatile long*)dest, set_val_pun.as_int, comp_val_pun.as_int);
 	return ret.val;
@@ -321,7 +330,7 @@ single msh_AtomicCompareSetSingle(volatile single* dest, single comp_val, single
 #endif
 }
 
-double msh_AtomicCompareSetDouble(volatile double* dest, double comp_val, double set_val)
+double VO_FCN_CASNAME(Double)(volatile double* dest, double comp_val, double set_val)
 {
 #ifdef MSH_WIN
 
@@ -333,10 +342,10 @@ double msh_AtomicCompareSetDouble(volatile double* dest, double comp_val, double
 		int64_T as_int;
 	};
 	
-	union doublepun_T ret;
+	union doublepun_T ret = {0};
 	union doublepun_T comp_val_pun = {comp_val};
 	union doublepun_T set_val_pun = {set_val};
-	ret.as_int = _InterlockedCompareExchange64((volatile long long*)dest, set_val_pun.as_int, comp_val_pun.as_int);
+	ret.as_int = _InterlockedCompareExchange64((volatile __int64*)dest, set_val_pun.as_int, comp_val_pun.as_int);
 	return ret.val;
 	
 #  else
@@ -360,7 +369,7 @@ double msh_AtomicCompareSetDouble(volatile double* dest, double comp_val, double
 		} as_int;
 	};
 	
-	union doublepun_T res;
+	union doublepun_T res = {0};
 	union doublepun_T comp_val_pun = {comp_val};
 	union doublepun_T set_val_pun = {set_val};
 	__asm {
@@ -383,7 +392,7 @@ double msh_AtomicCompareSetDouble(volatile double* dest, double comp_val, double
 		int64_T as_int;
 	};
 	
-	union doublepun_T ret;
+	union doublepun_T ret = {0};
 	union doublepun_T comp_val_pun = {comp_val};
 	union doublepun_T set_val_pun = {set_val};
 	ret.as_int = __sync_val_compare_and_swap((volatile int64_T*)dest, comp_val_pun.as_int, set_val_pun.as_int);
@@ -391,3 +400,209 @@ double msh_AtomicCompareSetDouble(volatile double* dest, double comp_val, double
 #endif
 }
 
+int8_T VO_FCN_SNAME(Int8)(volatile int8_T* dest, int8_T set_val)
+{
+#ifdef MSH_WIN
+#  ifdef _MSC_VER
+	return _InterlockedExchange8((volatile char*)dest, set_val);
+#  else
+	int8_T ret;
+	asm volatile(
+		"xchgb %0, %1" : "=r"(ret),
+		"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#  endif
+#else
+	int8_T ret;
+	asm volatile(
+		"xchgb %0, %1" : "=r"(ret),
+		"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#endif
+}
+
+int16_T VO_FCN_SNAME(Int16)(volatile int16_T* dest, int16_T set_val)
+{
+#ifdef MSH_WIN
+#  ifdef _MSC_VER
+	return _InterlockedExchange16(dest, set_val);
+#  else
+	int16_T ret;
+	asm volatile(
+	"xchgw %0, %1" : "=r"(ret),
+	"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#  endif
+#else
+	int16_T ret;
+	asm volatile(
+	"xchgw %0, %1" : "=r"(ret),
+	"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#endif
+}
+
+int32_T VO_FCN_SNAME(Int32)(volatile int32_T* dest, int32_T set_val)
+{
+#ifdef MSH_WIN
+	return InterlockedExchange((volatile long*)dest, set_val);
+#else
+	int32_T ret;
+	asm volatile(
+	"xchgl %0, %1" : "=r"(ret),
+	"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#endif
+}
+
+#if MSH_BITNESS==64
+int64_T VO_FCN_SNAME(Int64)(volatile int64_T* dest, int64_T set_val)
+{
+#ifdef MSH_WIN
+	return InterlockedExchange64((volatile __int64*)dest, set_val);
+#else
+	int64_T ret;
+	asm volatile(
+	"xchgq %0, %1" : "=r"(ret),
+	"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#endif
+}
+#endif
+
+uint8_T VO_FCN_SNAME(UInt8)(volatile uint8_T* dest, uint8_T set_val)
+{
+#ifdef MSH_WIN
+#  ifdef _MSC_VER
+	return (uint8_T)_InterlockedExchange8((volatile char*)dest, set_val);
+#  else
+	uint8_T ret;
+	asm volatile(
+	"xchgb %0, %1" : "=r"(ret),
+	"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#  endif
+#else
+	uint8_T ret;
+	asm volatile(
+	"xchgb %0, %1" : "=r"(ret),
+	"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#endif
+}
+
+uint16_T VO_FCN_SNAME(UInt16)(volatile uint16_T* dest, uint16_T set_val)
+{
+#ifdef MSH_WIN
+#  ifdef _MSC_VER
+	return (uint16_T)_InterlockedExchange16((volatile short*)dest, set_val);
+#  else
+	uint16_T ret;
+	asm volatile(
+	"xchgw %0, %1" : "=r"(ret),
+	"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#  endif
+#else
+	uint16_T ret;
+	asm volatile(
+	"xchgw %0, %1" : "=r"(ret),
+	"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#endif
+}
+
+uint32_T VO_FCN_SNAME(UInt32)(volatile uint32_T* dest, uint32_T set_val)
+{
+#ifdef MSH_WIN
+	return (uint32_T)InterlockedExchange((volatile long*)dest, (long)set_val);
+#else
+	uint32_T ret;
+	asm volatile(
+	"xchgl %0, %1" : "=r"(ret),
+	"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#endif
+}
+
+#if MSH_BITNESS==64
+uint64_T VO_FCN_SNAME(UInt64)(volatile uint64_T* dest, uint64_T set_val)
+{
+#ifdef MSH_WIN
+	return (uint64_T)InterlockedExchange64((volatile __int64*)dest, set_val);
+#else
+	uint64_T ret;
+	asm volatile(
+	"xchgq %0, %1" : "=r"(ret),
+	"+m"(*dest) : "0"(set_val)
+	);
+	return ret;
+#endif
+}
+#endif
+
+single VO_FCN_SNAME(Single)(volatile single* dest, single set_val)
+{
+	union singlepun_T
+	{
+		single val;
+		int32_T as_int;
+	};
+	
+	union singlepun_T ret = {0};
+	union singlepun_T set_val_pun = {set_val};
+	
+#ifdef MSH_WIN
+	ret.as_int = InterlockedExchange((volatile long*)dest, set_val_pun.as_int);
+	return ret.val;
+#else
+	asm volatile(
+	"xchgl %0, %1" : "=r"(ret.as_int),
+	"+m"(*(int32_T*)dest) : "0"(set_val_pun.as_int)
+	);
+	return ret.val;
+#endif
+}
+
+double VO_FCN_SNAME(Double)(volatile double* dest, double set_val)
+{
+#if MSH_BITNESS==64
+	union doublepun_T
+	{
+		double val;
+		int64_T as_int;
+	};
+	
+	union doublepun_T ret = {0};
+	union doublepun_T set_val_pun = {set_val};
+
+#  ifdef MSH_WIN
+	ret.as_int = InterlockedExchange64((volatile __int64*)dest, set_val_pun.as_int);
+	return ret.val;
+#  else
+	asm volatile(
+	"xchgq %0, %1" : "=r"(ret.as_int),
+	"+m"(*(int64_T*)dest) : "0"(set_val_pun.as_int)
+	);
+	return ret.val;
+#  endif
+#else
+	double old_val;
+	do
+	{
+		old_val = *dest;
+	} while(msh_AtomicCompareExchangeDouble(dest, old_val, set_val) != old_val);
+	return old_val;
+#endif
+}

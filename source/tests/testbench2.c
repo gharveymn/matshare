@@ -2,7 +2,7 @@
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {	
-	const char* fn[] = {"hi", "bye", "hi"};
+	size_t* sz = mxMalloc(0);
 	
 	if(nlhs > 0)
 	{

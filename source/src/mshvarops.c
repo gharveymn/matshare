@@ -9,7 +9,6 @@
  
 #include <math.h>
 #include <string.h>
-#include <intrin.h>
 
 #include "mshvarops.h"
 #include "mshutils.h"
@@ -958,10 +957,16 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp
 
 void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, long opts, mxArray** output)
 {
+	
 	int               field_num, in_num_fields, is_complex;
-	size_t            i, j, dest_idx, in_idx, nzmax, elem_size, dest_offset, in_offset;
-	int8_T*           dest_data, * in_data, * dest_imag_data, * in_imag_data;
+	size_t            i, j, dest_idx, in_idx, elem_size, dest_offset, in_offset;
 	const char_T*     curr_field_name;
+	
+	int8_T* dest_real;
+	int8_T* dest_imag;
+	
+	int8_T* in_real;
+	int8_T* in_imag;
 	
 	size_t            dest_num_elems  = mxGetNumberOfElements(indexed_var->dest_var);
 	size_t            in_num_elems    = mxGetNumberOfElements(in_var);
@@ -1041,23 +1046,23 @@ void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var
 		
 		if(mxIsSparse(in_var))
 		{
+			dest_num_elems = mxGetNzmax(in_var);
 			
-			nzmax = mxGetNzmax(in_var);
-			
-			memcpy(mxGetIr(indexed_var->dest_var), mxGetIr(in_var), nzmax*sizeof(mwIndex));
+			memcpy(mxGetIr(indexed_var->dest_var), mxGetIr(in_var), dest_num_elems*sizeof(mwIndex));
 			memcpy(mxGetJc(indexed_var->dest_var), mxGetJc(in_var), (mxGetN(in_var) + 1)*sizeof(mwIndex));
-			memcpy(mxGetData(indexed_var->dest_var), mxGetData(in_var), nzmax*mxGetElementSize(in_var));
-			if(is_complex) memcpy(mxGetImagData(indexed_var->dest_var), mxGetImagData(in_var), nzmax*mxGetElementSize(in_var));
+			memcpy(mxGetData(indexed_var->dest_var), mxGetData(in_var), dest_num_elems*mxGetElementSize(in_var));
+			if(is_complex)
+				memcpy(mxGetImagData(indexed_var->dest_var), mxGetImagData(in_var), dest_num_elems*mxGetElementSize(in_var));
 			
 		}
-		else if(!mxIsEmpty(in_var))
+		else
 		{
 			
-			dest_data = mxGetData(indexed_var->dest_var);
-			in_data = mxGetData(in_var);
+			dest_real = mxGetData(indexed_var->dest_var);
+			dest_imag = mxGetImagData(indexed_var->dest_var);
 			
-			dest_imag_data = mxGetImagData(indexed_var->dest_var);
-			in_imag_data = mxGetImagData(in_var);
+			in_real = mxGetData(in_var);
+			in_imag = mxGetImagData(in_var);
 			
 			elem_size = mxGetElementSize(indexed_var->dest_var);
 			
@@ -1065,21 +1070,20 @@ void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var
 			{
 				in_num_elems = mxGetNumberOfElements(in_var);
 				
-				dest_data = mxGetData(indexed_var->dest_var);
-				dest_imag_data = mxGetImagData(indexed_var->dest_var);
-				
 				if(in_num_elems == 1)
 				{
 					for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
 					{
-						memcpy(dest_data + dest_idx*elem_size/sizeof(int8_T), in_data, elem_size);
-						if(is_complex) memcpy(dest_imag_data + dest_idx*elem_size/sizeof(int8_T), in_imag_data, elem_size);
+						memcpy(dest_real + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
+						if(is_complex)
+							memcpy(dest_imag + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
 					}
 				}
 				else
 				{
-					memcpy(dest_data, in_data, in_num_elems*elem_size);
-					if(is_complex) memcpy(dest_imag_data, in_imag_data, in_num_elems*elem_size);
+					memcpy(dest_real, in_real, in_num_elems*elem_size);
+					if(is_complex)
+						memcpy(dest_imag, in_imag, in_num_elems*elem_size);
 				}
 				
 			}
@@ -1090,30 +1094,32 @@ void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var
 				{
 					for(j = 0; j < indexed_var->indices.num_lens; j++)
 					{
-						dest_offset = indexed_var->indices.start_idxs[i+j]*elem_size/sizeof(int8_T);
+						dest_offset = indexed_var->indices.start_idxs[i + j]*elem_size/sizeof(int8_T);
 						
 						/* optimized out */
 						if(in_num_elems == 1)
 						{
 							for(dest_idx = 0; dest_idx < indexed_var->indices.slice_lens[j]; dest_idx++)
 							{
-								memcpy(dest_data + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_data, elem_size);
-								if(is_complex) memcpy(dest_imag_data + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_imag_data, elem_size);
+								memcpy(dest_real + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
+								if(is_complex)
+									memcpy(dest_imag + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
 							}
 						}
 						else
 						{
-							memcpy(dest_data + dest_offset, in_data + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
-							if(is_complex) memcpy(dest_imag_data + dest_offset, in_imag_data + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
+							memcpy(dest_real + dest_offset, in_real + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
+							if(is_complex)
+								memcpy(dest_imag + dest_offset, in_imag + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
 							in_offset += indexed_var->indices.slice_lens[j]*elem_size/sizeof(int8_T);
 						}
-						
 						
 					}
 				}
 				
 			}
 		}
+		
 	}
 	
 	if(output != NULL)
@@ -1124,31 +1130,17 @@ void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var
 }
 
 
-//typedef int8_T (*int8conv_T)(void*, size_t);
-//
-//
-//int8_T msh_TCInt32ToInt8(void* v_in, size_t offset)
-//{
-//	int32_T* in = v_in;
-//	return (int8_T)((*(in + offset) > INT8_MAX)? INT8_MAX : *(in + offset));
-//}
-
-
 /** meta routines **/
 
-#define VO_FCN_NAME(OP, TYPEN) VO_FCN_NAME_(OP, TYPEN)
-#define VO_FCN_RNAME(OP, TYPEN) VO_FCN_RNAME_(OP, TYPEN)
-#define VO_FCN_ANAME(TYPEN) VO_FCN_ANAME_(TYPEN)
-#define VO_FCN_CTCNAME(TYPEN) VO_FCN_CTCNAME_(TYPEN)
-#define VO_FCN_TCNAME(TYPEN1, TYPEN2) VO_FCN_TCNAME_(TYPEN1, TYPEN2)
-
-#define VO_FCN_RNAME2(OP, TYPEN1, TYPEN2) msh_##OP##TYPEN2##To##TYPEN1##Runner
-
-#define VO_FCN_NAME_(OP, TYPEN) msh_##OP##TYPEN
+#define VO_FCN_FNAME_(OP, TYPEN) msh_##OP##TYPEN
 #define VO_FCN_RNAME_(OP, TYPEN) msh_##OP##TYPEN##Runner
-#define VO_FCN_ANAME_(TYPEN) msh_AtomicCompareSet##TYPEN
 #define VO_FCN_CTCNAME_(TYPEN) msh_Choose##TYPEN##Converter
 #define VO_FCN_TCNAME_(TYPEN1, TYPEN2) msh_TC##TYPEN2##To##TYPEN1
+
+#define VO_FCN_FNAME(OP, TYPEN) VO_FCN_FNAME_(OP, TYPEN)
+#define VO_FCN_RNAME(OP, TYPEN) VO_FCN_RNAME_(OP, TYPEN)
+#define VO_FCN_CTCNAME(TYPEN) VO_FCN_CTCNAME_(TYPEN)
+#define VO_FCN_TCNAME(TYPEN1, TYPEN2) VO_FCN_TCNAME_(TYPEN1, TYPEN2)
 
 #define FW_INT_TYPEC(SIZE) int##SIZE##conv_T
 #define FW_INT_TYPEN(SIZE) Int##SIZE
@@ -1157,8 +1149,7 @@ void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var
 #define FW_INT_MIN(SIZE) INT##SIZE##_MIN
 
 #define FW_INT_FCN_RNAME(OP, SIZE) VO_FCN_RNAME(OP, FW_INT_TYPEN(SIZE))
-#define FW_INT_FCN_NAME(OP, SIZE) VO_FCN_NAME(OP, FW_INT_TYPEN(SIZE))
-#define FW_INT_FCN_ANAME(SIZE) VO_FCN_ANAME(OP, FW_INT_TYPEN(SIZE))
+#define FW_INT_FCN_FNAME(OP, SIZE) VO_FCN_FNAME(OP, FW_INT_TYPEN(SIZE))
 #define FW_INT_FCN_CTCNAME(SIZE) VO_FCN_CTCNAME(FW_INT_TYPEN(SIZE))
 #define FW_II_FCN_TCNAME(SIZE1,SIZE2) VO_FCN_TCNAME(FW_INT_TYPEN(SIZE1), FW_INT_TYPEN(SIZE2))
 #define FW_IU_FCN_TCNAME(SIZE1,SIZE2) VO_FCN_TCNAME(FW_INT_TYPEN(SIZE1), FW_UINT_TYPEN(SIZE2))
@@ -1169,8 +1160,7 @@ void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var
 #define FW_UINT_MAX(SIZE) UINT##SIZE##_MAX
 
 #define FW_UINT_FCN_RNAME(OP, SIZE) VO_FCN_RNAME(OP, FW_UINT_TYPEN(SIZE))
-#define FW_UINT_FCN_NAME(OP, SIZE) VO_FCN_NAME(OP, FW_UINT_TYPEN(SIZE))
-#define FW_UINT_FCN_ANAME(SIZE) VO_FCN_ANAME(OP, FW_UINT_TYPEN(SIZE))
+#define FW_UINT_FCN_FNAME(OP, SIZE) VO_FCN_FNAME(OP, FW_UINT_TYPEN(SIZE))
 #define FW_UINT_FCN_CTCNAME(SIZE) VO_FCN_CTCNAME(FW_UINT_TYPEN(SIZE))
 #define FW_UU_FCN_TCNAME(SIZE1,SIZE2) VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE1), FW_UINT_TYPEN(SIZE2))
 #define FW_UI_FCN_TCNAME(SIZE1,SIZE2) VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE1), FW_INT_TYPEN(SIZE2))
@@ -1311,6 +1301,7 @@ static FW_INT_TYPEC(SIZE) FW_INT_FCN_CTCNAME(SIZE)(mxClassID cid) \
 		case(mxDOUBLE_CLASS): return VO_FCN_TCNAME(FW_INT_TYPEN(SIZE), Double); \
 		default: meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "TypeConversionError", "Invalid variable conversion."); \
 	} \
+	return 0; \
 }
 #else
 #define FW_TC_INT_CONV_DEF(SIZE) \
@@ -1329,6 +1320,7 @@ static FW_INT_TYPEC(SIZE) FW_INT_FCN_CTCNAME(SIZE)(mxClassID cid) \
 		case(mxDOUBLE_CLASS): return VO_FCN_TCNAME(FW_INT_TYPEN(SIZE), Double); \
 		default: meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "TypeConversionError", "Invalid variable conversion."); \
 	} \
+	return 0; \
 }
 #endif
 
@@ -1399,6 +1391,7 @@ static FW_UINT_TYPEC(SIZE) FW_UINT_FCN_CTCNAME(SIZE)(mxClassID cid) \
 		case(mxDOUBLE_CLASS): return VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE), Double); \
 		default: meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "TypeConversionError", "Invalid variable conversion."); \
 	} \
+	return 0; \
 }
 #else
 #define FW_TC_INT_CONV_DEF(SIZE) \
@@ -1417,6 +1410,7 @@ static FW_UINT_TYPEC(SIZE) FW_UINT_FCN_CTCNAME(SIZE)(mxClassID cid) \
 		case(mxDOUBLE_CLASS): return VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE), Double); \
 		default: meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "TypeConversionError", "Invalid variable conversion."); \
 	} \
+	return 0; \
 }
 #endif
 
@@ -1500,6 +1494,7 @@ static singleconv_T VO_FCN_CTCNAME(Single)(mxClassID cid)
 		case(mxDOUBLE_CLASS): return VO_FCN_TCNAME(Single, Double);
 		default: meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "TypeConversionError", "Invalid variable conversion.");
 	}
+	return 0;
 }
 
 
@@ -1523,10 +1518,12 @@ static doubleconv_T VO_FCN_CTCNAME(Double)(mxClassID cid)
 		case(mxDOUBLE_CLASS): return VO_FCN_TCNAME(Double, Double);
 		default: meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "TypeConversionError", "Invalid variable conversion.");
 	}
+	return 0;
 }
 
 
-#define UNARY_OP_RUNNER(RNAME, NAME, TYPE_ACCUM, ANAME)   \
+
+#define UNARY_OP_RUNNER(RNAME, NAME, TYPE_ACCUM, CASNAME)   \
 static void RNAME(void* v_accum, long opts) \
 {                                                  \
 	size_t i;                                     \
@@ -1540,7 +1537,7 @@ static void RNAME(void* v_accum, long opts) \
 			{                                                       \
 				old_val = wide_accum->input[i];                    \
 				new_val = NAME(old_val);          \
-			} while(ANAME(wide_accum->input + i, old_val, new_val) != old_val); \
+			} while(CASNAME(wide_accum->input + i, old_val, new_val) != old_val); \
 		}                                             \
 	} \
 	else \
@@ -1553,61 +1550,10 @@ static void RNAME(void* v_accum, long opts) \
 }
 
 #define UNARY_OP_RUNNER_METADEF(OP, TYPE, TYPEN) \
-UNARY_OP_RUNNER(VO_FCN_RNAME(OP, TYPEN), VO_FCN_NAME(OP, TYPEN), TYPE, VO_FCN_ANAME(TYPEN))
+UNARY_OP_RUNNER(VO_FCN_RNAME(OP, TYPEN), VO_FCN_FNAME(OP, TYPEN), TYPE, VO_FCN_CASNAME(TYPEN))
 
-#define BINARY_OP_RUNNER(RNAME, NAME, TYPE, ANAME)           \
-static void RNAME(void* v_accum, void* v_in, long opts)                      \
-{                                                                           \
-	size_t i;                                                              \
-	TYPE new_val, old_val;						                \
-	WideInput_T(TYPE)* wide_accum = v_accum;					 \
-	WideInput_T(TYPE)* wide_in    = v_in;                            \
-	if(wide_in->num_elems == 1) 						                \
-	{                                                                      \
-		if(opts & MSH_USE_ATOMIC_OPS) 					           \
-		{                                                                 \
-			for(i = 0; i < wide_accum->num_elems; i++)                               \
-			{                                                            \
-				do                                                      \
-				{                                                       \
-					old_val = wide_accum->input[i];                    \
-					new_val = NAME(old_val, *wide_in->input);          \
-				} while(ANAME(wide_accum->input + i, old_val, new_val) != old_val); \
-			}                                                            \
-		}                                                                 \
-		else                                                              \
-		{                                                                 \
-			for(i = 0; i < wide_accum->num_elems; i++)                               \
-			{                                                            \
-				wide_accum->input[i] = NAME(wide_accum->input[i], *wide_in->input);             \
-			}                                                            \
-		}                                                                 \
-	}                                                                      \
-	else                                                                   \
-	{                                                                      \
-		if(opts & MSH_USE_ATOMIC_OPS) 					 \
-		{                                                                 \
-			for(i = 0; i < wide_accum->num_elems; i++)                               \
-			{                                                            \
-				do                                                      \
-				{                                                       \
-					old_val = wide_accum->input[i];                                \
-					new_val = NAME(old_val, wide_in->input[i]);        \
-				} while(ANAME(wide_accum->input + i, old_val, new_val) != old_val); \
-			}                                                            \
-		}                                                                 \
-		else                                                              \
-		{                                                                 \
-			for(i = 0; i < wide_accum->num_elems; i++)                               \
-			{                                                            \
-				wide_accum->input[i] = NAME(wide_accum->input[i], wide_in->input[i]);           \
-			}                                                            \
-		}                                                                 \
-	}                                                                      \
-}
-
-#define BINARY_OP_RUNNER2(OP, TYPE, TYPEC, TYPEN)           \
-static void VO_FCN_RNAME(OP,TYPEN)(void* v_accum, void* v_in, long opts) \
+#define BINARY_OP_RUNNER(RNAME, NAME, CASNAME, CTCNAME, TYPE, TYPEC)           \
+static void RNAME(void* v_accum, void* v_in, long opts) \
 { \
 	size_t i; \
 	TYPEC in_conv; \
@@ -1618,7 +1564,7 @@ static void VO_FCN_RNAME(OP,TYPEN)(void* v_accum, void* v_in, long opts) \
 	{ \
 		if(wide_accum->mxtype != wide_in->mxtype) \
 		{ \
-			in_conv = VO_FCN_CTCNAME(TYPEN)(wide_in->mxtype); \
+			in_conv = CTCNAME(wide_in->mxtype); \
 			static_val = in_conv(wide_in->input, 0); \
 		} \
 		else \
@@ -1632,15 +1578,15 @@ static void VO_FCN_RNAME(OP,TYPEN)(void* v_accum, void* v_in, long opts) \
 				do \
 				{ \
 					old_val = wide_accum->input[i]; \
-					new_val = VO_FCN_NAME(OP,TYPEN)(old_val, static_val); \
-				} while(VO_FCN_ANAME(TYPEN)(wide_accum->input + i, old_val, new_val) != old_val); \
+					new_val = NAME(old_val, static_val); \
+				} while(CASNAME(wide_accum->input + i, old_val, new_val) != old_val); \
 			} \
 		} \
 		else \
 		{ \
 			for(i = 0; i < wide_accum->num_elems; i++) \
 			{ \
-				wide_accum->input[i] = VO_FCN_NAME(OP,TYPEN)(wide_accum->input[i], static_val); \
+				wide_accum->input[i] = NAME(wide_accum->input[i], static_val); \
 			} \
 		} \
 	} \
@@ -1648,7 +1594,7 @@ static void VO_FCN_RNAME(OP,TYPEN)(void* v_accum, void* v_in, long opts) \
 	{ \
 		if(wide_accum->mxtype != wide_in->mxtype) \
 		{ \
-			in_conv = VO_FCN_CTCNAME(TYPEN)(wide_in->mxtype); \
+			in_conv = CTCNAME(wide_in->mxtype); \
 			if(opts & MSH_USE_ATOMIC_OPS) \
 			{ \
 				for(i = 0; i < wide_accum->num_elems; i++) \
@@ -1656,15 +1602,15 @@ static void VO_FCN_RNAME(OP,TYPEN)(void* v_accum, void* v_in, long opts) \
 					do \
 					{ \
 						old_val = wide_accum->input[i]; \
-						new_val = VO_FCN_NAME(OP,TYPEN)(old_val, in_conv(wide_in->input, i)); \
-					} while(VO_FCN_ANAME(TYPEN)(wide_accum->input + i, old_val, new_val) != old_val); \
+						new_val = NAME(old_val, in_conv(wide_in->input, i)); \
+					} while(CASNAME(wide_accum->input + i, old_val, new_val) != old_val); \
 				} \
 			} \
 			else \
 			{ \
 				for(i = 0; i < wide_accum->num_elems; i++) \
 				{ \
-					wide_accum->input[i] = VO_FCN_NAME(OP,TYPEN)(wide_accum->input[i], in_conv(wide_in->input, i)); \
+					wide_accum->input[i] = NAME(wide_accum->input[i], in_conv(wide_in->input, i)); \
 				} \
 			} \
 		} \
@@ -1677,23 +1623,23 @@ static void VO_FCN_RNAME(OP,TYPEN)(void* v_accum, void* v_in, long opts) \
 					do \
 					{ \
 						old_val = wide_accum->input[i]; \
-						new_val = VO_FCN_NAME(OP,TYPEN)(old_val, wide_in->input[i]); \
-					} while(VO_FCN_ANAME(TYPEN)(wide_accum->input + i, old_val, new_val) != old_val); \
+						new_val = NAME(old_val, wide_in->input[i]); \
+					} while(CASNAME(wide_accum->input + i, old_val, new_val) != old_val); \
 				} \
 			} \
 			else \
 			{ \
 				for(i = 0; i < wide_accum->num_elems; i++) \
 				{ \
-					wide_accum->input[i] = VO_FCN_NAME(TYPEN)(wide_accum->input[i], wide_in->input[i]); \
+					wide_accum->input[i] = NAME(wide_accum->input[i], wide_in->input[i]); \
 				} \
 			} \
 		} \
 	} \
 }
 
-#define BINARY_OP_RUNNER_METADEF(OP, TYPE, TYPEN) \
-BINARY_OP_RUNNER(VO_FCN_RNAME(OP, TYPEN), VO_FCN_NAME(OP, TYPEN), TYPE, VO_FCN_ANAME(TYPEN))
+#define BINARY_OP_RUNNER_METADEF(OP, TYPE, TYPEN, TYPEC) \
+BINARY_OP_RUNNER(VO_FCN_RNAME(OP,TYPEN), VO_FCN_FNAME(OP,TYPEN), VO_FCN_CASNAME(TYPEN), VO_FCN_CTCNAME(TYPEN), TYPE, TYPEC)
 
 /** Signed integer arithmetic
  * We assume here that ints are two's complement, and
@@ -1709,7 +1655,7 @@ static TYPE NAME(TYPE in)                         \
 	return (UTYPE)in >> SIZEM1;                  \
 }
 
-#define SGNBIT_INT_METADEF(SIZE) SGNBIT_INT_DEF(FW_INT_FCN_NAME(Sgn, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1));
+#define SGNBIT_INT_METADEF(SIZE) SGNBIT_INT_DEF(FW_INT_FCN_FNAME(Sgn, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1));
 
 SGNBIT_INT_METADEF(8);
 SGNBIT_INT_METADEF(16);
@@ -1734,7 +1680,7 @@ static TYPE NAME(TYPE in)                        \
 }
 
 #define ABS_INT_METADEF(SIZE)                                                           \
-ABS_INT_DEF(FW_INT_FCN_NAME(Abs, SIZE), FW_INT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
+ABS_INT_DEF(FW_INT_FCN_FNAME(Abs, SIZE), FW_INT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
 UNARY_OP_RUNNER_METADEF(Abs, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
 
 ABS_INT_METADEF(8);
@@ -1759,8 +1705,8 @@ static TYPE NAME(TYPE augend, TYPE addend)              \
 }
 
 #define ADD_INT_METADEF(SIZE)                                                                               \
-ADD_INT_DEF(FW_INT_FCN_NAME(Add, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Add, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
+ADD_INT_DEF(FW_INT_FCN_FNAME(Add, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Add, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPEC(SIZE));
 
 ADD_INT_METADEF(8);
 ADD_INT_METADEF(16);
@@ -1785,8 +1731,8 @@ static TYPE NAME(TYPE minuend, TYPE subtrahend)         \
 }
 
 #define SUB_INT_METADEF(SIZE)                                                                               \
-SUB_INT_DEF(FW_INT_FCN_NAME(Sub, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Sub, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
+SUB_INT_DEF(FW_INT_FCN_FNAME(Sub, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Sub, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPEC(SIZE));
 
 SUB_INT_METADEF(8);
 SUB_INT_METADEF(16);
@@ -1813,8 +1759,8 @@ static TYPE NAME(TYPE mul1, TYPE mul2)                   \
 }
 
 #define MUL_INT_METADEF(SIZE, PSIZE)                                                                                \
-MUL_INT_DEF(FW_INT_FCN_NAME(Mul, SIZE), FW_INT_TYPE(SIZE), FW_INT_TYPE(PSIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Mul, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
+MUL_INT_DEF(FW_INT_FCN_FNAME(Mul, SIZE), FW_INT_TYPE(SIZE), FW_INT_TYPE(PSIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Mul, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPEC(SIZE));
 
 MUL_INT_METADEF(8, 16);
 MUL_INT_METADEF(16, 32);
@@ -1828,8 +1774,8 @@ static int32_T msh_MulInt32(int32_T m1, int32_T m2)
 	
 	int      ret_is_pos   = ((m1 < 0) == (m2 < 0));
 	
-	uint32_T m1_abs       = (uint32_T)FW_INT_FCN_NAME(Abs, 32)(m1);
-	uint32_T m2_abs       = (uint32_T)FW_INT_FCN_NAME(Abs, 32)(m2);
+	uint32_T m1_abs       = (uint32_T)FW_INT_FCN_FNAME(Abs, 32)(m1);
+	uint32_T m2_abs       = (uint32_T)FW_INT_FCN_FNAME(Abs, 32)(m2);
 	
 	uint32_T m1a_u16      = m1_abs >> 16;
 	uint32_T m2a_u16      = m2_abs >> 16;
@@ -1908,7 +1854,7 @@ static int32_T msh_MulInt32(int32_T m1, int32_T m2)
 	
 }
 
-BINARY_OP_RUNNER_METADEF(Mul, FW_INT_TYPE(32), FW_INT_TYPEN(32));
+BINARY_OP_RUNNER_METADEF(Mul, FW_INT_TYPE(32), FW_INT_TYPEN(32), FW_INT_TYPEC(32));
 
 #else
 
@@ -1922,8 +1868,8 @@ static int64_T msh_MulInt64(int64_T m1, int64_T m2)
 	
 	int      ret_is_pos   = ((m1 < 0) == (m2 < 0));
 	
-	uint64_T m1_abs       = (uint64_T)FW_INT_FCN_NAME(Abs, 64)(m1);
-	uint64_T m2_abs       = (uint64_T)FW_INT_FCN_NAME(Abs, 64)(m2);
+	uint64_T m1_abs       = (uint64_T)FW_INT_FCN_FNAME(Abs, 64)(m1);
+	uint64_T m2_abs       = (uint64_T)FW_INT_FCN_FNAME(Abs, 64)(m2);
 	
 	uint64_T m1a_u32      = m1_abs >> 32;
 	uint64_T m2a_u32      = m2_abs >> 32;
@@ -2002,7 +1948,7 @@ static int64_T msh_MulInt64(int64_T m1, int64_T m2)
 	
 }
 
-BINARY_OP_RUNNER_METADEF(Mul, FW_INT_TYPE(64), FW_INT_TYPEN(64));
+BINARY_OP_RUNNER_METADEF(Mul, FW_INT_TYPE(64), FW_INT_TYPEN(64), FW_INT_TYPEC(64));
 
 #endif
 
@@ -2037,28 +1983,28 @@ static TYPE NAME(TYPE numer, TYPE denom)                                        
 		else                                                                   \
 		{                                                                      \
 			ret = numer/denom;                                                \
-			overflow_check = -FW_INT_FCN_NAME(Abs, SIZE)(numer % denom);      \
+			overflow_check = -FW_INT_FCN_FNAME(Abs, SIZE)(numer % denom);      \
 			if(overflow_check <= denom - overflow_check)                      \
 			{                                                                 \
-				return ret - (1 - (FW_INT_FCN_NAME(Sgn, SIZE)(numer) << 1)); \
+				return ret - (1 - (FW_INT_FCN_FNAME(Sgn, SIZE)(numer) << 1)); \
 			}                                                                 \
 		}                                                                      \
 	}                                                                           \
 	else                                                                        \
 	{                                                                           \
 		ret = numer/denom;                                                     \
-		overflow_check = FW_INT_FCN_NAME(Abs, SIZE)(numer % denom);            \
+		overflow_check = FW_INT_FCN_FNAME(Abs, SIZE)(numer % denom);            \
 		if(overflow_check >= denom - overflow_check)                           \
 		{                                                                      \
-			return ret + (1 - (FW_INT_FCN_NAME(Sgn, SIZE)(numer) << 1));      \
+			return ret + (1 - (FW_INT_FCN_FNAME(Sgn, SIZE)(numer) << 1));      \
 		}                                                                      \
 	}                                                                           \
 	return ret;                                                                 \
 }
 
 #define DIV_INT_METADEF(SIZE)                                                                         \
-DIV_INT_DEF(FW_INT_FCN_NAME(Div, SIZE), SIZE, FW_INT_TYPE(SIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Div, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
+DIV_INT_DEF(FW_INT_FCN_FNAME(Div, SIZE), SIZE, FW_INT_TYPE(SIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Div, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPEC(SIZE));
 
 DIV_INT_METADEF(8);
 DIV_INT_METADEF(16);
@@ -2076,8 +2022,8 @@ static TYPE NAME(TYPE numer, TYPE denom)     \
 }
 
 #define REM_INT_METADEF(SIZE)                               \
-REM_INT_DEF(FW_INT_FCN_NAME(Rem, SIZE), FW_INT_TYPE(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Rem, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
+REM_INT_DEF(FW_INT_FCN_FNAME(Rem, SIZE), FW_INT_TYPE(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Rem, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPEC(SIZE));
 
 REM_INT_METADEF(8);
 REM_INT_METADEF(16);
@@ -2101,8 +2047,8 @@ static TYPE NAME(TYPE numer, TYPE denom)                          \
 }
 
 #define MOD_INT_METADEF(SIZE)                               \
-MOD_INT_DEF(FW_INT_FCN_NAME(Mod, SIZE), FW_INT_TYPE(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Mod, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
+MOD_INT_DEF(FW_INT_FCN_FNAME(Mod, SIZE), FW_INT_TYPE(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Mod, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPEC(SIZE));
 
 MOD_INT_METADEF(8);
 MOD_INT_METADEF(16);
@@ -2124,7 +2070,7 @@ static TYPE NAME(TYPE in)                         \
 }
 
 #define NEG_INT_METADEF(SIZE)                                                                   \
-NEG_INT_DEF(FW_INT_FCN_NAME(Neg, SIZE), FW_INT_TYPE(SIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE)); \
+NEG_INT_DEF(FW_INT_FCN_FNAME(Neg, SIZE), FW_INT_TYPE(SIZE), FW_INT_MAX(SIZE), FW_INT_MIN(SIZE)); \
 UNARY_OP_RUNNER_METADEF(Neg, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
 
 NEG_INT_METADEF(8);
@@ -2136,15 +2082,15 @@ NEG_INT_METADEF(64);
 
 /** SIGNED RIGHT SHIFT **/
 
-#define ARS_INT_DEF(NAME, TYPE)          \
-static TYPE NAME(TYPE in, int num_shift) \
-{                                        \
-	return in >> num_shift;             \
+#define ARS_INT_DEF(NAME, TYPE)           \
+static TYPE NAME(TYPE in, TYPE num_shift) \
+{                                         \
+	return in >> num_shift;              \
 }
 
 #define ARS_INT_METADEF(SIZE)                               \
-ARS_INT_DEF(FW_INT_FCN_NAME(ARS, SIZE), FW_INT_TYPE(SIZE)); \
-BINARY_OP_RUNNER_METADEF(ARS, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
+ARS_INT_DEF(FW_INT_FCN_FNAME(ARS, SIZE), FW_INT_TYPE(SIZE)); \
+BINARY_OP_RUNNER_METADEF(ARS, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPEC(SIZE));
 
 ARS_INT_METADEF(8);
 ARS_INT_METADEF(16);
@@ -2155,15 +2101,15 @@ ARS_INT_METADEF(64);
 
 /** SIGNED LEFT SHIFT **/
 
-#define ALS_INT_DEF(NAME, TYPE)          \
-static TYPE NAME(TYPE in, int num_shift) \
-{                                        \
-	return in << num_shift;             \
+#define ALS_INT_DEF(NAME, TYPE)           \
+static TYPE NAME(TYPE in, TYPE num_shift) \
+{                                         \
+	return in << num_shift;              \
 }
 
 #define ALS_INT_METADEF(SIZE)                               \
-ALS_INT_DEF(FW_INT_FCN_NAME(ALS, SIZE), FW_INT_TYPE(SIZE)); \
-BINARY_OP_RUNNER_METADEF(ALS, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
+ALS_INT_DEF(FW_INT_FCN_FNAME(ALS, SIZE), FW_INT_TYPE(SIZE)); \
+BINARY_OP_RUNNER_METADEF(ALS, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPEC(SIZE));
 
 ALS_INT_METADEF(8);
 ALS_INT_METADEF(16);
@@ -2186,7 +2132,7 @@ static TYPE NAME(TYPE in)        \
 }
 
 #define ABS_UINT_METADEF(SIZE)                                 \
-ABS_UINT_DEF(FW_UINT_FCN_NAME(Abs, SIZE), FW_UINT_TYPE(SIZE)); \
+ABS_UINT_DEF(FW_UINT_FCN_FNAME(Abs, SIZE), FW_UINT_TYPE(SIZE)); \
 UNARY_OP_RUNNER_METADEF(Abs, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
 
 ABS_UINT_METADEF(8);
@@ -2206,8 +2152,8 @@ static TYPE NAME(TYPE augend, TYPE addend) \
 }
 
 #define ADD_UINT_METADEF(SIZE)                                                                               \
-ADD_UINT_DEF(FW_UINT_FCN_NAME(Add, SIZE), FW_UINT_TYPE(SIZE), FW_UINT_MAX(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Add, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
+ADD_UINT_DEF(FW_UINT_FCN_FNAME(Add, SIZE), FW_UINT_TYPE(SIZE), FW_UINT_MAX(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Add, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_TYPEC(SIZE));
 
 ADD_UINT_METADEF(8);
 ADD_UINT_METADEF(16);
@@ -2226,8 +2172,8 @@ static TYPE NAME(TYPE minuend, TYPE subtrahend) \
 }
 
 #define SUB_UINT_METADEF(SIZE)                                                                               \
-SUB_UINT_DEF(FW_UINT_FCN_NAME(Sub, SIZE), FW_UINT_TYPE(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Sub, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
+SUB_UINT_DEF(FW_UINT_FCN_FNAME(Sub, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Sub, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_TYPEC(SIZE));
 
 SUB_UINT_METADEF(8);
 SUB_UINT_METADEF(16);
@@ -2250,8 +2196,8 @@ static TYPE NAME(TYPE mul1, TYPE mul2)               \
 }
 
 #define MUL_UINT_METADEF(SIZE, PSIZE)                                                                  \
-MUL_UINT_DEF(FW_UINT_FCN_NAME(Mul, SIZE), FW_UINT_TYPE(SIZE), FW_UINT_TYPE(PSIZE), FW_UINT_MAX(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Mul, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
+MUL_UINT_DEF(FW_UINT_FCN_FNAME(Mul, SIZE), FW_UINT_TYPE(SIZE), FW_UINT_TYPE(PSIZE), FW_UINT_MAX(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Mul, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_TYPEC(SIZE));
 
 MUL_UINT_METADEF(8, 16);
 MUL_UINT_METADEF(16, 32);
@@ -2285,7 +2231,7 @@ static uint32_T msh_MulUInt32(uint32_T m1, uint32_T m2)
 		m1_l16 = (uint16_T)m1;
 		m1l_m2l = m1_l16 * m2_l16;
 		
-		return FW_UINT_FCN_NAME(Add, 32)(m1u_m2l, m1l_m2l);
+		return FW_UINT_FCN_FNAME(Add, 32)(m1u_m2l, m1l_m2l);
 		
 	}
 	else if(m2_u16)
@@ -2303,7 +2249,7 @@ static uint32_T msh_MulUInt32(uint32_T m1, uint32_T m2)
 		m2_l16 = (uint16_T)m2;
 		m1l_m2l = m1_l16 * m2_l16;
 		
-		return FW_UINT_FCN_NAME(Add, 32)(m1l_m2l, m1l_m2u);
+		return FW_UINT_FCN_FNAME(Add, 32)(m1l_m2l, m1l_m2u);
 		
 	}
 	else
@@ -2313,7 +2259,7 @@ static uint32_T msh_MulUInt32(uint32_T m1, uint32_T m2)
 	
 }
 
-BINARY_OP_RUNNER_METADEF(Mul, FW_UINT_TYPE(32), FW_UINT_TYPEN(32));
+BINARY_OP_RUNNER_METADEF(Mul, FW_UINT_TYPE(32), FW_UINT_TYPEN(32), FW_UINT_TYPEC(32));
 
 #else
 MUL_UINT_METADEF(32, 64);
@@ -2346,7 +2292,7 @@ static uint64_T msh_MulUInt64(uint64_T m1, uint64_T m2)
 		m1_l32 = (uint32_T)m1;
 		m1l_m2l = m1_l32 * m2_l32;
 		
-		return FW_UINT_FCN_NAME(Add, 64)(m1u_m2l, m1l_m2l);
+		return FW_UINT_FCN_FNAME(Add, 64)(m1u_m2l, m1l_m2l);
 		
 	}
 	else if(m2_u32)
@@ -2364,7 +2310,7 @@ static uint64_T msh_MulUInt64(uint64_T m1, uint64_T m2)
 		m2_l32 = (uint32_T)m2;
 		m1l_m2l = m1_l32 * m2_l32;
 		
-		return FW_UINT_FCN_NAME(Add, 64)(m1l_m2l, m1l_m2u);
+		return FW_UINT_FCN_FNAME(Add, 64)(m1l_m2l, m1l_m2u);
 		
 	}
 	else
@@ -2374,7 +2320,7 @@ static uint64_T msh_MulUInt64(uint64_T m1, uint64_T m2)
 	
 }
 
-BINARY_OP_RUNNER_METADEF(Mul, FW_UINT_TYPE(64), FW_UINT_TYPEN(64));
+BINARY_OP_RUNNER_METADEF(Mul, FW_UINT_TYPE(64), FW_UINT_TYPEN(64), FW_UINT_TYPEC(64));
 
 #endif
 
@@ -2394,8 +2340,8 @@ static TYPE NAME(TYPE numer, TYPE denom)         \
 }
 
 #define DIV_UINT_METADEF(SIZE)                                                                         \
-DIV_UINT_DEF(FW_UINT_FCN_NAME(Div, SIZE), FW_UINT_TYPE(SIZE), FW_UINT_MAX(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Div, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
+DIV_UINT_DEF(FW_UINT_FCN_FNAME(Div, SIZE), FW_UINT_TYPE(SIZE), FW_UINT_MAX(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Div, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_TYPEC(SIZE));
 
 DIV_UINT_METADEF(8);
 DIV_UINT_METADEF(16);
@@ -2413,8 +2359,8 @@ static TYPE NAME(TYPE numer, TYPE denom)     \
 }
 
 #define REM_UINT_METADEF(SIZE)                               \
-REM_UINT_DEF(FW_UINT_FCN_NAME(Rem, SIZE), FW_UINT_TYPE(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Rem, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
+REM_UINT_DEF(FW_UINT_FCN_FNAME(Rem, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Rem, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_TYPEC(SIZE));
 
 REM_UINT_METADEF(8);
 REM_UINT_METADEF(16);
@@ -2432,8 +2378,8 @@ static TYPE NAME(TYPE numer, TYPE denom)         \
 }
 
 #define MOD_UINT_METADEF(SIZE)                                 \
-MOD_UINT_DEF(FW_UINT_FCN_NAME(Mod, SIZE), FW_UINT_TYPE(SIZE)); \
-BINARY_OP_RUNNER_METADEF(Mod, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
+MOD_UINT_DEF(FW_UINT_FCN_FNAME(Mod, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_OP_RUNNER_METADEF(Mod, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_TYPEC(SIZE));
 
 MOD_UINT_METADEF(8);
 MOD_UINT_METADEF(16);
@@ -2452,7 +2398,7 @@ static TYPE NAME(TYPE in)        \
 }
 
 #define NEG_UINT_METADEF(SIZE)                                 \
-NEG_UINT_DEF(FW_UINT_FCN_NAME(Neg, SIZE), FW_UINT_TYPE(SIZE)); \
+NEG_UINT_DEF(FW_UINT_FCN_FNAME(Neg, SIZE), FW_UINT_TYPE(SIZE)); \
 UNARY_OP_RUNNER_METADEF(Neg, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
 
 NEG_UINT_METADEF(8);
@@ -2464,15 +2410,15 @@ NEG_UINT_METADEF(64);
 
 /** UNSIGNED RIGHT SHIFT **/
 
-#define ARS_UINT_DEF(NAME, TYPE)              \
-static TYPE NAME(TYPE in, unsigned num_shift) \
-{                                             \
-	return in >> num_shift;                  \
+#define ARS_UINT_DEF(NAME, TYPE)          \
+static TYPE NAME(TYPE in, TYPE num_shift) \
+{                                         \
+	return in >> num_shift;              \
 }
 
 #define ARS_UINT_METADEF(SIZE)                                 \
-ARS_UINT_DEF(FW_UINT_FCN_NAME(ARS, SIZE), FW_UINT_TYPE(SIZE)); \
-BINARY_OP_RUNNER_METADEF(ARS, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
+ARS_UINT_DEF(FW_UINT_FCN_FNAME(ARS, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_OP_RUNNER_METADEF(ARS, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_TYPEC(SIZE));
 
 ARS_UINT_METADEF(8);
 ARS_UINT_METADEF(16);
@@ -2483,15 +2429,15 @@ ARS_UINT_METADEF(64);
 
 /** UNSIGNED LEFT SHIFT **/
 
-#define ALS_UINT_DEF(NAME, TYPE)              \
-static TYPE NAME(TYPE in, unsigned num_shift) \
-{                                             \
-	return in << num_shift;                  \
+#define ALS_UINT_DEF(NAME, TYPE)          \
+static TYPE NAME(TYPE in, TYPE num_shift) \
+{                                         \
+	return in << num_shift;              \
 }
 
 #define ALS_UINT_METADEF(SIZE)                                 \
-ALS_UINT_DEF(FW_UINT_FCN_NAME(ALS, SIZE), FW_UINT_TYPE(SIZE)); \
-BINARY_OP_RUNNER_METADEF(ALS, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
+ALS_UINT_DEF(FW_UINT_FCN_FNAME(ALS, SIZE), FW_UINT_TYPE(SIZE)); \
+BINARY_OP_RUNNER_METADEF(ALS, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_TYPEC(SIZE));
 
 ALS_UINT_METADEF(8);
 ALS_UINT_METADEF(16);
@@ -2523,28 +2469,28 @@ static mxSingle msh_AddSingle(mxSingle accum, mxSingle in)
 {
 	return accum + in;
 }
-BINARY_OP_RUNNER_METADEF(Add, mxSingle, Single);
+BINARY_OP_RUNNER_METADEF(Add, mxSingle, Single, singleconv_T);
 
 
 static mxSingle msh_SubSingle(mxSingle accum, mxSingle in)
 {
 	return accum - in;
 }
-BINARY_OP_RUNNER_METADEF(Sub, mxSingle, Single);
+BINARY_OP_RUNNER_METADEF(Sub, mxSingle, Single, singleconv_T);
 
 
 static mxSingle msh_MulSingle(mxSingle accum, mxSingle in)
 {
 	return accum * in;
 }
-BINARY_OP_RUNNER_METADEF(Mul, mxSingle, Single);
+BINARY_OP_RUNNER_METADEF(Mul, mxSingle, Single, singleconv_T);
 
 
 static mxSingle msh_DivSingle(mxSingle accum, mxSingle in)
 {
 	return accum / in;
 }
-BINARY_OP_RUNNER_METADEF(Div, mxSingle, Single);
+BINARY_OP_RUNNER_METADEF(Div, mxSingle, Single, singleconv_T);
 
 
 static mxSingle msh_RemSingle(mxSingle accum, mxSingle in)
@@ -2555,7 +2501,7 @@ static mxSingle msh_RemSingle(mxSingle accum, mxSingle in)
 	return (mxSingle)fmod((double)accum, (double)in);
 #endif
 }
-BINARY_OP_RUNNER_METADEF(Rem, mxSingle, Single);
+BINARY_OP_RUNNER_METADEF(Rem, mxSingle, Single, singleconv_T);
 
 
 static mxSingle msh_ModSingle(mxSingle accum, mxSingle in)
@@ -2568,62 +2514,16 @@ static mxSingle msh_ModSingle(mxSingle accum, mxSingle in)
 	}
 	return accum;
 }
+BINARY_OP_RUNNER(msh_ModSingleRunnerW, VO_FCN_FNAME(Mod, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), mxSingle, singleconv_T);
 
 static void msh_ModSingleRunner(void* v_accum, void* v_in, long opts)
 {
-	size_t               i;
-	mxSingle             old_val, new_val;
-	
-	WideInput_T(single)* wide_accum = v_accum;
-	WideInput_T(single)* wide_in    = v_in;
-	
-	if(wide_in->num_elems == 1)
+	WideInput_T(single)* wide_in = v_in;
+	if(wide_in->num_elems == 1 && *wide_in->input == 0)
 	{
-		if(*wide_in->input == 0)
-		{
-			return;
-		}
-		
-		if(opts & MSH_USE_ATOMIC_OPS)
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				do
-				{
-					old_val = wide_accum->input[i];
-					new_val = msh_ModSingle(old_val, *wide_in->input);
-				} while(msh_AtomicCompareSetSingle(wide_accum->input + i, old_val, new_val) != old_val);
-			}
-		}
-		else
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				wide_accum->input[i] = msh_ModSingle(wide_accum->input[i], *wide_in->input);
-			}
-		}
+		return;
 	}
-	else
-	{
-		if(opts & MSH_USE_ATOMIC_OPS)
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				do
-				{
-					old_val = wide_accum->input[i];
-					new_val = msh_ModSingle(old_val, wide_in->input[i]);
-				} while(msh_AtomicCompareSetSingle(wide_accum->input + i, old_val, new_val) != old_val);
-			}
-		}
-		else
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				wide_accum->input[i] = msh_ModSingle(wide_accum->input[i], wide_in->input[i]);
-			}
-		}
-	}
+	msh_ModSingleRunnerW(v_accum, v_in, opts);
 }
 
 
@@ -2642,47 +2542,40 @@ static mxSingle msh_ARSSingle(mxSingle accum, mxSingle in)
 	return accum / (mxSingle)pow(2.0, (double)in);
 #endif
 }
+BINARY_OP_RUNNER(msh_ARSSingleRunnerW, VO_FCN_FNAME(ARS, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), mxSingle, singleconv_T);
 
 static void msh_ARSSingleRunner(void* v_accum, void* v_in, long opts)
 {
-	size_t               i;
-	mxSingle             mult, old_val, new_val;
+	mxSingle             mult, static_val;
+	singleconv_T         in_conv;
 	WideInput_T(single)  sing_in;
-	
 	WideInput_T(single)* wide_accum = v_accum;
 	WideInput_T(single)* wide_in    = v_in;
 	
 	if(wide_in->num_elems == 1)
 	{
+		if(wide_accum->mxtype != wide_in->mxtype)
+		{
+			in_conv = msh_ChooseSingleConverter(wide_in->mxtype);
+			static_val = in_conv(wide_in->input, 0);
+		}
+		else
+		{
+			static_val = *wide_in->input;
+		}
 #if __STDC_VERSION__ >= 199901L
-		mult = (float)powf(2.0, (float)*wide_in->input);
+		mult = (float)powf(2.0, (float)static_val);
 #else
-		mult = (mxSingle)pow(2.0, (double)*wide_in->input);
+		mult = (mxSingle)pow(2.0, (double)static_val);
 #endif
 		sing_in.input = &mult;
 		sing_in.num_elems = 1;
+		sing_in.mxtype = wide_accum->mxtype;
 		msh_DivSingleRunner(v_accum, &sing_in, opts);
 	}
 	else
 	{
-		if(opts & MSH_USE_ATOMIC_OPS)
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				do
-				{
-					old_val = wide_accum->input[i];
-					new_val = msh_ARSSingle(old_val, wide_in->input[i]);
-				} while(msh_AtomicCompareSetSingle(wide_accum->input + i, old_val, new_val) != old_val);
-			}
-		}
-		else
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				wide_accum->input[i] = msh_ARSSingle(wide_accum->input[i], wide_in->input[i]);
-			}
-		}
+		msh_ARSSingleRunnerW(v_accum, v_in, opts);
 	}
 }
 
@@ -2694,47 +2587,40 @@ static mxSingle msh_ALSSingle(mxSingle accum, mxSingle in)
 	return accum * (mxSingle)pow(2.0, (double)in);
 #endif
 }
+BINARY_OP_RUNNER(msh_ALSSingleRunnerW, VO_FCN_FNAME(ALS, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), mxSingle, singleconv_T);
 
 static void msh_ALSSingleRunner(void* v_accum, void* v_in, long opts)
 {
-	size_t               i;
-	mxSingle             mult, old_val, new_val;
+	mxSingle             mult, static_val;
+	singleconv_T         in_conv;
 	WideInput_T(single)  sing_in;
-	
 	WideInput_T(single)* wide_accum = v_accum;
 	WideInput_T(single)* wide_in    = v_in;
 	
 	if(wide_in->num_elems == 1)
 	{
+		if(wide_accum->mxtype != wide_in->mxtype)
+		{
+			in_conv = msh_ChooseSingleConverter(wide_in->mxtype);
+			static_val = in_conv(wide_in->input, 0);
+		}
+		else
+		{
+			static_val = *wide_in->input;
+		}
 #if __STDC_VERSION__ >= 199901L
-		mult = (float)powf(2.0, (float)*wide_in->input);
+		mult = (float)powf(2.0, (float)static_val);
 #else
-		mult = (mxSingle)pow(2.0, (double)*wide_in->input);
+		mult = (mxSingle)pow(2.0, (double)static_val);
 #endif
 		sing_in.input = &mult;
 		sing_in.num_elems = 1;
+		sing_in.mxtype = wide_accum->mxtype;
 		msh_MulSingleRunner(v_accum, &sing_in, opts);
 	}
 	else
 	{
-		if(opts & MSH_USE_ATOMIC_OPS)
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				do
-				{
-					old_val = wide_accum->input[i];
-					new_val = msh_ALSSingle(old_val, wide_in->input[i]);
-				} while(msh_AtomicCompareSetSingle(wide_accum->input + i, old_val, new_val) != old_val);
-			}
-		}
-		else
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				wide_accum->input[i] = msh_ALSSingle(wide_accum->input[i], wide_in->input[i]);
-			}
-		}
+		msh_ALSSingleRunnerW(v_accum, v_in, opts);
 	}
 }
 
@@ -2751,34 +2637,34 @@ static mxDouble msh_AddDouble(mxDouble accum, mxDouble in)
 {
 	return accum + in;
 }
-BINARY_OP_RUNNER_METADEF(Add, mxDouble, Double);
+BINARY_OP_RUNNER_METADEF(Add, mxDouble, Double, doubleconv_T);
 
 static mxDouble msh_SubDouble(mxDouble accum, mxDouble in)
 {
 	return accum - in;
 }
-BINARY_OP_RUNNER_METADEF(Sub, mxDouble, Double);
+BINARY_OP_RUNNER_METADEF(Sub, mxDouble, Double, doubleconv_T);
 
 
 static mxDouble msh_MulDouble(mxDouble accum, mxDouble in)
 {
 	return accum * in;
 }
-BINARY_OP_RUNNER_METADEF(Mul, mxDouble, Double);
+BINARY_OP_RUNNER_METADEF(Mul, mxDouble, Double, doubleconv_T);
 
 
 static mxDouble msh_DivDouble(mxDouble accum, mxDouble in)
 {
 	return accum / in;
 }
-BINARY_OP_RUNNER_METADEF(Div, mxDouble, Double);
+BINARY_OP_RUNNER_METADEF(Div, mxDouble, Double, doubleconv_T);
 
 
 static mxDouble msh_RemDouble(mxDouble accum, mxDouble in)
 {
 	return (mxDouble)fmod((double)accum, (double)in);
 }
-BINARY_OP_RUNNER_METADEF(Rem, mxDouble, Double);
+BINARY_OP_RUNNER_METADEF(Rem, mxDouble, Double, doubleconv_T);
 
 
 static mxDouble msh_ModDouble(mxDouble accum, mxDouble in)
@@ -2791,62 +2677,16 @@ static mxDouble msh_ModDouble(mxDouble accum, mxDouble in)
 	}
 	return accum;
 }
+BINARY_OP_RUNNER(msh_ModDoubleRunnerW, VO_FCN_FNAME(Mod, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), mxDouble, doubleconv_T);
 
 static void msh_ModDoubleRunner(void* v_accum, void* v_in, long opts)
 {
-	size_t               i;
-	mxDouble             old_val, new_val;
-	
-	WideInput_T(double)* wide_accum = v_accum;
-	WideInput_T(double)* wide_in    = v_in;
-	
-	if(wide_in->num_elems == 1)
+	WideInput_T(double)* wide_in = v_in;
+	if(wide_in->num_elems == 1 && *wide_in->input == 0)
 	{
-		if(*wide_in->input == 0)
-		{
-			return;
-		}
-		
-		if(opts & MSH_USE_ATOMIC_OPS)
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				do
-				{
-					old_val = wide_accum->input[i];
-					new_val = msh_ModDouble(old_val, *wide_in->input);
-				} while(msh_AtomicCompareSetDouble(wide_accum->input + i, old_val, new_val) != old_val);
-			}
-		}
-		else
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				wide_accum->input[i] = msh_ModDouble(wide_accum->input[i], *wide_in->input);
-			}
-		}
+		return;
 	}
-	else
-	{
-		if(opts & MSH_USE_ATOMIC_OPS)
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				do
-				{
-					old_val = wide_accum->input[i];
-					new_val = msh_ModDouble(old_val, wide_in->input[i]);
-				} while(msh_AtomicCompareSetDouble(wide_accum->input + i, old_val, new_val) != old_val);
-			}
-		}
-		else
-		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				wide_accum->input[i] = msh_ModDouble(wide_accum->input[i], wide_in->input[i]);
-			}
-		}
-	}
+	msh_ModDoubleRunnerW(v_accum, v_in, opts);
 }
 
 
@@ -2861,43 +2701,36 @@ static mxDouble msh_ARSDouble(mxDouble accum, mxDouble in)
 {
 	return accum / (mxDouble)pow(2.0, (double)in);
 }
+BINARY_OP_RUNNER(msh_ARSDoubleRunnerW, VO_FCN_FNAME(ARS, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), mxDouble, doubleconv_T);
 
 static void msh_ARSDoubleRunner(void* v_accum, void* v_in, long opts)
 {
-	size_t               i;
-	mxDouble             mult, old_val, new_val;
+	mxDouble             mult, static_val;
+	doubleconv_T         in_conv;
 	WideInput_T(double)  sing_in;
-	
 	WideInput_T(double)* wide_accum = v_accum;
 	WideInput_T(double)* wide_in    = v_in;
 	
 	if(wide_in->num_elems == 1)
 	{
-		mult = (mxDouble)pow(2.0, *wide_in->input);
-		sing_in.input = &mult;
-		sing_in.num_elems = 1;
-		msh_DivSingleRunner(v_accum, &sing_in, opts);
-	}
-	else
-	{
-		if(opts & MSH_USE_ATOMIC_OPS)
+		if(wide_accum->mxtype != wide_in->mxtype)
 		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				do
-				{
-					old_val = wide_accum->input[i];
-					new_val = msh_ARSDouble(old_val, wide_in->input[i]);
-				} while(msh_AtomicCompareSetDouble(wide_accum->input + i, old_val, new_val) != old_val);
-			}
+			in_conv = msh_ChooseDoubleConverter(wide_in->mxtype);
+			static_val = in_conv(wide_in->input, 0);
 		}
 		else
 		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				wide_accum->input[i] = msh_ARSDouble(wide_accum->input[i], wide_in->input[i]);
-			}
+			static_val = *wide_in->input;
 		}
+		mult = pow(2.0, static_val);
+		sing_in.input = &mult;
+		sing_in.num_elems = 1;
+		sing_in.mxtype = wide_accum->mxtype;
+		msh_DivDoubleRunner(v_accum, &sing_in, opts);
+	}
+	else
+	{
+		msh_ARSDoubleRunnerW(v_accum, v_in, opts);
 	}
 }
 
@@ -2906,99 +2739,118 @@ static mxDouble msh_ALSDouble(mxDouble accum, mxDouble in)
 {
 	return accum * pow(2.0, in);
 }
+BINARY_OP_RUNNER(msh_ALSDoubleRunnerW, VO_FCN_FNAME(ALS, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), mxDouble, doubleconv_T);
 
 static void msh_ALSDoubleRunner(void* v_accum, void* v_in, long opts)
 {
-	size_t               i;
-	mxDouble             mult, old_val, new_val;
+	mxDouble             mult, static_val;
+	doubleconv_T         in_conv;
 	WideInput_T(double)  sing_in;
-	
 	WideInput_T(double)* wide_accum = v_accum;
 	WideInput_T(double)* wide_in    = v_in;
 	
 	if(wide_in->num_elems == 1)
 	{
-		mult = (mxDouble)pow(2.0, *wide_in->input);
-		sing_in.input = &mult;
-		sing_in.num_elems = 1;
-		msh_MulSingleRunner(v_accum, &sing_in, opts);
-	}
-	else
-	{
-		if(opts & MSH_USE_ATOMIC_OPS)
+		if(wide_accum->mxtype != wide_in->mxtype)
 		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				do
-				{
-					old_val = wide_accum->input[i];
-					new_val = msh_ALSDouble(old_val, wide_in->input[i]);
-				} while(msh_AtomicCompareSetDouble(wide_accum->input + i, old_val, new_val) != old_val);
-			}
+			in_conv = msh_ChooseDoubleConverter(wide_in->mxtype);
+			static_val = in_conv(wide_in->input, 0);
 		}
 		else
 		{
-			for(i = 0; i < wide_accum->num_elems; i++)
-			{
-				wide_accum->input[i] = msh_ALSDouble(wide_accum->input[i], wide_in->input[i]);
-			}
+			static_val = *wide_in->input;
 		}
+		mult = pow(2.0, static_val);
+		sing_in.input = &mult;
+		sing_in.num_elems = 1;
+		sing_in.mxtype = wide_accum->mxtype;
+		msh_MulDoubleRunner(v_accum, &sing_in, opts);
+	}
+	else
+	{
+		msh_ALSDoubleRunnerW(v_accum, v_in, opts);
 	}
 }
 
-#define CPY_FCN_DEF(RNAME, TYPE, SIZE, ANAME) \
+#define CPY_FCN_DEF(RNAME, NAME, SNAME, CTCNAME, TYPE, TYPEC) \
 static void RNAME(void* v_accum, void* v_in, long opts) \
-{                                                              \
-	size_t i;                                                              \
-	TYPE new_val, old_val;						                \
-	WideInput_T(TYPE)* wide_accum = v_accum;					 \
-	WideInput_T(TYPE)*    wide_in    = v_in;                            \
-	if(wide_in->num_elems == 1) 						                \
-	{                                                                      \
-		if(opts & MSH_USE_ATOMIC_OPS) 					           \
-		{                                                                 \
-			for(i = 0; i < wide_accum->num_elems; i++)                               \
-			{                                                            \
-				new_val = *wide_in->input;                                       \
-				do                                                      \
-				{                                                       \
-					old_val = wide_accum->input[i];                    \
-				} while(ANAME(wide_accum->input + i, old_val, new_val) != old_val); \
-			}                                                            \
-		}                                                                 \
-		else                                                              \
-		{                                                                 \
-			for(i = 0; i < wide_accum->num_elems; i++)                               \
-			{                                                            \
-				wide_accum->input[i] = *wide_in->input;             \
-			}                                                            \
-		}                                                                 \
-	}                                                                      \
-	else                                                                   \
-	{                                                                      \
-		if(opts & MSH_USE_ATOMIC_OPS) 					 \
-		{                                                                 \
-			for(i = 0; i < wide_accum->num_elems; i++)                               \
-			{                                                            \
-				do                                                      \
-				{                                                       \
-					old_val = wide_accum->input[i];                                \
-					new_val = wide_in->input[i];        \
-				} while(ANAME(wide_accum->input + i, old_val, new_val) != old_val); \
-			}                                                            \
-		}                                                                 \
-		else                                                              \
-		{                                                                 \
-			memcpy(wide_accum->input, wide_in->input, wide_accum->num_elems*SIZE); \
-		}                                                                 \
-	}    \
+{ \
+	size_t i; \
+	TYPEC in_conv; \
+	TYPE new_val; \
+	WideInput_T(TYPE)* wide_accum = v_accum; \
+	WideInput_T(TYPE)* wide_in    = v_in; \
+	if(wide_in->num_elems == 1) \
+	{ \
+		if(wide_accum->mxtype != wide_in->mxtype) \
+		{ \
+			in_conv = CTCNAME(wide_in->mxtype); \
+			new_val = in_conv(wide_in->input, 0); \
+		} \
+		else \
+		{ \
+			new_val = *wide_in->input; \
+		} \
+		if(opts & MSH_USE_ATOMIC_OPS) \
+		{ \
+			for(i = 0; i < wide_accum->num_elems;) \
+			{ \
+				SNAME(wide_accum->input + i, new_val); \
+			} \
+		} \
+		else \
+		{ \
+			for(i = 0; i < wide_accum->num_elems; i++) \
+			{ \
+				wide_accum->input[i] = new_val; \
+			} \
+		} \
+	} \
+	else \
+	{ \
+		if(wide_accum->mxtype != wide_in->mxtype) \
+		{ \
+			in_conv = CTCNAME(wide_in->mxtype); \
+			if(opts & MSH_USE_ATOMIC_OPS) \
+			{ \
+				for(i = 0; i < wide_accum->num_elems; i++) \
+				{ \
+					SNAME(wide_accum->input + i, in_conv(wide_in->input, i)); \
+				} \
+			} \
+			else \
+			{ \
+				for(i = 0; i < wide_accum->num_elems; i++) \
+				{ \
+					wide_accum->input[i] = in_conv(wide_in->input, i); \
+				} \
+			} \
+		} \
+		else \
+		{ \
+			if(opts & MSH_USE_ATOMIC_OPS) \
+			{ \
+				for(i = 0; i < wide_accum->num_elems; i++) \
+				{ \
+					SNAME(wide_accum->input + i, wide_in->input[i]); \
+				} \
+			} \
+			else \
+			{ \
+				for(i = 0; i < wide_accum->num_elems; i++) \
+				{ \
+					wide_accum->input[i] = wide_in->input[i]; \
+				} \
+			} \
+		} \
+	} \
 }
 
 #define CPY_INT_METADEF(SIZE) \
-CPY_FCN_DEF(FW_INT_FCN_RNAME(Cpy, SIZE), FW_INT_TYPE(SIZE), SIZE, FW_INT_FCN_ANAME(SIZE))
+CPY_FCN_DEF(FW_INT_FCN_RNAME(Cpy, SIZE), FW_INT_FCN_FNAME(Cpy, SIZE), VO_FCN_SNAME(FW_INT_TYPEN(SIZE)), FW_INT_FCN_CTCNAME(SIZE), FW_INT_TYPE(SIZE), FW_INT_TYPEC(SIZE))
 
 #define CPY_UINT_METADEF(SIZE) \
-CPY_FCN_DEF(FW_UINT_FCN_RNAME(Cpy, SIZE), FW_UINT_TYPE(SIZE), SIZE, FW_UINT_FCN_ANAME(SIZE))
+CPY_FCN_DEF(FW_UINT_FCN_RNAME(Cpy, SIZE), FW_UINT_FCN_FNAME(Cpy, SIZE), VO_FCN_SNAME(FW_UINT_TYPEN(SIZE)), FW_UINT_FCN_CTCNAME(SIZE), FW_UINT_TYPE(SIZE), FW_UINT_TYPEC(SIZE))
 
 CPY_INT_METADEF(8);
 CPY_INT_METADEF(16);
@@ -3014,8 +2866,8 @@ CPY_UINT_METADEF(32);
 CPY_UINT_METADEF(64);
 #endif
 
-CPY_FCN_DEF(msh_CpySingleRunner, mxSingle, sizeof(single), msh_AtomicCompareSetSingle);
-CPY_FCN_DEF(msh_CpyDoubleRunner, mxDouble, sizeof(double), msh_AtomicCompareSetDouble);
+CPY_FCN_DEF(msh_CpySingleRunner, msh_CpySingle, msh_AtomicSetSingle, msh_ChooseSingleConverter, mxSingle, singleconv_T);
+CPY_FCN_DEF(msh_CpyDoubleRunner, msh_CpyDouble, msh_AtomicSetDouble, msh_ChooseDoubleConverter, mxDouble, doubleconv_T);
 
 /** function choosers **/
 
@@ -3217,8 +3069,8 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 {
 	int                 is_complex;
 	size_t              i, j, elem_size;
-	size_t              dest_nzmax, dest_offset, dest_num_elems;
-	size_t              in_nzmax, in_num_elems;
+	size_t              dest_offset, dest_num_elems;
+	size_t              in_num_elems;
 	binaryvaropfcn_T    varop_fcn;
 	
 	int8_T*             dest_real;
@@ -3242,26 +3094,32 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 	dest_real          = mxGetData(indexed_var->dest_var);
 	dest_imag          = mxGetImagData(indexed_var->dest_var);
 	
+	wide_dest_real.mxtype = mxGetClassID(indexed_var->dest_var);
+	wide_dest_imag.mxtype = wide_dest_real.mxtype;
+	
+	wide_in_real.mxtype = mxGetClassID(in_var);
+	wide_in_imag.mxtype = wide_in_real.mxtype;
+	
 	wide_in_real.input = mxGetData(in_var);
 	wide_in_imag.input = mxGetImagData(in_var);
 	
 	if(mxIsSparse(indexed_var->dest_var))
 	{
-		dest_nzmax = mxGetNzmax(indexed_var->dest_var);
-		in_nzmax   = mxGetNzmax(in_var);
+		dest_num_elems = mxGetNzmax(indexed_var->dest_var);
+		in_num_elems   = mxGetNzmax(in_var);
 		
 		wide_dest_real.input     = dest_real;
-		wide_dest_real.num_elems = dest_nzmax;
+		wide_dest_real.num_elems = dest_num_elems;
 		
-		wide_in_real.num_elems   = in_nzmax;
+		wide_in_real.num_elems   = in_num_elems;
 		
 		varop_fcn(&wide_dest_real, &wide_in_real, opts);
 		if(is_complex)
 		{
 			wide_dest_imag.input     = dest_imag;
-			wide_dest_imag.num_elems = dest_nzmax;
+			wide_dest_imag.num_elems = dest_num_elems;
 			
-			wide_in_imag.num_elems   = in_nzmax;
+			wide_in_imag.num_elems   = in_num_elems;
 			
 			varop_fcn(&wide_dest_imag, &wide_in_imag, opts);
 		}
@@ -3279,10 +3137,12 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 		if(indexed_var->indices.start_idxs == NULL)
 		{
 			dest_num_elems  = mxGetNumberOfElements(indexed_var->dest_var);
+			wide_dest_real.input     = dest_real;
 			wide_dest_real.num_elems = dest_num_elems;
 			varop_fcn(&wide_dest_real, &wide_in_real, opts);
 			if(is_complex)
 			{
+				wide_dest_imag.input     = dest_imag;
 				wide_dest_imag.num_elems = dest_num_elems;
 				varop_fcn(&wide_dest_imag, &wide_in_imag, opts);
 			}

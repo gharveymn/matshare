@@ -93,11 +93,18 @@ typedef int32_T segmentnumber_T; /* segment number identifiers */
 #endif
 
 #ifdef MSH_AVX_SUPPORT
-#  define DATA_ALIGNMENT 0x20
-#  define DATA_ALIGNMENT_SHIFT (size_t)0x1F
+#  define MATLAB_ALIGNMENT 0x20
 #else
-#  define DATA_ALIGNMENT 0x10
-#  define DATA_ALIGNMENT_SHIFT (size_t)0x0F
+#  define MATLAB_ALIGNMENT 0x10
+#endif
+
+/* always actually use 32 byte alignment */
+#define MSH_ALIGNMENT 0x20
+
+#if MSH_BITNESS==64
+#define MSH_SIZE_WIDTH 8
+#elif MSH_BITNESS==32
+#define MSH_SIZE_WIDTH 4
 #endif
 
 #define MSH_NAME_LEN_MAX 64

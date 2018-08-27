@@ -258,7 +258,7 @@ pid_T msh_GetPid(void)
 
 size_t msh_PadToAlignData(size_t curr_sz)
 {
-	return curr_sz + (DATA_ALIGNMENT_SHIFT - ((curr_sz - 1) & DATA_ALIGNMENT_SHIFT));
+	return curr_sz + ((MSH_ALIGNMENT-1) - ((curr_sz - 1) & (MSH_ALIGNMENT-1)));
 }
 
 
