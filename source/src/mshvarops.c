@@ -584,6 +584,7 @@ static void msh_CheckInputSize(mxArray* subs_arr, const mxArray* in_var, const s
 	size_t          first_sig_dim, last_sig_dim, num_sig_dims;
 	mxArray*        curr_subs;
 	
+	
 	size_t          num_subs_elems = 0;
 	size_t          num_subs       = mxGetNumberOfElements(subs_arr);
 	mwSize          in_num_dims    = mxGetNumberOfDimensions(in_var);
@@ -950,181 +951,6 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp
 		                  MEU_SEVERITY_USER,
 		                  "InvalidTypeError",
 		                  "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
-	}
-	
-}
-
-
-void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, long opts, mxArray** output)
-{
-	
-	int               field_num, in_num_fields, is_complex;
-	size_t            i, j, dest_idx, in_idx, elem_size, dest_offset, in_offset;
-	const char_T*     curr_field_name;
-	
-	int8_T* dest_real;
-	int8_T* dest_imag;
-	
-	int8_T* in_real;
-	int8_T* in_imag;
-	
-	size_t            dest_num_elems  = mxGetNumberOfElements(indexed_var->dest_var);
-	size_t            in_num_elems    = mxGetNumberOfElements(in_var);
-	mxClassID         shared_class_id = mxGetClassID(in_var);
-	IndexedVariable_T sub_variable    = {0};
-	
-	/* struct case */
-	if(shared_class_id == mxSTRUCT_CLASS)
-	{
-		in_num_fields = mxGetNumberOfFields(in_var);
-		
-		/* go through each element */
-		if(indexed_var->indices.start_idxs == NULL)
-		{
-			for(field_num = 0; field_num < in_num_fields; field_num++)     /* each field */
-			{
-				curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
-				for(dest_idx = 0; dest_idx < in_num_elems; dest_idx++)
-				{
-					sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
-					msh_OverwriteVariable(&sub_variable, mxGetField(in_var, dest_idx, curr_field_name), opts, NULL);
-				}
-			}
-		}
-		else
-		{
-			for(field_num = 0; field_num < in_num_fields; field_num++)     /* each field */
-			{
-				curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
-				for(i = 0, in_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
-				{
-					for(j = 0; j < indexed_var->indices.num_lens; j++)
-					{
-						for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, in_idx++)
-						{
-							/* this inner conditional should be optimized out by the compiler */
-							sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
-							msh_OverwriteVariable(&sub_variable, mxGetField(in_var, (in_num_elems == 1)? 0 : in_idx, curr_field_name), opts, NULL);
-						}
-					}
-				}
-			}
-		}
-	}
-	else if(shared_class_id == mxCELL_CLASS) /* cell case */
-	{
-		
-		/* go through each element */
-		if(indexed_var->indices.start_idxs == NULL)
-		{
-			for(dest_idx = 0; dest_idx < in_num_elems; dest_idx++)
-			{
-				sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
-				msh_OverwriteVariable(&sub_variable, mxGetCell(in_var, dest_idx), opts, NULL);
-			}
-		}
-		else
-		{
-			for(i = 0, in_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
-			{
-				for(j = 0; j < indexed_var->indices.num_lens; j++)
-				{
-					for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, in_idx++)
-					{
-						/* this inner conditional should be optimized out by the compiler */
-						sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
-						msh_OverwriteVariable(&sub_variable, mxGetCell(in_var, (in_num_elems == 1)? 0 : in_idx), opts, NULL);
-					}
-				}
-			}
-		}
-	}
-	else     /*base case*/
-	{
-		
-		is_complex = mxIsComplex(in_var);
-		
-		if(mxIsSparse(in_var))
-		{
-			dest_num_elems = mxGetNzmax(in_var);
-			
-			memcpy(mxGetIr(indexed_var->dest_var), mxGetIr(in_var), dest_num_elems*sizeof(mwIndex));
-			memcpy(mxGetJc(indexed_var->dest_var), mxGetJc(in_var), (mxGetN(in_var) + 1)*sizeof(mwIndex));
-			memcpy(mxGetData(indexed_var->dest_var), mxGetData(in_var), dest_num_elems*mxGetElementSize(in_var));
-			if(is_complex)
-				memcpy(mxGetImagData(indexed_var->dest_var), mxGetImagData(in_var), dest_num_elems*mxGetElementSize(in_var));
-			
-		}
-		else
-		{
-			
-			dest_real = mxGetData(indexed_var->dest_var);
-			dest_imag = mxGetImagData(indexed_var->dest_var);
-			
-			in_real = mxGetData(in_var);
-			in_imag = mxGetImagData(in_var);
-			
-			elem_size = mxGetElementSize(indexed_var->dest_var);
-			
-			if(indexed_var->indices.start_idxs == NULL)
-			{
-				in_num_elems = mxGetNumberOfElements(in_var);
-				
-				if(in_num_elems == 1)
-				{
-					for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
-					{
-						memcpy(dest_real + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
-						if(is_complex)
-							memcpy(dest_imag + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
-					}
-				}
-				else
-				{
-					memcpy(dest_real, in_real, in_num_elems*elem_size);
-					if(is_complex)
-						memcpy(dest_imag, in_imag, in_num_elems*elem_size);
-				}
-				
-			}
-			else
-			{
-				
-				for(i = 0, in_offset = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
-				{
-					for(j = 0; j < indexed_var->indices.num_lens; j++)
-					{
-						dest_offset = indexed_var->indices.start_idxs[i + j]*elem_size/sizeof(int8_T);
-						
-						/* optimized out */
-						if(in_num_elems == 1)
-						{
-							for(dest_idx = 0; dest_idx < indexed_var->indices.slice_lens[j]; dest_idx++)
-							{
-								memcpy(dest_real + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
-								if(is_complex)
-									memcpy(dest_imag + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
-							}
-						}
-						else
-						{
-							memcpy(dest_real + dest_offset, in_real + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
-							if(is_complex)
-								memcpy(dest_imag + dest_offset, in_imag + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
-							in_offset += indexed_var->indices.slice_lens[j]*elem_size/sizeof(int8_T);
-						}
-						
-					}
-				}
-				
-			}
-		}
-		
-	}
-	
-	if(output != NULL)
-	{
-		*output = mxDuplicateArray(indexed_var->dest_var);
 	}
 	
 }
@@ -2864,6 +2690,9 @@ CPY_UINT_METADEF(16);
 CPY_UINT_METADEF(32);
 #if MSH_BITNESS==64
 CPY_UINT_METADEF(64);
+#  define msh_CpySizeRunner(V_ACCUM, V_IN, OPTS) msh_CpyUInt64Runner(V_ACCUM, V_IN, OPTS)
+#else
+#  define msh_CpySizeRunner(V_ACCUM, V_IN, OPTS) msh_CpyUInt32Runner(V_ACCUM, V_IN, OPTS)
 #endif
 
 CPY_FCN_DEF(msh_CpySingleRunner, msh_CpySingle, msh_AtomicSetSingle, msh_ChooseSingleConverter, mxSingle, singleconv_T);
@@ -2871,23 +2700,7 @@ CPY_FCN_DEF(msh_CpyDoubleRunner, msh_CpyDouble, msh_AtomicSetDouble, msh_ChooseD
 
 /** function choosers **/
 
-#if MSH_BITNESS==32
-#define CLASS_FCN_SWITCH_CASES(OP, CLASS_ID_NAME)         \
-switch(CLASS_ID_NAME)                                     \
-{                                                         \
-	case(mxINT8_CLASS):  return msh_##OP##Int8Runner;    \
-	case(mxINT16_CLASS): return msh_##OP##Int16Runner;   \
-	case(mxINT32_CLASS): return msh_##OP##Int32Runner;   \
-                                                          \
-	case(mxUINT8_CLASS):  return msh_##OP##UInt8Runner;  \
-	case(mxUINT16_CLASS): return msh_##OP##UInt16Runner; \
-	case(mxUINT32_CLASS): return msh_##OP##UInt32Runner; \
-                                                          \
-	case(mxSINGLE_CLASS): return msh_##OP##SingleRunner; \
-	case(mxDOUBLE_CLASS): return msh_##OP##DoubleRunner; \
-	default: goto NOT_FOUND_ERROR;                       \
-}
-#else
+#if MSH_BITNESS==64
 #define CLASS_FCN_SWITCH_CASES(OP, CLASS_ID_NAME)         \
 switch(CLASS_ID_NAME)                                     \
 {                                                         \
@@ -2900,6 +2713,22 @@ switch(CLASS_ID_NAME)                                     \
 	case(mxUINT16_CLASS): return msh_##OP##UInt16Runner; \
 	case(mxUINT32_CLASS): return msh_##OP##UInt32Runner; \
 	case(mxUINT64_CLASS): return msh_##OP##UInt64Runner; \
+                                                          \
+	case(mxSINGLE_CLASS): return msh_##OP##SingleRunner; \
+	case(mxDOUBLE_CLASS): return msh_##OP##DoubleRunner; \
+	default: goto NOT_FOUND_ERROR;                       \
+}
+#else
+#define CLASS_FCN_SWITCH_CASES(OP, CLASS_ID_NAME)         \
+switch(CLASS_ID_NAME)                                     \
+{                                                         \
+	case(mxINT8_CLASS):  return msh_##OP##Int8Runner;    \
+	case(mxINT16_CLASS): return msh_##OP##Int16Runner;   \
+	case(mxINT32_CLASS): return msh_##OP##Int32Runner;   \
+                                                          \
+	case(mxUINT8_CLASS):  return msh_##OP##UInt8Runner;  \
+	case(mxUINT16_CLASS): return msh_##OP##UInt16Runner; \
+	case(mxUINT32_CLASS): return msh_##OP##UInt32Runner; \
                                                           \
 	case(mxSINGLE_CLASS): return msh_##OP##SingleRunner; \
 	case(mxDOUBLE_CLASS): return msh_##OP##DoubleRunner; \
@@ -3244,6 +3073,199 @@ void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, co
 	if(indexed_var.indices.slice_lens != NULL)
 	{
 		mxFree(indexed_var.indices.slice_lens);
+	}
+	
+}
+
+
+void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, long opts, mxArray** output)
+{
+	
+	int               field_num, in_num_fields, is_complex;
+	size_t            i, j, dest_idx, in_idx, elem_size, dest_offset, in_offset;
+	binaryvaropfcn_T  varop_fcn;
+	const char_T*     curr_field_name;
+	
+	int8_T* dest_real;
+	int8_T* dest_imag;
+	
+	WideInput_T(int8_T) wide_dest_real;
+	WideInput_T(int8_T) wide_dest_imag;
+	WideInput_T(void)   wide_dest_ir;
+	WideInput_T(void)   wide_dest_jc;
+	
+	WideInput_T(int8_T) wide_in_real;
+	WideInput_T(int8_T) wide_in_imag;
+	WideInput_T(void)   wide_in_ir;
+	WideInput_T(void)   wide_in_jc;
+	
+	mxClassID         dest_class_id  = mxGetClassID(indexed_var->dest_var);
+	mxClassID         in_class_id    = mxGetClassID(in_var);
+	IndexedVariable_T sub_variable   = {0};
+	
+	/* struct case */
+	if(dest_class_id == mxSTRUCT_CLASS)
+	{
+		in_num_fields = mxGetNumberOfFields(in_var);
+		in_num_elems   = mxGetNumberOfElements(in_var);
+		
+		/* go through each element */
+		if(indexed_var->indices.start_idxs == NULL)
+		{
+			for(field_num = 0; field_num < in_num_fields; field_num++)     /* each field */
+			{
+				curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
+				for(dest_idx = 0; dest_idx < in_num_elems; dest_idx++)
+				{
+					sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
+					msh_OverwriteVariable(&sub_variable, mxGetField(in_var, dest_idx, curr_field_name), opts, NULL);
+				}
+			}
+		}
+		else
+		{
+			for(field_num = 0; field_num < in_num_fields; field_num++)     /* each field */
+			{
+				curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
+				for(i = 0, in_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
+				{
+					for(j = 0; j < indexed_var->indices.num_lens; j++)
+					{
+						for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, in_idx++)
+						{
+							/* this inner conditional should be optimized out by the compiler */
+							sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
+							msh_OverwriteVariable(&sub_variable, mxGetField(in_var, (in_num_elems == 1)? 0 : in_idx, curr_field_name), opts, NULL);
+						}
+					}
+				}
+			}
+		}
+	}
+	else if(dest_class_id == mxCELL_CLASS) /* cell case */
+	{
+		
+		in_num_elems   = mxGetNumberOfElements(in_var);
+		
+		/* go through each element */
+		if(indexed_var->indices.start_idxs == NULL)
+		{
+			for(dest_idx = 0; dest_idx < in_num_elems; dest_idx++)
+			{
+				sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
+				msh_OverwriteVariable(&sub_variable, mxGetCell(in_var, dest_idx), opts, NULL);
+			}
+		}
+		else
+		{
+			for(i = 0, in_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
+			{
+				for(j = 0; j < indexed_var->indices.num_lens; j++)
+				{
+					for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, in_idx++)
+					{
+						/* this inner conditional should be optimized out by the compiler */
+						sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
+						msh_OverwriteVariable(&sub_variable, mxGetCell(in_var, (in_num_elems == 1)? 0 : in_idx), opts, NULL);
+					}
+				}
+			}
+		}
+	}
+	else     /*base case*/
+	{
+		
+		varop_fcn = msh_ChooseBinaryVarOpFcn(VAROP_CPY, mxGetClassID(indexed_var->dest_var));
+		
+		is_complex = mxIsComplex(in_var);
+		
+		if(mxIsSparse(indexed_var->dest_var))
+		{
+			dest_num_elems = mxGetNzmax(dest_var);
+			in_num_elems   = mxGetNumberOfElements(in_var);
+			
+			wide_dest_real.input = mxGetData(indexed_var->dest_var);
+			wide_dest_real.num_elems = dest_num_elems;
+			
+			
+			msh_CpySizeRunner()
+			memcpy(mxGetIr(indexed_var->dest_var), mxGetIr(in_var), dest_num_elems*sizeof(mwIndex));
+			memcpy(mxGetJc(indexed_var->dest_var), mxGetJc(in_var), (mxGetN(in_var) + 1)*sizeof(mwIndex));
+			memcpy(mxGetData(indexed_var->dest_var), mxGetData(in_var), dest_num_elems*mxGetElementSize(in_var));
+			if(is_complex)
+				memcpy(mxGetImagData(indexed_var->dest_var), mxGetImagData(in_var), dest_num_elems*mxGetElementSize(in_var));
+			
+		}
+		else
+		{
+			
+			dest_real = mxGetData(indexed_var->dest_var);
+			dest_imag = mxGetImagData(indexed_var->dest_var);
+			
+			in_real = mxGetData(in_var);
+			in_imag = mxGetImagData(in_var);
+			
+			elem_size = mxGetElementSize(indexed_var->dest_var);
+			
+			if(indexed_var->indices.start_idxs == NULL)
+			{
+				in_num_elems = mxGetNumberOfElements(in_var);
+				
+				if(in_num_elems == 1)
+				{
+					for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
+					{
+						memcpy(dest_real + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
+						if(is_complex)
+							memcpy(dest_imag + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
+					}
+				}
+				else
+				{
+					memcpy(dest_real, in_real, in_num_elems*elem_size);
+					if(is_complex)
+						memcpy(dest_imag, in_imag, in_num_elems*elem_size);
+				}
+				
+			}
+			else
+			{
+				
+				for(i = 0, in_offset = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
+				{
+					for(j = 0; j < indexed_var->indices.num_lens; j++)
+					{
+						dest_offset = indexed_var->indices.start_idxs[i + j]*elem_size/sizeof(int8_T);
+						
+						/* optimized out */
+						if(in_num_elems == 1)
+						{
+							for(dest_idx = 0; dest_idx < indexed_var->indices.slice_lens[j]; dest_idx++)
+							{
+								memcpy(dest_real + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
+								if(is_complex)
+									memcpy(dest_imag + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
+							}
+						}
+						else
+						{
+							memcpy(dest_real + dest_offset, in_real + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
+							if(is_complex)
+								memcpy(dest_imag + dest_offset, in_imag + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
+							in_offset += indexed_var->indices.slice_lens[j]*elem_size/sizeof(int8_T);
+						}
+						
+					}
+				}
+				
+			}
+		}
+		
+	}
+	
+	if(output != NULL)
+	{
+		*output = mxDuplicateArray(indexed_var->dest_var);
 	}
 	
 }
