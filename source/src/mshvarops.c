@@ -528,7 +528,7 @@ static size_t msh_ParseIndicesWorker(mxArray*      subs_arr,
 }
 
 
-void msh_CheckValidInput(IndexedVariable_T* indexed_var, const mxArray* in_var)
+void msh_CheckValidInput(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop)
 {
 	size_t num_idxs;
 	mxArray* type;
@@ -571,7 +571,7 @@ void msh_CheckValidInput(IndexedVariable_T* indexed_var, const mxArray* in_var)
 		}
 	}
 	
-	msh_CompareVariableSize(indexed_var, in_var);
+	msh_CompareVariableSize(indexed_var, in_var, varop);
 	
 }
 
@@ -584,16 +584,14 @@ static void msh_CheckInputSize(mxArray* subs_arr, const mxArray* in_var, const s
 	size_t          first_sig_dim, last_sig_dim, num_sig_dims;
 	mxArray*        curr_subs;
 	
-	
 	size_t          num_subs_elems = 0;
 	size_t          num_subs       = mxGetNumberOfElements(subs_arr);
 	mwSize          in_num_dims    = mxGetNumberOfDimensions(in_var);
 	const size_t*   in_dims        = mxGetDimensions(in_var);
 	
-	
 	if(mxIsEmpty(in_var))
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NullAssignmentError", "Assignment input must be non-null.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "EmptyAssignmentError", "Assignment input must be non-empty.");
 	}
 	
 	if(mxGetNumberOfElements(in_var) > 1)
@@ -787,62 +785,60 @@ static void msh_CheckInputSize(mxArray* subs_arr, const mxArray* in_var, const s
 }
 
 
-void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp_var)
+void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop)
 {
 	int               field_num, dest_num_fields;
-	size_t            i, j, dest_idx, comp_idx, dest_num_elems, comp_num_elems;
+	size_t            i, j, dest_idx, comp_idx, dest_num_elems;
 	const char_T*     curr_field_name;
 	
-	IndexedVariable_T sub_variable  = {0};
+	size_t            in_num_elems  = mxGetNumberOfElements(in_var);
 	mxClassID         dest_class_id = mxGetClassID(indexed_var->dest_var);
+	IndexedVariable_T sub_variable  = {0};
 	
-	if(dest_class_id != mxGetClassID(comp_var))
+	/*
+	if(dest_class_id != mxGetClassID(in_var))
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(comp_var), mxGetClassName(indexed_var->dest_var));
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(in_var), mxGetClassName(indexed_var->dest_var));
 	}
+	*/
 	
-	if(mxGetElementSize(indexed_var->dest_var) != mxGetElementSize(comp_var))
+	if(mxGetElementSize(indexed_var->dest_var) != mxGetElementSize(in_var))
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "ElementSizeError", "Element sizes were incompatible.");
 	}
 	
-	comp_num_elems = mxGetNumberOfElements(comp_var);
 	
-	if(indexed_var->indices.start_idxs == NULL && comp_num_elems != 1)
+	/* if this is false, in the other case, the sizes will already be checked unless it is sparse */
+	if(indexed_var->indices.start_idxs == NULL && in_num_elems != 1)
 	{
 		/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
-		if(mxGetNumberOfDimensions(indexed_var->dest_var) != mxGetNumberOfDimensions(comp_var) ||
-		   memcmp(mxGetDimensions(indexed_var->dest_var), mxGetDimensions(comp_var), mxGetNumberOfDimensions(indexed_var->dest_var)*sizeof(mwSize)) != 0)
+		if(mxGetNumberOfDimensions(indexed_var->dest_var) != mxGetNumberOfDimensions(in_var) ||
+		   memcmp(mxGetDimensions(indexed_var->dest_var), mxGetDimensions(in_var), mxGetNumberOfDimensions(indexed_var->dest_var)*sizeof(mwSize)) != 0)
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleSizeError", "The input variable was of differing size in comparison to the destination.");
 		}
 	}
 	
-	/* in the other case, the sizes will already be checked */
-	
-	/* Structure case */
 	if(dest_class_id == mxSTRUCT_CLASS)
 	{
-		
-		/* must be struct
-		if(dest_class_id != mxGetClassID(comp_var))
+		/* must be struct */
+		if(dest_class_id != mxGetClassID(in_var))
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(comp_var), mxGetClassName(indexed_var->dest_var));
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(in_var), mxGetClassName(indexed_var->dest_var));
 		}
-		*/
 		
 		dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
 		dest_num_fields = mxGetNumberOfFields(indexed_var->dest_var);
 		
-		if(dest_num_fields != mxGetNumberOfFields(comp_var))
+		if(dest_num_fields != mxGetNumberOfFields(in_var))
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NumFieldsError", "The number of fields in the input variable (%d) differs from that of the destination (%d).", mxGetNumberOfFields(comp_var), dest_num_fields);
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NumFieldsError", "The number of fields in the input variable (%d) differs from that of the destination (%d).", mxGetNumberOfFields(in_var), dest_num_fields);
 		}
 		
 		/* search for each field name */
 		for(field_num = 0; field_num < dest_num_fields; field_num++)
 		{
-			if(mxGetField(comp_var, 0, mxGetFieldNameByNumber(indexed_var->dest_var, field_num)) == NULL)
+			if(mxGetField(in_var, 0, mxGetFieldNameByNumber(indexed_var->dest_var, field_num)) == NULL)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "MissingFieldError", "The input variable is missing the field '%s'.", mxGetFieldNameByNumber(indexed_var->dest_var, field_num));
 			}
@@ -856,7 +852,7 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp
 				for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
 				{
 					sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
-					msh_CompareVariableSize(&sub_variable, mxGetField(comp_var, dest_idx, curr_field_name));
+					msh_CompareVariableSize(&sub_variable, mxGetField(in_var, dest_idx, curr_field_name), VAROP_MUL);
 				}
 			}
 		}
@@ -872,21 +868,20 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp
 						for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, comp_idx++)
 						{
 							sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
-							msh_CompareVariableSize(&sub_variable, mxGetField(comp_var, (comp_num_elems == 1)? 0 : comp_idx, curr_field_name));
+							msh_CompareVariableSize(&sub_variable, mxGetField(in_var, (in_num_elems == 1)? 0 : comp_idx, curr_field_name), VAROP_MUL);
 						}
 					}
 				}
 			}
 		}
 	}
-	else if(dest_class_id == mxCELL_CLASS) /* Cell case */
+	else if(dest_class_id == mxCELL_CLASS)
 	{
-		/* must be cell
-		if(dest_class_id != mxGetClassID(comp_var))
+		/* must be cell */
+		if(dest_class_id != mxGetClassID(in_var))
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(comp_var), mxGetClassName(indexed_var->dest_var));
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(in_var), mxGetClassName(indexed_var->dest_var));
 		}
-		*/
 		
 		dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
 		
@@ -895,7 +890,7 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp
 			for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
 			{
 				sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
-				msh_CompareVariableSize(&sub_variable, mxGetCell(comp_var, dest_idx));
+				msh_CompareVariableSize(&sub_variable, mxGetCell(in_var, dest_idx), VAROP_MUL);
 			}
 		}
 		else
@@ -907,39 +902,65 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp
 					for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, comp_idx++)
 					{
 						sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
-						msh_CompareVariableSize(&sub_variable, mxGetCell(comp_var, (comp_num_elems == 1)? 0 : comp_idx));
+						msh_CompareVariableSize(&sub_variable, mxGetCell(in_var, (in_num_elems == 1)? 0 : comp_idx), VAROP_MUL);
 					}
 				}
 			}
 		}
 	}
-	else if(mxIsNumeric(indexed_var->dest_var) || dest_class_id == mxLOGICAL_CLASS || dest_class_id == mxCHAR_CLASS)      /*base case*/
+	else if(mxIsNumeric(indexed_var->dest_var) || dest_class_id == mxLOGICAL_CLASS || dest_class_id == mxCHAR_CLASS)
 	{
 		
-		/* Note: implement this later
-		if(!mxIsNumeric(comp_var) && !mxIsLogical(comp_var) && !mxIsChar(comp_var))
+		/* must be base level variable */
+		if(!mxIsNumeric(in_var) && !mxIsLogical(in_var) && !mxIsChar(in_var))
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(comp_var), mxGetClassName(indexed_var->dest_var));
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(in_var), mxGetClassName(indexed_var->dest_var));
 		}
-		 */
 		
 		if(mxIsSparse(indexed_var->dest_var))
 		{
-			/* sparse inputs are always the same size as the destination */
-			if(mxGetNzmax(indexed_var->dest_var) < mxGetNzmax(comp_var))
+			if(varop != VAROP_CPY)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "SparseVarOpError", "Non-copying variable operations are not available for shared sparse matrices.");
+			}
+			
+			if(!mxIsSparse(in_var))
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NonSparseInputError", "Input for sparse copying must be sparse.");
+			}
+			
+			/* sparse input must be the same size */
+			if(indexed_var->indices.start_idxs != NULL || in_num_elems == 1)
+			{
+				/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
+				if(mxGetM(indexed_var->dest_var) != mxGetM(in_var) || mxGetN(indexed_var->dest_var) != mxGetN(in_var))
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleSizeError", "The input variable was of differing size in comparison to the destination. "
+															"Sparse input must have the same size as the destination");
+				}
+			}
+			
+			if(mxGetNzmax(indexed_var->dest_var) < mxGetNzmax(in_var))
 			{
 				meu_PrintMexError(MEU_FL,
 				                  MEU_SEVERITY_USER,
 				                  "NzmaxError",
 				                  "The number of non-zero entries in the input variable ("SIZE_FORMAT") is larger than maximum number \n"
-				                                                                                     "allocated for destination ("SIZE_FORMAT"). This is an error because doing so would change the size \n"
-				                                                                                                                             "of shared memory.",
-				mxGetNzmax(comp_var),
-				mxGetNzmax(indexed_var->dest_var));
+										   "allocated for destination ("SIZE_FORMAT"). This is an error because doing so would change the size \n"
+										   "of shared memory.",
+				                  mxGetNzmax(in_var),
+				                  mxGetNzmax(indexed_var->dest_var));
+			}
+		}
+		else
+		{
+			if(mxIsSparse(in_var))
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "SparseInputError", "Cannot convert sparse matrix to full.");
 			}
 		}
 		
-		if(mxIsComplex(indexed_var->dest_var) != mxIsComplex(comp_var))
+		if(mxIsComplex(indexed_var->dest_var) != mxIsComplex(in_var))
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "ComplexityError", "The complexity of the input variable does not match with that of the destination.");
 		}
@@ -948,9 +969,9 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp
 	{
 		/* this may occur if the user passes a destination variable which is not in shared memory */
 		meu_PrintMexError(MEU_FL,
-		                  MEU_SEVERITY_USER,
+		                  MEU_SEVERITY_INTERNAL,
 		                  "InvalidTypeError",
-		                  "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
+		                  "Unexpected destination type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'. Check that your destination is a matshare object.");
 	}
 	
 }
@@ -996,11 +1017,11 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp
 static TYPE1 TCNAME(void* v_in, size_t offset) \
 { \
 	TYPE2 in_val = *((TYPE2*)v_in); \
-	if(in_val > TYPE1_MAX) \
+	if(in_val > (TYPE1_MAX)) \
 	{ \
 		return TYPE1_MAX; \
 	} \
-	else if(in_val < TYPE1_MIN) \
+	else if(in_val < (TYPE1_MIN)) \
 	{ \
 		return TYPE1_MIN; \
 	} \
@@ -1014,7 +1035,7 @@ static TYPE1 TCNAME(void* v_in, size_t offset) \
 static TYPE1 TCNAME(void* v_in, size_t offset) \
 { \
 	TYPE2 in_val = *((TYPE2*)v_in); \
-	if(in_val > TYPE1_MAX) \
+	if(in_val > (TYPE1_MAX)) \
 	{ \
 		return TYPE1_MAX; \
 	} \
@@ -1028,11 +1049,11 @@ static TYPE1 TCNAME(void* v_in, size_t offset) \
 static TYPE1 TCNAME(void* v_in, size_t offset) \
 { \
 	TYPE2 in_val = *((TYPE2*)v_in); \
-	if(in_val > TYPE1_MAX) \
+	if(in_val > (TYPE1_MAX)) \
 	{ \
 		return TYPE1_MAX; \
 	} \
-	else if(in_val < TYPE1_MIN) \
+	else if(in_val < (TYPE1_MIN)) \
 	{ \
 		return TYPE1_MIN; \
 	} \
@@ -1046,7 +1067,7 @@ static TYPE1 TCNAME(void* v_in, size_t offset) \
 static TYPE1 TCNAME(void* v_in, size_t offset) \
 { \
 	TYPE2 in_val = *((TYPE2*)v_in); \
-	if(in_val > TYPE1_MAX) \
+	if(in_val > (TYPE1_MAX)) \
      { \
           return TYPE1_MAX; \
      } \
@@ -1060,9 +1081,9 @@ static TYPE1 TCNAME(void* v_in, size_t offset) \
 static TYPE1 TCNAME(void* v_in, size_t offset) \
 { \
 	TYPE2 in_val = *((TYPE2*)v_in); \
-	if(in_val > TYPE1_MAX) \
+	if(in_val > (TYPE1_MAX)) \
      { \
-          return TYPE1_MAX; \
+          return (TYPE1_MAX); \
      } \
 	else if(in_val < 0) \
      { \
@@ -1478,10 +1499,10 @@ BINARY_OP_RUNNER(VO_FCN_RNAME(OP,TYPEN), VO_FCN_FNAME(OP,TYPEN), VO_FCN_CASNAME(
 #define SGNBIT_INT_DEF(NAME, TYPE, UTYPE, SIZEM1) \
 static TYPE NAME(TYPE in)                         \
 {                                                 \
-	return (UTYPE)in >> SIZEM1;                  \
+	return (UTYPE)in >> (SIZEM1);                  \
 }
 
-#define SGNBIT_INT_METADEF(SIZE) SGNBIT_INT_DEF(FW_INT_FCN_FNAME(Sgn, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1));
+#define SGNBIT_INT_METADEF(SIZE) SGNBIT_INT_DEF(FW_INT_FCN_FNAME(Sgn, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE)-1);
 
 SGNBIT_INT_METADEF(8);
 SGNBIT_INT_METADEF(16);
@@ -1496,7 +1517,7 @@ SGNBIT_INT_METADEF(64);
 static TYPE NAME(TYPE in)                        \
 {                                                \
 	TYPE out;                                   \
-	TYPE mask = in >> SIZEM1;                   \
+	TYPE mask = in >> (SIZEM1);                   \
 	out = (in ^ mask) - mask;                   \
 	if(out < 0)                                 \
 	{                                           \
@@ -1506,7 +1527,7 @@ static TYPE NAME(TYPE in)                        \
 }
 
 #define ABS_INT_METADEF(SIZE)                                                           \
-ABS_INT_DEF(FW_INT_FCN_FNAME(Abs, SIZE), FW_INT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
+ABS_INT_DEF(FW_INT_FCN_FNAME(Abs, SIZE), FW_INT_TYPE(SIZE), (SIZE)-1, FW_INT_MAX(SIZE)); \
 UNARY_OP_RUNNER_METADEF(Abs, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
 
 ABS_INT_METADEF(8);
@@ -1525,13 +1546,13 @@ static TYPE NAME(TYPE augend, TYPE addend)              \
 	TYPE flip2 = uadd ^ addend;                        \
 	if((flip1 & flip2) < 0)                            \
 	{                                                  \
-		return (TYPE)MAX_VAL  + (~uadd >> SIZEM1);    \
+		return (TYPE)(MAX_VAL)  + (~uadd >> (SIZEM1));    \
 	}                                                  \
 	return uadd;                                       \
 }
 
 #define ADD_INT_METADEF(SIZE)                                                                               \
-ADD_INT_DEF(FW_INT_FCN_FNAME(Add, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
+ADD_INT_DEF(FW_INT_FCN_FNAME(Add, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE)-1, FW_INT_MAX(SIZE)); \
 BINARY_OP_RUNNER_METADEF(Add, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPEC(SIZE));
 
 ADD_INT_METADEF(8);
@@ -1551,13 +1572,13 @@ static TYPE NAME(TYPE minuend, TYPE subtrahend)         \
 	TYPE flip2 = usub ^ ~subtrahend;                   \
 	if((flip1 & flip2) < 0)                            \
 	{                                                  \
-		return (TYPE)MAX_VAL  + (~usub >> SIZEM1);    \
+		return (TYPE)(MAX_VAL)  + (~usub >> (SIZEM1));    \
 	}                                                  \
 	return usub;                                       \
 }
 
 #define SUB_INT_METADEF(SIZE)                                                                               \
-SUB_INT_DEF(FW_INT_FCN_FNAME(Sub, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE-1), FW_INT_MAX(SIZE)); \
+SUB_INT_DEF(FW_INT_FCN_FNAME(Sub, SIZE), FW_INT_TYPE(SIZE), FW_UINT_TYPE(SIZE), (SIZE)-1, FW_INT_MAX(SIZE)); \
 BINARY_OP_RUNNER_METADEF(Sub, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPEC(SIZE));
 
 SUB_INT_METADEF(8);
@@ -1573,11 +1594,11 @@ SUB_INT_METADEF(64);
 static TYPE NAME(TYPE mul1, TYPE mul2)                   \
 {                                                        \
 	PTYPE promoted_mul = (PTYPE)mul1 * (PTYPE)mul2;     \
-	if(promoted_mul > MAX_VAL)                          \
+	if(promoted_mul > (MAX_VAL))                          \
 	{                                                   \
 		return MAX_VAL;                                \
 	}                                                   \
-	else if(promoted_mul < MIN_VAL)                     \
+	else if(promoted_mul < (MIN_VAL))                     \
 	{                                                   \
 		return MIN_VAL;                                \
 	}                                                   \
@@ -1802,7 +1823,7 @@ static TYPE NAME(TYPE numer, TYPE denom)                                        
 	}                                                                           \
 	else if(denom < 0)                                                          \
 	{                                                                           \
-		if(denom == -1 && numer == MIN_VAL)                                    \
+		if(denom == -1 && numer == (MIN_VAL))                                    \
 		{                                                                      \
 			return MAX_VAL;                                                   \
 		}                                                                      \
@@ -1888,7 +1909,7 @@ MOD_INT_METADEF(64);
 #define NEG_INT_DEF(NAME, TYPE, MAX_VAL, MIN_VAL) \
 static TYPE NAME(TYPE in)                         \
 {                                                 \
-	if(in == MIN_VAL)                            \
+	if(in == (MIN_VAL))                            \
 	{                                            \
 		return MAX_VAL;                         \
 	}                                            \
@@ -1974,7 +1995,7 @@ ABS_UINT_METADEF(64);
 static TYPE NAME(TYPE augend, TYPE addend) \
 {                                          \
 	TYPE ret = augend + addend;           \
-	return (ret < augend)? MAX_VAL : ret; \
+	return (ret < augend)? (MAX_VAL) : ret; \
 }
 
 #define ADD_UINT_METADEF(SIZE)                                                                               \
@@ -2014,7 +2035,7 @@ SUB_UINT_METADEF(64);
 static TYPE NAME(TYPE mul1, TYPE mul2)               \
 {                                                    \
 	PTYPE promoted_mul = (PTYPE)mul1 * (PTYPE)mul2; \
-	if(promoted_mul > MAX_VAL)                      \
+	if(promoted_mul > (MAX_VAL))                      \
 	{                                               \
 		return MAX_VAL;                            \
 	}                                               \
@@ -2158,7 +2179,7 @@ static TYPE NAME(TYPE numer, TYPE denom)         \
 	TYPE ret, rem;                              \
 	if(denom == 0)                              \
 	{                                           \
-		return numer? MAX_VAL : 0;             \
+		return numer? (MAX_VAL) : 0;             \
 	}                                           \
 	ret = numer/denom;                          \
 	rem = numer%denom;                          \
@@ -2893,215 +2914,39 @@ NOT_FOUND_ERROR:
 	
 }
 
-
-void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop, long opts, mxArray** output)
-{
-	int                 is_complex;
-	size_t              i, j, elem_size;
-	size_t              dest_offset, dest_num_elems;
-	size_t              in_num_elems;
-	binaryvaropfcn_T    varop_fcn;
-	
-	int8_T*             dest_real;
-	int8_T*             dest_imag;
-	
-	WideInput_T(int8_T) wide_dest_real;
-	WideInput_T(int8_T) wide_dest_imag;
-	
-	WideInput_T(int8_T) wide_in_real;
-	WideInput_T(int8_T) wide_in_imag;
-	
-	if(varop == VAROP_CPY)
-	{
-		msh_OverwriteVariable(indexed_var, in_var, opts, output);
-		return;
-	}
-	
-	is_complex         = mxIsComplex(in_var);
-	varop_fcn          = msh_ChooseBinaryVarOpFcn(varop, mxGetClassID(indexed_var->dest_var));
-	
-	dest_real          = mxGetData(indexed_var->dest_var);
-	dest_imag          = mxGetImagData(indexed_var->dest_var);
-	
-	wide_dest_real.mxtype = mxGetClassID(indexed_var->dest_var);
-	wide_dest_imag.mxtype = wide_dest_real.mxtype;
-	
-	wide_in_real.mxtype = mxGetClassID(in_var);
-	wide_in_imag.mxtype = wide_in_real.mxtype;
-	
-	wide_in_real.input = mxGetData(in_var);
-	wide_in_imag.input = mxGetImagData(in_var);
-	
-	if(mxIsSparse(indexed_var->dest_var))
-	{
-		dest_num_elems = mxGetNzmax(indexed_var->dest_var);
-		in_num_elems   = mxGetNzmax(in_var);
-		
-		wide_dest_real.input     = dest_real;
-		wide_dest_real.num_elems = dest_num_elems;
-		
-		wide_in_real.num_elems   = in_num_elems;
-		
-		varop_fcn(&wide_dest_real, &wide_in_real, opts);
-		if(is_complex)
-		{
-			wide_dest_imag.input     = dest_imag;
-			wide_dest_imag.num_elems = dest_num_elems;
-			
-			wide_in_imag.num_elems   = in_num_elems;
-			
-			varop_fcn(&wide_dest_imag, &wide_in_imag, opts);
-		}
-		
-	}
-	else
-	{
-		
-		elem_size    = mxGetElementSize(indexed_var->dest_var);
-		in_num_elems = mxGetNumberOfElements(in_var);
-		
-		wide_in_real.num_elems = in_num_elems;
-		wide_in_imag.num_elems = in_num_elems;
-		
-		if(indexed_var->indices.start_idxs == NULL)
-		{
-			dest_num_elems  = mxGetNumberOfElements(indexed_var->dest_var);
-			wide_dest_real.input     = dest_real;
-			wide_dest_real.num_elems = dest_num_elems;
-			varop_fcn(&wide_dest_real, &wide_in_real, opts);
-			if(is_complex)
-			{
-				wide_dest_imag.input     = dest_imag;
-				wide_dest_imag.num_elems = dest_num_elems;
-				varop_fcn(&wide_dest_imag, &wide_in_imag, opts);
-			}
-		}
-		else
-		{
-			for(i = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
-			{
-				for(j = 0; j < indexed_var->indices.num_lens; j++)
-				{
-					dest_offset = indexed_var->indices.start_idxs[i+j]*elem_size/sizeof(int8_T);
-					
-					wide_dest_real.input     = dest_real + dest_offset;
-					wide_dest_real.num_elems = indexed_var->indices.slice_lens[j];
-					
-					varop_fcn(&wide_dest_real, &wide_in_real, opts);
-					
-					if(is_complex)
-					{
-						wide_dest_imag.input     = dest_imag + dest_offset;
-						wide_dest_imag.num_elems = indexed_var->indices.slice_lens[j];
-						
-						varop_fcn(&wide_dest_imag, &wide_in_imag, opts);
-					}
-					
-					/* this condition should be optimized to the exterior by the compiler */
-					if(in_num_elems != 1)
-					{
-						wide_in_real.input                += indexed_var->indices.slice_lens[j]*elem_size/sizeof(int8_T);
-						if(is_complex) wide_in_imag.input += indexed_var->indices.slice_lens[j]*elem_size/sizeof(int8_T);
-					}
-				}
-			}
-		}
-	}
-	
-	if(output != NULL)
-	{
-		*output = mxDuplicateArray(indexed_var->dest_var);
-	}
-	
-}
-
-void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, const mxArray* subs_struct, msh_varop_T varop, long opts, mxArray** output)
-{
-	/* Note: in_vars is always a cell array */
-	size_t i;
-	
-	int exp_num_in_args = msh_GetNumVarOpArgs(varop)-1;
-	IndexedVariable_T indexed_var = {parent_var, {NULL, NULL, 0, NULL, 0}};
-	
-	if(mxGetNumberOfElements(in_vars) != exp_num_in_args)
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNumberOfInputsError", "Too many or too few inputs.");
-	}
-	
-	if(!mxIsCell(in_vars))
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "InVarsNotCellError", "Input variables should be contained in a cell array. Please use the provided entry functions.");
-	}
-	
-	if(subs_struct != NULL)
-	{
-		indexed_var = msh_ParseSubscriptStruct(parent_var, subs_struct);
-	}
-	
-	for(i = 0; i < exp_num_in_args; i++)
-	{
-		msh_CheckValidInput(&indexed_var, mxGetCell(in_vars, i));
-	}
-	
-	if(opts & MSH_IS_SYNCHRONOUS) msh_AcquireProcessLock(g_process_lock);
-	
-	switch(exp_num_in_args)
-	{
-		case(0):
-		{
-			msh_UnaryVariableOperation(&indexed_var, varop, opts, output);
-			break;
-		}
-		case(1):
-		{
-			msh_BinaryVariableOperation(&indexed_var, mxGetCell(in_vars, 0), varop, opts, output);
-			break;
-		}
-		default:
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNumberOfInputsError", "Too many or too few inputs.");
-		}
-	}
-	
-	if(opts & MSH_IS_SYNCHRONOUS) msh_ReleaseProcessLock(g_process_lock);
-	
-	if(indexed_var.indices.start_idxs != NULL)
-	{
-		mxFree(indexed_var.indices.start_idxs);
-	}
-	
-	if(indexed_var.indices.slice_lens != NULL)
-	{
-		mxFree(indexed_var.indices.slice_lens);
-	}
-	
-}
-
-
-void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, long opts, mxArray** output)
+#if 0
+static void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, long opts, mxArray** output)
 {
 	
 	int               field_num, in_num_fields, is_complex;
-	size_t            i, j, dest_idx, in_idx, elem_size, dest_offset, in_offset;
+	size_t            i, j, dest_idx, in_idx, elem_size, dest_offset, in_offset, in_num_elems;
 	binaryvaropfcn_T  varop_fcn;
 	const char_T*     curr_field_name;
 	
-	int8_T* dest_real;
-	int8_T* dest_imag;
+	int8_T* dest_real_anchor;
+	int8_T* dest_imag_anchor;
 	
-	WideInput_T(int8_T) wide_dest_real;
-	WideInput_T(int8_T) wide_dest_imag;
-	WideInput_T(void)   wide_dest_ir;
-	WideInput_T(void)   wide_dest_jc;
+	WideInput_T(int8_T)  wide_dest_real;
+	WideInput_T(int8_T)  wide_dest_imag;
+	WideInput_T(mwIndex) wide_dest_ir;
+	WideInput_T(mwIndex) wide_dest_jc;
 	
-	WideInput_T(int8_T) wide_in_real;
-	WideInput_T(int8_T) wide_in_imag;
-	WideInput_T(void)   wide_in_ir;
-	WideInput_T(void)   wide_in_jc;
+	WideInput_T(int8_T)  wide_in_real;
+	WideInput_T(int8_T)  wide_in_imag;
+	WideInput_T(mwIndex) wide_in_ir;
+	WideInput_T(mwIndex) wide_in_jc;
 	
 	mxClassID         dest_class_id  = mxGetClassID(indexed_var->dest_var);
 	mxClassID         in_class_id    = mxGetClassID(in_var);
 	IndexedVariable_T sub_variable   = {0};
+	
+	/* modification to sparses:
+	 * sparses must be with sparses
+	 * dims must be the same
+	 * in_nzmax <= dest_nzmax
+	 *
+	 * these were checked in msh_CheckValidInput
+	 */
 	
 	/* struct case */
 	if(dest_class_id == mxSTRUCT_CLASS)
@@ -3181,26 +3026,62 @@ void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var
 		
 		if(mxIsSparse(indexed_var->dest_var))
 		{
-			dest_num_elems = mxGetNzmax(dest_var);
 			in_num_elems   = mxGetNumberOfElements(in_var);
 			
-			wide_dest_real.input = mxGetData(indexed_var->dest_var);
-			wide_dest_real.num_elems = dest_num_elems;
+			/* ir setup */
+			wide_dest_ir.input     = mxGetIr(indexed_var->dest_var);
+			wide_dest_ir.num_elems = mxGetNzmax(in_var); /* copy the nzmax of input because in_nzmax <= dest_nzmax */
+			wide_dest_ir.mxtype    = mxINDEX_CLASS;
 			
+			wide_in_ir.input       = mxGetIr(in_var);
+			wide_in_ir.num_elems   = mxGetNzmax(in_var);
+			wide_in_ir.mxtype      = mxINDEX_CLASS;
 			
-			msh_CpySizeRunner()
-			memcpy(mxGetIr(indexed_var->dest_var), mxGetIr(in_var), dest_num_elems*sizeof(mwIndex));
-			memcpy(mxGetJc(indexed_var->dest_var), mxGetJc(in_var), (mxGetN(in_var) + 1)*sizeof(mwIndex));
-			memcpy(mxGetData(indexed_var->dest_var), mxGetData(in_var), dest_num_elems*mxGetElementSize(in_var));
+			/* jc setup */
+			wide_dest_ir.input     = mxGetJc(indexed_var->dest_var);
+			wide_dest_ir.num_elems = mxGetN(indexed_var->dest_var) + 1;
+			wide_dest_ir.mxtype    = mxINDEX_CLASS;
+			
+			wide_in_ir.input       = mxGetJc(in_var);
+			wide_in_ir.num_elems   = mxGetN(in_var) + 1;
+			wide_in_ir.mxtype      = mxINDEX_CLASS;
+			
+			/* real setup */
+			wide_dest_real.input     = mxGetData(indexed_var->dest_var);
+			wide_dest_real.num_elems = mxGetNzmax(in_var); /* copy the nzmax of input because in_nzmax <= dest_nzmax */
+			wide_dest_real.mxtype    = mxGetClassID(indexed_var->dest_var);
+			
+			wide_in_real.input       = mxGetData(in_var);
+			wide_in_real.num_elems   = mxGetNzmax(in_var);
+			wide_in_real.mxtype      = mxGetClassID(in_var);
+			
+			/* copying */
+			varop_fcn(&wide_dest_ir, &wide_in_ir, opts);
+			varop_fcn(&wide_dest_jc, &wide_in_jc, opts);
+			varop_fcn(&wide_dest_real, &wide_in_real, opts);
+			
 			if(is_complex)
-				memcpy(mxGetImagData(indexed_var->dest_var), mxGetImagData(in_var), dest_num_elems*mxGetElementSize(in_var));
+			{
+				/* imag setup */
+				
+				wide_dest_imag.input     = mxGetImagData(indexed_var->dest_var);
+				wide_dest_imag.num_elems = mxGetNzmax(in_var); /* copy the nzmax of input because in_nzmax <= dest_nzmax */
+				wide_dest_imag.mxtype    = mxGetClassID(indexed_var->dest_var);
+				
+				wide_in_imag.input       = mxGetImagData(in_var);
+				wide_in_imag.num_elems   = mxGetNzmax(in_var);
+				wide_in_imag.mxtype      = mxGetClassID(in_var);
+				
+				varop_fcn(&wide_dest_imag, &wide_in_imag, opts);
+				
+			}
 			
 		}
 		else
 		{
 			
-			dest_real = mxGetData(indexed_var->dest_var);
-			dest_imag = mxGetImagData(indexed_var->dest_var);
+			dest_real_anchor = mxGetData(indexed_var->dest_var);
+			dest_imag_anchor = mxGetImagData(indexed_var->dest_var);
 			
 			in_real = mxGetData(in_var);
 			in_imag = mxGetImagData(in_var);
@@ -3209,22 +3090,22 @@ void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var
 			
 			if(indexed_var->indices.start_idxs == NULL)
 			{
-				in_num_elems = mxGetNumberOfElements(in_var);
+				/* here we copy everything */
 				
-				if(in_num_elems == 1)
+				if(mxGetNumberOfElements(in_var) == 1)
 				{
 					for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
 					{
-						memcpy(dest_real + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
+						memcpy(dest_real_anchor + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
 						if(is_complex)
-							memcpy(dest_imag + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
+							memcpy(dest_imag_anchor + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
 					}
 				}
 				else
 				{
-					memcpy(dest_real, in_real, in_num_elems*elem_size);
+					memcpy(dest_real_anchor, in_real, in_num_elems*elem_size);
 					if(is_complex)
-						memcpy(dest_imag, in_imag, in_num_elems*elem_size);
+						memcpy(dest_imag_anchor, in_imag, in_num_elems*elem_size);
 				}
 				
 			}
@@ -3242,16 +3123,16 @@ void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var
 						{
 							for(dest_idx = 0; dest_idx < indexed_var->indices.slice_lens[j]; dest_idx++)
 							{
-								memcpy(dest_real + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
+								memcpy(dest_real_anchor + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
 								if(is_complex)
-									memcpy(dest_imag + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
+									memcpy(dest_imag_anchor + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
 							}
 						}
 						else
 						{
-							memcpy(dest_real + dest_offset, in_real + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
+							memcpy(dest_real_anchor + dest_offset, in_real + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
 							if(is_complex)
-								memcpy(dest_imag + dest_offset, in_imag + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
+								memcpy(dest_imag_anchor + dest_offset, in_imag + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
 							in_offset += indexed_var->indices.slice_lens[j]*elem_size/sizeof(int8_T);
 						}
 						
@@ -3266,6 +3147,319 @@ void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var
 	if(output != NULL)
 	{
 		*output = mxDuplicateArray(indexed_var->dest_var);
+	}
+	
+}
+#endif
+
+void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop, long opts, mxArray** output)
+{
+	int               field_num, in_num_fields, is_complex;
+	size_t            i, j;
+	size_t            dest_idx, dest_elem_size, dest_offset;
+	size_t            in_idx, in_elem_size, in_num_elems;
+	binaryvaropfcn_T  varop_fcn;
+	const char_T*     curr_field_name;
+	
+	int8_T*             dest_real_anchor;
+	int8_T*             dest_imag_anchor;
+	
+	WideInput_T(int8_T)  wide_dest_real;
+	WideInput_T(int8_T)  wide_dest_imag;
+	WideInput_T(mwIndex) wide_dest_ir;
+	WideInput_T(mwIndex) wide_dest_jc;
+	
+	WideInput_T(int8_T)  wide_in_real;
+	WideInput_T(int8_T)  wide_in_imag;
+	WideInput_T(mwIndex) wide_in_ir;
+	WideInput_T(mwIndex) wide_in_jc;
+	
+	IndexedVariable_T sub_variable = {0};
+	
+	switch(mxGetClassID(indexed_var->dest_var))
+	{
+		case (mxSTRUCT_CLASS):
+		{
+			in_num_fields = mxGetNumberOfFields(in_var);
+			in_num_elems = mxGetNumberOfElements(in_var);
+			
+			/* go through each element */
+			if(indexed_var->indices.start_idxs == NULL)
+			{
+				for(field_num = 0; field_num < in_num_fields; field_num++)     /* each field */
+				{
+					curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
+					for(dest_idx = 0; dest_idx < in_num_elems; dest_idx++)
+					{
+						sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
+						msh_BinaryVariableOperation(&sub_variable, mxGetField(in_var, dest_idx, curr_field_name), varop, opts, output);
+					}
+				}
+			}
+			else
+			{
+				for(field_num = 0; field_num < in_num_fields; field_num++)     /* each field */
+				{
+					curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
+					for(i = 0, in_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
+					{
+						for(j = 0; j < indexed_var->indices.num_lens; j++)
+						{
+							for(dest_idx = indexed_var->indices.start_idxs[i + j]; dest_idx < indexed_var->indices.start_idxs[i + j] + indexed_var->indices.slice_lens[j]; dest_idx++, in_idx++)
+							{
+								/* this inner conditional should be optimized out by the compiler */
+								sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
+								msh_BinaryVariableOperation(&sub_variable, mxGetField(in_var, (in_num_elems == 1)? 0 : in_idx, curr_field_name), varop, opts, output);
+							}
+						}
+					}
+				}
+			}
+			break;
+		}
+		case (mxCELL_CLASS):
+		{
+			
+			in_num_elems = mxGetNumberOfElements(in_var);
+			
+			/* go through each element */
+			if(indexed_var->indices.start_idxs == NULL)
+			{
+				for(dest_idx = 0; dest_idx < in_num_elems; dest_idx++)
+				{
+					sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
+					msh_BinaryVariableOperation(&sub_variable, mxGetCell(in_var, dest_idx), varop, opts, output);
+				}
+			}
+			else
+			{
+				for(i = 0, in_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
+				{
+					for(j = 0; j < indexed_var->indices.num_lens; j++)
+					{
+						for(dest_idx = indexed_var->indices.start_idxs[i + j]; dest_idx < indexed_var->indices.start_idxs[i + j] + indexed_var->indices.slice_lens[j]; dest_idx++, in_idx++)
+						{
+							/* this inner conditional should be optimized out by the compiler */
+							sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
+							msh_BinaryVariableOperation(&sub_variable, mxGetCell(in_var, (in_num_elems == 1)? 0 : in_idx), varop, opts, output);
+						}
+					}
+				}
+			}
+			break;
+		}
+		default:
+		{
+			
+			
+			wide_in_real.mxtype   = mxGetClassID(in_var);
+			wide_in_imag.mxtype   = wide_in_real.mxtype;
+			in_elem_size          = mxGetElementSize(in_var);
+			
+			wide_dest_real.mxtype = mxGetClassID(indexed_var->dest_var);
+			wide_dest_imag.mxtype = wide_dest_real.mxtype;
+			dest_elem_size        = mxGetElementSize(indexed_var->dest_var);
+			
+			
+			varop_fcn = msh_ChooseBinaryVarOpFcn(varop, mxGetClassID(indexed_var->dest_var));
+			is_complex = mxIsComplex(in_var);
+			
+			if(mxIsSparse(indexed_var->dest_var))
+			{
+				in_num_elems = mxGetNumberOfElements(in_var);
+				
+				/* repetitive function calls should be optimized by the compiler */
+				
+				/* ir setup */
+				wide_in_ir.input = mxGetIr(in_var);
+				wide_in_ir.num_elems = mxGetNzmax(in_var);
+				wide_in_ir.mxtype = mxINDEX_CLASS;
+				
+				wide_dest_ir.input = mxGetIr(indexed_var->dest_var);
+				wide_dest_ir.num_elems = wide_in_ir.num_elems; /* copy the nzmax of input because in_nzmax <= dest_nzmax */
+				wide_dest_ir.mxtype = mxINDEX_CLASS;
+				
+				/* jc setup */
+				wide_in_jc.input = mxGetJc(in_var);
+				wide_in_jc.num_elems = mxGetN(in_var) + 1;
+				wide_in_jc.mxtype = mxINDEX_CLASS;
+				
+				wide_dest_jc.input = mxGetJc(indexed_var->dest_var);
+				wide_dest_jc.num_elems = wide_in_jc.num_elems;
+				wide_dest_jc.mxtype = mxINDEX_CLASS;
+				
+				/* real setup */
+				wide_in_real.input = mxGetData(in_var);
+				wide_in_real.num_elems = mxGetNzmax(in_var);
+				
+				wide_dest_real.input = mxGetData(indexed_var->dest_var);
+				wide_dest_real.num_elems = wide_in_real.num_elems; /* copy the nzmax of input because in_nzmax <= dest_nzmax */
+				
+				/* copying */
+				varop_fcn(&wide_dest_ir, &wide_in_ir, opts);
+				varop_fcn(&wide_dest_jc, &wide_in_jc, opts);
+				varop_fcn(&wide_dest_real, &wide_in_real, opts);
+				
+				if(is_complex)
+				{
+					/* imag setup */
+					wide_in_imag.input = mxGetImagData(in_var);
+					wide_in_imag.num_elems = wide_in_real.num_elems;
+					
+					wide_dest_imag.input = mxGetImagData(indexed_var->dest_var);
+					wide_dest_imag.num_elems = wide_in_real.num_elems;
+					
+					varop_fcn(&wide_dest_imag, &wide_in_imag, opts);
+				}
+			}
+			else
+			{
+				if(indexed_var->indices.start_idxs == NULL)
+				{
+					/* use the entire variable */
+					
+					/* real setup */
+					wide_in_real.input = mxGetData(in_var);
+					wide_in_real.num_elems = mxGetNumberOfElements(in_var);
+					
+					wide_dest_real.input = mxGetData(indexed_var->dest_var);
+					wide_dest_real.num_elems = wide_in_real.num_elems;
+					
+					/* copying */
+					varop_fcn(&wide_dest_real, &wide_in_real, opts);
+					
+					if(is_complex)
+					{
+						/* imag setup */
+						wide_in_imag.input = mxGetImagData(in_var);
+						wide_in_imag.num_elems = wide_in_real.num_elems;
+						
+						wide_dest_imag.input = mxGetImagData(indexed_var->dest_var);
+						wide_dest_imag.num_elems = wide_dest_real.num_elems;
+						
+						/* copying */
+						varop_fcn(&wide_dest_imag, &wide_in_imag, opts);
+					}
+				}
+				else
+				{
+					
+					dest_real_anchor = mxGetData(indexed_var->dest_var);
+					dest_imag_anchor = mxGetImagData(indexed_var->dest_var);
+					
+					wide_in_real.input = mxGetData(in_var);
+					wide_in_real.num_elems = mxGetNumberOfElements(in_var);
+					
+					if(is_complex)
+					{
+						wide_in_imag.input = mxGetImagData(in_var);
+						wide_in_imag.num_elems = wide_in_real.num_elems;
+					}
+					
+					for(i = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
+					{
+						for(j = 0; j < indexed_var->indices.num_lens; j++)
+						{
+							dest_offset = indexed_var->indices.start_idxs[i+j]*dest_elem_size/sizeof(int8_T);
+							
+							/* real setup */
+							wide_dest_real.input = dest_real_anchor + dest_offset;
+							wide_dest_real.num_elems = indexed_var->indices.slice_lens[j];
+							
+							varop_fcn(&wide_dest_real, &wide_in_real, opts);
+							
+							if(is_complex)
+							{
+								wide_dest_imag.input = dest_imag_anchor + dest_offset;
+								wide_dest_imag.num_elems = indexed_var->indices.slice_lens[j];
+								
+								varop_fcn(&wide_dest_imag, &wide_in_imag, opts);
+							}
+							
+							/* this condition should be optimized to the exterior by the compiler */
+							if(wide_in_real.num_elems != 1)
+							{
+								wide_in_real.input += indexed_var->indices.slice_lens[j]*in_elem_size/sizeof(int8_T);
+								if(is_complex)
+								{
+									wide_in_imag.input += indexed_var->indices.slice_lens[j]*in_elem_size/sizeof(int8_T);
+								}
+							}
+						}
+					}
+				}
+			}
+			break;
+		}
+	}
+	
+	if(output != NULL)
+	{
+		*output = mxDuplicateArray(indexed_var->dest_var);
+	}
+	
+}
+
+
+void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, const mxArray* subs_struct, msh_varop_T varop, long opts, mxArray** output)
+{
+	/* Note: in_vars is always a cell array */
+	size_t i;
+	
+	int exp_num_in_args = msh_GetNumVarOpArgs(varop)-1;
+	IndexedVariable_T indexed_var = {parent_var, {NULL, NULL, 0, NULL, 0}};
+	
+	if(mxGetNumberOfElements(in_vars) != exp_num_in_args)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNumberOfInputsError", "Too many or too few inputs.");
+	}
+	
+	if(!mxIsCell(in_vars))
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "InVarsNotCellError", "Input variables should be contained in a cell array. Please use the provided entry functions.");
+	}
+	
+	if(subs_struct != NULL)
+	{
+		indexed_var = msh_ParseSubscriptStruct(parent_var, subs_struct);
+	}
+	
+	for(i = 0; i < exp_num_in_args; i++)
+	{
+		/* no varops for sparses except for copying---this is checked here */
+		msh_CheckValidInput(&indexed_var, mxGetCell(in_vars, i), varop);
+	}
+	
+	if(opts & MSH_IS_SYNCHRONOUS) msh_AcquireProcessLock(g_process_lock);
+	
+	switch(exp_num_in_args)
+	{
+		case(0):
+		{
+			msh_UnaryVariableOperation(&indexed_var, varop, opts, output);
+			break;
+		}
+		case(1):
+		{
+			msh_BinaryVariableOperation(&indexed_var, mxGetCell(in_vars, 0), varop, opts, output);
+			break;
+		}
+		default:
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNumberOfInputsError", "Too many or too few inputs.");
+		}
+	}
+	
+	if(opts & MSH_IS_SYNCHRONOUS) msh_ReleaseProcessLock(g_process_lock);
+	
+	if(indexed_var.indices.start_idxs != NULL)
+	{
+		mxFree(indexed_var.indices.start_idxs);
+	}
+	
+	if(indexed_var.indices.slice_lens != NULL)
+	{
+		mxFree(indexed_var.indices.slice_lens);
 	}
 	
 }

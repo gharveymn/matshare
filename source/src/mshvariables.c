@@ -137,11 +137,12 @@ void msh_AddVariableToList(VariableList_T* var_list, VariableNode_T* var_node)
 	/* append to the end of the list */
 	var_list->last = var_node;
 	
+	/*
 	if(var_list->mvar_table != NULL)
 	{
 		msh_AddSegmentToTable(var_list->mvar_table, msh_GetSegmentNode(var_node), mxGetData(msh_GetVariableData(var_node)));
 	}
-	
+	*/
 }
 
 
@@ -190,10 +191,12 @@ void msh_RemoveVariableFromList(VariableNode_T* var_node)
 		return;
 	}
 	
+	/*
 	if(var_list->mvar_table != NULL)
 	{
 		msh_RemoveSegmentFromTable(var_list->mvar_table, msh_GetSegmentNode(var_node), mxGetData(msh_GetVariableData(var_node)));
 	}
+	*/
 	
 	/* reset references in prev and next var node */
 	if(msh_GetPreviousVariable(var_node) != NULL)

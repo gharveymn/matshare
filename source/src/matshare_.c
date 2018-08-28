@@ -56,9 +56,8 @@ LocalInfo_T g_local_info =
 	TRUE                        /* is_deinitialized */
 };
 
-/**
+/*
  * MATLAB variable tracking table
- */
 SegmentTable_T g_mvar_table =
 {
 	NULL,
@@ -66,6 +65,7 @@ SegmentTable_T g_mvar_table =
 	msh_GetSegmentHashByDataAddress,
 	msh_CompareDataAddressKey
 };
+  */
 
 /**
  * Segment tracking table via segment numbers
@@ -101,7 +101,7 @@ SegmentList_T g_local_seg_list =
 
 VariableList_T g_local_var_list =
 {
-	&g_mvar_table,
+	/*&g_mvar_table,*/
 	NULL,
 	NULL
 };
@@ -1134,7 +1134,7 @@ void msh_VarOps(int nlhs, mxArray** plhs, int num_args, const mxArray** in_args,
 	 *
 	 * 0. directive
 	 * 1. varop
-	 * 2. dest_var
+	 * 2. parent_var
 	 * 3. {in_var1, in_var2, ...}
 	 * 4. {substruct, opt1, opt2, ...}
 	 */

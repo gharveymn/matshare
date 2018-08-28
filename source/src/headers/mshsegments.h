@@ -262,9 +262,9 @@ int msh_CompareDataAddressKey(void* data_address, void* comp_data_address);
  */
 extern SegmentList_T g_local_seg_list;
 
-/**
+/*
  * Foward declaration of the global MATLAB variable tracking table
- */
 extern SegmentTable_T g_mvar_table;
+ */
 
 #endif /* MATSHARE_MSHSEGMENTS_H */

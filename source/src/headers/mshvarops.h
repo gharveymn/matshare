@@ -93,26 +93,18 @@ ParsedIndices_T msh_ParseIndices(mxArray* subs_arr, const mxArray* dest_var);
 
 mwIndex msh_ParseSingleIndex(mxArray* subs_arr, const mxArray* dest_var);
 
-void msh_CheckValidInput(IndexedVariable_T* indexed_var, const mxArray* in_var);
+void msh_CheckValidInput(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop);
 
 /**
  * Compares the size of the two mxArrays. Returns TRUE if
  * they are the same size, returns FALSE otherwise.
  *
  * @param dest_var The first variable to be compared.
- * @param comp_var The second variable to be compared.
+ * @param in_var The second variable to be compared.
  * @return Whether they are equal in size.
  */
-void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* comp_var);
+void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop);
 
-
-/**
- * Overwrites the data in dest_var with the data in in_var.
- *
- * @param dest_var The destination variable.
- * @param in_var The input variable.
- */
-void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, long opts, mxArray** output);
 
 int msh_GetNumVarOpArgs(msh_varop_T varop);
 
