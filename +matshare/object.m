@@ -197,54 +197,13 @@ classdef object
 				
 			if(S(1).type(1) == '.' && ischar(S(1).subs))
 				if(strcmp(S(1).subs, 'data'))
-					
 					if(numel(S) < 2)
 						error('matshare:object:DirectAssignmentError', ...
 							 ['Direct assignment to the <strong>data</strong> ' ...
 							  'property is not permitted. To assign all elements ' ...
 							  'use the '':'' operator.']);
 					end
-					
-					% for sparses modify a local copy then overwrite the whole thing
-					if(issparse(asgn_obj.data))
-						sparsecopy = subsasgn(asgn_obj.data, S(2:end), B);
-						asgn_obj.overwrite(sparsecopy);
-					else
-						for i = 2:numel(S)
-							currsubs = S(i);
-							if(iscell(currsubs))
-								for j = 1:numel(currsubs)
-									if(islogical(currsubs{j}))
-										currsubs{j} = find(currsubs{j});
-									else
-										currsubs{j} = full(double(currsubs{j}));
-									end
-								end
-							end
-						end
-						
-						if(isnumeric(B) || ischar(B) || islogical(B))
-							if(numel(S) > 1)
-								if(S(end).type(1) == '{' || S(end).type(1) == '.')
-									% reference will not index
-									castvar = subsref(asgn_obj.data, S(2:end));
-								else
-									% prevent indexing when casting
-									castvar = subsref(asgn_obj, S(1:end-1));
-								end
-							else
-								castvar = asgn_obj.data;
-							end
-						
-							% we're gonna forward this error to the 
-							% binary, so don't allow this to fail
-							if(isnumeric(castvar) || ischar(castvar) || islogical(castvar))
-								B = cast(B, 'like', castvar);
-							end
-						end
-						asgn_obj.overwrite(B, S(2:end));
-					end
-					
+					obj.overwrite(B, S(2:end));
 				elseif(strcmp(S(1).subs, 'shared_data'))
 					error('matshare:object:InaccessiblePropertyError', 'The shared_data property is not directly accessible.');
 				else

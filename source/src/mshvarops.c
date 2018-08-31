@@ -847,7 +847,7 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 				for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
 				{
 					sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
-					msh_CompareVariableSize(&sub_variable, mxGetField(in_var, dest_idx, curr_field_name), VAROP_MUL);
+					msh_CompareVariableSize(&sub_variable, mxGetField(in_var, dest_idx, curr_field_name), varop);
 				}
 			}
 		}
@@ -863,7 +863,7 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 						for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, comp_idx++)
 						{
 							sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
-							msh_CompareVariableSize(&sub_variable, mxGetField(in_var, (in_num_elems == 1)? 0 : comp_idx, curr_field_name), VAROP_MUL);
+							msh_CompareVariableSize(&sub_variable, mxGetField(in_var, (in_num_elems == 1)? 0 : comp_idx, curr_field_name), varop);
 						}
 					}
 				}
@@ -885,7 +885,7 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 			for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
 			{
 				sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
-				msh_CompareVariableSize(&sub_variable, mxGetCell(in_var, dest_idx), VAROP_MUL);
+				msh_CompareVariableSize(&sub_variable, mxGetCell(in_var, dest_idx), varop);
 			}
 		}
 		else
@@ -897,7 +897,7 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 					for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, comp_idx++)
 					{
 						sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
-						msh_CompareVariableSize(&sub_variable, mxGetCell(in_var, (in_num_elems == 1)? 0 : comp_idx), VAROP_MUL);
+						msh_CompareVariableSize(&sub_variable, mxGetCell(in_var, (in_num_elems == 1)? 0 : comp_idx), varop);
 					}
 				}
 			}

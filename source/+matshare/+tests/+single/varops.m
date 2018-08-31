@@ -1,3 +1,5 @@
+fprintf('Testing variable operations... ');
+
 utester = matshare.tests.single.unaryvaroptester;
 btester = matshare.tests.single.binaryvaroptester;
 
@@ -172,3 +174,5 @@ btester.test(5, -7);
 btester.test(-7, -5);
 btester.test(-realmax, realmax);
 % btester.test(int8(-5), int8(5)); !bug!
+
+fprintf('Test successful.\n\n');

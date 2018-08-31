@@ -1,3 +1,5 @@
+fprintf('Testing subscripted overwriting... ');
+
 % testing subscripted assignment
 tv = rand(10,14);
 f = matshare.share(tv);
@@ -74,3 +76,4 @@ end
 % 
 % f = matshare.share(tv);
 
+fprintf('Test successful.\n\n');
