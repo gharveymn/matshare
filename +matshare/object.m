@@ -130,7 +130,7 @@ classdef object
 			if(nargout == 0)
 				matshare_(8, 8, obj.shared_data, {in}, varargin);
 			else
-				ret = matshare_(8, 1, obj.shared_data, {in}, varargin);
+				ret = matshare_(8, 8, obj.shared_data, {in}, varargin);
 			end
 		end
 		

@@ -793,6 +793,7 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 	
 	size_t            in_num_elems  = mxGetNumberOfElements(in_var);
 	mxClassID         dest_class_id = mxGetClassID(indexed_var->dest_var);
+	mxClassID         in_class_id   = mxGetClassID(in_var);
 	IndexedVariable_T sub_variable  = {0};
 	
 	/*
@@ -801,12 +802,6 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(in_var), mxGetClassName(indexed_var->dest_var));
 	}
 	*/
-	
-	if(mxGetElementSize(indexed_var->dest_var) != mxGetElementSize(in_var))
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "ElementSizeError", "Element sizes were incompatible.");
-	}
-	
 	
 	/* if this is false, in the other case, the sizes will already be checked unless it is sparse */
 	if(indexed_var->indices.start_idxs == NULL && in_num_elems != 1)
@@ -954,6 +949,48 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 		}
 		else
 		{
+			
+			if(varop != VAROP_CPY)
+			{
+				
+				if(dest_class_id == mxCHAR_CLASS)
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "DestCharError", "Destination class cannot be 'char' for variable operations other than overwriting.");
+				}
+				
+				/*
+				 * Rules:
+				 * floats may operate with floats
+				 * integers may only operate with integers of the same class, or scalar doubles
+				 */
+				
+				/* check if dest class is int */
+				if(dest_class_id != mxDOUBLE_CLASS && dest_class_id != mxSINGLE_CLASS)
+				{
+					/* check if same int class */
+					if(dest_class_id != in_class_id)
+					{
+						/* if not then must be scalar double */
+						if((in_class_id != mxDOUBLE_CLASS && in_class_id != mxCHAR_CLASS) || in_num_elems != 1)
+						{
+							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IntegerOpError", "Fixed width integer operations may only be performed with both operands of the same type "
+							                                                               "or with one of the operands in scalar form of class 'double' or 'char'.");
+						}
+					}
+					
+				}
+				else if(in_class_id != mxDOUBLE_CLASS && in_class_id != mxSINGLE_CLASS && in_class_id != mxCHAR_CLASS)
+				{
+					/* error if dest is single or not scalar */
+					if(dest_class_id == mxSINGLE_CLASS || mxGetNumberOfElements(indexed_var->dest_var) != 1)
+					{
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IntegerOpError", "Fixed width integer operations may only be performed with both operands of the same type "
+						                                                               "or with one of the operands in scalar form of class 'double' or 'char'.");
+					}
+				}
+				
+			}
+			
 			if(mxIsSparse(in_var))
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "SparseInputError", "Cannot convert sparse matrix to full.");
@@ -982,7 +1019,7 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 #define VO_FCN_FNAME_(OP, TYPEN) msh_##OP##TYPEN
 #define VO_FCN_RNAME_(OP, TYPEN) msh_##OP##TYPEN##Runner
 #define VO_FCN_CTCNAME_(TYPEN) msh_Choose##TYPEN##Converter
-#define VO_FCN_TCNAME_(TYPEN1, TYPEN2) msh_TC##TYPEN2##To##TYPEN1
+#define VO_FCN_TCNAME_(TYPEN1, TYPEN2) msh_TC##TYPEN1##From##TYPEN2
 
 #define VO_FCN_FNAME(OP, TYPEN) VO_FCN_FNAME_(OP, TYPEN)
 #define VO_FCN_RNAME(OP, TYPEN) VO_FCN_RNAME_(OP, TYPEN)
@@ -1011,6 +1048,16 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 #define FW_UINT_FCN_CTCNAME(SIZE) VO_FCN_CTCNAME(FW_UINT_TYPEN(SIZE))
 #define FW_UU_FCN_TCNAME(SIZE1,SIZE2) VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE1), FW_UINT_TYPEN(SIZE2))
 #define FW_UI_FCN_TCNAME(SIZE1,SIZE2) VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE1), FW_INT_TYPEN(SIZE2))
+
+/** function declarations (need these here for the metadef) **/
+static mxDouble VO_FCN_FNAME(Add, Double)(mxDouble accum, mxDouble in);
+static mxDouble VO_FCN_FNAME(Sub, Double)(mxDouble accum, mxDouble in);
+static mxDouble VO_FCN_FNAME(Mul, Double)(mxDouble accum, mxDouble in);
+static mxDouble VO_FCN_FNAME(Div, Double)(mxDouble accum, mxDouble in);
+static mxDouble VO_FCN_FNAME(Rem, Double)(mxDouble accum, mxDouble in);
+static mxDouble VO_FCN_FNAME(Mod, Double)(mxDouble accum, mxDouble in);
+static mxDouble VO_FCN_FNAME(ARS, Double)(mxDouble accum, mxDouble in);
+static mxDouble VO_FCN_FNAME(ALS, Double)(mxDouble accum, mxDouble in);
 
 /** Type Conversion routines **/
 #define TC_II_L_DEF(TYPE1, TYPE2, TYPE1_MAX, TYPE1_MIN, TCNAME) \
@@ -1049,18 +1096,23 @@ static TYPE1 TCNAME(void* v_in, size_t offset) \
 static TYPE1 TCNAME(void* v_in, size_t offset) \
 { \
 	TYPE2 in_val = *((TYPE2*)v_in); \
-	if(in_val > (TYPE1_MAX)) \
+	if(in_val > 0) \
 	{ \
-		return TYPE1_MAX; \
+		if(in_val > (TYPE1_MAX)) \
+		{ \
+			return TYPE1_MAX; \
+		} \
+		return (TYPE1)(in_val + 0.5); \
 	} \
-	else if(in_val < (TYPE1_MIN)) \
+	else if(in_val < 0) \
 	{ \
-		return TYPE1_MIN; \
+		if(in_val < (TYPE1_MIN)) \
+		{ \
+			return TYPE1_MIN; \
+		} \
+		return (TYPE1)(in_val - 0.5); \
 	} \
-	else \
-	{ \
-		return (TYPE1)(in_val+0.5); \
-	} \
+	return 0; \
 }
 
 #define TC_UU_L_DEF(TYPE1, TYPE2, TYPE1_MAX, TCNAME) \
@@ -1399,41 +1451,86 @@ static void RNAME(void* v_accum, long opts) \
 #define UNARY_OP_RUNNER_METADEF(OP, TYPE, TYPEN) \
 UNARY_OP_RUNNER(VO_FCN_RNAME(OP, TYPEN), VO_FCN_FNAME(OP, TYPEN), TYPE, VO_FCN_CASNAME(TYPEN))
 
-#define BINARY_OP_RUNNER(RNAME, NAME, CASNAME, CTCNAME, TYPE, TYPEC)           \
+#define BINARY_OP_RUNNER(RNAME, FNAME, CASNAME, CTCNAME, OP, TYPE, TYPEN, TYPEC)           \
 static void RNAME(void* v_accum, void* v_in, long opts) \
 { \
 	size_t i; \
 	TYPEC in_conv; \
 	TYPE new_val, old_val, static_val; \
+	double static_val_dbl, tmp; \
 	WideInput_T(TYPE)* wide_accum = v_accum; \
 	WideInput_T(TYPE)* wide_in    = v_in; \
 	if(wide_in->num_elems == 1) \
 	{ \
 		if(wide_accum->mxtype != wide_in->mxtype) \
 		{ \
-			in_conv = CTCNAME(wide_in->mxtype); \
-			static_val = in_conv(wide_in->input, 0); \
-		} \
-		else \
-		{ \
-			static_val = *wide_in->input; \
-		} \
-		if(opts & MSH_USE_ATOMIC_OPS) \
-		{ \
-			for(i = 0; i < wide_accum->num_elems; i++) \
+			if(wide_in->mxtype == mxDOUBLE_CLASS) \
 			{ \
-				do \
+				static_val_dbl = *(double*)wide_in->input; \
+				if(opts & MSH_USE_ATOMIC_OPS) \
 				{ \
-					old_val = wide_accum->input[i]; \
-					new_val = NAME(old_val, static_val); \
-				} while(CASNAME(wide_accum->input + i, old_val, new_val) != old_val); \
+					for(i = 0; i < wide_accum->num_elems; i++) \
+					{ \
+						do \
+						{ \
+							old_val = wide_accum->input[i]; \
+							tmp = VO_FCN_FNAME(OP, Double)((double)old_val, static_val_dbl); \
+							new_val = VO_FCN_TCNAME(TYPEN, Double)(&tmp, 0); \
+						} while(CASNAME(wide_accum->input + i, old_val, new_val) != old_val); \
+					} \
+				} \
+				else \
+				{ \
+					for(i = 0; i < wide_accum->num_elems; i++) \
+					{ \
+						tmp = VO_FCN_FNAME(OP, Double)((double)wide_accum->input[i], static_val_dbl); \
+						wide_accum->input[i] = VO_FCN_TCNAME(TYPEN, Double)(&tmp, 0); \
+					} \
+				} \
+			} \
+			else \
+			{ \
+				in_conv = CTCNAME(wide_in->mxtype); \
+				static_val = in_conv(wide_in->input, 0); \
+				if(opts & MSH_USE_ATOMIC_OPS) \
+				{ \
+					for(i = 0; i < wide_accum->num_elems; i++) \
+					{ \
+						do \
+						{ \
+							old_val = wide_accum->input[i]; \
+							new_val = FNAME(old_val, static_val); \
+						} while(CASNAME(wide_accum->input + i, old_val, new_val) != old_val); \
+					} \
+				} \
+				else \
+				{ \
+					for(i = 0; i < wide_accum->num_elems; i++) \
+					{ \
+						wide_accum->input[i] = FNAME(wide_accum->input[i], static_val); \
+					} \
+				} \
 			} \
 		} \
 		else \
 		{ \
-			for(i = 0; i < wide_accum->num_elems; i++) \
+			if(opts & MSH_USE_ATOMIC_OPS) \
 			{ \
-				wide_accum->input[i] = NAME(wide_accum->input[i], static_val); \
+				for(i = 0; i < wide_accum->num_elems; i++) \
+				{ \
+					do \
+					{ \
+						old_val = wide_accum->input[i]; \
+						new_val = FNAME(old_val, *wide_in->input); \
+					} while(CASNAME(wide_accum->input + i, old_val, new_val) != old_val); \
+				} \
+			} \
+			else \
+			{ \
+				for(i = 0; i < wide_accum->num_elems; i++) \
+				{ \
+					wide_accum->input[i] = FNAME(wide_accum->input[i], *wide_in->input); \
+				} \
 			} \
 		} \
 	} \
@@ -1449,7 +1546,7 @@ static void RNAME(void* v_accum, void* v_in, long opts) \
 					do \
 					{ \
 						old_val = wide_accum->input[i]; \
-						new_val = NAME(old_val, in_conv(wide_in->input, i)); \
+						new_val = FNAME(old_val, in_conv(wide_in->input, i)); \
 					} while(CASNAME(wide_accum->input + i, old_val, new_val) != old_val); \
 				} \
 			} \
@@ -1457,7 +1554,7 @@ static void RNAME(void* v_accum, void* v_in, long opts) \
 			{ \
 				for(i = 0; i < wide_accum->num_elems; i++) \
 				{ \
-					wide_accum->input[i] = NAME(wide_accum->input[i], in_conv(wide_in->input, i)); \
+					wide_accum->input[i] = FNAME(wide_accum->input[i], in_conv(wide_in->input, i)); \
 				} \
 			} \
 		} \
@@ -1470,7 +1567,7 @@ static void RNAME(void* v_accum, void* v_in, long opts) \
 					do \
 					{ \
 						old_val = wide_accum->input[i]; \
-						new_val = NAME(old_val, wide_in->input[i]); \
+						new_val = FNAME(old_val, wide_in->input[i]); \
 					} while(CASNAME(wide_accum->input + i, old_val, new_val) != old_val); \
 				} \
 			} \
@@ -1478,7 +1575,7 @@ static void RNAME(void* v_accum, void* v_in, long opts) \
 			{ \
 				for(i = 0; i < wide_accum->num_elems; i++) \
 				{ \
-					wide_accum->input[i] = NAME(wide_accum->input[i], wide_in->input[i]); \
+					wide_accum->input[i] = FNAME(wide_accum->input[i], wide_in->input[i]); \
 				} \
 			} \
 		} \
@@ -1486,7 +1583,7 @@ static void RNAME(void* v_accum, void* v_in, long opts) \
 }
 
 #define BINARY_OP_RUNNER_METADEF(OP, TYPE, TYPEN, TYPEC) \
-BINARY_OP_RUNNER(VO_FCN_RNAME(OP,TYPEN), VO_FCN_FNAME(OP,TYPEN), VO_FCN_CASNAME(TYPEN), VO_FCN_CTCNAME(TYPEN), TYPE, TYPEC)
+BINARY_OP_RUNNER(VO_FCN_RNAME(OP,TYPEN), VO_FCN_FNAME(OP,TYPEN), VO_FCN_CASNAME(TYPEN), VO_FCN_CTCNAME(TYPEN), OP, TYPE, TYPEN, TYPEC)
 
 /** Signed integer arithmetic
  * We assume here that ints are two's complement, and
@@ -1546,7 +1643,7 @@ static TYPE NAME(TYPE augend, TYPE addend)              \
 	TYPE flip2 = uadd ^ addend;                        \
 	if((flip1 & flip2) < 0)                            \
 	{                                                  \
-		return (TYPE)(MAX_VAL)  + (~uadd >> (SIZEM1));    \
+		return (TYPE)(MAX_VAL) + ((UTYPE)~uadd >> (SIZEM1));    \
 	}                                                  \
 	return uadd;                                       \
 }
@@ -1572,7 +1669,7 @@ static TYPE NAME(TYPE minuend, TYPE subtrahend)         \
 	TYPE flip2 = usub ^ ~subtrahend;                   \
 	if((flip1 & flip2) < 0)                            \
 	{                                                  \
-		return (TYPE)(MAX_VAL)  + (~usub >> (SIZEM1));    \
+		return (TYPE)(MAX_VAL)  + ((UTYPE)~usub >> (SIZEM1));    \
 	}                                                  \
 	return usub;                                       \
 }
@@ -1881,16 +1978,16 @@ REM_INT_METADEF(64);
 
 /** SIGNED MODULUS **/
 
-#define MOD_INT_DEF(NAME, TYPE)                                   \
-static TYPE NAME(TYPE numer, TYPE denom)                          \
-{                                                                 \
-	TYPE rem;                                                    \
-	if(denom != 0)                                               \
-	{                                                            \
-		rem = numer%denom;                                      \
-		return ((rem < 0) != (denom < 0))? (rem + denom) : rem; \
-	}                                                            \
-	return numer;                                                \
+#define MOD_INT_DEF(NAME, TYPE)                                                     \
+static TYPE NAME(TYPE numer, TYPE denom)                                            \
+{                                                                                   \
+	TYPE rem;                                                                      \
+	if(denom != 0)                                                                 \
+	{                                                                              \
+		rem = numer%denom;                                                        \
+		return (rem != 0)? (((rem < 0) != (denom < 0))? (rem + denom) : rem) : 0; \
+	}                                                                              \
+	return numer;                                                                  \
 }
 
 #define MOD_INT_METADEF(SIZE)                               \
@@ -2357,11 +2454,11 @@ static mxSingle msh_ModSingle(mxSingle accum, mxSingle in)
 	if(in != 0)
 	{
 		rem = msh_RemSingle(accum, in);
-		return ((rem < 0) != (in < 0))? rem + in : in;
+		return (rem != 0) ? (((rem < 0) != (in < 0)) ? (rem + in) : rem) : 0;
 	}
 	return accum;
 }
-BINARY_OP_RUNNER(msh_ModSingleRunnerW, VO_FCN_FNAME(Mod, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), mxSingle, singleconv_T);
+BINARY_OP_RUNNER(msh_ModSingleRunnerW, VO_FCN_FNAME(Mod, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), Mod, mxSingle, Single, singleconv_T);
 
 static void msh_ModSingleRunner(void* v_accum, void* v_in, long opts)
 {
@@ -2389,7 +2486,7 @@ static mxSingle msh_ARSSingle(mxSingle accum, mxSingle in)
 	return accum / (mxSingle)pow(2.0, (double)in);
 #endif
 }
-BINARY_OP_RUNNER(msh_ARSSingleRunnerW, VO_FCN_FNAME(ARS, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), mxSingle, singleconv_T);
+BINARY_OP_RUNNER(msh_ARSSingleRunnerW, VO_FCN_FNAME(ARS, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), ARS, mxSingle, Single, singleconv_T);
 
 static void msh_ARSSingleRunner(void* v_accum, void* v_in, long opts)
 {
@@ -2434,7 +2531,7 @@ static mxSingle msh_ALSSingle(mxSingle accum, mxSingle in)
 	return accum * (mxSingle)pow(2.0, (double)in);
 #endif
 }
-BINARY_OP_RUNNER(msh_ALSSingleRunnerW, VO_FCN_FNAME(ALS, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), mxSingle, singleconv_T);
+BINARY_OP_RUNNER(msh_ALSSingleRunnerW, VO_FCN_FNAME(ALS, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), ALS, mxSingle, Single, singleconv_T);
 
 static void msh_ALSSingleRunner(void* v_accum, void* v_in, long opts)
 {
@@ -2520,11 +2617,11 @@ static mxDouble msh_ModDouble(mxDouble accum, mxDouble in)
 	if(in != 0)
 	{
 		rem = msh_RemDouble(accum, in);
-		return ((rem < 0) != (in < 0))? rem + in : in;
+		return (rem != 0) ? (((rem < 0) != (in < 0)) ? (rem + in) : rem) : 0;
 	}
 	return accum;
 }
-BINARY_OP_RUNNER(msh_ModDoubleRunnerW, VO_FCN_FNAME(Mod, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), mxDouble, doubleconv_T);
+BINARY_OP_RUNNER(msh_ModDoubleRunnerW, VO_FCN_FNAME(Mod, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), Mod, mxDouble, Double, doubleconv_T);
 
 static void msh_ModDoubleRunner(void* v_accum, void* v_in, long opts)
 {
@@ -2548,7 +2645,7 @@ static mxDouble msh_ARSDouble(mxDouble accum, mxDouble in)
 {
 	return accum / (mxDouble)pow(2.0, (double)in);
 }
-BINARY_OP_RUNNER(msh_ARSDoubleRunnerW, VO_FCN_FNAME(ARS, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), mxDouble, doubleconv_T);
+BINARY_OP_RUNNER(msh_ARSDoubleRunnerW, VO_FCN_FNAME(ARS, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), ARS, mxDouble, Double, doubleconv_T);
 
 static void msh_ARSDoubleRunner(void* v_accum, void* v_in, long opts)
 {
@@ -2586,7 +2683,7 @@ static mxDouble msh_ALSDouble(mxDouble accum, mxDouble in)
 {
 	return accum * pow(2.0, in);
 }
-BINARY_OP_RUNNER(msh_ALSDoubleRunnerW, VO_FCN_FNAME(ALS, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), mxDouble, doubleconv_T);
+BINARY_OP_RUNNER(msh_ALSDoubleRunnerW, VO_FCN_FNAME(ALS, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), ALS, mxDouble, Double, doubleconv_T);
 
 static void msh_ALSDoubleRunner(void* v_accum, void* v_in, long opts)
 {
@@ -2722,38 +2819,44 @@ CPY_FCN_DEF(msh_CpyDoubleRunner, msh_CpyDouble, msh_AtomicSetDouble, msh_ChooseD
 /** function choosers **/
 
 #if MSH_BITNESS==64
-#define CLASS_FCN_SWITCH_CASES(OP, CLASS_ID_NAME)         \
-switch(CLASS_ID_NAME)                                     \
-{                                                         \
-	case(mxINT8_CLASS):  return msh_##OP##Int8Runner;    \
-	case(mxINT16_CLASS): return msh_##OP##Int16Runner;   \
-	case(mxINT32_CLASS): return msh_##OP##Int32Runner;   \
-	case(mxINT64_CLASS): return msh_##OP##Int64Runner;   \
-                                                          \
-	case(mxUINT8_CLASS):  return msh_##OP##UInt8Runner;  \
-	case(mxUINT16_CLASS): return msh_##OP##UInt16Runner; \
-	case(mxUINT32_CLASS): return msh_##OP##UInt32Runner; \
-	case(mxUINT64_CLASS): return msh_##OP##UInt64Runner; \
-                                                          \
-	case(mxSINGLE_CLASS): return msh_##OP##SingleRunner; \
-	case(mxDOUBLE_CLASS): return msh_##OP##DoubleRunner; \
-	default: goto NOT_FOUND_ERROR;                       \
+#define CLASS_FCN_SWITCH_CASES(OP, CLASS_ID_NAME)          \
+switch(CLASS_ID_NAME)                                      \
+{                                                          \
+	case(mxINT8_CLASS):    return msh_##OP##Int8Runner;   \
+	case(mxINT16_CLASS):   return msh_##OP##Int16Runner;  \
+	case(mxINT32_CLASS):   return msh_##OP##Int32Runner;  \
+	case(mxINT64_CLASS):   return msh_##OP##Int64Runner;  \
+                                                           \
+	case(mxUINT8_CLASS):   return msh_##OP##UInt8Runner;  \
+	case(mxUINT16_CLASS):  return msh_##OP##UInt16Runner; \
+	case(mxUINT32_CLASS):  return msh_##OP##UInt32Runner; \
+	case(mxUINT64_CLASS):  return msh_##OP##UInt64Runner; \
+                                                           \
+	case(mxSINGLE_CLASS):  return msh_##OP##SingleRunner; \
+	case(mxDOUBLE_CLASS):  return msh_##OP##DoubleRunner; \
+	                                                      \
+	case(mxLOGICAL_CLASS): return msh_##OP##Int8Runner;   \
+	case(mxCHAR_CLASS):    return msh_##OP##Int16Runner;  \
+	default: goto NOT_FOUND_ERROR;                        \
 }
 #else
 #define CLASS_FCN_SWITCH_CASES(OP, CLASS_ID_NAME)         \
-switch(CLASS_ID_NAME)                                     \
-{                                                         \
-	case(mxINT8_CLASS):  return msh_##OP##Int8Runner;    \
-	case(mxINT16_CLASS): return msh_##OP##Int16Runner;   \
-	case(mxINT32_CLASS): return msh_##OP##Int32Runner;   \
-                                                          \
-	case(mxUINT8_CLASS):  return msh_##OP##UInt8Runner;  \
-	case(mxUINT16_CLASS): return msh_##OP##UInt16Runner; \
-	case(mxUINT32_CLASS): return msh_##OP##UInt32Runner; \
-                                                          \
-	case(mxSINGLE_CLASS): return msh_##OP##SingleRunner; \
-	case(mxDOUBLE_CLASS): return msh_##OP##DoubleRunner; \
-	default: goto NOT_FOUND_ERROR;                       \
+switch(CLASS_ID_NAME)                                      \
+{                                                          \
+	case(mxINT8_CLASS):    return msh_##OP##Int8Runner;   \
+	case(mxINT16_CLASS):   return msh_##OP##Int16Runner;  \
+	case(mxINT32_CLASS):   return msh_##OP##Int32Runner;  \
+                                                           \
+	case(mxUINT8_CLASS):   return msh_##OP##UInt8Runner;  \
+	case(mxUINT16_CLASS):  return msh_##OP##UInt16Runner; \
+	case(mxUINT32_CLASS):  return msh_##OP##UInt32Runner; \
+                                                           \
+	case(mxSINGLE_CLASS):  return msh_##OP##SingleRunner; \
+	case(mxDOUBLE_CLASS):  return msh_##OP##DoubleRunner; \
+	                                                      \
+	case(mxLOGICAL_CLASS): return msh_##OP##Int8Runner;   \
+	case(mxCHAR_CLASS):    return msh_##OP##Int16Runner;  \
+	default: goto NOT_FOUND_ERROR;                        \
 }
 #endif
 
@@ -2865,46 +2968,16 @@ static binaryvaropfcn_T msh_ChooseBinaryVarOpFcn(msh_varop_T varop, mxClassID cl
 {
 	switch(varop)
 	{
-		case(VAROP_ADD):
-		{
-			CLASS_FCN_SWITCH_CASES(Add, class_id);
-		}
-		case(VAROP_SUB):
-		{
-			CLASS_FCN_SWITCH_CASES(Sub, class_id);
-		}
-		case(VAROP_MUL):
-		{
-			CLASS_FCN_SWITCH_CASES(Mul, class_id);
-		}
-		case(VAROP_DIV):
-		{
-			CLASS_FCN_SWITCH_CASES(Div, class_id);
-		}
-		case(VAROP_REM):
-		{
-			CLASS_FCN_SWITCH_CASES(Rem, class_id);
-		}
-		case(VAROP_MOD):
-		{
-			CLASS_FCN_SWITCH_CASES(Mod, class_id);
-		}
-		case(VAROP_ARS):
-		{
-			CLASS_FCN_SWITCH_CASES(ARS, class_id);
-		}
-		case(VAROP_ALS):
-		{
-			CLASS_FCN_SWITCH_CASES(ALS, class_id);
-		}
-		case(VAROP_CPY):
-		{
-			CLASS_FCN_SWITCH_CASES(Cpy, class_id);
-		}
-		default:
-		{
-			goto NOT_FOUND_ERROR;
-		}
+		case(VAROP_ADD): CLASS_FCN_SWITCH_CASES(Add, class_id);
+		case(VAROP_SUB): CLASS_FCN_SWITCH_CASES(Sub, class_id);
+		case(VAROP_MUL): CLASS_FCN_SWITCH_CASES(Mul, class_id);
+		case(VAROP_DIV): CLASS_FCN_SWITCH_CASES(Div, class_id);
+		case(VAROP_REM): CLASS_FCN_SWITCH_CASES(Rem, class_id);
+		case(VAROP_MOD): CLASS_FCN_SWITCH_CASES(Mod, class_id);
+		case(VAROP_ARS): CLASS_FCN_SWITCH_CASES(ARS, class_id);
+		case(VAROP_ALS): CLASS_FCN_SWITCH_CASES(ALS, class_id);
+		case(VAROP_CPY): CLASS_FCN_SWITCH_CASES(Cpy, class_id);
+		default: goto NOT_FOUND_ERROR;
 	}
 
 NOT_FOUND_ERROR:
@@ -2913,244 +2986,6 @@ NOT_FOUND_ERROR:
 	return 0;
 	
 }
-
-#if 0
-static void msh_OverwriteVariable(IndexedVariable_T* indexed_var, const mxArray* in_var, long opts, mxArray** output)
-{
-	
-	int               field_num, in_num_fields, is_complex;
-	size_t            i, j, dest_idx, in_idx, elem_size, dest_offset, in_offset, in_num_elems;
-	binaryvaropfcn_T  varop_fcn;
-	const char_T*     curr_field_name;
-	
-	int8_T* dest_real_anchor;
-	int8_T* dest_imag_anchor;
-	
-	WideInput_T(int8_T)  wide_dest_real;
-	WideInput_T(int8_T)  wide_dest_imag;
-	WideInput_T(mwIndex) wide_dest_ir;
-	WideInput_T(mwIndex) wide_dest_jc;
-	
-	WideInput_T(int8_T)  wide_in_real;
-	WideInput_T(int8_T)  wide_in_imag;
-	WideInput_T(mwIndex) wide_in_ir;
-	WideInput_T(mwIndex) wide_in_jc;
-	
-	mxClassID         dest_class_id  = mxGetClassID(indexed_var->dest_var);
-	mxClassID         in_class_id    = mxGetClassID(in_var);
-	IndexedVariable_T sub_variable   = {0};
-	
-	/* modification to sparses:
-	 * sparses must be with sparses
-	 * dims must be the same
-	 * in_nzmax <= dest_nzmax
-	 *
-	 * these were checked in msh_CheckValidInput
-	 */
-	
-	/* struct case */
-	if(dest_class_id == mxSTRUCT_CLASS)
-	{
-		in_num_fields = mxGetNumberOfFields(in_var);
-		in_num_elems   = mxGetNumberOfElements(in_var);
-		
-		/* go through each element */
-		if(indexed_var->indices.start_idxs == NULL)
-		{
-			for(field_num = 0; field_num < in_num_fields; field_num++)     /* each field */
-			{
-				curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
-				for(dest_idx = 0; dest_idx < in_num_elems; dest_idx++)
-				{
-					sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
-					msh_OverwriteVariable(&sub_variable, mxGetField(in_var, dest_idx, curr_field_name), opts, NULL);
-				}
-			}
-		}
-		else
-		{
-			for(field_num = 0; field_num < in_num_fields; field_num++)     /* each field */
-			{
-				curr_field_name = mxGetFieldNameByNumber(indexed_var->dest_var, field_num);
-				for(i = 0, in_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
-				{
-					for(j = 0; j < indexed_var->indices.num_lens; j++)
-					{
-						for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, in_idx++)
-						{
-							/* this inner conditional should be optimized out by the compiler */
-							sub_variable.dest_var = mxGetField(indexed_var->dest_var, dest_idx, curr_field_name);
-							msh_OverwriteVariable(&sub_variable, mxGetField(in_var, (in_num_elems == 1)? 0 : in_idx, curr_field_name), opts, NULL);
-						}
-					}
-				}
-			}
-		}
-	}
-	else if(dest_class_id == mxCELL_CLASS) /* cell case */
-	{
-		
-		in_num_elems   = mxGetNumberOfElements(in_var);
-		
-		/* go through each element */
-		if(indexed_var->indices.start_idxs == NULL)
-		{
-			for(dest_idx = 0; dest_idx < in_num_elems; dest_idx++)
-			{
-				sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
-				msh_OverwriteVariable(&sub_variable, mxGetCell(in_var, dest_idx), opts, NULL);
-			}
-		}
-		else
-		{
-			for(i = 0, in_idx = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
-			{
-				for(j = 0; j < indexed_var->indices.num_lens; j++)
-				{
-					for(dest_idx = indexed_var->indices.start_idxs[i+j]; dest_idx < indexed_var->indices.start_idxs[i+j] + indexed_var->indices.slice_lens[j]; dest_idx++, in_idx++)
-					{
-						/* this inner conditional should be optimized out by the compiler */
-						sub_variable.dest_var = mxGetCell(indexed_var->dest_var, dest_idx);
-						msh_OverwriteVariable(&sub_variable, mxGetCell(in_var, (in_num_elems == 1)? 0 : in_idx), opts, NULL);
-					}
-				}
-			}
-		}
-	}
-	else     /*base case*/
-	{
-		
-		varop_fcn = msh_ChooseBinaryVarOpFcn(VAROP_CPY, mxGetClassID(indexed_var->dest_var));
-		
-		is_complex = mxIsComplex(in_var);
-		
-		if(mxIsSparse(indexed_var->dest_var))
-		{
-			in_num_elems   = mxGetNumberOfElements(in_var);
-			
-			/* ir setup */
-			wide_dest_ir.input     = mxGetIr(indexed_var->dest_var);
-			wide_dest_ir.num_elems = mxGetNzmax(in_var); /* copy the nzmax of input because in_nzmax <= dest_nzmax */
-			wide_dest_ir.mxtype    = mxINDEX_CLASS;
-			
-			wide_in_ir.input       = mxGetIr(in_var);
-			wide_in_ir.num_elems   = mxGetNzmax(in_var);
-			wide_in_ir.mxtype      = mxINDEX_CLASS;
-			
-			/* jc setup */
-			wide_dest_ir.input     = mxGetJc(indexed_var->dest_var);
-			wide_dest_ir.num_elems = mxGetN(indexed_var->dest_var) + 1;
-			wide_dest_ir.mxtype    = mxINDEX_CLASS;
-			
-			wide_in_ir.input       = mxGetJc(in_var);
-			wide_in_ir.num_elems   = mxGetN(in_var) + 1;
-			wide_in_ir.mxtype      = mxINDEX_CLASS;
-			
-			/* real setup */
-			wide_dest_real.input     = mxGetData(indexed_var->dest_var);
-			wide_dest_real.num_elems = mxGetNzmax(in_var); /* copy the nzmax of input because in_nzmax <= dest_nzmax */
-			wide_dest_real.mxtype    = mxGetClassID(indexed_var->dest_var);
-			
-			wide_in_real.input       = mxGetData(in_var);
-			wide_in_real.num_elems   = mxGetNzmax(in_var);
-			wide_in_real.mxtype      = mxGetClassID(in_var);
-			
-			/* copying */
-			varop_fcn(&wide_dest_ir, &wide_in_ir, opts);
-			varop_fcn(&wide_dest_jc, &wide_in_jc, opts);
-			varop_fcn(&wide_dest_real, &wide_in_real, opts);
-			
-			if(is_complex)
-			{
-				/* imag setup */
-				
-				wide_dest_imag.input     = mxGetImagData(indexed_var->dest_var);
-				wide_dest_imag.num_elems = mxGetNzmax(in_var); /* copy the nzmax of input because in_nzmax <= dest_nzmax */
-				wide_dest_imag.mxtype    = mxGetClassID(indexed_var->dest_var);
-				
-				wide_in_imag.input       = mxGetImagData(in_var);
-				wide_in_imag.num_elems   = mxGetNzmax(in_var);
-				wide_in_imag.mxtype      = mxGetClassID(in_var);
-				
-				varop_fcn(&wide_dest_imag, &wide_in_imag, opts);
-				
-			}
-			
-		}
-		else
-		{
-			
-			dest_real_anchor = mxGetData(indexed_var->dest_var);
-			dest_imag_anchor = mxGetImagData(indexed_var->dest_var);
-			
-			in_real = mxGetData(in_var);
-			in_imag = mxGetImagData(in_var);
-			
-			elem_size = mxGetElementSize(indexed_var->dest_var);
-			
-			if(indexed_var->indices.start_idxs == NULL)
-			{
-				/* here we copy everything */
-				
-				if(mxGetNumberOfElements(in_var) == 1)
-				{
-					for(dest_idx = 0; dest_idx < dest_num_elems; dest_idx++)
-					{
-						memcpy(dest_real_anchor + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
-						if(is_complex)
-							memcpy(dest_imag_anchor + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
-					}
-				}
-				else
-				{
-					memcpy(dest_real_anchor, in_real, in_num_elems*elem_size);
-					if(is_complex)
-						memcpy(dest_imag_anchor, in_imag, in_num_elems*elem_size);
-				}
-				
-			}
-			else
-			{
-				
-				for(i = 0, in_offset = 0; i < indexed_var->indices.num_idxs; i += indexed_var->indices.num_lens)
-				{
-					for(j = 0; j < indexed_var->indices.num_lens; j++)
-					{
-						dest_offset = indexed_var->indices.start_idxs[i + j]*elem_size/sizeof(int8_T);
-						
-						/* optimized out */
-						if(in_num_elems == 1)
-						{
-							for(dest_idx = 0; dest_idx < indexed_var->indices.slice_lens[j]; dest_idx++)
-							{
-								memcpy(dest_real_anchor + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_real, elem_size);
-								if(is_complex)
-									memcpy(dest_imag_anchor + dest_offset + dest_idx*elem_size/sizeof(int8_T), in_imag, elem_size);
-							}
-						}
-						else
-						{
-							memcpy(dest_real_anchor + dest_offset, in_real + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
-							if(is_complex)
-								memcpy(dest_imag_anchor + dest_offset, in_imag + in_offset, indexed_var->indices.slice_lens[j]*elem_size);
-							in_offset += indexed_var->indices.slice_lens[j]*elem_size/sizeof(int8_T);
-						}
-						
-					}
-				}
-				
-			}
-		}
-		
-	}
-	
-	if(output != NULL)
-	{
-		*output = mxDuplicateArray(indexed_var->dest_var);
-	}
-	
-}
-#endif
 
 void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop, long opts, mxArray** output)
 {
@@ -3323,7 +3158,7 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 					wide_in_real.num_elems = mxGetNumberOfElements(in_var);
 					
 					wide_dest_real.input = mxGetData(indexed_var->dest_var);
-					wide_dest_real.num_elems = wide_in_real.num_elems;
+					wide_dest_real.num_elems = mxGetNumberOfElements(indexed_var->dest_var);
 					
 					/* copying */
 					varop_fcn(&wide_dest_real, &wide_in_real, opts);
