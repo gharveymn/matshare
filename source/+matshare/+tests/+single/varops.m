@@ -158,7 +158,7 @@ btester.test(int8(125), int8(25));
 btester.test(int8(-125), int8(25));
 btester.test(int8(-125), int8(0));
 btester.test(int8(0), int8(0));
-% btester.test(uint8(225), uint8(100)); !bug!
+btester.test(uint8(225), uint8(100));
 btester.test(125, 25);
 btester.test(-125, 25);
 btester.test(-125, 0);
@@ -173,6 +173,5 @@ btester.test(realmax, realmax);
 btester.test(5, -7);
 btester.test(-7, -5);
 btester.test(-realmax, realmax);
-% btester.test(int8(-5), int8(5)); !bug!
 
 fprintf('Test successful.\n\n');

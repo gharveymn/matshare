@@ -23,8 +23,9 @@ function INSTALL
 	mex('-silent', fullfile(tstdir,'intdefcheck.c'), '-outdir', tstdir);
 	addpath(fullfile(thisfolder, 'tests'));
 	
-	if(~intdefcheck())
-		error(['Your compiler must represent signed integers as ' ...
+	if(true)
+		mexflags = [mexflags {'-DMSH_NO_VAROPS'}];
+		warning(['Your compiler must represent signed integers as ' ...
 			  'two''s complement, and must preserve the sign bit ' ...
 			  'for right shifts. Please use a different compiler']);
 	end
@@ -156,8 +157,8 @@ function INSTALL
 	mexflags = [mexflags {['-DMSH_DEFAULT_VAROP_OPTS_DEFAULT=' varopoptsstr]}];
 
 	fprintf('-Compiling matshare...')
-	%mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /Wall"'}];
-	%mexflags = [mexflags {'CFLAGS="$CFLAGS --std=c89 -Wall -Werror -Wno-unused-function"'}];
+	mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /Wall"'}];
+	mexflags = [mexflags {'CFLAGS="$CFLAGS -Wall -Werror -Wno-unused-function"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n')
 	if(opts.mshDebugMode)

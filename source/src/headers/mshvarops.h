@@ -69,8 +69,35 @@ typedef enum
 	VAROP_CPY = 0x000A
 } msh_varop_T;
 
-typedef void (*unaryvaropfcn_T)(void*,long);
-typedef void (*binaryvaropfcn_T)(void*,void*,long);
+typedef struct WideInput_T
+{
+	union
+	{
+		void*     raw;
+		int8_T*   Int8;
+		int16_T*  Int16;
+		int32_T*  Int32;
+		uint8_T*  UInt8;
+		uint16_T* UInt16;
+		uint32_T* UInt32;
+#if MSH_BITNESS==64
+		int64_T*  Int64;
+		uint64_T* UInt64;
+#endif
+		mxSingle* Single;
+		mxDouble* Double;
+		mwIndex*  Index;
+		mwSize*   Size;
+	} input;
+	size_t num_elems;
+	mxClassID mxtype;
+} WideInput_T;
+
+#define WideInputFetch_(S_, TYPEN_) S_->input.TYPEN_
+#define WideInputFetch(S, TYPEN) WideInputFetch_(S, TYPEN)
+
+typedef void (*unaryvaropfcn_T)(WideInput_T*,long);
+typedef void (*binaryvaropfcn_T)(WideInput_T*,WideInput_T*,long);
 
 typedef struct ParsedIndices_T
 {
