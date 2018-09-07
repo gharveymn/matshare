@@ -23,9 +23,9 @@ function INSTALL
 	mex('-silent', fullfile(tstdir,'intdefcheck.c'), '-outdir', tstdir);
 	addpath(fullfile(thisfolder, 'tests'));
 	
-	if(true)
+	if(~intdefcheck())
 		mexflags = [mexflags {'-DMSH_NO_VAROPS'}];
-		warning(['Your compiler must represent signed integers as ' ...
+		warning(['Your compiler must represent signed integers in ' ...
 			  'two''s complement, and must preserve the sign bit ' ...
 			  'for right shifts. Please use a different compiler']);
 	end

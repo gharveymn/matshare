@@ -2713,7 +2713,7 @@ static void RNAME(WideInput_T* wide_accum, WideInput_T* wide_in, long opts) \
 		} \
 		if(opts & MSH_USE_ATOMIC_OPS) \
 		{ \
-			for(i = 0; i < wide_accum->num_elems;) \
+			for(i = 0; i < wide_accum->num_elems; i++) \
 			{ \
 				SNAME(WideInputFetch(wide_accum, TYPEN) + i, new_val); \
 			} \
@@ -2969,7 +2969,7 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 	size_t            i, j;
 	size_t            dest_idx, dest_elem_size, dest_offset;
 	size_t            in_idx, in_elem_size, in_num_elems;
-	binaryvaropfcn_T  varop_fcn;
+	binaryvaropfcn_T  varop_fcn, varop_fcn_ir, varop_fcn_jc;
 	const char_T*     curr_field_name;
 	
 	int8_T*             dest_real_anchor;
@@ -3077,7 +3077,8 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 			
 			if(mxIsSparse(indexed_var->dest_var))
 			{
-				in_num_elems = mxGetNumberOfElements(in_var);
+				
+				
 				
 				/* repetitive function calls should be optimized by the compiler */
 				
@@ -3089,6 +3090,7 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 				wide_dest_ir.input.raw = mxGetIr(indexed_var->dest_var);
 				wide_dest_ir.num_elems = wide_in_ir.num_elems; /* copy the nzmax of input because in_nzmax <= dest_nzmax */
 				wide_dest_ir.mxtype = mxINDEX_CLASS;
+				varop_fcn_ir = msh_ChooseBinaryVarOpFcn(varop, mxINDEX_CLASS);
 				
 				/* jc setup */
 				wide_in_jc.input.raw = mxGetJc(in_var);
@@ -3098,6 +3100,7 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 				wide_dest_jc.input.raw = mxGetJc(indexed_var->dest_var);
 				wide_dest_jc.num_elems = wide_in_jc.num_elems;
 				wide_dest_jc.mxtype = mxINDEX_CLASS;
+				varop_fcn_jc = msh_ChooseBinaryVarOpFcn(varop, mxINDEX_CLASS);
 				
 				/* real setup */
 				wide_in_real.input.raw = mxGetData(in_var);
@@ -3107,8 +3110,8 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 				wide_dest_real.num_elems = wide_in_real.num_elems; /* copy the nzmax of input because in_nzmax <= dest_nzmax */
 				
 				/* copying */
-				varop_fcn(&wide_dest_ir, &wide_in_ir, opts);
-				varop_fcn(&wide_dest_jc, &wide_in_jc, opts);
+				varop_fcn_ir(&wide_dest_ir, &wide_in_ir, opts);
+				varop_fcn_jc(&wide_dest_jc, &wide_in_jc, opts);
 				varop_fcn(&wide_dest_real, &wide_in_real, opts);
 				
 				if(is_complex)
