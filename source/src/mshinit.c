@@ -92,12 +92,10 @@ void msh_InitializeMatshare(void)
 		msh_InitializeTable(g_local_seg_list.name_table);
 	}
 	
-	/*
 	if(g_local_var_list.mvar_table->table == NULL)
 	{
 		msh_InitializeTable(g_local_var_list.mvar_table);
 	}
-	*/
 	
 	g_local_info.is_initialized = TRUE;
 	
@@ -275,10 +273,7 @@ void msh_OnExit(void)
 	msh_DetachSegmentList(&g_local_seg_list);
 	msh_DestroyTable(g_local_seg_list.seg_table);
 	msh_DestroyTable(g_local_seg_list.name_table);
-	
-	/*
 	msh_DestroyTable(g_local_var_list.mvar_table);
-	*/
 	
 	if(g_local_info.shared_info_wrapper.ptr != NULL)
 	{

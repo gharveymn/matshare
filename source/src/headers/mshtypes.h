@@ -40,7 +40,7 @@
 
 #define MSH_INITIAL_STATE 0
 
-typedef struct UserConfig_t
+typedef struct UserConfig_T
 {
 	/* these are aligned for lockless assignment */
 	size_t max_shared_size;
@@ -57,7 +57,7 @@ typedef struct UserConfig_t
 } UserConfig_T;
 
 /* structure of shared info about the shared segments */
-typedef volatile struct SharedInfo_t
+typedef volatile struct SharedInfo_T
 {
 	size_t rev_num;
 	size_t total_shared_size;
@@ -76,7 +76,7 @@ typedef volatile struct SharedInfo_t
 } SharedInfo_T;
 
 
-typedef struct LocalInfo_t
+typedef struct LocalInfo_T
 {
 	size_t rev_num;
 	uint32_T lock_level;

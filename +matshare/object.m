@@ -177,6 +177,10 @@ classdef object
 			
 		end
 		
+		function out = testfind(obj)
+			out = matshare_(13, obj.shared_data);
+		end
+		
 		function obj = subsasgn(obj,S,B)
 			
 			switch(S(1).type(1))

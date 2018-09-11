@@ -56,18 +56,22 @@ typedef struct mxArray_tag mxArray;
 
 #define MSH_CONFIG_STRING_FORMAT \
 "<strong>Current configuration:</strong>\n"\
-"    matshare version:    %s\n" \
-"    Max variables:       %lu\n" \
-"    Max shared size:     "SIZE_FORMAT"\n" \
-"    Garbage collection:  '%s'\n" \
-"    Fetch default:       '%s'\n"
+"    matshare version:                %s\n" \
+"    Max variables:                   %lu\n" \
+"    Max shared size:                 "SIZE_FORMAT"\n" \
+"    Garbage collection:              '%s'\n" \
+"    Fetch default:                   '%s'\n" \
+"    Variable operations use mutex:   '%s'\n" \
+"    Variable operations use atomics: '%s'\n" \
 
 #define MSH_CONFIG_STRING_ARGS \
 MSH_VERSION_STRING, \
 g_user_config.max_shared_segments, \
 g_user_config.max_shared_size, \
 g_user_config.will_shared_gc? "on" : "off", \
-g_user_config.fetch_default
+g_user_config.fetch_default, \
+g_user_config.varop_opts_default & MSH_IS_SYNCHRONOUS? "yes" : "no", \
+g_user_config.varop_opts_default & MSH_USE_ATOMIC_OPS? "yes" : "no"
 
 #ifdef MSH_WIN
 
@@ -202,6 +206,7 @@ typedef enum
 	msh_UNLOCK          = 0x000A,  /* release the interprocess lock */
 	msh_CLEAN           = 0x000B,  /* clean invalid and unused segments */
 	msh_STATUS          = 0x000C,  /* print out info about the current state of matshare */
+	msh_TESTFIND        = 0x000D
 } msh_directive_T;
 
 /**

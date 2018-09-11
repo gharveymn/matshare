@@ -779,13 +779,14 @@ static void msh_CheckInputSize(mxArray* subs_arr, const mxArray* in_var, const s
 void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop)
 {
 	int               field_num, dest_num_fields;
-	size_t            i, j, dest_idx, comp_idx, dest_num_elems;
+	size_t            i, j, dest_idx, comp_idx;
 	const char_T*     curr_field_name;
 	
-	size_t            in_num_elems  = mxGetNumberOfElements(in_var);
-	mxClassID         dest_class_id = mxGetClassID(indexed_var->dest_var);
-	mxClassID         in_class_id   = mxGetClassID(in_var);
-	IndexedVariable_T sub_variable  = {0};
+	size_t            dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
+	size_t            in_num_elems   = mxGetNumberOfElements(in_var);
+	mxClassID         dest_class_id  = mxGetClassID(indexed_var->dest_var);
+	mxClassID         in_class_id    = mxGetClassID(in_var);
+	IndexedVariable_T sub_variable   = {0};
 	
 	/*
 	if(dest_class_id != mxGetClassID(in_var))
@@ -795,13 +796,23 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 	*/
 	
 	/* if this is false, in the other case, the sizes will already be checked unless it is sparse */
-	if(indexed_var->indices.start_idxs == NULL && in_num_elems != 1)
+	if(indexed_var->indices.start_idxs == NULL)
 	{
-		/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
-		if(mxGetNumberOfDimensions(indexed_var->dest_var) != mxGetNumberOfDimensions(in_var) ||
-		   memcmp(mxGetDimensions(indexed_var->dest_var), mxGetDimensions(in_var), mxGetNumberOfDimensions(indexed_var->dest_var)*sizeof(mwSize)) != 0)
+		if(dest_num_elems == 0)
 		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleSizeError", "The input variable was of differing size in comparison to the destination.");
+			if(in_num_elems != 0)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleSizeError", "The input variable was of differing size in comparison to the destination.");
+			}
+		}
+		else if(in_num_elems != 1)
+		{
+			/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
+			if(mxGetNumberOfDimensions(indexed_var->dest_var) != mxGetNumberOfDimensions(in_var) ||
+			   memcmp(mxGetDimensions(indexed_var->dest_var), mxGetDimensions(in_var), mxGetNumberOfDimensions(indexed_var->dest_var)*sizeof(mwSize)) != 0)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleSizeError", "The input variable was of differing size in comparison to the destination.");
+			}
 		}
 	}
 	
@@ -813,7 +824,6 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(in_var), mxGetClassName(indexed_var->dest_var));
 		}
 		
-		dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
 		dest_num_fields = mxGetNumberOfFields(indexed_var->dest_var);
 		
 		if(dest_num_fields != mxGetNumberOfFields(in_var))
@@ -868,8 +878,6 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IncompatibleClassError", "The input variable class '%s' is not compatible with the destination class '%s'.", mxGetClassName(in_var), mxGetClassName(indexed_var->dest_var));
 		}
-		
-		dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
 		
 		if(indexed_var->indices.start_idxs == NULL)
 		{
@@ -3215,7 +3223,7 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 }
 
 
-void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, const mxArray* subs_struct, msh_varop_T varop, long opts, mxArray** output)
+void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, const mxArray* subs_struct, msh_varop_T varop, long opts, FileLock_T* lock, mxArray** output)
 {
 	/* Note: in_vars is always a cell array */
 	int i;
@@ -3245,10 +3253,10 @@ void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, co
 	for(i = 0; i < exp_num_in_args; i++)
 	{
 		/* no varops for sparses except for copying---this is checked here */
-		msh_CheckValidInput(&indexed_var, mxGetCell(in_vars, i), varop);
+		msh_CheckValidInput(&indexed_var, mxGetCell(in_vars, (size_t)i), varop);
 	}
 	
-	if(opts & MSH_IS_SYNCHRONOUS) msh_AcquireProcessLock(g_process_lock);
+	if(opts & MSH_IS_SYNCHRONOUS && lock != NULL) msh_AcquireProcessLock(*lock);
 	
 	switch(exp_num_in_args)
 	{
@@ -3268,7 +3276,7 @@ void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, co
 		}
 	}
 	
-	if(opts & MSH_IS_SYNCHRONOUS) msh_ReleaseProcessLock(g_process_lock);
+	if(opts & MSH_IS_SYNCHRONOUS && lock != NULL) msh_ReleaseProcessLock(*lock);
 	
 	if(indexed_var.indices.start_idxs != NULL)
 	{

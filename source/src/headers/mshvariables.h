@@ -17,10 +17,9 @@
 
 typedef struct VariableList_T
 {
-	/*SegmentTable_T* mvar_table;*/
+	SegmentTable_T* mvar_table;
 	VariableNode_T* first;
 	VariableNode_T* last;
-	/* uint32_T num_vars; */
 } VariableList_T;
 
 /**

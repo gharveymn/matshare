@@ -898,16 +898,32 @@ int msh_CompareStringKey(void* node_str, void* comp_str)
 }
 
 
-uint32_T msh_GetSegmentHashByDataAddress(SegmentTable_T* seg_table, void* data_address)
+uint32_T msh_GetSegmentHashByVariableAddress(SegmentTable_T* seg_table, void* var_address)
 {
-	/* dumb hash because I don't see any other way of doing it */
-	return (uint32_T)((size_t)data_address % seg_table->table_sz);
+	/* divide by the alignment to avoid crowding */
+	return (uint32_T)(((size_t)var_address/MATLAB_ALIGNMENT) % seg_table->table_sz);
 }
 
 
-int msh_CompareDataAddressKey(void* data_address, void* comp_data_address)
+int msh_CompareVariableAddressKey(void* var_address, void* comp_var_address)
 {
-	return (size_t)data_address == (size_t)comp_data_address;
+	return (size_t)var_address == (size_t)comp_var_address;
+}
+
+
+SegmentNode_T* msh_FindSegmentNodeFromCrosslink(SegmentTable_T* seg_table, mxArray* in_var)
+{
+	SegmentNode_T* ret;
+	mxArray*       curr_link = in_var;
+	do
+	{
+		if((ret = msh_FindSegmentNode(seg_table, curr_link)) != NULL)
+		{
+			break;
+		}
+		curr_link = met_GetCrosslink(curr_link);
+	} while(curr_link != NULL && curr_link != in_var);
+	return ret;
 }
 
 

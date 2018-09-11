@@ -56,16 +56,16 @@ LocalInfo_T g_local_info =
 	TRUE                        /* is_deinitialized */
 };
 
-/*
+/**
  * MATLAB variable tracking table
+ */
 SegmentTable_T g_mvar_table =
 {
 	NULL,
 	0,
-	msh_GetSegmentHashByDataAddress,
-	msh_CompareDataAddressKey
+	msh_GetSegmentHashByVariableAddress,
+	msh_CompareVariableAddressKey
 };
-  */
 
 /**
  * Segment tracking table via segment numbers
@@ -101,7 +101,7 @@ SegmentList_T g_local_seg_list =
 
 VariableList_T g_local_var_list =
 {
-	/*&g_mvar_table,*/
+	&g_mvar_table,
 	NULL,
 	NULL
 };
@@ -330,6 +330,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			/* do nothing */
 			break;
 		}
+		case(msh_TESTFIND):
+		{
+			plhs[0] = mxCreateLogicalScalar(
+			(mxLogical)(msh_FindSegmentNodeFromCrosslink(g_local_var_list.mvar_table, mxGetCell(in_args[0], 0)) != NULL)
+			);
+			break;
+		}
 		default:
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
@@ -355,18 +362,18 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 	SegmentNode_T*      new_seg_node = NULL;
 	VariableNode_T*     new_var_node = NULL;
 	
+	/* check the inputs */
 	if(num_args > INT_MAX)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NumInputsError", "Too many arguments.");
 	}
 	
-	/* check the inputs */
 	if(num_args < 1)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NoVariableError", "No variable supplied to share.");
 	}
 	
-	
+	/* parse options */
 	in_vars = mxMalloc(num_args * sizeof(const mxArray*));
 	for(i = 0, num_vars = 0; i < num_args; i++)
 	{
@@ -413,6 +420,7 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "OutputError", "Too many outputs.");
 	}
 	
+	/* main loop */
 	for(i = 0, j = 0, input_id = NULL; i < num_vars; i++)
 	{
 		
@@ -1247,6 +1255,6 @@ void msh_VarOps(int nlhs, mxArray** plhs, int num_args, const mxArray** in_args,
 	
 	
 	/* returns output only if requested to save time and memory */
-	msh_VariableOperation(parent_var, in_vars, subs_struct, varop, opts, (nlhs==1)? plhs : NULL);
+	msh_VariableOperation(parent_var, in_vars, subs_struct, varop, opts, &g_process_lock, (nlhs==1)? plhs : NULL);
 	
 }

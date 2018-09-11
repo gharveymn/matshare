@@ -1,11 +1,13 @@
-%% define result verification test parameters
-
+tic
 import matshare.tests.common.*
 
-params.verifyshort;
+params.verifylong;
 
+y = 1;
 count = 1;
 total_num_tests = num_maxDepth_tests*num_maxElements_tests*num_maxDims_tests*num_maxChildren_tests*num_typespec_tests;
+
+x = cell(total_num_tests,1);
 
 %% result verification test
 lents = 0;
@@ -40,13 +42,12 @@ for i = 1:num_maxDepth_tests
 						lents = numel(timestr);
 						
 						tv = vargen.variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, true, typespec);
-						matshare.share(tv);
-						x = matshare.fetch('-r');
-						
-						if(~matshare.scripts.compstruct(tv, x.data))
-							error('Matshare failed because results were not equal.');
+						x{y} = matshare.share(tv);
+						if(~x{y}.testfind)
+							error('did not find var');
 						end
 						
+						y = y + 1;
 						
 					end
 					count = count + 1;
@@ -57,4 +58,5 @@ for i = 1:num_maxDepth_tests
 end
 matshare.clear
 matshare.detach
-fprintf('successful.\n\n');
+fprintf('Test successful.\n\n');
+toc

@@ -253,9 +253,11 @@ uint32_T msh_GetSegmentHashByName(SegmentTable_T* seg_table, void* varname);
 
 int msh_CompareStringKey(void* node_str, void* comp_str);
 
-uint32_T msh_GetSegmentHashByDataAddress(SegmentTable_T* seg_table, void* data_address);
+uint32_T msh_GetSegmentHashByVariableAddress(SegmentTable_T* seg_table, void* var_address);
 
-int msh_CompareDataAddressKey(void* data_address, void* comp_data_address);
+int msh_CompareVariableAddressKey(void* var_address, void* comp_var_address);
+
+SegmentNode_T* msh_FindSegmentNodeFromCrosslink(SegmentTable_T* seg_table, mxArray* in_var);
 
 /**
  * Forward declaration of the global segment list.

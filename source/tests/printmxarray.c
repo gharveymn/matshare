@@ -102,7 +102,5 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 			   arr->jcClassID.ClassID,
 			   arr->nzmax
 			   );
-		
-		mexPrintf("%f\n", *((double*)mxGetData(arr)));
 	}	   
 }
