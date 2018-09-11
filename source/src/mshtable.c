@@ -163,6 +163,43 @@ void msh_FindAllSegmentNodes(SegmentTable_T* seg_table, SegmentList_T* seg_list_
 	}
 }
 
+void msh_GetCollisions(SegmentTable_T* seg_table, double* data)
+{
+	size_t i;
+	SegmentTableNode_T* curr_table_node;
+	for(i = 0; i < seg_table->table_sz; i++)
+	{
+		for(data[i] = 0,  curr_table_node = seg_table->table[i];
+		                  curr_table_node != NULL;
+		                  curr_table_node = curr_table_node->next)
+		{
+			if(curr_table_node->next != NULL)
+			{
+				data[i] += 1;
+			}
+		}
+		
+	}
+}
+
+size_t msh_GetMaxCollisions(SegmentTable_T* seg_table)
+{
+	size_t i, num_col, max_col;
+	SegmentTableNode_T* curr_table_node;
+	for(i = 0, max_col = 0; i < seg_table->table_sz; i++)
+	{
+		for(num_col = 0, curr_table_node = seg_table->table[i]; curr_table_node != NULL; curr_table_node = curr_table_node->next)
+		{
+			num_col++;
+		}
+		if(num_col > max_col)
+		{
+			max_col = num_col;
+		}
+	}
+	return max_col;
+}
+
 
 static void msh_ResizeTable(SegmentTable_T* seg_table, uint32_T num_segs)
 {

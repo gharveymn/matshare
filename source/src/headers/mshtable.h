@@ -69,4 +69,7 @@ void msh_RemoveSegmentFromTable(SegmentTable_T* seg_table, SegmentNode_T* seg_no
  */
 void msh_DestroyTable(SegmentTable_T* seg_table);
 
+void msh_GetCollisions(SegmentTable_T* seg_table, double* data);
+size_t msh_GetMaxCollisions(SegmentTable_T* seg_table);
+
 #endif /* MATSHARE_MSHTABLE_H */

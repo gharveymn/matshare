@@ -42,7 +42,7 @@ for i = 1:num_maxDepth_tests
 						lents = numel(timestr);
 						
 						tv = vargen.variablegenerator(rns, maxDepth, maxElements, maxDims, maxChildren, true, typespec);
-						x{y} = matshare.share(tv);
+						x{y} = matshare.share('-n', char('a' + randi(26, 1, randi(63)) - 1), tv);
 						if(~x{y}.testfind)
 							error('did not find var');
 						end
@@ -56,7 +56,6 @@ for i = 1:num_maxDepth_tests
 		end
 	end
 end
-matshare.clear
-matshare.detach
+collisions = matshare.getcols;
 fprintf('Test successful.\n\n');
 toc

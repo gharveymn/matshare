@@ -337,6 +337,12 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			);
 			break;
 		}
+		case(msh_GETCOLS):
+		{
+			plhs[0] = mxCreateDoubleMatrix(g_local_seg_list.name_table->table_sz, 1, mxREAL);
+			msh_GetCollisions(g_local_seg_list.name_table, mxGetData(plhs[0]));
+			break;
+		}
 		default:
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
