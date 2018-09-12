@@ -138,6 +138,6 @@ int msh_GetNumVarOpArgs(msh_varop_T varop);
 void msh_UnaryVariableOperation(IndexedVariable_T* indexed_var, msh_varop_T varop, long opts, mxArray** output);
 void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop, long opts, mxArray** output);
 
-void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, const mxArray* subs_struct, msh_varop_T varop, long opts, FileLock_T* lock, mxArray** output);
+void msh_VariableOperation(const mxArray* parent_var, const mxArray* subs_struct, const mxArray* in_vars, size_t num_in_vars, msh_varop_T varop, long opts, FileLock_T filelock, mxArray** output);
 
 #endif /* MATSHARE_MSHVAROPS_H */

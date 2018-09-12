@@ -14,31 +14,31 @@
 
 #include "mshbasictypes.h"
 
+#define MSH_INITIAL_STATE 0
+#define MSH_CONFIG_FOLDER_NAME "matshare"
+
 /* differentiate these in case we have both running at the same time for some reason */
 #if MSH_BITNESS == 64
-#  define MSH_SHARED_INFO_SEGMENT_NAME "/MSH_SHARED_INFO_SEGMENT"
-#  define MSH_SEGMENT_NAME_FORMAT "/MSH_SEGMENT%0lx"
-#  define MSH_CONFIG_FOLDER_NAME "matshare"
-#  define MSH_CONFIG_FILE_NAME "mshconfig"
+#  define MSH_SHARED_INFO_SEGMENT_NAME   "/MSH_SHARED_INFO_SEGMENT"
+#  define MSH_SEGMENT_NAME_FORMAT        "/MSH_SEGMENT%0lx"
+#  define MSH_CONFIG_FILE_NAME           "mshconfig"
 #  ifdef MSH_WIN
-#    define MSH_LOCK_NAME "/MSH_LOCK"
+#    define MSH_LOCK_NAME                "/MSH_LOCK"
+#    define MSH_SEGMENT_LOCK_NAME_FORMAT "/MSH_SEGMENT_LOCK%0lx"
 #  else
-#    define HOME_CONFIG_FOLDER ".config"
+#    define HOME_CONFIG_FOLDER           ".config"
 #  endif
 #elif MSH_BITNESS == 32
-#  define MSH_SHARED_INFO_SEGMENT_NAME "/MSH_SHARED_INFO_SEGMENT32"
-#  define MSH_SEGMENT_NAME_FORMAT "/MSH_32SEGMENT%0lx"
-#  define MSH_CONFIG_FOLDER_NAME "matshare"
-#  define MSH_ "matshare"
-#  define MSH_CONFIG_FILE_NAME "mshconfig32"
+#    define MSH_SHARED_INFO_SEGMENT_NAME "/MSH32_SHARED_INFO_SEGMENT"
+#    define MSH_SEGMENT_NAME_FORMAT      "/MSH32_SEGMENT%0lx"
+#    define MSH_CONFIG_FILE_NAME         "mshconfig32"
 #  ifdef MSH_WIN
-#    define MSH_LOCK_NAME "/MSH_LOCK32"
+#    define MSH_LOCK_NAME                "/MSH32_LOCK"
+#    define MSH_SEGMENT_LOCK_NAME_FORMAT "/MSH32_SEGMENT_LOCK%0lx"
 #  else
-#    define HOME_CONFIG_FOLDER ".config"
+#    define HOME_CONFIG_FOLDER           ".config"
 #  endif
 #endif
-
-#define MSH_INITIAL_STATE 0
 
 typedef struct UserConfig_T
 {

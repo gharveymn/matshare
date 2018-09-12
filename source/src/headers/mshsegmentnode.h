@@ -37,11 +37,12 @@ typedef struct SegmentMetadata_T
 
 typedef struct SegmentInfo_T
 {
-	void* raw_ptr;
+	void*              raw_ptr;
 	SegmentMetadata_T* metadata;
-	size_t total_segment_size;
-	handle_T handle;
-	segmentnumber_T seg_num;
+	size_t             total_segment_size;
+	handle_T           handle;
+	FileLock_T         lock;
+	segmentnumber_T    seg_num;
 } SegmentInfo_T;
 
 

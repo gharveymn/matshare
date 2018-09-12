@@ -1153,16 +1153,17 @@ void msh_VarOps(int nlhs, mxArray** plhs, int num_args, const mxArray** in_args,
 	 * 4. {substruct, opt1, opt2, ...}
 	 */
 	
-	size_t            i, num_varargin;
-	mxChar*           input_option;
-	mxArray*          opt_input;
-	const mxArray*    parent_var;
-	const mxArray*    in_vars;
+	size_t         i, num_varargin, num_in_vars;
+	mxChar*        input_option;
+	mxArray*       opt_input;
+	SegmentNode_T* shared_seg_node;
+	const mxArray* parent_var;
+	const mxArray* in_vars;
 	
-	int               exp_num_in_args = msh_GetNumVarOpArgs(varop)-1;
-	int               index_once      = FALSE;
-	long              opts            = g_user_config.varop_opts_default;
-	mxArray*          subs_struct     = NULL;
+	int            index_once      = FALSE;
+	long           opts            = g_user_config.varop_opts_default;
+	FileLock_T     filelock        = g_process_lock;
+	mxArray*       subs_struct     = NULL;
 	
 	if(num_args != 3)
 	{
@@ -1172,7 +1173,12 @@ void msh_VarOps(int nlhs, mxArray** plhs, int num_args, const mxArray** in_args,
 	parent_var = mxGetCell(in_args[0], 0);
 	in_vars = in_args[1];
 	
-	if(mxIsCell(in_vars) && mxGetNumberOfElements(in_vars) != exp_num_in_args)
+	if(!mxIsCell(in_vars))
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "InvalidInputTypeError", "Expected cell input for in_vars.");
+	}
+	
+	if((num_in_vars = mxGetNumberOfElements(in_vars)) != (msh_GetNumVarOpArgs(varop)-1))
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNumberOfInputsError", "Too many or too few inputs.");
 	}
@@ -1259,8 +1265,15 @@ void msh_VarOps(int nlhs, mxArray** plhs, int num_args, const mxArray** in_args,
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "TooManyOutputsError", "Too many outputs");
 	}
 	
+	if(opts & MSH_IS_SYNCHRONOUS)
+	{
+		if((shared_seg_node = msh_FindSegmentNodeFromCrosslink(g_local_var_list.mvar_table, parent_var)) != NULL)
+		{
+			filelock = msh_GetSegmentInfo(shared_seg_node)->lock;
+		}
+	}
 	
 	/* returns output only if requested to save time and memory */
-	msh_VariableOperation(parent_var, in_vars, subs_struct, varop, opts, &g_process_lock, (nlhs==1)? plhs : NULL);
+	msh_VariableOperation(parent_var, subs_struct, in_vars, num_in_vars, varop, opts, filelock, (nlhs==1)? plhs : NULL);
 	
 }

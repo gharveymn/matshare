@@ -29,6 +29,18 @@
 
 
 /**
+ * Writes the segment name to the name buffer.
+ *
+ * @param name_buffer The destination of the segment name.
+ * @param seg_num The segment number used by matshare to identify the segment.
+ */
+static void msh_WriteSegmentName(char* name_buffer, segmentnumber_T seg_num);
+
+
+static void msh_WriteSegmentLockName(char* name_buffer, segmentnumber_T seg_num);
+
+
+/**
  * Does the actual segment creation operation. Write information on the segment
  * to seg_info_cache to be used immediately after.
  *
@@ -166,6 +178,23 @@ void msh_DetachSegment(SegmentNode_T* seg_node)
 		msh_CloseSharedMemory(seg_info->handle);
 		seg_info->handle = MSH_INVALID_HANDLE;
 	}
+
+#ifdef MSH_WIN
+	if(seg_info->lock != MSH_INVALID_HANDLE)
+	{
+		if(CloseHandle(seg_info->lock) == 0)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CloseHandleError", "Error closing the process lock handle.");
+		}
+		seg_info->lock = MSH_INVALID_HANDLE;
+	}
+#else
+	if(seg_info->lock.lock_handle != MSH_INVALID_HANDLE)
+	{
+		seg_info->lock.lock_handle = MSH_INVALID_HANDLE;
+		seg_info->lock.lock_size   = 0;
+	}
+#endif
 	
 	msh_DestroySegmentNode(seg_node);
 	
@@ -654,7 +683,20 @@ static void msh_CreateSegmentWorker(SegmentInfo_T* new_seg_info, size_t data_siz
 	
 	/* refer to nothing since this is the end of the list */
 	new_seg_info->metadata->next_seg_num = MSH_INVALID_SEG_NUM;
+
 	
+	/* create a lock for the segment */
+#ifdef MSH_WIN
+	msh_WriteSegmentLockName(segment_name, new_seg_info->seg_num);
+	if((new_seg_info->lock = CreateMutex(NULL, FALSE, segment_name)) == NULL)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateMutexError", "Failed to create the mutex.");
+	}
+#else
+	new_seg_info->lock.lock_handle = new_seg_info->handle;
+	new_seg_info->lock.lock_size   = new_seg_info->total_segment_size;
+#endif
+
 }
 
 
@@ -701,6 +743,18 @@ static void msh_OpenSegmentWorker(SegmentInfo_T* new_seg_info, segmentnumber_T s
 	/* get the segment size */
 	new_seg_info->total_segment_size = msh_FindSegmentSize(new_seg_info->metadata->data_size);
 	
+	/* open the lock */
+#ifdef MSH_WIN
+	msh_WriteSegmentLockName(segment_name, seg_num);
+	if((new_seg_info->lock = CreateMutex(NULL, FALSE, segment_name)) == NULL)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "CreateMutexError", "Failed to create the mutex.");
+	}
+#else
+	new_seg_info->lock.lock_handle = new_seg_info->handle;
+	new_seg_info->lock.lock_size   = new_seg_info->total_segment_size;
+#endif
+
 }
 
 
@@ -872,6 +926,34 @@ void msh_UnlockMemory(void* ptr, size_t sz)
 #endif
 }
 
+static void msh_WriteSegmentName(char* name_buffer, segmentnumber_T seg_num)
+{
+	if(seg_num == MSH_INVALID_SEG_NUM)
+	{
+		meu_PrintMexError(MEU_FL,
+		                  MEU_SEVERITY_INTERNAL | MEU_SEVERITY_FATAL,
+		                  "InternalLogicError",
+		                  "There was an internal logic error where matshare lost track of its internal shared memory list. Please"
+		                  "report this if you can.");
+	}
+	sprintf(name_buffer, MSH_SEGMENT_NAME_FORMAT, (unsigned long)seg_num);
+}
+
+#ifdef MSH_WIN
+static void msh_WriteSegmentLockName(char* name_buffer, segmentnumber_T seg_num)
+{
+	if(seg_num == MSH_INVALID_SEG_NUM)
+	{
+		meu_PrintMexError(MEU_FL,
+		                  MEU_SEVERITY_INTERNAL | MEU_SEVERITY_FATAL,
+		                  "InternalLogicError",
+		                  "There was an internal logic error where matshare lost track of its internal shared memory list. Please"
+		                  "report this if you can.");
+	}
+	sprintf(name_buffer, MSH_SEGMENT_LOCK_NAME_FORMAT, (unsigned long)seg_num);
+}
+#endif
+
 
 uint32_T msh_GetSegmentHashByNumber(SegmentTable_T* seg_table, void* seg_num)
 {
@@ -911,29 +993,35 @@ int msh_CompareVariableAddressKey(void* var_address, void* comp_var_address)
 }
 
 
-SegmentNode_T* msh_FindSegmentNodeFromCrosslink(SegmentTable_T* seg_table, mxArray* in_var)
+SegmentNode_T* msh_FindSegmentNodeFromCrosslink(SegmentTable_T* seg_table, const mxArray* dest_var)
 {
 	SegmentNode_T* ret;
-	mxArray*       curr_link = in_var;
+	const mxArray* curr_link = dest_var;
 	do
 	{
-		if((ret = msh_FindSegmentNode(seg_table, curr_link)) != NULL)
+		if((ret = msh_FindSegmentNode(seg_table, (void*)curr_link)) != NULL)
 		{
 			break;
 		}
 		curr_link = met_GetCrosslink(curr_link);
-	} while(curr_link != NULL && curr_link != in_var);
+	} while(curr_link != NULL && curr_link != dest_var);
 	return ret;
 }
 
 
 static void msh_InitializeSegmentInfo(SegmentInfo_T* seg_info)
 {
-	seg_info->raw_ptr = NULL;
-	seg_info->metadata = NULL;
+	seg_info->raw_ptr            = NULL;
+	seg_info->metadata           = NULL;
 	seg_info->total_segment_size = 0;
-	seg_info->handle = MSH_INVALID_HANDLE;
-	seg_info->seg_num = -1;
+	seg_info->handle             = MSH_INVALID_HANDLE;
+#ifdef MSH_WIN
+	seg_info->lock               = MSH_INVALID_HANDLE;
+#else
+	seg_info->lock.lock_handle   = MSH_INVALID_HANDLE;
+	seg_info->lock.lock_size     = 0;
+#endif
+	seg_info->seg_num            = -1;
 }
 
 

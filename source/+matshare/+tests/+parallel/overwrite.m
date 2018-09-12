@@ -1,6 +1,6 @@
 import matshare.tests.common.*
 
-params.verify;
+params.verifyshort;
 
 count = 1;
 total_num_tests = num_maxDepth_tests*num_maxElements_tests*num_maxDims_tests*num_maxChildren_tests*num_typespec_tests;

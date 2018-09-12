@@ -159,7 +159,7 @@ struct InternalMexStruct_T
 };
 #endif
 
-mxArray* met_GetCrosslink(mxArray* var)
+mxArray* met_GetCrosslink(const mxArray* var)
 {
 #if MSH_USE_DEBUG_DEFINITION
 	return (mxArray*)((InternalMexStruct_T*)var)->crosslink;

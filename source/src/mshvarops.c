@@ -3223,42 +3223,31 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 }
 
 
-void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, const mxArray* subs_struct, msh_varop_T varop, long opts, FileLock_T* lock, mxArray** output)
+void msh_VariableOperation(const mxArray* parent_var, const mxArray* subs_struct, const mxArray* in_vars, size_t num_in_vars, msh_varop_T varop, long opts, FileLock_T filelock, mxArray** output)
 {
 	/* Note: in_vars is always a cell array */
 	int i;
 	
-	int exp_num_in_args = msh_GetNumVarOpArgs(varop)-1;
 	IndexedVariable_T indexed_var = {parent_var, {NULL, NULL, 0, NULL, 0}};
 
 #ifdef MSH_NO_VAROPS
 	meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "NoVarOpsError", "Variable operations were not supported by your compiler. Please try compiling again.");
 #endif
 	
-	if(mxGetNumberOfElements(in_vars) != exp_num_in_args)
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNumberOfInputsError", "Too many or too few inputs.");
-	}
-	
-	if(!mxIsCell(in_vars))
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "InVarsNotCellError", "Input variables should be contained in a cell array. Please use the provided entry functions.");
-	}
-	
 	if(subs_struct != NULL)
 	{
 		indexed_var = msh_ParseSubscriptStruct(parent_var, subs_struct);
 	}
 	
-	for(i = 0; i < exp_num_in_args; i++)
+	for(i = 0; i < num_in_vars; i++)
 	{
 		/* no varops for sparses except for copying---this is checked here */
 		msh_CheckValidInput(&indexed_var, mxGetCell(in_vars, (size_t)i), varop);
 	}
 	
-	if(opts & MSH_IS_SYNCHRONOUS && lock != NULL) msh_AcquireProcessLock(*lock);
+	if(opts & MSH_IS_SYNCHRONOUS) msh_AcquireProcessLock(filelock);
 	
-	switch(exp_num_in_args)
+	switch(num_in_vars)
 	{
 		case(0):
 		{
@@ -3276,7 +3265,7 @@ void msh_VariableOperation(const mxArray* parent_var, const mxArray* in_vars, co
 		}
 	}
 	
-	if(opts & MSH_IS_SYNCHRONOUS && lock != NULL) msh_ReleaseProcessLock(*lock);
+	if(opts & MSH_IS_SYNCHRONOUS) msh_ReleaseProcessLock(filelock);
 	
 	if(indexed_var.indices.start_idxs != NULL)
 	{

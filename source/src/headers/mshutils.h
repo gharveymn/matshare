@@ -55,15 +55,6 @@ pid_T msh_GetPid(void);
 
 
 /**
- * Writes the segment name to the name buffer.
- *
- * @param name_buffer The destination of the segment name.
- * @param seg_num The segment number used by matshare to identify the segment.
- */
-void msh_WriteSegmentName(char* name_buffer, segmentnumber_T seg_num);
-
-
-/**
  * Pads the input size to the alignment specified by ALIGN_SIZE and ALIGN_SHIFT.
  *
  * @note Do not use for curr_sz = 0.

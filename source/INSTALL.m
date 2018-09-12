@@ -157,8 +157,8 @@ function INSTALL
 	mexflags = [mexflags {['-DMSH_DEFAULT_VAROP_OPTS_DEFAULT=' varopoptsstr]}];
 
 	fprintf('-Compiling matshare...')
-	mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /Wall"'}];
-	mexflags = [mexflags {'CFLAGS="$CFLAGS -Wall -Werror -Wno-unused-function"'}];
+	mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /O2"'}];
+	% mexflags = [mexflags {'CFLAGS="$CFLAGS -Wall -Werror -Wno-unused-function"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n')
 	if(opts.mshDebugMode)

@@ -22,7 +22,7 @@ typedef struct InternalMexStruct_T InternalMexStruct_T;
  * @param var The mxArray for which to find the crosslink.
  * @return The crosslink.
  */
-mxArray* met_GetCrosslink(mxArray* var);
+mxArray* met_GetCrosslink(const mxArray* var);
 
 
 #endif /* MATSHARE_EXTERNTYPES_H */

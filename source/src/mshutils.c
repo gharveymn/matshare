@@ -90,19 +90,6 @@ void msh_ReleaseProcessLock(FileLock_T file_lock)
 }
 
 
-void msh_WriteSegmentName(char* name_buffer, segmentnumber_T seg_num)
-{
-	if(seg_num == MSH_INVALID_SEG_NUM)
-	{
-		meu_PrintMexError(MEU_FL,
-		                  MEU_SEVERITY_INTERNAL | MEU_SEVERITY_FATAL,
-		                  "InternalLogicError",
-		                  "There was an internal logic error where matshare lost track of its internal shared memory list. Please"
-		                  "report this if you can.");
-	}
-	sprintf(name_buffer, MSH_SEGMENT_NAME_FORMAT, (unsigned long)seg_num);
-}
-
 
 void msh_WriteConfiguration(void)
 {
