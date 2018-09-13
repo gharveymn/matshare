@@ -14,6 +14,7 @@
 #include <ctype.h>
 
 #include "mshsegments.h"
+#include "mshheader.h"
 #include "mshtable.h"
 #include "mshvariables.h"
 #include "mlerrorutils.h"
@@ -75,18 +76,6 @@ static void msh_InitializeSegmentInfo(SegmentInfo_T* seg_info);
 
 
 /** public function definitions **/
-
-SharedVariableHeader_T* msh_GetSegmentData(SegmentNode_T* seg_node)
-{
-	/* The raw pointer is only mapped if it is actually needed.
-	 * This improves performance of functions only needing the
-	 * metadata without effecting performance of other functions. */
-	if(msh_GetSegmentInfo(seg_node)->raw_ptr == NULL)
-	{
-		msh_GetSegmentInfo(seg_node)->raw_ptr = msh_MapMemory(msh_GetSegmentInfo(seg_node)->handle, msh_GetSegmentInfo(seg_node)->total_segment_size);
-	}
-	return (SharedVariableHeader_T*)((byte_T*)msh_GetSegmentInfo(seg_node)->raw_ptr + msh_PadToAlignData(sizeof(SegmentMetadata_T)));
-}
 
 
 size_t msh_FindSegmentSize(size_t data_size)

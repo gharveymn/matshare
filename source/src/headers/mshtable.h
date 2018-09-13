@@ -50,7 +50,7 @@ void msh_AddSegmentToTable(SegmentTable_T* seg_table, SegmentNode_T* seg_node, v
 SegmentNode_T* msh_FindSegmentNode(SegmentTable_T* seg_table, void* key);
 
 
-void msh_FindAllSegmentNodes(SegmentTable_T* seg_table, SegmentList_T* seg_list_cache, void* key);
+void msh_FindAllSegmentNodes(SegmentTable_T* seg_table, struct SegmentList_T* seg_list_cache, void* key);
 
 /**
  * Removes the specified segment node from the hash table.

@@ -206,8 +206,6 @@ typedef enum
 	msh_UNLOCK          = 0x000A,  /* release the interprocess lock */
 	msh_CLEAN           = 0x000B,  /* clean invalid and unused segments */
 	msh_STATUS          = 0x000C,  /* print out info about the current state of matshare */
-	msh_TESTFIND        = 0x000D,
-	msh_GETCOLS
 } msh_directive_T;
 
 /**

@@ -15,10 +15,10 @@
 #include "mshtable.h"
 
 /* forward declaration, definition in mshheader.c */
-typedef struct SharedVariableHeader_T SharedVariableHeader_T;
+struct SharedVariableHeader_T;
 
 /* forward declaration */
-typedef struct SegmentTable_T SegmentTable_T;
+struct SegmentTable_T;
 
 typedef struct SegmentList_T
 {
@@ -45,15 +45,6 @@ typedef void (*UpdateFunction_t)(SegmentList_T*);
  * @return The pointer to the segment metadata.
  */
 #define msh_GetSegmentMetadata(seg_node) (msh_GetSegmentInfo(seg_node)->metadata)
-
-
-/**
- * Gets the segment data (the first shared variable header in the segment).
- *
- * @param seg_node The segment node.
- * @return The segment data.
- */
-SharedVariableHeader_T* msh_GetSegmentData(SegmentNode_T* seg_node);
 
 
 /**

@@ -46,7 +46,7 @@ void msh_DestroySegmentNode(SegmentNode_T* seg_node)
 
 /** getters **/
 
-SegmentList_T* msh_GetSegmentList(SegmentNode_T* seg_node)
+struct SegmentList_T* msh_GetSegmentList(SegmentNode_T* seg_node)
 {
 	return seg_node->parent_seg_list;
 }
@@ -78,7 +78,7 @@ VariableNode_T* msh_GetVariableNode(SegmentNode_T* seg_node)
 
 /** setters **/
 
-void msh_SetSegmentList(SegmentNode_T* seg_node, SegmentList_T* seg_list)
+void msh_SetSegmentList(SegmentNode_T* seg_node, struct SegmentList_T* seg_list)
 {
 	seg_node->parent_seg_list = seg_list;
 }

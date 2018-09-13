@@ -13,14 +13,14 @@
 
 #include "mshbasictypes.h"
 
-/* forward declaration */
-typedef struct SegmentList_T SegmentList_T;
-
 /* forward declaration, defined in source file */
 typedef struct SegmentNode_T SegmentNode_T;
 
+/* forward declaration */
+struct SegmentList_T;
+
 /* forward declaration, defined in mshvariablenode.h */
-typedef struct VariableNode_T VariableNode_T;
+struct VariableNode_T;
 
 typedef struct SegmentMetadata_T
 {
@@ -44,7 +44,6 @@ typedef struct SegmentInfo_T
 	FileLock_T         lock;
 	segmentnumber_T    seg_num;
 } SegmentInfo_T;
-
 
 #define msh_HasVariableName(seg_node) (msh_GetSegmentMetadata(seg_node)->name[0] != '\0')
 
@@ -71,7 +70,7 @@ void msh_DestroySegmentNode(SegmentNode_T* seg_node);
  * @param seg_node The segment node.
  * @return The parent segment list.
  */
-SegmentList_T* msh_GetSegmentList(SegmentNode_T* seg_node);
+struct SegmentList_T* msh_GetSegmentList(SegmentNode_T* seg_node);
 
 
 /**
@@ -108,7 +107,7 @@ SegmentInfo_T* msh_GetSegmentInfo(SegmentNode_T* seg_node);
  * @param seg_node The segment node.
  * @return The variable node.
  */
-VariableNode_T* msh_GetVariableNode(SegmentNode_T* seg_node);
+struct VariableNode_T* msh_GetVariableNode(SegmentNode_T* seg_node);
 
 
 /**
@@ -117,7 +116,7 @@ VariableNode_T* msh_GetVariableNode(SegmentNode_T* seg_node);
  * @param seg_node The segment node.
  * @param seg_list The new parent segment list.
  */
-void msh_SetSegmentList(SegmentNode_T* seg_node, SegmentList_T* seg_list);
+void msh_SetSegmentList(SegmentNode_T* seg_node, struct SegmentList_T* seg_list);
 
 
 /**
@@ -154,6 +153,6 @@ void msh_SetSegmentInfo(SegmentNode_T* seg_node, SegmentInfo_T* seg_info);
  * @param seg_node The segment node.
  * @param var_node The variable node to be linked.
  */
-void msh_SetVariableNode(SegmentNode_T* seg_node, VariableNode_T* var_node);
+void msh_SetVariableNode(SegmentNode_T* seg_node, struct VariableNode_T* var_node);
 
 #endif /* MATSHARE_MSHSEGMENTNODE_H */

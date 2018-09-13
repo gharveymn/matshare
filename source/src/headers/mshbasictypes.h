@@ -135,7 +135,7 @@ ALIGNED_TYPEDEF(int64_T, 32)  a32_int64_T;
 ALIGNED_TYPEDEF(uint64_T, 32) a32_uint64_T;
 #endif
 
-ALIGNED_TYPEDEF(single, 32)    a32_single;
+ALIGNED_TYPEDEF(single, 32)   a32_single;
 ALIGNED_TYPEDEF(double, 32)   a32_double;
 #endif
 
@@ -153,7 +153,7 @@ ALIGNED_TYPEDEF(int64_T, 16)  a16_int64_T;
 ALIGNED_TYPEDEF(uint64_T, 16) a16_uint64_T;
 #endif
 
-ALIGNED_TYPEDEF(single, 16)    a16_single;
+ALIGNED_TYPEDEF(single, 16)   a16_single;
 ALIGNED_TYPEDEF(double, 16)   a16_double;
 #endif
 

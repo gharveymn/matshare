@@ -1132,6 +1132,19 @@ void msh_DetachVariable(mxArray* ret_var)
 }
 
 
+SharedVariableHeader_T* msh_GetSegmentData(SegmentNode_T* seg_node)
+{
+	/* The raw pointer is only mapped if it is actually needed.
+	 * This improves performance of functions only needing the
+	 * metadata without effecting performance of other functions. */
+	if(msh_GetSegmentInfo(seg_node)->raw_ptr == NULL)
+	{
+		msh_GetSegmentInfo(seg_node)->raw_ptr = msh_MapMemory(msh_GetSegmentInfo(seg_node)->handle, msh_GetSegmentInfo(seg_node)->total_segment_size);
+	}
+	return (SharedVariableHeader_T*)((byte_T*)msh_GetSegmentInfo(seg_node)->raw_ptr + msh_PadToAlignData(sizeof(SegmentMetadata_T)));
+}
+
+
 static size_t msh_GetFieldNamesSize(const mxArray* in_var)
 {
 	const char_T* field_name;

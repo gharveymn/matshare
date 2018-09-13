@@ -13,11 +13,11 @@
 
 #include "mshbasictypes.h"
 
-/* forward declaration to avoid include */
-typedef struct mxArray_tag mxArray;
-
 /** Forward declaration for SharedVariableHeader_t **/
 typedef struct SharedVariableHeader_T SharedVariableHeader_T;
+
+/* forward declaration */
+struct SegmentNode_T;
 
 /** getters **/
 
@@ -440,6 +440,15 @@ int msh_CompareHeaderSize(SharedVariableHeader_T* shared_header, const mxArray* 
  * @param ret_var The variable to be detached.
  */
 void msh_DetachVariable(mxArray* ret_var);
+
+
+/**
+ * Gets the segment data (the first shared variable header in the segment).
+ *
+ * @param seg_node The segment node.
+ * @return The segment data.
+ */
+SharedVariableHeader_T* msh_GetSegmentData(struct SegmentNode_T* seg_node);
 
 
 #endif /* MATSHARE_MSHHEADERTYPE_H */

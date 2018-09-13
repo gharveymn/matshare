@@ -84,8 +84,8 @@ typedef struct WideInput_T
 		int64_T*  Int64;
 		uint64_T* UInt64;
 #endif
-		mxSingle* Single;
-		mxDouble* Double;
+		single* Single;
+		double* Double;
 		mwIndex*  Index;
 		mwSize*   Size;
 	} input;

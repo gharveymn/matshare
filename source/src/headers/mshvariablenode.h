@@ -14,20 +14,17 @@
 
 #include "mshbasictypes.h"
 
-/* forward declaration to avoid include */
-typedef struct mxArray_tag mxArray;
-
 /* forward declaration, defined in source file */
 typedef struct VariableNode_T VariableNode_T;
 
 /* forward declaration, definition in mshsegmentnode.h */
-typedef struct SegmentNode_T SegmentNode_T;
+struct SegmentNode_T;
 
 /* forward declaration */
-typedef struct VariableList_T VariableList_T;
+struct VariableList_T;
 
 /** Forward declaration for SharedVariableHeader_t **/
-typedef struct SharedVariableHeader_T SharedVariableHeader_T;
+struct SharedVariableHeader_T;
 
 
 /**
@@ -37,7 +34,7 @@ typedef struct SharedVariableHeader_T SharedVariableHeader_T;
  * @param new_var The mxArray to be tracked.
  * @return The new variable node.
  */
-VariableNode_T* msh_CreateVariableNode(SegmentNode_T* seg_node, mxArray* new_var);
+VariableNode_T* msh_CreateVariableNode(struct SegmentNode_T* seg_node, mxArray* new_var);
 
 
 /**
@@ -54,7 +51,7 @@ void msh_DestroyVariableNode(VariableNode_T* var_node);
  * @param var_node The variable node.
  * @return The parents variable list.
  */
-VariableList_T* msh_GetVariableList(VariableNode_T* var_node);
+struct VariableList_T* msh_GetVariableList(VariableNode_T* var_node);
 
 
 /**
@@ -90,7 +87,7 @@ mxArray* msh_GetVariableData(VariableNode_T* var_node);
  * @param var_node The variable node.
  * @return The segment node whose segment this variable uses.
  */
-SegmentNode_T* msh_GetSegmentNode(VariableNode_T* var_node);
+struct SegmentNode_T* msh_GetSegmentNode(VariableNode_T* var_node);
 
 
 int msh_GetIsUsed(VariableNode_T* var_node);
@@ -102,7 +99,7 @@ int msh_GetIsUsed(VariableNode_T* var_node);
  * @param var_node The variable node.
  * @param var_list The variable list.
  */
-void msh_SetVariableList(VariableNode_T* var_node, VariableList_T* var_list);
+void msh_SetVariableList(VariableNode_T* var_node, struct VariableList_T* var_list);
 
 
 /**
@@ -138,7 +135,7 @@ void msh_SetVariableData(VariableNode_T* var_node, mxArray* var);
  * @param var_node The variable node.
  * @param seg_node The segment node.
  */
-void msh_SetSegmentNode(VariableNode_T* var_node, SegmentNode_T* seg_node);
+void msh_SetSegmentNode(VariableNode_T* var_node, struct SegmentNode_T* seg_node);
 
 
 void msh_SetIsUsed(VariableNode_T* var_node, int is_used);

@@ -15,7 +15,7 @@
 
 struct VariableNode_T
 {
-	VariableList_T* parent_var_list;
+	struct VariableList_T* parent_var_list;
 	VariableNode_T* next; /* next variable that is currently fetched and being used */
 	VariableNode_T* prev;
 	mxArray* var;
@@ -43,7 +43,7 @@ VariableNode_T* msh_CreateVariableNode(SegmentNode_T* seg_node, mxArray* new_var
 
 /** getters */
 
-VariableList_T* msh_GetVariableList(VariableNode_T* var_node)
+struct VariableList_T* msh_GetVariableList(VariableNode_T* var_node)
 {
 	return var_node->parent_var_list;
 }
@@ -81,7 +81,7 @@ int msh_GetIsUsed(VariableNode_T* var_node)
 
 /** setters **/
 
-void msh_SetVariableList(VariableNode_T* var_node, VariableList_T* var_list)
+void msh_SetVariableList(VariableNode_T* var_node, struct VariableList_T* var_list)
 {
 	var_node->parent_var_list = var_list;
 }
