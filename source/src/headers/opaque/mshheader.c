@@ -12,6 +12,7 @@
 #include "mex.h"
 
 #include "mshheader.h"
+#include "mshsegments.h"
 #include "mshvariables.h"
 #include "mlerrorutils.h"
 #include "mshexterntypes.h"
