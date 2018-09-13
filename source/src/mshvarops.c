@@ -1049,14 +1049,14 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 #define FW_UI_FCN_TCNAME(SIZE1,SIZE2) VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE1), FW_INT_TYPEN(SIZE2))
 
 /** function declarations (need these here for the metadef) **/
-static mxDouble VO_FCN_FNAME(Add, Double)(mxDouble accum, mxDouble in);
-static mxDouble VO_FCN_FNAME(Sub, Double)(mxDouble accum, mxDouble in);
-static mxDouble VO_FCN_FNAME(Mul, Double)(mxDouble accum, mxDouble in);
-static mxDouble VO_FCN_FNAME(Div, Double)(mxDouble accum, mxDouble in);
-static mxDouble VO_FCN_FNAME(Rem, Double)(mxDouble accum, mxDouble in);
-static mxDouble VO_FCN_FNAME(Mod, Double)(mxDouble accum, mxDouble in);
-static mxDouble VO_FCN_FNAME(ARS, Double)(mxDouble accum, mxDouble in);
-static mxDouble VO_FCN_FNAME(ALS, Double)(mxDouble accum, mxDouble in);
+static double VO_FCN_FNAME(Add, Double)(double accum, double in);
+static double VO_FCN_FNAME(Sub, Double)(double accum, double in);
+static double VO_FCN_FNAME(Mul, Double)(double accum, double in);
+static double VO_FCN_FNAME(Div, Double)(double accum, double in);
+static double VO_FCN_FNAME(Rem, Double)(double accum, double in);
+static double VO_FCN_FNAME(Mod, Double)(double accum, double in);
+static double VO_FCN_FNAME(ARS, Double)(double accum, double in);
+static double VO_FCN_FNAME(ALS, Double)(double accum, double in);
 
 /** Type Conversion routines **/
 #define TC_II_L_DEF(TYPE1, TYPE2, TYPE1_MAX, TYPE1_MIN, TCNAME) \
@@ -1176,8 +1176,8 @@ TC_INT_U_DEF(FW_INT_TYPE(SIZE1), FW_INT_TYPE(SIZE2), FW_II_FCN_TCNAME(SIZE1, SIZ
 TC_INT_U_DEF(FW_INT_TYPE(SIZE1), FW_UINT_TYPE(SIZE2), FW_IU_FCN_TCNAME(SIZE1, SIZE2));
 
 #define FW_TC_INT_F_METADEF(SIZE) \
-TC_INT_F_DEF(FW_INT_TYPE(SIZE), mxSingle, FW_INT_MAX(SIZE), FW_INT_MIN(SIZE), VO_FCN_TCNAME(FW_INT_TYPEN(SIZE), Single)); \
-TC_INT_F_DEF(FW_INT_TYPE(SIZE), mxDouble, FW_INT_MAX(SIZE), FW_INT_MIN(SIZE), VO_FCN_TCNAME(FW_INT_TYPEN(SIZE), Double)); \
+TC_INT_F_DEF(FW_INT_TYPE(SIZE), single, FW_INT_MAX(SIZE), FW_INT_MIN(SIZE), VO_FCN_TCNAME(FW_INT_TYPEN(SIZE), Single)); \
+TC_INT_F_DEF(FW_INT_TYPE(SIZE), double, FW_INT_MAX(SIZE), FW_INT_MIN(SIZE), VO_FCN_TCNAME(FW_INT_TYPEN(SIZE), Double)); \
 
 
 #if MSH_BITNESS==64
@@ -1267,8 +1267,8 @@ TC_INT_U_DEF(FW_UINT_TYPE(SIZE1), FW_UINT_TYPE(SIZE2), FW_UU_FCN_TCNAME(SIZE1, S
 TC_UINT_U_DEF(FW_UINT_TYPE(SIZE1), FW_INT_TYPE(SIZE2), FW_UI_FCN_TCNAME(SIZE1, SIZE2)); \
 
 #define FW_TC_UINT_F_METADEF(SIZE) \
-TC_INT_F_DEF(FW_UINT_TYPE(SIZE), mxSingle, FW_UINT_MAX(SIZE), 0, VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE), Single)); \
-TC_INT_F_DEF(FW_UINT_TYPE(SIZE), mxDouble, FW_UINT_MAX(SIZE), 0, VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE), Double)); \
+TC_INT_F_DEF(FW_UINT_TYPE(SIZE), single, FW_UINT_MAX(SIZE), 0, VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE), Single)); \
+TC_INT_F_DEF(FW_UINT_TYPE(SIZE), double, FW_UINT_MAX(SIZE), 0, VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE), Double)); \
 
 #if MSH_BITNESS==64
 #define FW_TC_UINT_CONV_DEF(SIZE) \
@@ -1355,10 +1355,10 @@ static TYPE1 TCNAME(void* v_in, size_t offset) \
 }
 
 #define TC_FL_INT_METADEF(SIZE) \
-TC_FL_DEF(mxSingle, FW_INT_TYPE(SIZE), VO_FCN_TCNAME(Single, FW_INT_TYPEN(SIZE))); \
-TC_FL_DEF(mxSingle, FW_UINT_TYPE(SIZE), VO_FCN_TCNAME(Single, FW_UINT_TYPEN(SIZE))); \
-TC_FL_DEF(mxDouble, FW_INT_TYPE(SIZE), VO_FCN_TCNAME(Double, FW_INT_TYPEN(SIZE))); \
-TC_FL_DEF(mxDouble, FW_UINT_TYPE(SIZE), VO_FCN_TCNAME(Double, FW_UINT_TYPEN(SIZE)));
+TC_FL_DEF(single, FW_INT_TYPE(SIZE), VO_FCN_TCNAME(Single, FW_INT_TYPEN(SIZE))); \
+TC_FL_DEF(single, FW_UINT_TYPE(SIZE), VO_FCN_TCNAME(Single, FW_UINT_TYPEN(SIZE))); \
+TC_FL_DEF(double, FW_INT_TYPE(SIZE), VO_FCN_TCNAME(Double, FW_INT_TYPEN(SIZE))); \
+TC_FL_DEF(double, FW_UINT_TYPE(SIZE), VO_FCN_TCNAME(Double, FW_UINT_TYPEN(SIZE)));
 
 TC_FL_INT_METADEF(8);
 TC_FL_INT_METADEF(16);
@@ -1367,12 +1367,12 @@ TC_FL_INT_METADEF(32);
 TC_FL_INT_METADEF(64);
 #endif
 
-TC_FL_DEF(mxSingle, mxSingle, VO_FCN_TCNAME(Single, Single));
-TC_FL_DEF(mxSingle, mxDouble, VO_FCN_TCNAME(Single, Double));
-TC_FL_DEF(mxDouble, mxDouble, VO_FCN_TCNAME(Double, Double));
-TC_FL_DEF(mxDouble, mxSingle, VO_FCN_TCNAME(Double, Single));
+TC_FL_DEF(single, single, VO_FCN_TCNAME(Single, Single));
+TC_FL_DEF(single, double, VO_FCN_TCNAME(Single, Double));
+TC_FL_DEF(double, double, VO_FCN_TCNAME(Double, Double));
+TC_FL_DEF(double, single, VO_FCN_TCNAME(Double, Single));
 
-typedef mxSingle (*singleconv_T)(void*,size_t);
+typedef single (*singleconv_T)(void*,size_t);
 static singleconv_T VO_FCN_CTCNAME(Single)(mxClassID cid)
 {
 	switch(cid)
@@ -1396,7 +1396,7 @@ static singleconv_T VO_FCN_CTCNAME(Single)(mxClassID cid)
 }
 
 
-typedef mxDouble (*doubleconv_T)(void*,size_t);
+typedef double (*doubleconv_T)(void*,size_t);
 static doubleconv_T VO_FCN_CTCNAME(Double)(mxClassID cid)
 {
 	switch(cid)
@@ -2392,61 +2392,61 @@ ALS_UINT_METADEF(64);
  * so no need for the single value subfunctions.
  */
  
-/** mxSingle **/
+/** single **/
 
-static mxSingle msh_AbsSingle(mxSingle accum)
+static single msh_AbsSingle(single accum)
 {
 #if __STDC_VERSION__ >= 199901L
-	return (mxSingle)fabsf((float)accum);
+	return (single)fabsf((float)accum);
 #else
-	return (mxSingle)fabs((double)accum);
+	return (single)fabs((double)accum);
 #endif
 }
-UNARY_OP_RUNNER_METADEF(Abs, mxSingle, Single);
+UNARY_OP_RUNNER_METADEF(Abs, single, Single);
 
 
-static mxSingle msh_AddSingle(mxSingle accum, mxSingle in)
+static single msh_AddSingle(single accum, single in)
 {
 	return accum + in;
 }
-BINARY_OP_RUNNER_METADEF(Add, mxSingle, Single, singleconv_T);
+BINARY_OP_RUNNER_METADEF(Add, single, Single, singleconv_T);
 
 
-static mxSingle msh_SubSingle(mxSingle accum, mxSingle in)
+static single msh_SubSingle(single accum, single in)
 {
 	return accum - in;
 }
-BINARY_OP_RUNNER_METADEF(Sub, mxSingle, Single, singleconv_T);
+BINARY_OP_RUNNER_METADEF(Sub, single, Single, singleconv_T);
 
 
-static mxSingle msh_MulSingle(mxSingle accum, mxSingle in)
+static single msh_MulSingle(single accum, single in)
 {
 	return accum * in;
 }
-BINARY_OP_RUNNER_METADEF(Mul, mxSingle, Single, singleconv_T);
+BINARY_OP_RUNNER_METADEF(Mul, single, Single, singleconv_T);
 
 
-static mxSingle msh_DivSingle(mxSingle accum, mxSingle in)
+static single msh_DivSingle(single accum, single in)
 {
 	return accum / in;
 }
-BINARY_OP_RUNNER_METADEF(Div, mxSingle, Single, singleconv_T);
+BINARY_OP_RUNNER_METADEF(Div, single, Single, singleconv_T);
 
 
-static mxSingle msh_RemSingle(mxSingle accum, mxSingle in)
+static single msh_RemSingle(single accum, single in)
 {
 #if __STDC_VERSION__ >= 199901L
-	return (mxSingle)fmodf((float)accum, (float)in);
+	return (single)fmodf((float)accum, (float)in);
 #else
-	return (mxSingle)fmod((double)accum, (double)in);
+	return (single)fmod((double)accum, (double)in);
 #endif
 }
-BINARY_OP_RUNNER_METADEF(Rem, mxSingle, Single, singleconv_T);
+BINARY_OP_RUNNER_METADEF(Rem, single, Single, singleconv_T);
 
 
-static mxSingle msh_ModSingle(mxSingle accum, mxSingle in)
+static single msh_ModSingle(single accum, single in)
 {
-	mxSingle  rem;
+	single  rem;
 	if(in != 0)
 	{
 		rem = msh_RemSingle(accum, in);
@@ -2454,7 +2454,7 @@ static mxSingle msh_ModSingle(mxSingle accum, mxSingle in)
 	}
 	return accum;
 }
-BINARY_OP_RUNNER(msh_ModSingleRunnerW, VO_FCN_FNAME(Mod, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), Mod, mxSingle, Single, singleconv_T);
+BINARY_OP_RUNNER(msh_ModSingleRunnerW, VO_FCN_FNAME(Mod, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), Mod, single, Single, singleconv_T);
 
 static void msh_ModSingleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, long opts)
 {
@@ -2466,26 +2466,26 @@ static void msh_ModSingleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, l
 }
 
 
-static mxSingle msh_NegSingle(mxSingle accum)
+static single msh_NegSingle(single accum)
 {
 	return -accum;
 }
-UNARY_OP_RUNNER_METADEF(Neg, mxSingle, Single);
+UNARY_OP_RUNNER_METADEF(Neg, single, Single);
 
 
-static mxSingle msh_ARSSingle(mxSingle accum, mxSingle in)
+static single msh_ARSSingle(single accum, single in)
 {
 #if __STDC_VERSION__ >= 199901L
 	return accum / (float)powf(2.0, (float)in);
 #else
-	return accum / (mxSingle)pow(2.0, (double)in);
+	return accum / (single)pow(2.0, (double)in);
 #endif
 }
-BINARY_OP_RUNNER(msh_ARSSingleRunnerW, VO_FCN_FNAME(ARS, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), ARS, mxSingle, Single, singleconv_T);
+BINARY_OP_RUNNER(msh_ARSSingleRunnerW, VO_FCN_FNAME(ARS, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), ARS, single, Single, singleconv_T);
 
 static void msh_ARSSingleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, long opts)
 {
-	mxSingle             mult, static_val;
+	single             mult, static_val;
 	singleconv_T         in_conv;
 	WideInput_T  sing_in;
 	
@@ -2503,7 +2503,7 @@ static void msh_ARSSingleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, l
 #if __STDC_VERSION__ >= 199901L
 		mult = (float)powf(2.0, (float)static_val);
 #else
-		mult = (mxSingle)pow(2.0, (double)static_val);
+		mult = (single)pow(2.0, (double)static_val);
 #endif
 		sing_in.input.Single = &mult;
 		sing_in.num_elems = 1;
@@ -2516,19 +2516,19 @@ static void msh_ARSSingleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, l
 	}
 }
 
-static mxSingle msh_ALSSingle(mxSingle accum, mxSingle in)
+static single msh_ALSSingle(single accum, single in)
 {
 #if __STDC_VERSION__ >= 199901L
 	return accum * (float)powf(2.0, (float)in);
 #else
-	return accum * (mxSingle)pow(2.0, (double)in);
+	return accum * (single)pow(2.0, (double)in);
 #endif
 }
-BINARY_OP_RUNNER(msh_ALSSingleRunnerW, VO_FCN_FNAME(ALS, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), ALS, mxSingle, Single, singleconv_T);
+BINARY_OP_RUNNER(msh_ALSSingleRunnerW, VO_FCN_FNAME(ALS, Single), VO_FCN_CASNAME(Single), VO_FCN_CTCNAME(Single), ALS, single, Single, singleconv_T);
 
 static void msh_ALSSingleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, long opts)
 {
-	mxSingle             mult, static_val;
+	single             mult, static_val;
 	singleconv_T         in_conv;
 	WideInput_T sing_in;
 	
@@ -2546,7 +2546,7 @@ static void msh_ALSSingleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, l
 #if __STDC_VERSION__ >= 199901L
 		mult = (float)powf(2.0, (float)static_val);
 #else
-		mult = (mxSingle)pow(2.0, (double)static_val);
+		mult = (single)pow(2.0, (double)static_val);
 #endif
 		sing_in.input.Single = &mult;
 		sing_in.num_elems = 1;
@@ -2559,52 +2559,52 @@ static void msh_ALSSingleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, l
 	}
 }
 
-/** mxDouble **/
+/** double **/
 
-static mxDouble msh_AbsDouble(mxDouble accum)
+static double msh_AbsDouble(double accum)
 {
-	return (mxDouble)fabs((double)accum);
+	return (double)fabs((double)accum);
 }
-UNARY_OP_RUNNER_METADEF(Abs, mxDouble, Double);
+UNARY_OP_RUNNER_METADEF(Abs, double, Double);
 
 
-static mxDouble msh_AddDouble(mxDouble accum, mxDouble in)
+static double msh_AddDouble(double accum, double in)
 {
 	return accum + in;
 }
-BINARY_OP_RUNNER_METADEF(Add, mxDouble, Double, doubleconv_T);
+BINARY_OP_RUNNER_METADEF(Add, double, Double, doubleconv_T);
 
-static mxDouble msh_SubDouble(mxDouble accum, mxDouble in)
+static double msh_SubDouble(double accum, double in)
 {
 	return accum - in;
 }
-BINARY_OP_RUNNER_METADEF(Sub, mxDouble, Double, doubleconv_T);
+BINARY_OP_RUNNER_METADEF(Sub, double, Double, doubleconv_T);
 
 
-static mxDouble msh_MulDouble(mxDouble accum, mxDouble in)
+static double msh_MulDouble(double accum, double in)
 {
 	return accum * in;
 }
-BINARY_OP_RUNNER_METADEF(Mul, mxDouble, Double, doubleconv_T);
+BINARY_OP_RUNNER_METADEF(Mul, double, Double, doubleconv_T);
 
 
-static mxDouble msh_DivDouble(mxDouble accum, mxDouble in)
+static double msh_DivDouble(double accum, double in)
 {
 	return accum / in;
 }
-BINARY_OP_RUNNER_METADEF(Div, mxDouble, Double, doubleconv_T);
+BINARY_OP_RUNNER_METADEF(Div, double, Double, doubleconv_T);
 
 
-static mxDouble msh_RemDouble(mxDouble accum, mxDouble in)
+static double msh_RemDouble(double accum, double in)
 {
-	return (mxDouble)fmod((double)accum, (double)in);
+	return (double)fmod((double)accum, (double)in);
 }
-BINARY_OP_RUNNER_METADEF(Rem, mxDouble, Double, doubleconv_T);
+BINARY_OP_RUNNER_METADEF(Rem, double, Double, doubleconv_T);
 
 
-static mxDouble msh_ModDouble(mxDouble accum, mxDouble in)
+static double msh_ModDouble(double accum, double in)
 {
-	mxDouble  rem;
+	double  rem;
 	if(in != 0)
 	{
 		rem = msh_RemDouble(accum, in);
@@ -2612,7 +2612,7 @@ static mxDouble msh_ModDouble(mxDouble accum, mxDouble in)
 	}
 	return accum;
 }
-BINARY_OP_RUNNER(msh_ModDoubleRunnerW, VO_FCN_FNAME(Mod, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), Mod, mxDouble, Double, doubleconv_T);
+BINARY_OP_RUNNER(msh_ModDoubleRunnerW, VO_FCN_FNAME(Mod, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), Mod, double, Double, doubleconv_T);
 
 static void msh_ModDoubleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, long opts)
 {
@@ -2624,22 +2624,22 @@ static void msh_ModDoubleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, l
 }
 
 
-static mxDouble msh_NegDouble(mxDouble accum)
+static double msh_NegDouble(double accum)
 {
 	return -accum;
 }
-UNARY_OP_RUNNER_METADEF(Neg, mxDouble, Double);
+UNARY_OP_RUNNER_METADEF(Neg, double, Double);
 
 
-static mxDouble msh_ARSDouble(mxDouble accum, mxDouble in)
+static double msh_ARSDouble(double accum, double in)
 {
-	return accum / (mxDouble)pow(2.0, (double)in);
+	return accum / (double)pow(2.0, (double)in);
 }
-BINARY_OP_RUNNER(msh_ARSDoubleRunnerW, VO_FCN_FNAME(ARS, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), ARS, mxDouble, Double, doubleconv_T);
+BINARY_OP_RUNNER(msh_ARSDoubleRunnerW, VO_FCN_FNAME(ARS, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), ARS, double, Double, doubleconv_T);
 
 static void msh_ARSDoubleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, long opts)
 {
-	mxDouble             mult, static_val;
+	double             mult, static_val;
 	doubleconv_T         in_conv;
 	WideInput_T sing_in;
 	
@@ -2667,15 +2667,15 @@ static void msh_ARSDoubleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, l
 }
 
 
-static mxDouble msh_ALSDouble(mxDouble accum, mxDouble in)
+static double msh_ALSDouble(double accum, double in)
 {
 	return accum * pow(2.0, in);
 }
-BINARY_OP_RUNNER(msh_ALSDoubleRunnerW, VO_FCN_FNAME(ALS, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), ALS, mxDouble, Double, doubleconv_T);
+BINARY_OP_RUNNER(msh_ALSDoubleRunnerW, VO_FCN_FNAME(ALS, Double), VO_FCN_CASNAME(Double), VO_FCN_CTCNAME(Double), ALS, double, Double, doubleconv_T);
 
 static void msh_ALSDoubleRunner(WideInput_T* wide_accum, WideInput_T* wide_in, long opts)
 {
-	mxDouble             mult, static_val;
+	double             mult, static_val;
 	doubleconv_T         in_conv;
 	WideInput_T         sing_in;
 	
@@ -2797,8 +2797,8 @@ CPY_UINT_METADEF(64);
 #  define msh_CpySizeRunner(V_ACCUM, V_IN, OPTS) msh_CpyUInt32Runner(V_ACCUM, V_IN, OPTS)
 #endif
 
-CPY_FCN_DEF(msh_CpySingleRunner, msh_CpySingle, msh_AtomicSetSingle, msh_ChooseSingleConverter, mxSingle, Single, singleconv_T);
-CPY_FCN_DEF(msh_CpyDoubleRunner, msh_CpyDouble, msh_AtomicSetDouble, msh_ChooseDoubleConverter, mxDouble, Double, doubleconv_T);
+CPY_FCN_DEF(msh_CpySingleRunner, msh_CpySingle, msh_AtomicSetSingle, msh_ChooseSingleConverter, single, Single, singleconv_T);
+CPY_FCN_DEF(msh_CpyDoubleRunner, msh_CpyDouble, msh_AtomicSetDouble, msh_ChooseDoubleConverter, double, Double, doubleconv_T);
 
 /** function choosers **/
 
