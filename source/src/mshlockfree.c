@@ -407,7 +407,7 @@ int8_T VO_FCN_SNAME(Int8)(volatile int8_T* dest, int8_T set_val)
 	return _InterlockedExchange8((volatile char*)dest, set_val);
 #  else
 	int8_T ret;
-	asm volatile(
+	__asm__ volatile(
 		"xchgb %0, %1" : "=r"(ret),
 		"+m"(*dest) : "0"(set_val)
 	);
@@ -415,7 +415,7 @@ int8_T VO_FCN_SNAME(Int8)(volatile int8_T* dest, int8_T set_val)
 #  endif
 #else
 	int8_T ret;
-	asm volatile(
+	__asm__ volatile(
 		"xchgb %0, %1" : "=r"(ret),
 		"+m"(*dest) : "0"(set_val)
 	);
@@ -430,7 +430,7 @@ int16_T VO_FCN_SNAME(Int16)(volatile int16_T* dest, int16_T set_val)
 	return _InterlockedExchange16(dest, set_val);
 #  else
 	int16_T ret;
-	asm volatile(
+	__asm__ volatile(
 	"xchgw %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
