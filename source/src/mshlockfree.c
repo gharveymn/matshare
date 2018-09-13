@@ -602,7 +602,7 @@ double VO_FCN_SNAME(Double)(volatile double* dest, double set_val)
 	do
 	{
 		old_val = *dest;
-	} while(msh_AtomicCompareExchangeDouble(dest, old_val, set_val) != old_val);
+	} while(VO_FCN_CASNAME(Double)(dest, old_val, set_val) != old_val);
 	return old_val;
 #endif
 }

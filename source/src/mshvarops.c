@@ -195,7 +195,7 @@ ParsedIndices_T msh_ParseIndices(mxArray* subs_arr, const mxArray* dest_var)
 	size_t          dest_num_elems = mxGetNumberOfElements(dest_var);
 	size_t          num_subs_elems = 0;
 	size_t          base_mult     = 1;
-	mwSize          dest_num_dims  = mxGetNumberOfDimensions(dest_var);
+	size_t          dest_num_dims  = mxGetNumberOfDimensions(dest_var);
 	ParsedIndices_T parsed_indices = {0};
 	double*         indices        = NULL;
 	const size_t*   dest_dims      = mxGetDimensions(dest_var);
@@ -331,7 +331,7 @@ mwIndex msh_ParseSingleIndex(mxArray* subs_arr, const mxArray* dest_var)
 	size_t          num_subs_elems   = 0;
 	mwSize          dummy_slice_lens = 1;
 	size_t          dest_num_elems   = mxGetNumberOfElements(dest_var);
-	mwSize          dest_num_dims    = mxGetNumberOfDimensions(dest_var);
+	size_t          dest_num_dims    = mxGetNumberOfDimensions(dest_var);
 	const size_t*   dest_dims        = mxGetDimensions(dest_var);
 	
 	if(!mxIsCell(subs_arr))
@@ -418,7 +418,7 @@ static size_t msh_ParseIndicesWorker(mxArray*      subs_arr,
 		{
 			if(curr_dim < dest_num_dims)
 			{
-				for(i = 0; i < dest_dims[curr_dim]; i++)
+				for(i = 0; i < (size_t)dest_dims[curr_dim]; i++)
 				{
 					num_parsed = msh_ParseIndicesWorker(subs_arr,
 					                                    dest_dims,
@@ -493,7 +493,7 @@ static size_t msh_ParseIndicesWorker(mxArray*      subs_arr,
 		if(mxIsChar(curr_sub))
 		{
 			start_idxs[num_parsed] = anchor_idx;
-			if(dest_num_elems < start_idxs[num_parsed] + slice_lens[0])
+			if(dest_num_elems < (size_t)start_idxs[num_parsed] + slice_lens[0])
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Indexing exceeds the bounds of the destination variable.");
 			}
@@ -505,7 +505,7 @@ static size_t msh_ParseIndicesWorker(mxArray*      subs_arr,
 			for(i = 0, j = 0, num_elems = mxGetNumberOfElements(curr_sub); i < num_elems; i += slice_lens[j++])
 			{
 				start_idxs[num_parsed] = anchor_idx + ((mwIndex)indices[i]-1)*curr_mult;
-				if(dest_num_elems < start_idxs[num_parsed] + slice_lens[j])
+				if(dest_num_elems < (size_t)start_idxs[num_parsed] + slice_lens[j])
 				{
 					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "IndexingError", "Indexing exceeds the bounds of the destination variable.");
 				}
@@ -577,7 +577,7 @@ static void msh_CheckInputSize(mxArray* subs_arr, const mxArray* in_var, const s
 	
 	size_t          num_subs_elems = 0;
 	size_t          num_subs       = mxGetNumberOfElements(subs_arr);
-	mwSize          in_num_dims    = mxGetNumberOfDimensions(in_var);
+	size_t          in_num_dims    = mxGetNumberOfDimensions(in_var);
 	const size_t*   in_dims        = mxGetDimensions(in_var);
 	
 	if(mxIsEmpty(in_var))
@@ -779,11 +779,12 @@ static void msh_CheckInputSize(mxArray* subs_arr, const mxArray* in_var, const s
 void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_var, msh_varop_T varop)
 {
 	int               field_num, dest_num_fields;
-	size_t            i, j, dest_idx, comp_idx;
+	size_t            i, j;
+	mwIndex           dest_idx, comp_idx;
 	const char_T*     curr_field_name;
 	
-	size_t            dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
-	size_t            in_num_elems   = mxGetNumberOfElements(in_var);
+	mwSize            dest_num_elems = mxGetNumberOfElements(indexed_var->dest_var);
+	mwSize            in_num_elems   = mxGetNumberOfElements(in_var);
 	mxClassID         dest_class_id  = mxGetClassID(indexed_var->dest_var);
 	mxClassID         in_class_id    = mxGetClassID(in_var);
 	IndexedVariable_T sub_variable   = {0};
@@ -1292,7 +1293,7 @@ static FW_UINT_TYPEC(SIZE) FW_UINT_FCN_CTCNAME(SIZE)(mxClassID cid) \
 	return 0; \
 }
 #else
-#define FW_TC_INT_CONV_DEF(SIZE) \
+#define FW_TC_UINT_CONV_DEF(SIZE) \
 typedef FW_UINT_TYPE(SIZE) (*FW_UINT_TYPEC(SIZE))(void*,size_t); \
 static FW_UINT_TYPEC(SIZE) FW_UINT_FCN_CTCNAME(SIZE)(mxClassID cid) \
 { \
@@ -2975,8 +2976,9 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 {
 	int               field_num, in_num_fields, is_complex;
 	size_t            i, j;
-	size_t            dest_idx, dest_elem_size, dest_offset;
-	size_t            in_idx, in_elem_size, in_num_elems;
+	size_t            dest_elem_size, dest_offset, in_elem_size;
+	mwSize            in_num_elems;
+	mwIndex           dest_idx, in_idx;
 	binaryvaropfcn_T  varop_fcn, varop_fcn_ir, varop_fcn_jc;
 	const char_T*     curr_field_name;
 	
@@ -3226,7 +3228,7 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 void msh_VariableOperation(const mxArray* parent_var, const mxArray* subs_struct, const mxArray* in_vars, size_t num_in_vars, msh_varop_T varop, long opts, FileLock_T filelock, mxArray** output)
 {
 	/* Note: in_vars is always a cell array */
-	int i;
+	size_t i;
 	
 	IndexedVariable_T indexed_var = {parent_var, {NULL, NULL, 0, NULL, 0}};
 
