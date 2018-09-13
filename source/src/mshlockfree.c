@@ -438,7 +438,7 @@ int16_T VO_FCN_SNAME(Int16)(volatile int16_T* dest, int16_T set_val)
 #  endif
 #else
 	int16_T ret;
-	asm volatile(
+	__asm__ volatile(
 	"xchgw %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
@@ -452,7 +452,7 @@ int32_T VO_FCN_SNAME(Int32)(volatile int32_T* dest, int32_T set_val)
 	return InterlockedExchange((volatile long*)dest, set_val);
 #else
 	int32_T ret;
-	asm volatile(
+	__asm__ volatile(
 	"xchgl %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
@@ -467,7 +467,7 @@ int64_T VO_FCN_SNAME(Int64)(volatile int64_T* dest, int64_T set_val)
 	return InterlockedExchange64((volatile __int64*)dest, set_val);
 #else
 	int64_T ret;
-	asm volatile(
+	__asm__ volatile(
 	"xchgq %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
@@ -483,7 +483,7 @@ uint8_T VO_FCN_SNAME(UInt8)(volatile uint8_T* dest, uint8_T set_val)
 	return (uint8_T)_InterlockedExchange8((volatile char*)dest, set_val);
 #  else
 	uint8_T ret;
-	asm volatile(
+	__asm__ volatile(
 	"xchgb %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
@@ -491,7 +491,7 @@ uint8_T VO_FCN_SNAME(UInt8)(volatile uint8_T* dest, uint8_T set_val)
 #  endif
 #else
 	uint8_T ret;
-	asm volatile(
+	__asm__ volatile(
 	"xchgb %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
@@ -506,7 +506,7 @@ uint16_T VO_FCN_SNAME(UInt16)(volatile uint16_T* dest, uint16_T set_val)
 	return (uint16_T)_InterlockedExchange16((volatile short*)dest, set_val);
 #  else
 	uint16_T ret;
-	asm volatile(
+	__asm__ volatile(
 	"xchgw %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
@@ -514,7 +514,7 @@ uint16_T VO_FCN_SNAME(UInt16)(volatile uint16_T* dest, uint16_T set_val)
 #  endif
 #else
 	uint16_T ret;
-	asm volatile(
+	__asm__ volatile(
 	"xchgw %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
@@ -528,7 +528,7 @@ uint32_T VO_FCN_SNAME(UInt32)(volatile uint32_T* dest, uint32_T set_val)
 	return (uint32_T)InterlockedExchange((volatile long*)dest, (long)set_val);
 #else
 	uint32_T ret;
-	asm volatile(
+	__asm__ volatile(
 	"xchgl %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
@@ -543,7 +543,7 @@ uint64_T VO_FCN_SNAME(UInt64)(volatile uint64_T* dest, uint64_T set_val)
 	return (uint64_T)InterlockedExchange64((volatile __int64*)dest, set_val);
 #else
 	uint64_T ret;
-	asm volatile(
+	__asm__ volatile(
 	"xchgq %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
@@ -567,7 +567,7 @@ single VO_FCN_SNAME(Single)(volatile single* dest, single set_val)
 	ret.as_int = InterlockedExchange((volatile long*)dest, set_val_pun.as_int);
 	return ret.val;
 #else
-	asm volatile(
+	__asm__ volatile(
 	"xchgl %0, %1" : "=r"(ret.as_int),
 	"+m"(*(int32_T*)dest) : "0"(set_val_pun.as_int)
 	);
@@ -591,7 +591,7 @@ double VO_FCN_SNAME(Double)(volatile double* dest, double set_val)
 	ret.as_int = InterlockedExchange64((volatile __int64*)dest, set_val_pun.as_int);
 	return ret.val;
 #  else
-	asm volatile(
+	__asm__ volatile(
 	"xchgq %0, %1" : "=r"(ret.as_int),
 	"+m"(*(int64_T*)dest) : "0"(set_val_pun.as_int)
 	);
