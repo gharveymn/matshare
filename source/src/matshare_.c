@@ -1032,7 +1032,11 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 			
 			errno = 0;
 #if MSH_BITNESS == 64
+#ifdef _MSC_VER
+			maxsize_temp = _strtoui64(val_str_l, NULL, 0);
+#else
 			maxsize_temp = strtoull(val_str_l, NULL, 0);
+#endif
 #elif MSH_BITNESS == 32
 			maxsize_temp = strtoul(val_str_l, NULL, 0);
 #endif

@@ -20,7 +20,7 @@ function INSTALL
 	% check if ints are two's complement, and right shifts of signed ints 
 	% preserve the sign bit
 	tstdir = fullfile(thisfolder,'tests');
-	mex('-silent', fullfile(tstdir,'intdefcheck.c'), '-outdir', tstdir);
+	mex(fullfile(tstdir,'intdefcheck.c'), '-outdir', tstdir);
 	addpath(fullfile(thisfolder, 'tests'));
 	
 	if(~intdefcheck())
@@ -76,7 +76,7 @@ function INSTALL
 			mexflags = [mexflags {'-largeArrayDims'}];
 		else
 			warning(['Compiling in compatibility mode; the R2018a' ...
-				'MEX api does not support certain functions '...
+				'MEX API may not support certain functions '...
 				'which are integral to this function'])
 			mexflags = [mexflags, {'-R2017b'}];
 		end
@@ -88,7 +88,7 @@ function INSTALL
 	else
 		mexflags = [mexflags {'-compatibleArrayDims', ...
 			'-DMSH_BITNESS=32', ...
-			['-DMSH_DEFAULT_MAX_SHARED_SIZE=' mshMaxSize32]}];
+			['-DMSH_DEFAULT_MAX_SHARED_SIZE=' opts.mshMaxSize32]}];
 		mshconfigpath = fullfile(mshconfigfolder, 'mshconfig32');
 	end
 
@@ -157,7 +157,7 @@ function INSTALL
 	mexflags = [mexflags {['-DMSH_DEFAULT_VAROP_OPTS_DEFAULT=' varopoptsstr]}];
 
 	fprintf('-Compiling matshare...')
-	mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /O2"'}];
+	% mexflags = [mexflags {'COMPFLAGS="$COMPFLAGS /O2"'}];
 	% mexflags = [mexflags {'CFLAGS="$CFLAGS -Wall -Werror -Wno-unused-function"'}];
 	mex(mexflags{:} , sources{:})
 	fprintf(' successful.\n')

@@ -28,7 +28,7 @@
 #    ifndef WIN32_LEAN_AND_MEAN
 #      define WIN32_LEAN_AND_MEAN
 #    endif
-#    include <windows.h>
+#    include <Windows.h>
 #  define MSH_INVALID_HANDLE INVALID_HANDLE_VALUE
 #else
 #  include <sys/types.h>

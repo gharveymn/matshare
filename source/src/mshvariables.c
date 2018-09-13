@@ -17,8 +17,13 @@
 #include "mshexterntypes.h"
 #include "mshlockfree.h"
 
+/* may have been disabled for R2018a+ */
+#ifdef mxCreateSharedDataCopy
+#  undef mxCreateSharedDataCopy
+#endif
+
 /* undocumented function */
-extern mxArray* mxCreateSharedDataCopy(mxArray *);
+extern mxArray* mxCreateSharedDataCopy(const mxArray *);
 
 /** public function definitions **/
 
