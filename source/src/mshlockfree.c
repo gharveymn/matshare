@@ -249,7 +249,6 @@ int32_T VO_FCN_CASNAME(Int32)(volatile int32_T* dest, int32_T comp_val, int32_T 
 #endif
 }
 
-#if MSH_BITNESS==64
 int64_T VO_FCN_CASNAME(Int64)(volatile int64_T* dest, int64_T comp_val, int64_T set_val)
 {
 	/* returns the initial value of dest */
@@ -259,7 +258,6 @@ int64_T VO_FCN_CASNAME(Int64)(volatile int64_T* dest, int64_T comp_val, int64_T 
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
 }
-#endif
 
 
 uint8_T VO_FCN_CASNAME(UInt8)(volatile uint8_T* dest, uint8_T comp_val, uint8_T set_val)
@@ -297,7 +295,6 @@ uint32_T VO_FCN_CASNAME(UInt32)(volatile uint32_T* dest, uint32_T comp_val, uint
 #endif
 }
 
-#if MSH_BITNESS==64
 uint64_T VO_FCN_CASNAME(UInt64)(volatile uint64_T* dest, uint64_T comp_val, uint64_T set_val)
 {
 	/* returns the initial value of dest */
@@ -307,7 +304,6 @@ uint64_T VO_FCN_CASNAME(UInt64)(volatile uint64_T* dest, uint64_T comp_val, uint
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
 }
-#endif
 
 
 single VO_FCN_CASNAME(Single)(volatile single* dest, single comp_val, single set_val)
@@ -460,7 +456,6 @@ int32_T VO_FCN_SNAME(Int32)(volatile int32_T* dest, int32_T set_val)
 #endif
 }
 
-#if MSH_BITNESS==64
 int64_T VO_FCN_SNAME(Int64)(volatile int64_T* dest, int64_T set_val)
 {
 #ifdef MSH_WIN
@@ -474,7 +469,6 @@ int64_T VO_FCN_SNAME(Int64)(volatile int64_T* dest, int64_T set_val)
 	return ret;
 #endif
 }
-#endif
 
 uint8_T VO_FCN_SNAME(UInt8)(volatile uint8_T* dest, uint8_T set_val)
 {
@@ -536,7 +530,6 @@ uint32_T VO_FCN_SNAME(UInt32)(volatile uint32_T* dest, uint32_T set_val)
 #endif
 }
 
-#if MSH_BITNESS==64
 uint64_T VO_FCN_SNAME(UInt64)(volatile uint64_T* dest, uint64_T set_val)
 {
 #ifdef MSH_WIN
@@ -550,7 +543,6 @@ uint64_T VO_FCN_SNAME(UInt64)(volatile uint64_T* dest, uint64_T set_val)
 	return ret;
 #endif
 }
-#endif
 
 single VO_FCN_SNAME(Single)(volatile single* dest, single set_val)
 {

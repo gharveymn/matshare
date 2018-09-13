@@ -12,7 +12,7 @@ function varresult(tv, numworkers)
 		end
 	end
 	
-	held.clear;
+	held.clearshm;
 	
 end
 

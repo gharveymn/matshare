@@ -9,8 +9,8 @@ bounds.clear_new = 50;
 
 bounds.clear_all = 50;
 
-% bound of random call to mshclear
-bounds.mshclear = 200;
+% bound of random call to clearshm
+bounds.clearshm = 200;
 
 bounds.mshdetach = 200;
 

@@ -80,10 +80,8 @@ typedef struct WideInput_T
 		uint8_T*  UInt8;
 		uint16_T* UInt16;
 		uint32_T* UInt32;
-#if MSH_BITNESS==64
 		int64_T*  Int64;
 		uint64_T* UInt64;
-#endif
 		single* Single;
 		double* Double;
 		mwIndex*  Index;

@@ -1180,8 +1180,6 @@ TC_INT_U_DEF(FW_INT_TYPE(SIZE1), FW_UINT_TYPE(SIZE2), FW_IU_FCN_TCNAME(SIZE1, SI
 TC_INT_F_DEF(FW_INT_TYPE(SIZE), single, FW_INT_MAX(SIZE), FW_INT_MIN(SIZE), VO_FCN_TCNAME(FW_INT_TYPEN(SIZE), Single)); \
 TC_INT_F_DEF(FW_INT_TYPE(SIZE), double, FW_INT_MAX(SIZE), FW_INT_MIN(SIZE), VO_FCN_TCNAME(FW_INT_TYPEN(SIZE), Double)); \
 
-
-#if MSH_BITNESS==64
 #define FW_TC_INT_CONV_DEF(SIZE) \
 typedef FW_INT_TYPE(SIZE) (*FW_INT_TYPEC(SIZE))(void*, size_t); \
 static FW_INT_TYPEC(SIZE) FW_INT_FCN_CTCNAME(SIZE)(mxClassID cid) \
@@ -1202,62 +1200,34 @@ static FW_INT_TYPEC(SIZE) FW_INT_FCN_CTCNAME(SIZE)(mxClassID cid) \
 	} \
 	return 0; \
 }
-#else
-#define FW_TC_INT_CONV_DEF(SIZE) \
-typedef FW_INT_TYPE(SIZE) (*FW_INT_TYPEC(SIZE))(void*,size_t); \
-static FW_INT_TYPEC(SIZE) FW_INT_FCN_CTCNAME(SIZE)(mxClassID cid) \
-{ \
-	switch(cid) \
-	{ \
-		case(mxINT8_CLASS):   return FW_II_FCN_TCNAME(SIZE, 8); \
-		case(mxUINT8_CLASS):  return FW_IU_FCN_TCNAME(SIZE, 8); \
-		case(mxINT16_CLASS):  return FW_II_FCN_TCNAME(SIZE, 16); \
-		case(mxUINT16_CLASS): return FW_IU_FCN_TCNAME(SIZE, 16); \
-		case(mxINT32_CLASS):  return FW_II_FCN_TCNAME(SIZE, 32); \
-		case(mxUINT32_CLASS): return FW_IU_FCN_TCNAME(SIZE, 32); \
-		case(mxSINGLE_CLASS): return VO_FCN_TCNAME(FW_INT_TYPEN(SIZE), Single); \
-		case(mxDOUBLE_CLASS): return VO_FCN_TCNAME(FW_INT_TYPEN(SIZE), Double); \
-		default: meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "TypeConversionError", "Invalid variable conversion."); \
-	} \
-	return 0; \
-}
-#endif
 
 FW_TC_INT_U_METADEF(8, 8);
 FW_TC_INT_L_METADEF(8, 16);
 FW_TC_INT_L_METADEF(8, 32);
-#if MSH_BITNESS==64
 FW_TC_INT_L_METADEF(8, 64);
-#endif
 FW_TC_INT_F_METADEF(8);
 FW_TC_INT_CONV_DEF(8);
 
 FW_TC_INT_U_METADEF(16, 8);
 FW_TC_INT_U_METADEF(16, 16);
 FW_TC_INT_L_METADEF(16, 32);
-#if MSH_BITNESS==64
 FW_TC_INT_L_METADEF(16, 64);
-#endif
 FW_TC_INT_F_METADEF(16);
 FW_TC_INT_CONV_DEF(16);
 
 FW_TC_INT_U_METADEF(32, 8);
 FW_TC_INT_U_METADEF(32, 16);
 FW_TC_INT_U_METADEF(32, 32);
-#if MSH_BITNESS==64
 FW_TC_INT_L_METADEF(32, 64);
-#endif
 FW_TC_INT_F_METADEF(32);
 FW_TC_INT_CONV_DEF(32);
 
-#if MSH_BITNESS==64
 FW_TC_INT_U_METADEF(64, 8);
 FW_TC_INT_U_METADEF(64, 16);
 FW_TC_INT_U_METADEF(64, 32);
 FW_TC_INT_U_METADEF(64, 64);
 FW_TC_INT_F_METADEF(64);
 FW_TC_INT_CONV_DEF(64);
-#endif
 
 #define FW_UINT_TC_L_METADEF(SIZE1, SIZE2) \
 TC_UU_L_DEF(FW_UINT_TYPE(SIZE1), FW_UINT_TYPE(SIZE2), FW_UINT_MAX(SIZE1), FW_UU_FCN_TCNAME(SIZE1, SIZE2)); \
@@ -1271,7 +1241,6 @@ TC_UINT_U_DEF(FW_UINT_TYPE(SIZE1), FW_INT_TYPE(SIZE2), FW_UI_FCN_TCNAME(SIZE1, S
 TC_INT_F_DEF(FW_UINT_TYPE(SIZE), single, FW_UINT_MAX(SIZE), 0, VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE), Single)); \
 TC_INT_F_DEF(FW_UINT_TYPE(SIZE), double, FW_UINT_MAX(SIZE), 0, VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE), Double)); \
 
-#if MSH_BITNESS==64
 #define FW_TC_UINT_CONV_DEF(SIZE) \
 typedef FW_UINT_TYPE(SIZE) (*FW_UINT_TYPEC(SIZE))(void*, size_t); \
 static FW_UINT_TYPEC(SIZE) FW_UINT_FCN_CTCNAME(SIZE)(mxClassID cid) \
@@ -1292,62 +1261,34 @@ static FW_UINT_TYPEC(SIZE) FW_UINT_FCN_CTCNAME(SIZE)(mxClassID cid) \
 	} \
 	return 0; \
 }
-#else
-#define FW_TC_UINT_CONV_DEF(SIZE) \
-typedef FW_UINT_TYPE(SIZE) (*FW_UINT_TYPEC(SIZE))(void*,size_t); \
-static FW_UINT_TYPEC(SIZE) FW_UINT_FCN_CTCNAME(SIZE)(mxClassID cid) \
-{ \
-	switch(cid) \
-	{ \
-		case(mxINT8_CLASS):   return FW_UI_FCN_TCNAME(SIZE, 8); \
-		case(mxUINT8_CLASS):  return FW_UU_FCN_TCNAME(SIZE, 8); \
-		case(mxINT16_CLASS):  return FW_UI_FCN_TCNAME(SIZE, 16); \
-		case(mxUINT16_CLASS): return FW_UU_FCN_TCNAME(SIZE, 16); \
-		case(mxINT32_CLASS):  return FW_UI_FCN_TCNAME(SIZE, 32); \
-		case(mxUINT32_CLASS): return FW_UU_FCN_TCNAME(SIZE, 32); \
-		case(mxSINGLE_CLASS): return VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE), Single); \
-		case(mxDOUBLE_CLASS): return VO_FCN_TCNAME(FW_UINT_TYPEN(SIZE), Double); \
-		default: meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "TypeConversionError", "Invalid variable conversion."); \
-	} \
-	return 0; \
-}
-#endif
 
 FW_UINT_TC_U_METADEF(8, 8);
 FW_UINT_TC_L_METADEF(8, 16);
 FW_UINT_TC_L_METADEF(8, 32);
-#if MSH_BITNESS==64
 FW_UINT_TC_L_METADEF(8, 64);
-#endif
 FW_TC_UINT_F_METADEF(8);
 FW_TC_UINT_CONV_DEF(8);
 
 FW_UINT_TC_U_METADEF(16, 8);
 FW_UINT_TC_U_METADEF(16, 16);
 FW_UINT_TC_L_METADEF(16, 32);
-#if MSH_BITNESS==64
 FW_UINT_TC_L_METADEF(16, 64);
-#endif
 FW_TC_UINT_F_METADEF(16);
 FW_TC_UINT_CONV_DEF(16);
 
 FW_UINT_TC_U_METADEF(32, 8);
 FW_UINT_TC_U_METADEF(32, 16);
 FW_UINT_TC_U_METADEF(32, 32);
-#if MSH_BITNESS==64
 FW_UINT_TC_L_METADEF(32, 64);
-#endif
 FW_TC_UINT_F_METADEF(32);
 FW_TC_UINT_CONV_DEF(32);
 
-#if MSH_BITNESS==64
 FW_UINT_TC_U_METADEF(64, 8);
 FW_UINT_TC_U_METADEF(64, 16);
 FW_UINT_TC_U_METADEF(64, 32);
 FW_UINT_TC_U_METADEF(64, 64);
 FW_TC_UINT_F_METADEF(64);
 FW_TC_UINT_CONV_DEF(64);
-#endif
 
 #define TC_FL_DEF(TYPE1, TYPE2, TCNAME) \
 static TYPE1 TCNAME(void* v_in, size_t offset) \
@@ -1364,9 +1305,7 @@ TC_FL_DEF(double, FW_UINT_TYPE(SIZE), VO_FCN_TCNAME(Double, FW_UINT_TYPEN(SIZE))
 TC_FL_INT_METADEF(8);
 TC_FL_INT_METADEF(16);
 TC_FL_INT_METADEF(32);
-#if MSH_BITNESS==64
 TC_FL_INT_METADEF(64);
-#endif
 
 TC_FL_DEF(single, single, VO_FCN_TCNAME(Single, Single));
 TC_FL_DEF(single, double, VO_FCN_TCNAME(Single, Double));
@@ -1384,11 +1323,8 @@ static singleconv_T VO_FCN_CTCNAME(Single)(mxClassID cid)
 		case(mxUINT16_CLASS): return VO_FCN_TCNAME(Single, FW_UINT_TYPEN( 16 ));
 		case(mxINT32_CLASS):  return VO_FCN_TCNAME(Single, FW_INT_TYPEN(  32 ));
 		case(mxUINT32_CLASS): return VO_FCN_TCNAME(Single, FW_UINT_TYPEN( 32 ));
-#if MSH_BITNESS==64
 		case(mxINT64_CLASS):  return VO_FCN_TCNAME(Single, FW_INT_TYPEN(  64 ));
 		case(mxUINT64_CLASS): return VO_FCN_TCNAME(Single, FW_UINT_TYPEN( 64 ));
-
-#endif
 		case(mxSINGLE_CLASS): return VO_FCN_TCNAME(Single, Single);
 		case(mxDOUBLE_CLASS): return VO_FCN_TCNAME(Single, Double);
 		default: meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "TypeConversionError", "Invalid variable conversion.");
@@ -1408,11 +1344,8 @@ static doubleconv_T VO_FCN_CTCNAME(Double)(mxClassID cid)
 		case(mxUINT16_CLASS): return VO_FCN_TCNAME(Double, FW_UINT_TYPEN( 16 ));
 		case(mxINT32_CLASS):  return VO_FCN_TCNAME(Double, FW_INT_TYPEN(  32 ));
 		case(mxUINT32_CLASS): return VO_FCN_TCNAME(Double, FW_UINT_TYPEN( 32 ));
-#if MSH_BITNESS==64
 		case(mxINT64_CLASS):  return VO_FCN_TCNAME(Double, FW_INT_TYPEN(  64 ));
 		case(mxUINT64_CLASS): return VO_FCN_TCNAME(Double, FW_UINT_TYPEN( 64 ));
-
-#endif
 		case(mxSINGLE_CLASS): return VO_FCN_TCNAME(Double, Single);
 		case(mxDOUBLE_CLASS): return VO_FCN_TCNAME(Double, Double);
 		default: meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "TypeConversionError", "Invalid variable conversion.");
@@ -1601,9 +1534,7 @@ static TYPE NAME(TYPE in)                         \
 SGNBIT_INT_METADEF(8);
 SGNBIT_INT_METADEF(16);
 SGNBIT_INT_METADEF(32);
-#if MSH_BITNESS==64
 SGNBIT_INT_METADEF(64);
-#endif
 
 /** SIGNED ABSOLUTE VALUES **/
 
@@ -1627,9 +1558,7 @@ UNARY_OP_RUNNER_METADEF(Abs, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
 ABS_INT_METADEF(8);
 ABS_INT_METADEF(16);
 ABS_INT_METADEF(32);
-#if MSH_BITNESS==64
 ABS_INT_METADEF(64);
-#endif
 
 /** SIGNED ADDITION **/
 #define ADD_INT_DEF(NAME, TYPE, UTYPE, SIZEM1, MAX_VAL) \
@@ -1652,9 +1581,7 @@ BINARY_OP_RUNNER_METADEF(Add, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPE
 ADD_INT_METADEF(8);
 ADD_INT_METADEF(16);
 ADD_INT_METADEF(32);
-#if MSH_BITNESS==64
 ADD_INT_METADEF(64);
-#endif
 
 /** SIGNED SUBTRACTION **/
 
@@ -1678,9 +1605,7 @@ BINARY_OP_RUNNER_METADEF(Sub, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPE
 SUB_INT_METADEF(8);
 SUB_INT_METADEF(16);
 SUB_INT_METADEF(32);
-#if MSH_BITNESS==64
 SUB_INT_METADEF(64);
-#endif
 
 /** SIGNED MULTIPLICATION **/
 
@@ -1705,100 +1630,6 @@ BINARY_OP_RUNNER_METADEF(Mul, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPE
 
 MUL_INT_METADEF(8, 16);
 MUL_INT_METADEF(16, 32);
-#if MSH_BITNESS==32
-
-static int32_T msh_MulInt32(int32_T m1, int32_T m2)
-{
-	uint32_T uret;
-	uint32_T m1a_l16, m2a_l16;
-	uint32_T m1au_m2al, m1al_m2al, m1al_m2au;
-	
-	int      ret_is_pos   = ((m1 < 0) == (m2 < 0));
-	
-	uint32_T m1_abs       = (uint32_T)FW_INT_FCN_FNAME(Abs, 32)(m1);
-	uint32_T m2_abs       = (uint32_T)FW_INT_FCN_FNAME(Abs, 32)(m2);
-	
-	uint32_T m1a_u16      = m1_abs >> 16;
-	uint32_T m2a_u16      = m2_abs >> 16;
-	
-	if(m1a_u16)
-	{
-		if(m2a_u16)
-		{
-			return ret_is_pos? INT32_MAX : INT32_MIN;
-		}
-		
-		m2a_l16 = (uint16_T)m2_abs;
-		m1au_m2al = m1a_u16 * m2a_l16;
-		
-		if(m1au_m2al >> 16)
-		{
-			return ret_is_pos? INT32_MAX : INT32_MIN;
-		}
-		
-		m1au_m2al <<= 16;
-		m1a_l16 = (uint16_T)m1_abs;
-		m1al_m2al = m1a_l16 * m2a_l16;
-		uret = m1au_m2al + m1al_m2al;
-		
-		if(uret < m1au_m2al)
-		{
-			return ret_is_pos? INT32_MAX : INT32_MIN;
-		}
-		
-	}
-	else if(m2a_u16)
-	{
-		/* do the opposite of the previous branch */
-		m1a_l16 = (uint16_T)m1_abs;
-		m1al_m2au = m1a_l16 * m2a_u16;
-		
-		if(m1al_m2au >> 16)
-		{
-			return ret_is_pos? INT32_MAX : INT32_MIN;
-		}
-		
-		m1al_m2au <<= 16;
-		m2a_l16 = (uint16_T)m2_abs;
-		m1al_m2al = m1a_l16 * m2a_l16;
-		uret = m1al_m2al + m1al_m2au;
-		
-		if(uret < m1al_m2au)
-		{
-			return ret_is_pos? INT32_MAX : INT32_MIN;
-		}
-	}
-	else
-	{
-		
-		uret = m1_abs * m2_abs;
-	}
-	
-	if(ret_is_pos)
-	{
-		if(uret > (uint32_T)INT32_MAX)
-		{
-			return INT32_MAX;
-		}
-		return (int32_T)uret;
-	}
-	else
-	{
-		if(uret > (uint32_T)INT32_MIN)
-		{
-			return INT32_MIN;
-		}
-		
-		/* note: this works for uret == INT32_MIN because negation wraps to itself */
-		return -(int32_T)uret;
-	}
-	
-}
-
-BINARY_OP_RUNNER_METADEF(Mul, FW_INT_TYPE(32), FW_INT_TYPEN(32), FW_INT_TYPEC(32));
-
-#else
-
 MUL_INT_METADEF(32, 64);
 
 static int64_T msh_MulInt64(int64_T m1, int64_T m2)
@@ -1888,10 +1719,7 @@ static int64_T msh_MulInt64(int64_T m1, int64_T m2)
 	}
 	
 }
-
 BINARY_OP_RUNNER_METADEF(Mul, FW_INT_TYPE(64), FW_INT_TYPEN(64), FW_INT_TYPEC(64));
-
-#endif
 
 
 /** SIGNED DIVISION (ROUNDED) **/
@@ -1950,9 +1778,7 @@ BINARY_OP_RUNNER_METADEF(Div, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPE
 DIV_INT_METADEF(8);
 DIV_INT_METADEF(16);
 DIV_INT_METADEF(32);
-#if MSH_BITNESS==64
 DIV_INT_METADEF(64);
-#endif
 
 /** SIGNED REMAINDER **/
 
@@ -1969,9 +1795,7 @@ BINARY_OP_RUNNER_METADEF(Rem, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPE
 REM_INT_METADEF(8);
 REM_INT_METADEF(16);
 REM_INT_METADEF(32);
-#if MSH_BITNESS==64
 REM_INT_METADEF(64);
-#endif
 
 /** SIGNED MODULUS **/
 
@@ -1994,9 +1818,7 @@ BINARY_OP_RUNNER_METADEF(Mod, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPE
 MOD_INT_METADEF(8);
 MOD_INT_METADEF(16);
 MOD_INT_METADEF(32);
-#if MSH_BITNESS==64
 MOD_INT_METADEF(64);
-#endif
 
 /** SIGNED NEGATION **/
 
@@ -2017,9 +1839,7 @@ UNARY_OP_RUNNER_METADEF(Neg, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE));
 NEG_INT_METADEF(8);
 NEG_INT_METADEF(16);
 NEG_INT_METADEF(32);
-#if MSH_BITNESS==64
 NEG_INT_METADEF(64);
-#endif
 
 /** SIGNED RIGHT SHIFT **/
 
@@ -2036,9 +1856,7 @@ BINARY_OP_RUNNER_METADEF(ARS, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPE
 ARS_INT_METADEF(8);
 ARS_INT_METADEF(16);
 ARS_INT_METADEF(32);
-#if MSH_BITNESS==64
 ARS_INT_METADEF(64);
-#endif
 
 /** SIGNED LEFT SHIFT **/
 
@@ -2055,9 +1873,7 @@ BINARY_OP_RUNNER_METADEF(ALS, FW_INT_TYPE(SIZE), FW_INT_TYPEN(SIZE), FW_INT_TYPE
 ALS_INT_METADEF(8);
 ALS_INT_METADEF(16);
 ALS_INT_METADEF(32);
-#if MSH_BITNESS==64
 ALS_INT_METADEF(64);
-#endif
 
 /** Unsigned integer arithmetic
  *  The functions here are pretty straightforward, except
@@ -2079,9 +1895,7 @@ UNARY_OP_RUNNER_METADEF(Abs, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
 ABS_UINT_METADEF(8);
 ABS_UINT_METADEF(16);
 ABS_UINT_METADEF(32);
-#if MSH_BITNESS==64
 ABS_UINT_METADEF(64);
-#endif
 
 /** UNSIGNED ADDITION **/
 
@@ -2099,9 +1913,7 @@ BINARY_OP_RUNNER_METADEF(Add, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_T
 ADD_UINT_METADEF(8);
 ADD_UINT_METADEF(16);
 ADD_UINT_METADEF(32);
-#if MSH_BITNESS==64
 ADD_UINT_METADEF(64);
-#endif
 
 /** UNSIGNED SUBTRACTION **/
 
@@ -2119,9 +1931,7 @@ BINARY_OP_RUNNER_METADEF(Sub, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_T
 SUB_UINT_METADEF(8);
 SUB_UINT_METADEF(16);
 SUB_UINT_METADEF(32);
-#if MSH_BITNESS==64
 SUB_UINT_METADEF(64);
-#endif
 
 /** UNSIGNED MULTIPLICATION **/
 
@@ -2142,67 +1952,6 @@ BINARY_OP_RUNNER_METADEF(Mul, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_T
 
 MUL_UINT_METADEF(8, 16);
 MUL_UINT_METADEF(16, 32);
-#if MSH_BITNESS==32
-
-static uint32_T msh_MulUInt32(uint32_T m1, uint32_T m2)
-{
-	
-	uint32_T m1_l16, m2_l16;
-	uint32_T m1u_m2l, m1l_m2l, m1l_m2u;
-	
-	uint32_T m1_u16      = m1 >> 16;
-	uint32_T m2_u16      = m2 >> 16;
-	
-	if(m1_u16)
-	{
-		if(m2_u16)
-		{
-			return UINT32_MAX;
-		}
-		
-		m2_l16 = (uint16_T)m2;
-		m1u_m2l = m1_u16 * m2_l16;
-		
-		if(m1u_m2l >> 16)
-		{
-			return UINT32_MAX;
-		}
-		
-		m1u_m2l <<= 16;
-		m1_l16 = (uint16_T)m1;
-		m1l_m2l = m1_l16 * m2_l16;
-		
-		return FW_UINT_FCN_FNAME(Add, 32)(m1u_m2l, m1l_m2l);
-		
-	}
-	else if(m2_u16)
-	{
-		/* do the opposite of the previous branch */
-		m1_l16 = (uint16_T)m1;
-		m1l_m2u = m1_l16 * m2_u16;
-		
-		if(m1l_m2u >> 16)
-		{
-			return UINT32_MAX;
-		}
-		
-		m1l_m2u <<= 16;
-		m2_l16 = (uint16_T)m2;
-		m1l_m2l = m1_l16 * m2_l16;
-		
-		return FW_UINT_FCN_FNAME(Add, 32)(m1l_m2l, m1l_m2u);
-		
-	}
-	else
-	{
-		return m1 * m2;
-	}
-	
-}
-
-BINARY_OP_RUNNER_METADEF(Mul, FW_UINT_TYPE(32), FW_UINT_TYPEN(32), FW_UINT_TYPEC(32));
-
-#else
 MUL_UINT_METADEF(32, 64);
 
 static uint64_T msh_MulUInt64(uint64_T m1, uint64_T m2)
@@ -2260,10 +2009,8 @@ static uint64_T msh_MulUInt64(uint64_T m1, uint64_T m2)
 	}
 	
 }
-
 BINARY_OP_RUNNER_METADEF(Mul, FW_UINT_TYPE(64), FW_UINT_TYPEN(64), FW_UINT_TYPEC(64));
 
-#endif
 
 /** UNSIGNED DIVISION (ROUNDED) **/
 
@@ -2287,9 +2034,7 @@ BINARY_OP_RUNNER_METADEF(Div, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_T
 DIV_UINT_METADEF(8);
 DIV_UINT_METADEF(16);
 DIV_UINT_METADEF(32);
-#if MSH_BITNESS==64
 DIV_UINT_METADEF(64);
-#endif
 
 /** UNSIGNED REMAINDER **/
 
@@ -2306,9 +2051,7 @@ BINARY_OP_RUNNER_METADEF(Rem, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_T
 REM_UINT_METADEF(8);
 REM_UINT_METADEF(16);
 REM_UINT_METADEF(32);
-#if MSH_BITNESS==64
 REM_UINT_METADEF(64);
-#endif
 
 /** UNSIGNED MODULUS **/
 
@@ -2325,9 +2068,7 @@ BINARY_OP_RUNNER_METADEF(Mod, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_T
 MOD_UINT_METADEF(8);
 MOD_UINT_METADEF(16);
 MOD_UINT_METADEF(32);
-#if MSH_BITNESS==64
 MOD_UINT_METADEF(64);
-#endif
 
 
 /** UNSIGNED NEGATION **/
@@ -2345,9 +2086,7 @@ UNARY_OP_RUNNER_METADEF(Neg, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE));
 NEG_UINT_METADEF(8);
 NEG_UINT_METADEF(16);
 NEG_UINT_METADEF(32);
-#if MSH_BITNESS==64
 NEG_UINT_METADEF(64);
-#endif
 
 /** UNSIGNED RIGHT SHIFT **/
 
@@ -2364,9 +2103,7 @@ BINARY_OP_RUNNER_METADEF(ARS, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_T
 ARS_UINT_METADEF(8);
 ARS_UINT_METADEF(16);
 ARS_UINT_METADEF(32);
-#if MSH_BITNESS==64
 ARS_UINT_METADEF(64);
-#endif
 
 /** UNSIGNED LEFT SHIFT **/
 
@@ -2383,9 +2120,7 @@ BINARY_OP_RUNNER_METADEF(ALS, FW_UINT_TYPE(SIZE), FW_UINT_TYPEN(SIZE), FW_UINT_T
 ALS_UINT_METADEF(8);
 ALS_UINT_METADEF(16);
 ALS_UINT_METADEF(32);
-#if MSH_BITNESS==64
 ALS_UINT_METADEF(64);
-#endif
 
 
 /** Floating point arithmetic
@@ -2784,15 +2519,13 @@ CPY_FCN_DEF(FW_UINT_FCN_RNAME(Cpy, SIZE), FW_UINT_FCN_FNAME(Cpy, SIZE), VO_FCN_S
 CPY_INT_METADEF(8);
 CPY_INT_METADEF(16);
 CPY_INT_METADEF(32);
-#if MSH_BITNESS==64
 CPY_INT_METADEF(64);
-#endif
 
 CPY_UINT_METADEF(8);
 CPY_UINT_METADEF(16);
 CPY_UINT_METADEF(32);
-#if MSH_BITNESS==64
 CPY_UINT_METADEF(64);
+#if MSH_BITNESS==64
 #  define msh_CpySizeRunner(V_ACCUM, V_IN, OPTS) msh_CpyUInt64Runner(V_ACCUM, V_IN, OPTS)
 #else
 #  define msh_CpySizeRunner(V_ACCUM, V_IN, OPTS) msh_CpyUInt32Runner(V_ACCUM, V_IN, OPTS)
@@ -2803,7 +2536,6 @@ CPY_FCN_DEF(msh_CpyDoubleRunner, msh_CpyDouble, msh_AtomicSetDouble, msh_ChooseD
 
 /** function choosers **/
 
-#if MSH_BITNESS==64
 #define CLASS_FCN_SWITCH_CASES(OP, CLASS_ID_NAME)          \
 switch(CLASS_ID_NAME)                                      \
 {                                                          \
@@ -2822,67 +2554,38 @@ switch(CLASS_ID_NAME)                                      \
 	                                                      \
 	case(mxLOGICAL_CLASS): return msh_##OP##Int8Runner;   \
 	case(mxCHAR_CLASS):    return msh_##OP##Int16Runner;  \
-	default: goto NOT_FOUND_ERROR;                        \
+	default:               return 0;                        \
 }
-#else
-#define CLASS_FCN_SWITCH_CASES(OP, CLASS_ID_NAME)         \
-switch(CLASS_ID_NAME)                                      \
-{                                                          \
-	case(mxINT8_CLASS):    return msh_##OP##Int8Runner;   \
-	case(mxINT16_CLASS):   return msh_##OP##Int16Runner;  \
-	case(mxINT32_CLASS):   return msh_##OP##Int32Runner;  \
-                                                           \
-	case(mxUINT8_CLASS):   return msh_##OP##UInt8Runner;  \
-	case(mxUINT16_CLASS):  return msh_##OP##UInt16Runner; \
-	case(mxUINT32_CLASS):  return msh_##OP##UInt32Runner; \
-                                                           \
-	case(mxSINGLE_CLASS):  return msh_##OP##SingleRunner; \
-	case(mxDOUBLE_CLASS):  return msh_##OP##DoubleRunner; \
-	                                                      \
-	case(mxLOGICAL_CLASS): return msh_##OP##Int8Runner;   \
-	case(mxCHAR_CLASS):    return msh_##OP##Int16Runner;  \
-	default: goto NOT_FOUND_ERROR;                        \
-}
-#endif
 
 static unaryvaropfcn_T msh_ChooseUnaryVarOpFcn(msh_varop_T varop, mxClassID class_id)
 {
 	switch(varop)
 	{
-		case(VAROP_ABS):
-		{
-			CLASS_FCN_SWITCH_CASES(Abs, class_id);
-		}
-		case(VAROP_NEG):
-		{
-			CLASS_FCN_SWITCH_CASES(Neg, class_id);
-		}
-		default:
-		{
-			goto NOT_FOUND_ERROR;
-		}
+		case(VAROP_ABS): CLASS_FCN_SWITCH_CASES(Abs, class_id);
+		case(VAROP_NEG): CLASS_FCN_SWITCH_CASES(Neg, class_id);
+		default: return 0;
 	}
-
-NOT_FOUND_ERROR:
-	meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "NoVaropFoundError", "Could not find a suitable variable operation.");
-	
 	return 0;
-	
 }
 
 
 void msh_UnaryVariableOperation(IndexedVariable_T* indexed_var, msh_varop_T varop, long opts, mxArray** output)
 {
 	size_t          i, j, nzmax, elem_size, dest_offset, dest_num_elems;
+	unaryvaropfcn_T varop_fcn;
 	
 	int             is_complex = mxIsComplex(indexed_var->dest_var);
-	unaryvaropfcn_T varop_fcn  = msh_ChooseUnaryVarOpFcn(varop, mxGetClassID(indexed_var->dest_var));
 	
 	int8_T*         dest_real_anchor = mxGetData(indexed_var->dest_var);
 	int8_T*         dest_imag_anchor = mxGetImagData(indexed_var->dest_var);
 	
 	WideInput_T    wide_dest_real   = {{dest_real_anchor}, 0, 0};
 	WideInput_T    wide_dest_imag   = {{dest_imag_anchor}, 0, 0};
+	
+	if((varop_fcn  = msh_ChooseUnaryVarOpFcn(varop, mxGetClassID(indexed_var->dest_var))) == 0)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "NoVarOpFoundError", "Could not find a suitable variable operation for type '%s'.", mxGetClassName(indexed_var->dest_var));
+	}
 	
 	if(mxIsSparse(indexed_var->dest_var))
 	{
@@ -2962,11 +2665,8 @@ static binaryvaropfcn_T msh_ChooseBinaryVarOpFcn(msh_varop_T varop, mxClassID cl
 		case(VAROP_ARS): CLASS_FCN_SWITCH_CASES(ARS, class_id);
 		case(VAROP_ALS): CLASS_FCN_SWITCH_CASES(ALS, class_id);
 		case(VAROP_CPY): CLASS_FCN_SWITCH_CASES(Cpy, class_id);
-		default: goto NOT_FOUND_ERROR;
+		default: return 0;
 	}
-
-NOT_FOUND_ERROR:
-	meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "NoVaropFoundError", "Could not find a suitable variable operation.");
 	
 	return 0;
 	
@@ -3082,7 +2782,11 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 			dest_elem_size        = mxGetElementSize(indexed_var->dest_var);
 			
 			
-			varop_fcn = msh_ChooseBinaryVarOpFcn(varop, mxGetClassID(indexed_var->dest_var));
+			if((varop_fcn = msh_ChooseBinaryVarOpFcn(varop, mxGetClassID(indexed_var->dest_var))) == 0)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "NoVarOpFoundError", "Could not find a suitable variable operation for type '%s'.", mxGetClassName(indexed_var->dest_var));
+			}
+			
 			is_complex = mxIsComplex(in_var);
 			
 			if(mxIsSparse(indexed_var->dest_var))
@@ -3100,7 +2804,11 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 				wide_dest_ir.input.raw = mxGetIr(indexed_var->dest_var);
 				wide_dest_ir.num_elems = wide_in_ir.num_elems; /* copy the nzmax of input because in_nzmax <= dest_nzmax */
 				wide_dest_ir.mxtype = mxINDEX_CLASS;
-				varop_fcn_ir = msh_ChooseBinaryVarOpFcn(varop, mxINDEX_CLASS);
+				
+				if((varop_fcn_ir = msh_ChooseBinaryVarOpFcn(varop, mxINDEX_CLASS)) == 0)
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "NoVarOpFoundError", "Could not find a suitable variable operation for type 'mxINDEX_CLASS'.");
+				}
 				
 				/* jc setup */
 				wide_in_jc.input.raw = mxGetJc(in_var);
@@ -3110,7 +2818,10 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 				wide_dest_jc.input.raw = mxGetJc(indexed_var->dest_var);
 				wide_dest_jc.num_elems = wide_in_jc.num_elems;
 				wide_dest_jc.mxtype = mxINDEX_CLASS;
-				varop_fcn_jc = msh_ChooseBinaryVarOpFcn(varop, mxINDEX_CLASS);
+				if((varop_fcn_jc = msh_ChooseBinaryVarOpFcn(varop, mxINDEX_CLASS)) == 0)
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "NoVarOpFoundError", "Could not find a suitable variable operation for type 'mxINDEX_CLASS'.");
+				}
 				
 				/* real setup */
 				wide_in_real.input.raw = mxGetData(in_var);
@@ -3229,7 +2940,6 @@ void msh_VariableOperation(const mxArray* parent_var, const mxArray* subs_struct
 {
 	/* Note: in_vars is always a cell array */
 	size_t i;
-	
 	IndexedVariable_T indexed_var = {parent_var, {NULL, NULL, 0, NULL, 0}};
 
 #ifdef MSH_NO_VAROPS

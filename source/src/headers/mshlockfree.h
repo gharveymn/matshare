@@ -160,10 +160,8 @@ uint8_T  VO_FCN_CASNAME(UInt8)(volatile uint8_T* dest, uint8_T comp_val, uint8_T
 uint16_T VO_FCN_CASNAME(UInt16)(volatile uint16_T* dest, uint16_T comp_val, uint16_T set_val);
 uint32_T VO_FCN_CASNAME(UInt32)(volatile uint32_T* dest, uint32_T comp_val, uint32_T set_val);
 
-#if MSH_BITNESS==64
 int64_T VO_FCN_CASNAME(Int64)(volatile int64_T* dest, int64_T comp_val, int64_T set_val);
 uint64_T VO_FCN_CASNAME(UInt64)(volatile uint64_T* dest, uint64_T comp_val, uint64_T set_val);
-#endif
 
 single VO_FCN_CASNAME(Single)(volatile single* dest, single comp_val, single set_val);
 double VO_FCN_CASNAME(Double)(volatile double* dest, double comp_val, double set_val);
@@ -176,10 +174,8 @@ uint8_T  VO_FCN_SNAME(UInt8)(volatile uint8_T* dest, uint8_T set_val);
 uint16_T VO_FCN_SNAME(UInt16)(volatile uint16_T* dest, uint16_T set_val);
 uint32_T VO_FCN_SNAME(UInt32)(volatile uint32_T* dest, uint32_T set_val);
 
-#if MSH_BITNESS==64
 int64_T VO_FCN_SNAME(Int64)(volatile int64_T* dest, int64_T set_val);
 uint64_T VO_FCN_SNAME(UInt64)(volatile uint64_T* dest, uint64_T set_val);
-#endif
 
 single VO_FCN_SNAME(Single)(volatile single* dest, single set_val);
 double VO_FCN_SNAME(Double)(volatile double* dest, double set_val);

@@ -64,13 +64,13 @@ for i = 1:num_maxDepth_tests
 						end
 						
 					end
-					matshare.clear;
+					matshare.clearshm;
 					count = count + 1;
 				end
 			end
 		end
 	end
 end
-matshare.clear;
+matshare.clearshm;
 matshare.detach
 fprintf('Test successful.\n\n');

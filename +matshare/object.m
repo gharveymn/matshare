@@ -161,7 +161,7 @@ classdef object
 			end			
 		end
 		
-		function clear(obj)
+		function clearshm(obj)
 %% CLEAR  Clear the matshare object data from shared memory.
 %    OBJ.CLEAR removes the data assocated to OBJ from shared memory.		
 			
