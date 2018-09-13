@@ -11,7 +11,7 @@
 #define MATSHARE_EXTERNTYPES_H
 
 /* forward declaration to avoid include */
-typedef struct mxArray_tag mxArray;
+struct mxArray_tag;
 
 /* opaque declaration */
 typedef struct InternalMexStruct_T InternalMexStruct_T;
@@ -22,7 +22,7 @@ typedef struct InternalMexStruct_T InternalMexStruct_T;
  * @param var The mxArray for which to find the crosslink.
  * @return The crosslink.
  */
-mxArray* met_GetCrosslink(const mxArray* var);
+struct mxArray_tag* met_GetCrosslink(const struct mxArray_tag* var);
 
 
 #endif /* MATSHARE_EXTERNTYPES_H */

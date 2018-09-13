@@ -14,10 +14,6 @@
 #include "mshvarops.h"
 
 
-/* forward declaration to avoid include */
-typedef struct mxArray_tag mxArray;
-
-
 #define MSH_PARAM_THREADSAFETY     "ThreadSafety"
 #define MSH_PARAM_THREADSAFETY_L   "threadsafety"
 #define MSH_PARAM_THREADSAFETY_AB  "ts"
