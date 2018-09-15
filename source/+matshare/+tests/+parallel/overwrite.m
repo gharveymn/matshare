@@ -1,5 +1,7 @@
 import matshare.tests.common.*
 
+numworkers = matshare.utils.poolstartup;
+
 params.verifyshort;
 
 count = 1;
@@ -51,7 +53,7 @@ for i = 1:num_maxDepth_tests
 						end
 
 						for workernum = 1:numworkers
-							if(~matshare.scripts.compstruct(tv2, transfer{workernum}.data))
+							if(~matshare.utils.compstruct(tv2, transfer{workernum}.data))
 								error('matshare.overwrite failed because parallel results were not equal.');
 							end
 						end

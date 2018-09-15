@@ -1,5 +1,7 @@
 fprintf('Testing subscripted overwriting... ');
 
+testsubs = @matshare.tests.single.testsubs;
+
 % testing subscripted assignment
 tv = rand(10,14);
 f = matshare.share(tv);
@@ -27,7 +29,7 @@ replacement(2) = struct('f1', 9,         'f2', wilkinson(7));
 tv(2:3) = replacement;
 f.data(2:3) = replacement;
 
-if(~matshare.scripts.compstruct(tv, f.data))
+if(~matshare.utils.compstruct(tv, f.data))
 	error('Subscripted assignment failed because results were not equal.');
 end
 
@@ -39,7 +41,7 @@ f = matshare.share(tv);
 tv(2:4) = {6,7,8};
 f.data(2:4) = {6,7,8};
 
-if(~matshare.scripts.compstruct(tv, f.data))
+if(~matshare.utils.compstruct(tv, f.data))
 	error('Subscripted assignment failed because results were not equal.');
 end
 
@@ -61,14 +63,14 @@ f = matshare.share(tv);
 tv(3).f1(2).g1{2} = 17;
 f.data(3).f1(2).g1{2} = tv(3).f1(2).g1{2};
 
-if(~matshare.scripts.compstruct(tv, f.data))
+if(~matshare.utils.compstruct(tv, f.data))
 	error('Subscripted assignment failed because results were not equal.');
 end
 
 tv(3).f1(1).g2(4:7,2:8) = rand(size(tv(3).f1(1).g2(4:7,2:8)));
 f.data(3).f1(1).g2(4:7,2:8) = tv(3).f1(1).g2(4:7,2:8);
 
-if(~matshare.scripts.compstruct(tv, f.data))
+if(~matshare.utils.compstruct(tv, f.data))
 	error('Subscripted assignment failed because results were not equal.');
 end
 

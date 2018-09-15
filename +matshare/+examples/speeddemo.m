@@ -1,6 +1,6 @@
 % This demonstrates how matshare performs when feeding data to workers.
 
-mshpoolstartup;
+matshare.examples.mshpoolstartup;
 
 % Some data to shared
 Data = round(10* rand(2000));

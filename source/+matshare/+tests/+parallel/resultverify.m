@@ -1,5 +1,7 @@
 import matshare.tests.common.*
 
+numworkers = matshare.utils.poolstartup;
+
 params.verifylong;
 
 count = 1;

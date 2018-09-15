@@ -253,7 +253,34 @@ int64_T VO_FCN_CASNAME(Int64)(volatile int64_T* dest, int64_T comp_val, int64_T 
 {
 	/* returns the initial value of dest */
 #ifdef MSH_WIN
+#  if MSH_BITNESS==64
 	return InterlockedCompareExchange64((volatile __int64*)dest, set_val, comp_val);
+#  else
+	union int64pun_T
+	{
+		int64_T val;
+		struct
+		{
+			int32_T lower;
+			int32_T upper;
+		} as_int;
+	};
+	
+	union int64pun_T res;
+	union int64pun_T comp_val_pun = {comp_val};
+	union int64pun_T set_val_pun = {set_val};
+	__asm {
+		mov EDI, dest;
+		mov EAX, comp_val_pun.as_int.lower;
+		mov EDX, comp_val_pun.as_int.upper;
+		mov EBX, set_val_pun.as_int.lower;
+		mov ECX, set_val_pun.as_int.upper;
+		lock cmpxchg8b [EDI];
+		mov DWORD PTR res.as_int.lower, EAX;
+		mov DWORD PTR res.as_int.upper, EDX;
+	};
+	return res.val;
+#  endif
 #else
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
@@ -299,7 +326,34 @@ uint64_T VO_FCN_CASNAME(UInt64)(volatile uint64_T* dest, uint64_T comp_val, uint
 {
 	/* returns the initial value of dest */
 #ifdef MSH_WIN
+#  if MSH_BITNESS==64
 	return (uint64_T)InterlockedCompareExchange64((volatile __int64*)dest, set_val, comp_val);
+#  else
+	union uint64pun_T
+	{
+		uint64_T val;
+		struct
+		{
+			uint32_T lower;
+			uint32_T upper;
+		} as_int;
+	};
+	
+	union uint64pun_T res;
+	union uint64pun_T comp_val_pun = {comp_val};
+	union uint64pun_T set_val_pun = {set_val};
+	__asm {
+		mov EDI, dest;
+		mov EAX, comp_val_pun.as_int.lower;
+		mov EDX, comp_val_pun.as_int.upper;
+		mov EBX, set_val_pun.as_int.lower;
+		mov ECX, set_val_pun.as_int.upper;
+		lock cmpxchg8b [EDI];
+		mov DWORD PTR res.as_int.lower, EAX;
+		mov DWORD PTR res.as_int.upper, EDX;
+	};
+	return res.val;
+#  endif
 #else
 	return __sync_val_compare_and_swap(dest, comp_val, set_val);
 #endif
@@ -314,7 +368,7 @@ single VO_FCN_CASNAME(Single)(volatile single* dest, single comp_val, single set
 		int32_T as_int;
 	};
 	
-	union singlepun_T ret = {0};
+	union singlepun_T ret;
 	union singlepun_T comp_val_pun = {comp_val};
 	union singlepun_T set_val_pun = {set_val};
 #ifdef MSH_WIN
@@ -338,7 +392,7 @@ double VO_FCN_CASNAME(Double)(volatile double* dest, double comp_val, double set
 		int64_T as_int;
 	};
 	
-	union doublepun_T ret = {0};
+	union doublepun_T ret;
 	union doublepun_T comp_val_pun = {comp_val};
 	union doublepun_T set_val_pun = {set_val};
 	ret.as_int = _InterlockedCompareExchange64((volatile __int64*)dest, set_val_pun.as_int, comp_val_pun.as_int);
@@ -365,7 +419,7 @@ double VO_FCN_CASNAME(Double)(volatile double* dest, double comp_val, double set
 		} as_int;
 	};
 	
-	union doublepun_T res = {0};
+	union doublepun_T res;
 	union doublepun_T comp_val_pun = {comp_val};
 	union doublepun_T set_val_pun = {set_val};
 	__asm {
@@ -388,7 +442,7 @@ double VO_FCN_CASNAME(Double)(volatile double* dest, double comp_val, double set
 		int64_T as_int;
 	};
 	
-	union doublepun_T ret = {0};
+	union doublepun_T ret;
 	union doublepun_T comp_val_pun = {comp_val};
 	union doublepun_T set_val_pun = {set_val};
 	ret.as_int = __sync_val_compare_and_swap((volatile int64_T*)dest, comp_val_pun.as_int, set_val_pun.as_int);
@@ -458,15 +512,24 @@ int32_T VO_FCN_SNAME(Int32)(volatile int32_T* dest, int32_T set_val)
 
 int64_T VO_FCN_SNAME(Int64)(volatile int64_T* dest, int64_T set_val)
 {
-#ifdef MSH_WIN
+#if MSH_BITNESS==64
+#  ifdef MSH_WIN
 	return InterlockedExchange64((volatile __int64*)dest, set_val);
-#else
+#  else
 	int64_T ret;
 	__asm__ volatile(
 	"xchgq %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
 	return ret;
+#  endif
+#else
+	int64_T old_val;
+	do
+	{
+		old_val = *dest;
+	} while(VO_FCN_CASNAME(Int64)(dest, old_val, set_val) != old_val);
+	return old_val;
 #endif
 }
 
@@ -532,15 +595,24 @@ uint32_T VO_FCN_SNAME(UInt32)(volatile uint32_T* dest, uint32_T set_val)
 
 uint64_T VO_FCN_SNAME(UInt64)(volatile uint64_T* dest, uint64_T set_val)
 {
-#ifdef MSH_WIN
+#if MSH_BITNESS==64
+#  ifdef MSH_WIN
 	return (uint64_T)InterlockedExchange64((volatile __int64*)dest, set_val);
-#else
+#  else
 	uint64_T ret;
 	__asm__ volatile(
 	"xchgq %0, %1" : "=r"(ret),
 	"+m"(*dest) : "0"(set_val)
 	);
 	return ret;
+#  endif
+#else
+	uint64_T old_val;
+	do
+	{
+		old_val = *dest;
+	} while(VO_FCN_CASNAME(UInt64)(dest, old_val, set_val) != old_val);
+	return old_val;
 #endif
 }
 

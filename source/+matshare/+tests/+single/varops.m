@@ -147,8 +147,15 @@ utester.test(int8(-128));
 utester.test(int8(-127));
 
 % ars
+tlbxs = matshare.utils.gettoolboxes;
+
 btester.mshf = @ars;
-btester.matf = @bitsra;
+
+if(all(ismember('Simulink',tlbxs)))
+	btester.matf = @bitsra;
+else
+	btester.matf = @(x1,x2) double(x1)./2.^x2;
+end
 
 btester.test(2, 1);
 btester.test(realmax, realmax);

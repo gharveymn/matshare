@@ -1,5 +1,7 @@
 %% Define random call test parameters
 
+numworkers = matshare.utils.poolstartup;
+
 % bound of clearing of data
 bounds.clear_data = 50;
 

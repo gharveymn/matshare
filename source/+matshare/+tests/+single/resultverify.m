@@ -43,7 +43,7 @@ for i = 1:num_maxDepth_tests
 						matshare.share(tv);
 						x = matshare.fetch('-r');
 						
-						if(~matshare.scripts.compstruct(tv, x.data))
+						if(~matshare.utils.compstruct(tv, x.data))
 							error('Matshare failed because results were not equal.');
 						end
 						

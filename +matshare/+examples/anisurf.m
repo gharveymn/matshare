@@ -21,7 +21,7 @@ scale = [linspace(0,1,num_frames * 1/3) linspace(1,-1,num_frames * 2/3)];    % s
 
 frames = zeros(num_pts, num_pts, 3, num_frames);
 
-mshpoolstartup;
+matshare.examples.mshpoolstartup;
 matshare.clear;
 matshare.share('-n',           ...
 	'theta', theta, ...

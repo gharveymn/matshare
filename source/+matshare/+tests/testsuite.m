@@ -4,7 +4,7 @@
 addpath('..');
 
 %% Parallel pool startup
-matshare.scripts.poolstartup;
+[numworkers, workerpids] = matshare.utils.poolstartup;
 observerpid = workerpids{1};
 
 % test essential variables
