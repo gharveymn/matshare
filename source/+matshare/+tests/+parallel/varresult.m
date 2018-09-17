@@ -1,4 +1,7 @@
 function varresult(tv, numworkers)
+	
+	matshare.clearshm;
+	
 	held = matshare.share(tv);
 	parfor i = 1:numworkers
 		f = matshare.fetch('-r');
@@ -12,8 +15,6 @@ function varresult(tv, numworkers)
 			error('Matshare failed because parallel results were not equal.');
 		end
 	end
-	
-	matshare.clearshm;
 	
 end
 
