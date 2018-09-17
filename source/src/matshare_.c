@@ -930,6 +930,7 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 void msh_Config(size_t num_params, const mxArray** in_params)
 {
 	size_t              i, j, ps_len, vs_len, maxsize_temp;
+	long                opts;
 	unsigned long       maxvars_temp;
 	const mxArray*      param;
 	const mxArray*      val;
@@ -1108,20 +1109,53 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 			/* don't use the lowercase string in this case */
 			strcpy((char*)g_user_config.fetch_default, val_str);
 		}
-		else if(strcmp(param_str_l, MSH_PARAM_SYNC_DEFAULT_L) == 0 || strcmp(param_str_l, MSH_PARAM_SYNC_DEFAULT_AB) == 0)
+		else if(strcmp(param_str_l, MSH_PARAM_VAROP_OPTS_DEFAULT_L) == 0 || strcmp(param_str_l, MSH_PARAM_VAROP_OPTS_DEFAULT_AB) == 0)
 		{
-			/* don't use the lowercase string in this case */
-			if(strcmp(val_str_l, "true") == 0 || strcmp(val_str_l, "on") == 0 || strcmp(val_str_l, "enable") == 0)
+			
+			opts = 0;
+			
+			if(val_str[0] == '-')
 			{
-				g_user_config.varop_opts_default = TRUE;
-			}
-			else if(strcmp(val_str_l, "false") == 0 || strcmp(val_str_l, "off") == 0 || strcmp(val_str_l, "disable") == 0)
-			{
-				g_user_config.varop_opts_default = FALSE;
+				/* switch for possible future additions */
+				switch(val_str[1])
+				{
+					case('s'):
+					{
+						/* sync */
+						opts |= MSH_IS_SYNCHRONOUS;
+						break;
+					}
+					case('a'):
+					{
+						/* async */
+						opts &= ~MSH_IS_SYNCHRONOUS;
+						break;
+					}
+					case('t'):
+					{
+						/* atomic */
+						opts |= MSH_USE_ATOMIC_OPS;
+						break;
+					}
+					case('n'):
+					{
+						/* non-atomic */
+						opts &= ~MSH_USE_ATOMIC_OPS;
+						break;
+					}
+					default:
+					{
+						/* normally the string produced here should be freed with mxFree, but since we have an error just let MATLAB do the GC */
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_VAROP_OPTS_DEFAULT);
+					}
+				}
+				
+				g_user_config.varop_opts_default = opts;
+				
 			}
 			else
 			{
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_SYNC_DEFAULT);
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_VAROP_OPTS_DEFAULT);
 			}
 		}
 		else

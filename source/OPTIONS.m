@@ -21,8 +21,6 @@ function opts = OPTIONS
 
 	opts.mshFetchDefault = '-r';
 
-	opts.mshSyncDefault = 'on';
-
 	opts.mshVarOpsOptsDefault = {};
 
 	% must have at least SSE2, AVX/2 is optional

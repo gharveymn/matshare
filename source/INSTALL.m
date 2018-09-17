@@ -111,16 +111,6 @@ function INSTALL
 
 	mexflags = [mexflags {['-DMSH_DEFAULT_FETCH_DEFAULT="' opts.mshFetchDefault '"']}];
 
-	if(strcmp(opts.mshSyncDefault, 'on'))
-		fprintf('-Synchronized overwriting is enabled by default.\n')
-		mexflags = [mexflags {'-DMSH_DEFAULT_SYNC_DEFAULT=TRUE'}];
-	elseif(strcmp(opts.mshSyncDefault, 'off'))
-		fprintf('-Synchronized overwriting is disabled by default.\n')
-		mexflags = [mexflags {'-DMSH_DEFAULT_SYNC_DEFAULT=FALSE'}];
-	else
-		error('Invalid value for compilation parameter mshSyncDefault');
-	end
-
 	% R2011b
 	if(~verLessThan('matlab', '7.13'))
 		mexflags = [mexflags {'-DMSH_AVX_SUPPORT'}];
