@@ -958,6 +958,11 @@ void msh_CompareVariableSize(IndexedVariable_T* indexed_var, const mxArray* in_v
 					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "DestCharError", "Destination class cannot be 'char' for variable operations other than overwriting.");
 				}
 				
+				if(mxIsComplex(indexed_var->dest_var) || mxIsComplex(in_var))
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "ComplexVarOpError", "Variable operations other than overwriting are not available.");
+				}
+				
 				/*
 				 * Rules:
 				 * floats may operate with floats
@@ -2772,7 +2777,6 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 		default:
 		{
 			
-			
 			wide_in_real.mxtype   = mxGetClassID(in_var);
 			wide_in_imag.mxtype   = wide_in_real.mxtype;
 			in_elem_size          = mxGetElementSize(in_var);
@@ -2780,7 +2784,6 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 			wide_dest_real.mxtype = mxGetClassID(indexed_var->dest_var);
 			wide_dest_imag.mxtype = wide_dest_real.mxtype;
 			dest_elem_size        = mxGetElementSize(indexed_var->dest_var);
-			
 			
 			if((varop_fcn = msh_ChooseBinaryVarOpFcn(varop, mxGetClassID(indexed_var->dest_var))) == 0)
 			{
@@ -2791,9 +2794,6 @@ void msh_BinaryVariableOperation(IndexedVariable_T* indexed_var, const mxArray* 
 			
 			if(mxIsSparse(indexed_var->dest_var))
 			{
-				
-				
-				
 				/* repetitive function calls should be optimized by the compiler */
 				
 				/* ir setup */
