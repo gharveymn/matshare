@@ -12,7 +12,22 @@ tv = testsubs(tv, f, substruct('()',{':',3}));
 tv = testsubs(tv, f, substruct('()',{7, ':'}));
 tv = testsubs(tv, f, substruct('()',{[9,4], ':'}));
 tv = testsubs(tv, f, substruct('()',{[7,3,2],1,1,1,':',':',1,1,ones(3),[1;1;1],':',':',':'}));
-tv = testsubs(tv, f, substruct('()',{':'}), @(x) randi(255, x, 'uint8'));
+tv = testsubs(tv, f, substruct('()',{':'}), @(sz) randi(255, sz, 'uint8'));
+
+clear tv
+
+% testing subscripted assignment with complex numbers
+tv = rand(10,14) + 1i*rand(10,14);
+f = matshare.share(tv);
+
+fcn = @(sz) rand(sz) + 1i*rand(sz);
+
+tv = testsubs(tv, f, substruct('()',{1}), fcn);
+tv = testsubs(tv, f, substruct('()',{':'}), fcn);
+tv = testsubs(tv, f, substruct('()',{':',3}), fcn);
+tv = testsubs(tv, f, substruct('()',{7, ':'}), fcn);
+tv = testsubs(tv, f, substruct('()',{[9,4], ':'}), fcn);
+tv = testsubs(tv, f, substruct('()',{[7,3,2],1,1,1,':',':',1,1,ones(3),[1;1;1],':',':',':'}), fcn);
 
 clear tv
 
