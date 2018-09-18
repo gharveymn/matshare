@@ -13,23 +13,22 @@
 
 #include "mshbasictypes.h"
 
-
 /**
  * Acquires the specified interprocess lock.
  *
  * @note Does not lock if thread safety is turned off.
- * @param process_lock The interprocess lock to acquire.
+ * @param file_lock The interprocess lock to acquire.
  */
-void msh_AcquireProcessLock(ProcessLock_t process_lock);
+void msh_AcquireProcessLock(FileLock_T file_lock);
 
 
 /**
  * Releases the specified interprocess lock.
  *
  * @note Does not try to release anything if not already locked.
- * @param process_lock The interprocess lock to release.
+ * @param file_lock The interprocess lock to release.
  */
-void msh_ReleaseProcessLock(ProcessLock_t process_lock);
+void msh_ReleaseProcessLock(FileLock_T file_lock);
 
 
 /**
@@ -44,7 +43,7 @@ void msh_WriteConfiguration(void);
  * @note The return must be freed.
  * @return The path of the configuration file.
  */
-char_t* msh_GetConfigurationPath(void);
+char_T* msh_GetConfigurationPath(void);
 
 
 /**
@@ -52,36 +51,7 @@ char_t* msh_GetConfigurationPath(void);
  *
  * @return The PID for the current process.
  */
-pid_t msh_GetPid(void);
-
-
-/**
- * Compares the size of the two mxArrays. Returns TRUE if
- * they are the same size, returns FALSE otherwise.
- *
- * @param dest_var The first variable to be compared.
- * @param comp_var The second variable to be compared.
- * @return Whether they are equal in size.
- */
-int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var);
-
-
-/**
- * Overwrites the data in dest_var with the data in in_var.
- *
- * @param dest_var The destination variable.
- * @param in_var The input variable.
- */
-void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var);
-
-
-/**
- * Writes the segment name to the name buffer.
- *
- * @param name_buffer The destination of the segment name.
- * @param seg_num The segment number used by matshare to identify the segment.
- */
-void msh_WriteSegmentName(char* name_buffer, segmentnumber_t seg_num);
+pid_T msh_GetPid(void);
 
 
 /**

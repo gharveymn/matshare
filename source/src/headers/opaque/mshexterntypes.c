@@ -12,13 +12,13 @@
 #include "mshexterntypes.h"
 #include "mlerrorutils.h"
 
-/* Credit to James Tursa for the definitions */
+/* Credit to James Tursa and others for the definitions */
 #define MSH_USE_PARTIAL_DEFINITION 1
 #define MSH_USE_DEBUG_DEFINITION 0
 
 /* partial definition */
 #if MSH_USE_PARTIAL_DEFINITION
-struct InternalMexStruct_t
+struct InternalMexStruct_T
 {
 	void* name;             /*   prev - R2008b: Name of variable in workspace
 				               R2009a - R2010b: NULL
@@ -47,9 +47,9 @@ struct InternalMexStruct_t
 };
 #elif MSH_USE_DEBUG_DEFINITION
 /* debug definition */
-struct InternalMexStruct_t
+struct InternalMexStruct_T
 {
-	InternalMexStruct_t* name;              /*   prev - R2008b: Name of variable in workspace
+	InternalMexStruct_T* name;              /*   prev - R2008b: Name of variable in workspace
 				               R2009a - R2010b: NULL
 				               R2011a - later : Reverse crosslink pointer  */
 	mxClassID class_id;      /* 0 = unknown
@@ -71,7 +71,7 @@ struct InternalMexStruct_t
                                  5 = (unknown)
                                  6 = property of opaque class object
                                  7 = (unknown)                                 */
-	InternalMexStruct_t* crosslink;      /* Address of next shared-data variable          */
+	InternalMexStruct_T* crosslink;      /* Address of next shared-data variable          */
 	size_t ndim;             /* Number of dimensions                          */
 	unsigned int ref_count;  /* Number of extra sub-element copies            */
 	unsigned int flags;      /* bit  0 = is scalar double full
@@ -103,7 +103,7 @@ struct InternalMexStruct_t
 };
 #else
 /* the full definition */
-struct InternalMexStruct_t
+struct InternalMexStruct_T
 {
 	void* name;              /*   prev - R2008b: Name of variable in workspace
 				               R2009a - R2010b: NULL
@@ -159,11 +159,11 @@ struct InternalMexStruct_t
 };
 #endif
 
-mxArray* met_GetCrosslink(mxArray* var)
+mxArray* met_GetCrosslink(const mxArray* var)
 {
 #if MSH_USE_DEBUG_DEFINITION
-	return (mxArray*)((InternalMexStruct_t*)var)->crosslink;
+	return (mxArray*)((InternalMexStruct_T*)var)->crosslink;
 #else
-	return ((InternalMexStruct_t*)var)->crosslink;
+	return ((InternalMexStruct_T*)var)->crosslink;
 #endif
 }

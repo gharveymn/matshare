@@ -14,20 +14,17 @@
 
 #include "mshbasictypes.h"
 
-/* forward declaration to avoid include */
-typedef struct mxArray_tag mxArray;
-
 /* forward declaration, defined in source file */
-typedef struct VariableNode_t VariableNode_t;
+typedef struct VariableNode_T VariableNode_T;
 
 /* forward declaration, definition in mshsegmentnode.h */
-typedef struct SegmentNode_t SegmentNode_t;
+struct SegmentNode_T;
 
 /* forward declaration */
-typedef struct VariableList_t VariableList_t;
+struct VariableList_T;
 
 /** Forward declaration for SharedVariableHeader_t **/
-typedef struct SharedVariableHeader_t SharedVariableHeader_t;
+struct SharedVariableHeader_T;
 
 
 /**
@@ -37,7 +34,7 @@ typedef struct SharedVariableHeader_t SharedVariableHeader_t;
  * @param new_var The mxArray to be tracked.
  * @return The new variable node.
  */
-VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var);
+VariableNode_T* msh_CreateVariableNode(struct SegmentNode_T* seg_node, mxArray* new_var);
 
 
 /**
@@ -45,7 +42,7 @@ VariableNode_t* msh_CreateVariableNode(SegmentNode_t* seg_node, mxArray* new_var
  *
  * @param var_node The variable node to be destroyed.
  */
-void msh_DestroyVariableNode(VariableNode_t* var_node);
+void msh_DestroyVariableNode(VariableNode_T* var_node);
 
 
 /**
@@ -54,7 +51,7 @@ void msh_DestroyVariableNode(VariableNode_t* var_node);
  * @param var_node The variable node.
  * @return The parents variable list.
  */
-VariableList_t* msh_GetVariableList(VariableNode_t* var_node);
+struct VariableList_T* msh_GetVariableList(VariableNode_T* var_node);
 
 
 /**
@@ -63,7 +60,7 @@ VariableList_t* msh_GetVariableList(VariableNode_t* var_node);
  * @param var_node The variable node.
  * @return The next variable node.
  */
-VariableNode_t* msh_GetNextVariable(VariableNode_t* var_node);
+VariableNode_T* msh_GetNextVariable(VariableNode_T* var_node);
 
 
 /**
@@ -72,7 +69,7 @@ VariableNode_t* msh_GetNextVariable(VariableNode_t* var_node);
  * @param var_node The variable node.
  * @return The previous variable node.
  */
-VariableNode_t* msh_GetPreviousVariable(VariableNode_t* var_node);
+VariableNode_T* msh_GetPreviousVariable(VariableNode_T* var_node);
 
 
 /**
@@ -81,7 +78,7 @@ VariableNode_t* msh_GetPreviousVariable(VariableNode_t* var_node);
  * @param var_node The variable node.
  * @return The tracked mxArray.
  */
-mxArray* msh_GetVariableData(VariableNode_t* var_node);
+mxArray* msh_GetVariableData(VariableNode_T* var_node);
 
 
 /**
@@ -90,10 +87,10 @@ mxArray* msh_GetVariableData(VariableNode_t* var_node);
  * @param var_node The variable node.
  * @return The segment node whose segment this variable uses.
  */
-SegmentNode_t* msh_GetSegmentNode(VariableNode_t* var_node);
+struct SegmentNode_T* msh_GetSegmentNode(VariableNode_T* var_node);
 
 
-int msh_GetIsUsed(VariableNode_t* var_node);
+int msh_GetIsUsed(VariableNode_T* var_node);
 
 
 /**
@@ -102,7 +99,7 @@ int msh_GetIsUsed(VariableNode_t* var_node);
  * @param var_node The variable node.
  * @param var_list The variable list.
  */
-void msh_SetVariableList(VariableNode_t* var_node, VariableList_t* var_list);
+void msh_SetVariableList(VariableNode_T* var_node, struct VariableList_T* var_list);
 
 
 /**
@@ -111,7 +108,7 @@ void msh_SetVariableList(VariableNode_t* var_node, VariableList_t* var_list);
  * @param var_node The variable node.
  * @param next_var_node The next variable node.
  */
-void msh_SetNextVariable(VariableNode_t* var_node, VariableNode_t* next_var_node);
+void msh_SetNextVariable(VariableNode_T* var_node, VariableNode_T* next_var_node);
 
 
 /**
@@ -120,7 +117,7 @@ void msh_SetNextVariable(VariableNode_t* var_node, VariableNode_t* next_var_node
  * @param var_node The variable node.
  * @param prev_var_node The previous variable node.
  */
-void msh_SetPreviousVariable(VariableNode_t* var_node, VariableNode_t* prev_var_node);
+void msh_SetPreviousVariable(VariableNode_T* var_node, VariableNode_T* prev_var_node);
 
 
 /**
@@ -129,7 +126,7 @@ void msh_SetPreviousVariable(VariableNode_t* var_node, VariableNode_t* prev_var_
  * @param var_node The variable node.
  * @param var The mxArray.
  */
-void msh_SetVariableData(VariableNode_t* var_node, mxArray* var);
+void msh_SetVariableData(VariableNode_T* var_node, mxArray* var);
 
 
 /**
@@ -138,9 +135,9 @@ void msh_SetVariableData(VariableNode_t* var_node, mxArray* var);
  * @param var_node The variable node.
  * @param seg_node The segment node.
  */
-void msh_SetSegmentNode(VariableNode_t* var_node, SegmentNode_t* seg_node);
+void msh_SetSegmentNode(VariableNode_T* var_node, struct SegmentNode_T* seg_node);
 
 
-void msh_SetIsUsed(VariableNode_t* var_node, int is_used);
+void msh_SetIsUsed(VariableNode_T* var_node, int is_used);
 
 #endif /* MATSHARE_MSHVARIABLENODE_H */

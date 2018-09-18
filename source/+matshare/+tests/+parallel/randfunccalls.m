@@ -1,5 +1,7 @@
 %% Define random call test parameters
 
+numworkers = matshare.utils.poolstartup;
+
 % bound of clearing of data
 bounds.clear_data = 50;
 
@@ -13,8 +15,8 @@ bounds.mshreset = 200;
 % bound of running mshlocalcopy
 bounds.mshlocalcopy = 10;
 
-% bound of random call to mshclear
-bounds.mshclear = 200;
+% bound of random call to clearshm
+bounds.clearshm = 200;
 
 % bound of random call to mshdetach
 bounds.mshdetach = 5;
@@ -99,7 +101,7 @@ for i = 1:num_maxDepth_tests
 		end
 	end
 end
-matshare.clear;
+matshare.clearshm;
 matshare.debug;
 matshare.detach;
 fprintf('Test successful.\n\n');

@@ -6,7 +6,7 @@
  * This software may be modified and distributed under the terms
  * of the MIT license. See the LICENSE file for details.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-
+ 
 
 #include "mex.h"
 
@@ -22,6 +22,7 @@
 #include "mshsegments.h"
 #include "mshinit.h"
 #include "mshlockfree.h"
+#include "mshvarops.h"
 
 #ifdef MSH_UNIX
 #  include <string.h>
@@ -29,11 +30,11 @@
 #  include <sys/stat.h>
 #endif
 
-char_t* g_msh_library_name         = "matshare";
-char_t* g_msh_error_help_message   = "";
-char_t* g_msh_warning_help_message = "";
+char_T* g_msh_library_name         = "matshare";
+char_T* g_msh_error_help_message   = "";
+char_T* g_msh_warning_help_message = "";
 
-LocalInfo_t g_local_info =
+LocalInfo_T g_local_info =
 {
 	MSH_INITIAL_STATE,          /* rev_num */
 	0,                          /* lock_level */
@@ -55,7 +56,21 @@ LocalInfo_t g_local_info =
 	TRUE                        /* is_deinitialized */
 };
 
-SegmentTable_t g_seg_table =
+/**
+ * MATLAB variable tracking table
+ */
+static SegmentTable_T s_mvar_table =
+{
+	NULL,
+	0,
+	msh_GetSegmentHashByVariableAddress,
+	msh_CompareVariableAddressKey
+};
+
+/**
+ * Segment tracking table via segment numbers
+ */
+static SegmentTable_T s_seg_table =
 {
 	NULL,
 	0,
@@ -63,7 +78,10 @@ SegmentTable_t g_seg_table =
 	msh_CompareNumericKey
 };
 
-SegmentTable_t g_name_table =
+/**
+ * Segment table of variable names
+ */
+static SegmentTable_T s_name_table =
 {
 	NULL,
 	0,
@@ -71,18 +89,19 @@ SegmentTable_t g_name_table =
 	msh_CompareStringKey
 };
 
-SegmentList_t g_local_seg_list =
+SegmentList_T g_local_seg_list =
 {
-	&g_seg_table,
-	&g_name_table,
+	&s_seg_table,
+	&s_name_table,
 	NULL,
 	NULL,
 	0,
 	0
 };
 
-VariableList_t g_local_var_list =
+VariableList_T g_local_var_list =
 {
+	&s_mvar_table,
 	NULL,
 	NULL
 };
@@ -135,7 +154,7 @@ static mxArray* msh_CreateOutputNamed(void);
  * @param name the name of the shared variable.
  * @return the shared variable(s) as a cell array.
  */
-static mxArray* msh_CreateNamedOutput(const char_t* name);
+static mxArray* msh_CreateNamedOutput(const char_T* name);
 
 /* ------------------------------------------------------------------------- */
 /* Matlab gateway function                                                   */
@@ -150,7 +169,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	int num_in_args = nrhs - 1;
 	
 	/* resultant matshare directive */
-	msh_directive_t directive;
+	msh_directive_T directive;
 	
 	/* check the local struct for fatal errors */
 	if(g_local_info.has_fatal_error)
@@ -165,11 +184,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 	/* check min number of arguments */
 	if(nrhs < 1)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Minimum input arguments missing. You must supply a directive.");
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Minimum input arguments missing. Please use the supplied entry functions.");
 	}
 	
 	/* get the directive, no check is made since the matshare should not be used without entry functions */
-	directive = (msh_directive_t)mxGetScalar(in_directive);
+	directive = (msh_directive_T)mxGetScalar(in_directive);
 	
 	
 	/* pre-initialization directives */
@@ -242,11 +261,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 		case(msh_SHARE):
 		{
 			/* we use varargin and extract the result */
-			if(num_in_args < 1)
+			if(num_in_args < 2)
 			{
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "Not enough inputs. Please use the entry functions provided.");
 			}
-			msh_Share(nlhs, plhs, mxGetNumberOfElements(in_args[0]), mxGetData(in_args[0]));
+			msh_Share(nlhs, plhs, mxGetNumberOfElements(in_args[1]), mxGetData(in_args[1]), (int)mxGetScalar(in_args[0]));
 			break;
 		}
 		case(msh_FETCH):
@@ -287,9 +306,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			msh_ReleaseProcessLock(g_process_lock);
 			break;
 		}
-		case(msh_OVERWRITE):
+		case(msh_VAROP):
 		{
-			msh_Overwrite(num_in_args, in_args);
+			if(nrhs < 2)
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NotEnoughInputsError", "No variable operation supplied. Please use the supplied entry functions.");
+			}
+			msh_VarOps(nlhs, plhs, num_in_args - 1, in_args + 1, (msh_varop_T)mxGetScalar(prhs[1]));
 			break;
 		}
 		case(msh_LOCK):
@@ -303,8 +326,10 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 			break;
 		}
 		case(msh_CLEAN):
+		{
 			/* do nothing */
 			break;
+		}
 		default:
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnknownDirectiveError", "Unrecognized matshare directive. Please use the supplied entry functions.");
@@ -317,31 +342,31 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
 }
 
 
-void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args)
+void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args, int return_to_ans)
 {
-	unsigned            i, num_vars;
+	size_t              i, j, num_vars;
 	mxChar*             in_opt;
 	const mxArray*      curr_in_var;
+	const mxArray*      input_id;
 	const mxArray**     in_vars;
 	
 	int                 will_persist = FALSE;
 	int                 with_names   = FALSE;
-	SegmentNode_t*      new_seg_node = NULL;
-	VariableNode_t*     new_var_node = NULL;
-	const mxArray*      input_id     = NULL;
+	SegmentNode_T*      new_seg_node = NULL;
+	VariableNode_T*     new_var_node = NULL;
 	
+	/* check the inputs */
 	if(num_args > INT_MAX)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NumInputsError", "Too many arguments.");
 	}
 	
-	/* check the inputs */
 	if(num_args < 1)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NoVariableError", "No variable supplied to share.");
 	}
 	
-	
+	/* parse options */
 	in_vars = mxMalloc(num_args * sizeof(const mxArray*));
 	for(i = 0, num_vars = 0; i < num_args; i++)
 	{
@@ -374,18 +399,28 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		}
 	}
 	
-	if(with_names && num_vars % 2 != 0)
+	if(with_names)
 	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InputError", "Each input must have be preceded by a name when '-n' is specified.");
+		if(num_vars%2 != 0)
+		{
+			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InputError", "Each input must have be preceded by a name when '-n' is specified.");
+		}
+		num_vars/=2;
 	}
 	
-	for(i = 0; i < num_vars; i = (with_names? i + 2 : i + 1))
+	if(num_vars < (size_t)nlhs)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "OutputError", "Too many outputs.");
+	}
+	
+	/* main loop */
+	for(i = 0, j = 0, input_id = NULL; i < num_vars; i++)
 	{
 		
 		if(with_names)
 		{
-			input_id = in_vars[i];
-			curr_in_var = in_vars[i + 1];
+			input_id = in_vars[2*i];
+			curr_in_var = in_vars[2*i + 1];
 		}
 		else
 		{
@@ -411,15 +446,11 @@ void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		msh_AddVariableToList(&g_local_var_list, new_var_node);
 		
 		/* create and set the return */
-		if(i < (unsigned)nlhs)
+		if(j < (size_t)nlhs)
 		{
-			plhs[i] = msh_WrapOutput(msh_CreateSharedDataCopy(new_var_node, TRUE));
+			plhs[j] = msh_WrapOutput(msh_CreateSharedDataCopy(new_var_node, j > 0 || !return_to_ans));
+			j += 1;
 		}
-		else if(i == 0 && nlhs == 0)
-		{
-			plhs[i] = msh_WrapOutput(msh_CreateSharedDataCopy(new_var_node, FALSE));
-		}
-		
 	}
 	
 	mxFree((void*)in_vars);
@@ -431,14 +462,14 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 {
 	unsigned            arg_num, out_num, num_out;
 	size_t              num_new_vars, num_op_args;
-	char_t              input_str[MSH_NAME_LEN_MAX];
-	SegmentNode_t*      curr_seg_node;
+	char_T              input_str[MSH_NAME_LEN_MAX];
+	SegmentNode_T*      curr_seg_node;
 	
 	
 	int                 output_as_struct   = FALSE;
 	int                 will_fetch_default = FALSE;
 	UpdateFunction_t    update_function    = NULL;
-	const char_t*       all_out_names[]    = {"recent", "new", "all", "named"};
+	const char_T*       all_out_names[]    = {"recent", "new", "all", "named"};
 	
 	if(nlhs < 1)
 	{
@@ -536,7 +567,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		update_function = msh_UpdateAllSegments;
 	}
 	
-	if(num_out > (unsigned)nlhs)
+	if((unsigned)nlhs > num_out)
 	{
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "TooManyOutputsError", "Too many outputs requested.");
 	}
@@ -651,7 +682,7 @@ void msh_Fetch(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_arg
 		{
 			if(will_fetch_default)
 			{
-				strcpy(input_str, (char_t*)g_user_config.fetch_default);
+				strcpy(input_str, (char_T*)g_user_config.fetch_default);
 			}
 			else
 			{
@@ -722,7 +753,7 @@ static mxArray* msh_CreateOutputRecent(void)
 static mxArray* msh_CreateOutputNew(size_t num_new_vars)
 {
 	size_t i;
-	VariableNode_t* curr_var_node;
+	VariableNode_T* curr_var_node;
 	mxArray* out = mxCreateCellMatrix(num_new_vars, (size_t)(num_new_vars > 0));
 	for(i = 0, curr_var_node = g_local_var_list.last; i < num_new_vars; i++, curr_var_node = msh_GetPreviousVariable(curr_var_node))
 	{
@@ -735,7 +766,7 @@ static mxArray* msh_CreateOutputNew(size_t num_new_vars)
 static mxArray* msh_CreateOutputAll(void)
 {
 	size_t i;
-	SegmentNode_t* curr_seg_node;
+	SegmentNode_T* curr_seg_node;
 	mxArray* out = mxCreateCellMatrix(g_local_seg_list.num_segs, (size_t)(g_local_seg_list.num_segs > 0));
 	for(i = 0, curr_seg_node = g_local_seg_list.first; i < g_local_seg_list.num_segs; i++, curr_seg_node = msh_GetNextSegment(curr_seg_node))
 	{
@@ -748,7 +779,7 @@ static mxArray* msh_CreateOutputAll(void)
 static mxArray* msh_CreateOutputNamed(void)
 {
 	size_t i;
-	SegmentNode_t* curr_seg_node;
+	SegmentNode_T* curr_seg_node;
 	const char* curr_name;
 	mxArray* out = mxCreateStructMatrix(1, 1, 0, NULL);
 	for(i = 0, curr_seg_node = g_local_seg_list.first; i < g_local_seg_list.num_named && curr_seg_node != NULL; curr_seg_node = msh_GetNextSegment(curr_seg_node))
@@ -768,10 +799,10 @@ static mxArray* msh_CreateOutputNamed(void)
 }
 
 
-static mxArray* msh_CreateNamedOutput(const char_t* name)
+static mxArray* msh_CreateNamedOutput(const char_T* name)
 {
 	size_t i;
-	SegmentList_t named_var_list;
+	SegmentList_T named_var_list;
 	mxArray* named_var_ret;
 	
 	msh_FindAllSegmentNodes(g_local_seg_list.name_table, &named_var_list, (void*)name);
@@ -836,12 +867,12 @@ void msh_Copy(int nlhs, mxArray** plhs, int num_inputs, const mxArray** in_vars)
 
 void msh_Clear(int num_inputs, const mxArray** in_vars)
 {
-	SegmentNode_t* clear_seg_node;
-	VariableNode_t* curr_var_node;
+	SegmentNode_T* clear_seg_node;
+	VariableNode_T* curr_var_node;
 	mxArray* link;
 	const mxArray* clear_var, * curr_in_var;
 	char input_str[MSH_NAME_LEN_MAX];
-	bool_t found_variable;
+	bool_T found_variable;
 	int input_num;
 	
 	msh_AcquireProcessLock(g_process_lock);
@@ -896,99 +927,17 @@ void msh_Clear(int num_inputs, const mxArray** in_vars)
 }
 
 
-void msh_Overwrite(int num_args, const mxArray** in_args)
-{
-	mxArray* dest;
-	const mxArray* in;
-	mxChar* input_option;
-	int will_sync = FALSE; /* asynchronous by default */
-	
-	if(num_args < 2 || num_args > 3)
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "NumInputsError", "Too many inputs. The overwrite function takes either 2 or 3 arguments.");
-	}
-	
-	if(num_args == 3)
-	{
-		if(!mxIsChar(in_args[2]))
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must be of type 'char'.");
-		}
-		
-		if(mxGetNumberOfElements(in_args[2]) < 2)
-		{
-			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must have length more than 1.");
-		}
-		
-		input_option = mxGetChars(in_args[2]);
-		if(input_option[0])
-		{
-			/* switch for possible future additions */
-			switch(input_option[1])
-			{
-				case('s'):
-					/* sync */
-					will_sync = TRUE;
-					break;
-				case('a'):
-					/* async */
-					will_sync = FALSE;
-					break;
-				default:
-				{
-					goto OPTION_ERROR;
-				}
-			}
-		}
-		else
-		{
-		OPTION_ERROR:
-			{
-				/* normally the string produced here should be freed with mxFree, but since we have an error just let MATLAB do the GC */
-				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Unrecognized option %s", mxArrayToString(in_args[2]));
-			}
-		}
-	}
-	
-	if(!mxIsCell(in_args[0]) || mxGetNumberOfElements(in_args[0]) != 1)
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidInputError", "Invalid input variable. Please use the entry functions provided.");
-	}
-	
-	dest = mxGetCell(in_args[0], 0);
-	in = in_args[1];
-	
-	if(msh_CompareVariableSize(dest, in))
-	{
-		if(will_sync)
-		{
-			msh_AcquireProcessLock(g_process_lock);
-			{
-				msh_OverwriteVariable(dest, in);
-			}
-			msh_ReleaseProcessLock(g_process_lock);
-		}
-		else
-		{
-			msh_OverwriteVariable(dest, in);
-		}
-	}
-	else
-	{
-		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "VariableSizeError", "The size of the variable to be overwritten is incompatible with the input variable.");
-	}
-}
-
-
 void msh_Config(size_t num_params, const mxArray** in_params)
 {
 	size_t              i, j, ps_len, vs_len, maxsize_temp;
+	long                opts;
+	unsigned long       maxvars_temp;
 	const mxArray*      param;
 	const mxArray*      val;
-	unsigned long       maxvars_temp;
+	
 #ifdef MSH_UNIX
 	mode_t              sec_temp;
-	SegmentNode_t*      curr_seg_node;
+	SegmentNode_T*      curr_seg_node;
 #endif
 	
 	char                param_str[MSH_NAME_LEN_MAX]   = {0};
@@ -1084,7 +1033,11 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 			
 			errno = 0;
 #if MSH_BITNESS == 64
+#ifdef _MSC_VER
+			maxsize_temp = _strtoui64(val_str_l, NULL, 0);
+#else
 			maxsize_temp = strtoull(val_str_l, NULL, 0);
+#endif
 #elif MSH_BITNESS == 32
 			maxsize_temp = strtoul(val_str_l, NULL, 0);
 #endif
@@ -1156,10 +1109,196 @@ void msh_Config(size_t num_params, const mxArray** in_params)
 			/* don't use the lowercase string in this case */
 			strcpy((char*)g_user_config.fetch_default, val_str);
 		}
+		else if(strcmp(param_str_l, MSH_PARAM_VAROP_OPTS_DEFAULT_L) == 0 || strcmp(param_str_l, MSH_PARAM_VAROP_OPTS_DEFAULT_AB) == 0)
+		{
+			
+			opts = 0;
+			
+			if(val_str[0] == '-')
+			{
+				/* switch for possible future additions */
+				switch(val_str[1])
+				{
+					case('s'):
+					{
+						/* sync */
+						opts |= MSH_IS_SYNCHRONOUS;
+						break;
+					}
+					case('a'):
+					{
+						/* async */
+						opts &= ~MSH_IS_SYNCHRONOUS;
+						break;
+					}
+					case('t'):
+					{
+						/* atomic */
+						opts |= MSH_USE_ATOMIC_OPS;
+						break;
+					}
+					case('n'):
+					{
+						/* non-atomic */
+						opts &= ~MSH_USE_ATOMIC_OPS;
+						break;
+					}
+					default:
+					{
+						/* normally the string produced here should be freed with mxFree, but since we have an error just let MATLAB do the GC */
+						meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_VAROP_OPTS_DEFAULT);
+					}
+				}
+				
+				g_user_config.varop_opts_default = opts;
+				
+			}
+			else
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidValueError", "Unrecognised value \"%s\" for parameter \"%s\".", val_str, MSH_PARAM_VAROP_OPTS_DEFAULT);
+			}
+		}
 		else
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidParamError", "Unrecognised parameter \"%s\".", param_str);
 		}
 	}
+	
+}
+
+void msh_VarOps(int nlhs, mxArray** plhs, int num_args, const mxArray** in_args, msh_varop_T varop)
+{
+	
+	/* input order (including arguments handled by mexFunction)
+	 *
+	 * 0. directive
+	 * 1. varop
+	 * 2. parent_var
+	 * 3. {in_var1, in_var2, ...}
+	 * 4. {substruct, opt1, opt2, ...}
+	 */
+	
+	size_t         i, num_varargin, num_in_vars;
+	mxChar*        input_option;
+	mxArray*       opt_input;
+	SegmentNode_T* shared_seg_node;
+	const mxArray* parent_var;
+	const mxArray* in_vars;
+	
+	int            index_once      = FALSE;
+	long           opts            = g_user_config.varop_opts_default;
+	FileLock_T     filelock        = g_process_lock;
+	mxArray*       subs_struct     = NULL;
+	
+	if(num_args != 3)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNumberOfArgumentsError", "Too many or too few arguments. Please use the provided entry functions.");
+	}
+	
+	parent_var = mxGetCell(in_args[0], 0);
+	in_vars = in_args[1];
+	
+	if(!mxIsCell(in_vars))
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_INTERNAL, "InvalidInputTypeError", "Expected cell input for in_vars.");
+	}
+	
+	if((num_in_vars = mxGetNumberOfElements(in_vars)) != (msh_GetNumVarOpArgs(varop)-1))
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidNumberOfInputsError", "Too many or too few inputs.");
+	}
+	
+	/*
+	 * check dest compared to subscripting while
+	 * check input compared to subscripting and dest variable
+	 */
+	
+	if(num_args == 3)
+	{
+		for(i = 0, num_varargin = mxGetNumberOfElements(in_args[2]); i < num_varargin; i++)
+		{
+			opt_input = mxGetCell(in_args[2], i);
+			if(mxIsStruct(opt_input))
+			{
+				if(index_once)
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "MultipleSubsStructError", "Must be only one subscripting struct input.");
+				}
+				index_once = TRUE;
+				
+				subs_struct = opt_input;
+				
+			}
+			else if(mxIsChar(opt_input))
+			{
+				if(mxGetNumberOfElements(opt_input) < 2)
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must have length more than 1.");
+				}
+				input_option = mxGetChars(opt_input);
+				if(input_option[0] == '-')
+				{
+					/* switch for possible future additions */
+					switch(input_option[1])
+					{
+						case('s'):
+						{
+							/* sync */
+							opts |= MSH_IS_SYNCHRONOUS;
+							break;
+						}
+						case('a'):
+						{
+							/* async */
+							opts &= ~MSH_IS_SYNCHRONOUS;
+							break;
+						}
+						case('t'):
+						{
+							/* atomic */
+							opts |= MSH_USE_ATOMIC_OPS;
+							break;
+						}
+						case('n'):
+						{
+							/* non-atomic */
+							opts &= ~MSH_USE_ATOMIC_OPS;
+							break;
+						}
+						default:
+						{
+							/* normally the string produced here should be freed with mxFree, but since we have an error just let MATLAB do the GC */
+							meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Unrecognized option \"%s\"", mxArrayToString(in_args[2]));
+						}
+					}
+				}
+				else
+				{
+					meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "UnrecognizedOptionError", "Input options must start with '-'. Invalid option \"%s\"", mxArrayToString(in_args[2]));
+				}
+			}
+			else
+			{
+				meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "InvalidOptionError", "Option must be of class 'struct' or 'char'.");
+			}
+		}
+	}
+	
+	
+	if(nlhs > 1)
+	{
+		meu_PrintMexError(MEU_FL, MEU_SEVERITY_USER, "TooManyOutputsError", "Too many outputs");
+	}
+	
+	if(opts & MSH_IS_SYNCHRONOUS)
+	{
+		if((shared_seg_node = msh_FindSegmentNodeFromCrosslink(g_local_var_list.mvar_table, parent_var)) != NULL)
+		{
+			filelock = msh_GetSegmentInfo(shared_seg_node)->lock;
+		}
+	}
+	
+	/* returns output only if requested to save time and memory */
+	msh_VariableOperation(parent_var, subs_struct, in_vars, num_in_vars, varop, opts, filelock, (nlhs==1)? plhs : NULL);
 	
 }

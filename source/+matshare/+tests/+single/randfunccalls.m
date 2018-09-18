@@ -15,8 +15,8 @@ bounds.mshreset = 200;
 % bound of running mshlocalcopy
 bounds.mshlocalcopy = 10;
 
-% bound of random call to mshclear
-bounds.mshclear = 200;
+% bound of random call to clearshm
+bounds.clearshm = 200;
 
 % bound of random call to mshdetach
 bounds.mshdetach = 5;
@@ -103,6 +103,6 @@ for i = 1:num_maxDepth_tests
 		end
 	end
 end
-matshare.clear
+matshare.clearshm
 matshare.detach
 fprintf('successful.\n\n');

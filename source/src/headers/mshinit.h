@@ -33,6 +33,6 @@ void msh_InitializeMatshare(void);
 /**
  * Sets the configuration to default.
  */
-void msh_SetDefaultConfiguration(UserConfig_t* user_config);
+void msh_SetDefaultConfiguration(UserConfig_T* user_config);
 
 #endif /* MATSHARE_INIT_H */

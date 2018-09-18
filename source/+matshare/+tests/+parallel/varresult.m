@@ -1,18 +1,20 @@
 function varresult(tv, numworkers)
+	
+	matshare.clearshm;
+	
 	held = matshare.share(tv);
-	transfer = cell(numworkers,1);
 	parfor i = 1:numworkers
 		f = matshare.fetch('-r');
-		transfer{i} = f.data;
+		matshare.share(f.data);
 	end
 	
-	for i = 1:numworkers
-		if(~matshare.scripts.compstruct(tv, transfer{i}))
+	res = matshare.fetch('-a');
+	
+	for i = 1:numworkers+1
+		if(~matshare.utils.compstruct(tv, res(i).data))
 			error('Matshare failed because parallel results were not equal.');
 		end
 	end
-	
-	held.clear;
 	
 end
 

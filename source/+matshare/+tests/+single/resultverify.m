@@ -2,7 +2,7 @@
 
 import matshare.tests.common.*
 
-params.verify;
+params.verifyshort;
 
 count = 1;
 total_num_tests = num_maxDepth_tests*num_maxElements_tests*num_maxDims_tests*num_maxChildren_tests*num_typespec_tests;
@@ -43,7 +43,7 @@ for i = 1:num_maxDepth_tests
 						matshare.share(tv);
 						x = matshare.fetch('-r');
 						
-						if(~matshare.scripts.compstruct(tv, x.data))
+						if(~matshare.utils.compstruct(tv, x.data))
 							error('Matshare failed because results were not equal.');
 						end
 						
@@ -55,6 +55,6 @@ for i = 1:num_maxDepth_tests
 		end
 	end
 end
-matshare.clear
+matshare.clearshm
 matshare.detach
 fprintf('successful.\n\n');

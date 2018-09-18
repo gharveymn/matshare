@@ -11,10 +11,7 @@
 #define MATSHARE__H
 
 #include "mshbasictypes.h"
-
-
-/* forward declaration to avoid include */
-typedef struct mxArray_tag mxArray;
+#include "mshvarops.h"
 
 
 #define MSH_PARAM_THREADSAFETY     "ThreadSafety"
@@ -41,6 +38,10 @@ typedef struct mxArray_tag mxArray;
 #define MSH_PARAM_FETCH_DEFAULT_L  "fetchdefault"
 #define MSH_PARAM_FETCH_DEFAULT_AB "fd"
 
+#define MSH_PARAM_VAROP_OPTS_DEFAULT     "SyncDefault"
+#define MSH_PARAM_VAROP_OPTS_DEFAULT_L   "syncdefault"
+#define MSH_PARAM_VAROP_OPTS_DEFAULT_AB  "sd"
+
 #ifdef MSH_UNIX
 #define MSH_CONFIG_SECURITY_STRING_FORMAT \
 "    Security:            '%o'\n"
@@ -51,18 +52,22 @@ typedef struct mxArray_tag mxArray;
 
 #define MSH_CONFIG_STRING_FORMAT \
 "<strong>Current configuration:</strong>\n"\
-"    matshare version:    %s\n" \
-"    Max variables:       %lu\n" \
-"    Max shared size:     "SIZE_FORMAT"\n" \
-"    Garbage collection:  '%s'\n" \
-"    Fetch default:       '%s'\n"
+"    matshare version:                %s\n" \
+"    Max variables:                   %lu\n" \
+"    Max shared size:                 "SIZE_FORMAT"\n" \
+"    Garbage collection:              '%s'\n" \
+"    Fetch default:                   '%s'\n" \
+"    Variable operations use mutex:   '%s'\n" \
+"    Variable operations use atomics: '%s'\n" \
 
 #define MSH_CONFIG_STRING_ARGS \
 MSH_VERSION_STRING, \
 g_user_config.max_shared_segments, \
 g_user_config.max_shared_size, \
 g_user_config.will_shared_gc? "on" : "off", \
-g_user_config.fetch_default
+g_user_config.fetch_default, \
+g_user_config.varop_opts_default & MSH_IS_SYNCHRONOUS? "yes" : "no", \
+g_user_config.varop_opts_default & MSH_USE_ATOMIC_OPS? "yes" : "no"
 
 #ifdef MSH_WIN
 
@@ -176,6 +181,11 @@ g_shared_info->update_pid
 #  define MSH_FD_HARD_LIMIT 2048
 #endif
 
+#define MSH_FETCHOPT_STRUCT 's'
+#define MSH_FETCHOPT_RECENT 'r'
+#define MSH_FETCHOPT_NEW    'w'
+#define MSH_FETCHOPT_ALL    'a'
+#define MSH_FETCHOPT_NAMED  'n'
 
 typedef enum
 {
@@ -187,18 +197,12 @@ typedef enum
 	msh_DEBUG           = 0x0005,  /* print debug information */
 	msh_CLEAR           = 0x0006,  /* clear segments from shared memory */
 	msh_RESET           = 0x0007,  /* reset the configuration */
-	msh_OVERWRITE       = 0x0008,  /* overwrite the specified variable in-place */
+	msh_VAROP           = 0x0008,  /* overwrite the specified variable in-place */
 	msh_LOCK            = 0x0009,  /* acquire the matshare interprocess lock */
 	msh_UNLOCK          = 0x000A,  /* release the interprocess lock */
 	msh_CLEAN           = 0x000B,  /* clean invalid and unused segments */
-	msh_STATUS          = 0x000C   /* print out info about the current state of matshare */
-} msh_directive_t;
-
-#define MSH_FETCHOPT_STRUCT 's'
-#define MSH_FETCHOPT_RECENT 'r'
-#define MSH_FETCHOPT_NEW    'w'
-#define MSH_FETCHOPT_ALL    'a'
-#define MSH_FETCHOPT_NAMED  'n'
+	msh_STATUS          = 0x000C,  /* print out info about the current state of matshare */
+} msh_directive_T;
 
 /**
  * Runs sharing operation. Makes a shared copy of the new variable if requested.
@@ -208,7 +212,7 @@ typedef enum
  * @param num_args The number of variables to be shared.
  * @param in_args The variables to be shared.
  */
-void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args);
+void msh_Share(int nlhs, mxArray** plhs, size_t num_args, const mxArray** in_args, int return_to_ans);
 
 
 /**
@@ -240,21 +244,13 @@ void msh_Clear(int num_inputs, const mxArray** in_vars);
 
 
 /**
- * Overwrite a variable in-place. Does this in a safe or unsafe manner
- * depending on the directive.
- *
- * @param dest_var The destination variable.
- * @param in_var The input variable.
- */
-void msh_Overwrite(int num_args, const mxArray** in_args);
-
-
-/**
  * Changes configuration parameters.
  *
  * @param num_params The number of parameters input.
  * @param in_params An array of the parameters and values.
  */
 void msh_Config(size_t num_params, const mxArray** in_params);
+
+void msh_VarOps(int nlhs, mxArray** plhs, int num_args, const mxArray** in_args, msh_varop_T varop);
 
 #endif /* MATSHARE__H */

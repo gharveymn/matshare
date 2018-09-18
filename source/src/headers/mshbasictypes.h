@@ -11,9 +11,8 @@
 #ifndef MATSHARE_MSHBASICTYPES_H
 #define MATSHARE_MSHBASICTYPES_H
 
+#include "mex.h"
 #include <errno.h>
-
-#include "tmwtypes.h"
 
 #if defined(DEBUG_UNIX)
 #  ifndef MSH_UNIX
@@ -29,19 +28,27 @@
 #    ifndef WIN32_LEAN_AND_MEAN
 #      define WIN32_LEAN_AND_MEAN
 #    endif
-#    include <windows.h>
+#    include <Windows.h>
 #  define MSH_INVALID_HANDLE INVALID_HANDLE_VALUE
 #else
 #  include <sys/types.h>
 #  define MSH_INVALID_HANDLE (-1)
 #endif
 
+#ifndef TRUE
+#  define TRUE 1
+#endif
+
 #ifndef FALSE
 #  define FALSE 0
 #endif
 
-#ifndef TRUE
-#  define TRUE 1
+#ifndef MAX
+#  define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef MIN
+#  define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
 #ifndef SIZE_MAX
@@ -57,47 +64,100 @@
 #define XSTR(x) #x
 #define STR(x) XSTR(x)
 
-#define MSH_VERSION_STRING "1.1.0"
+#define MSH_VERSION_STRING "1.2.0"
+#define MSH_VERSION_NUM    0x010200
 
 /** these are basic readability typedefs **/
-typedef char char_t;                     /* characters */
-typedef byte_T byte_t;                  /* reading physical memory */
-typedef int8_T bool_t;                  /* conditionals */
-typedef int32_T alignedbool_t;		/* for word sized alignment */
-typedef int32_T segmentnumber_t; /* segment number identifiers */
+typedef int8_T bool_T;                  /* conditionals */
+typedef int32_T alignedbool_T;		/* for word sized alignment */
+typedef int32_T segmentnumber_T; /* segment number identifiers */
 
 #define MSH_SEG_NUM_FORMAT "%li"
 
 #ifdef MSH_WIN
-   typedef HANDLE handle_t;
-   typedef DWORD pid_t;
-   typedef handle_t ProcessLock_t;
+   typedef HANDLE handle_T;
+   typedef DWORD pid_T;
+   typedef handle_T FileLock_T;
 #  define HANDLE_FORMAT SIZE_FORMAT
 #  define PID_FORMAT "%lu"
 #else
-   typedef int handle_t;				 /* give fds a uniform identifier */
-   typedef struct ProcessLock_t
+   typedef int handle_T;				 /* give fds a uniform identifier */
+   typedef pid_t pid_T;
+   typedef struct FileLock_T
    {
-      handle_t lock_handle;
+      handle_T lock_handle;
       size_t lock_size;
-   } ProcessLock_t;
+   } FileLock_T;
 #define HANDLE_FORMAT "%i"
 #define PID_FORMAT "%i"
 #endif
 
 #ifdef MSH_AVX_SUPPORT
-#  define DATA_ALIGNMENT 0x20
-#  define DATA_ALIGNMENT_SHIFT (size_t)0x1F
+#  define MATLAB_ALIGNMENT 0x20
 #else
-#  define DATA_ALIGNMENT 0x10
-#  define DATA_ALIGNMENT_SHIFT (size_t)0x0F
+#  define MATLAB_ALIGNMENT 0x10
+#endif
+
+/* always actually use 32 byte alignment */
+#define MSH_ALIGNMENT 0x20
+
+#if MSH_BITNESS==64
+#define MSH_SIZE_WIDTH 8
+#elif MSH_BITNESS==32
+#define MSH_SIZE_WIDTH 4
 #endif
 
 #define MSH_NAME_LEN_MAX 64
 #define MSH_SEG_NUM_MAX 0x7FFFFFFF      /* the maximum segment number (which is int32 max) */
 #define MSH_INVALID_SEG_NUM (-1L)
 
-typedef union LockFreeCounter_ut
+#if   defined(_MSC_VER)
+#  define MSH_ALIGN(ALIGNMENT) __declspec(align(ALIGNMENT))
+#elif defined(__GNUC__)
+#  define MSH_ALIGN(ALIGNMENT) __attribute__ ((aligned(ALIGNMENT)))
+#endif
+
+typedef float single;
+
+#define ALIGNED_TYPEDEF(TYPE, ALIGNMENT) typedef TYPE MSH_ALIGN(ALIGNMENT)
+
+#ifdef MSH_USE_AVX
+ALIGNED_TYPEDEF(int8_T, 32)   a32_int8_T;
+ALIGNED_TYPEDEF(int16_T, 32)  a32_int16_T;
+ALIGNED_TYPEDEF(int32_T, 32)  a32_int32_T;
+
+ALIGNED_TYPEDEF(uint8_T, 32)  a32_uint8_T;
+ALIGNED_TYPEDEF(uint16_T, 32) a32_uint16_T;
+ALIGNED_TYPEDEF(uint32_T, 32) a32_uint32_T;
+
+#if MSH_BITNESS==64
+ALIGNED_TYPEDEF(int64_T, 32)  a32_int64_T;
+ALIGNED_TYPEDEF(uint64_T, 32) a32_uint64_T;
+#endif
+
+ALIGNED_TYPEDEF(single, 32)   a32_single;
+ALIGNED_TYPEDEF(double, 32)   a32_double;
+#endif
+
+#ifdef MSH_USE_SSE2
+ALIGNED_TYPEDEF(int8_T, 16)   a16_int8_T;
+ALIGNED_TYPEDEF(int16_T, 16)  a16_int16_T;
+ALIGNED_TYPEDEF(int16_T, 16)  a16_int32_T;
+
+ALIGNED_TYPEDEF(uint8_T, 16)  a16_uint8_T;
+ALIGNED_TYPEDEF(uint16_T, 16) a16_uint16_T;
+ALIGNED_TYPEDEF(uint16_T, 16) a16_uint32_T;
+
+#if MSH_BITNESS==64
+ALIGNED_TYPEDEF(int64_T, 16)  a16_int64_T;
+ALIGNED_TYPEDEF(uint64_T, 16) a16_uint64_T;
+#endif
+
+ALIGNED_TYPEDEF(single, 16)   a16_single;
+ALIGNED_TYPEDEF(double, 16)   a16_double;
+#endif
+
+typedef union LockFreeCounter_Tag
 {
 	long span;
 	struct values_tag
@@ -106,6 +166,6 @@ typedef union LockFreeCounter_ut
 		unsigned long flag : 1;
 		unsigned long post : 1;
 	} values;
-} LockFreeCounter_t;
+} LockFreeCounter_T;
 
 #endif /* MATSHARE_MSHBASICTYPES_H */

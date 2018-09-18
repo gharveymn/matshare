@@ -4,7 +4,8 @@ lents = 0;
 locktestnum = 20;
 parlocknumtests = 100;
 
-matshare.reset;
+numworkers = matshare.utils.poolstartup;
+matshare.mshreset;
 
 fprintf('Testing locked overwriting...\n');
 for i = 1:parlocknumtests

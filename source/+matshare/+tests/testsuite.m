@@ -4,7 +4,7 @@
 addpath('..');
 
 %% Parallel pool startup
-matshare.scripts.poolstartup;
+[numworkers, workerpids] = matshare.utils.poolstartup;
 observerpid = workerpids{1};
 
 % test essential variables
@@ -21,6 +21,12 @@ matshare.tests.parallel.lock;
 
 % test parallel results
 matshare.tests.parallel.overwrite;
+
+% test subscripted overwriting
+matshare.tests.single.subsover;
+
+% test variable operations
+matshare.tests.single.varops;
 
 fprintf('Test suite ran successfully.\n\n');
 

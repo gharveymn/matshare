@@ -22,11 +22,9 @@ function varargout = share(varargin)
 %    of the MIT license. See the LICENSE file for details.
 
 	if(nargout == 0)
-		% easiest way to pass ans
-		matshare_(0, varargin);
-		varargout{1} = matshare.object(ans);
+		varargout{1} = matshare.object(matshare_(0, 1, varargin));
 	else
-		[shared_raw{1:nargout}] = matshare_(0, varargin);
+		[shared_raw{1:nargout}] = matshare_(0, 0, varargin);
 		varargout = num2cell(matshare.object(shared_raw, nargout));
 	end
 	

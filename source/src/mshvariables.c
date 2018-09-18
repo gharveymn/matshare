@@ -17,13 +17,17 @@
 #include "mshexterntypes.h"
 #include "mshlockfree.h"
 
+/* may have been disabled for R2018a+ */
+#ifdef mxCreateSharedDataCopy
+#  undef mxCreateSharedDataCopy
+#endif
+
 /* undocumented function */
-extern mxArray* mxCreateSharedDataCopy(mxArray *);
+extern mxArray* mxCreateSharedDataCopy(const mxArray *);
 
 /** public function definitions **/
 
-
-VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
+VariableNode_T* msh_CreateVariable(SegmentNode_T* seg_node)
 {
 	
 	mxArray* new_var;
@@ -34,6 +38,8 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 	}
 	
 	new_var = msh_FetchVariable(msh_GetSegmentData(seg_node));
+	
+	/* Important! Make sure MATLAB doesn't try to free this since the data points to a non-allocated address. */
 	mexMakeArrayPersistent(new_var);
 	
 	return msh_CreateVariableNode(seg_node, new_var);
@@ -41,9 +47,9 @@ VariableNode_t* msh_CreateVariable(SegmentNode_t* seg_node)
 }
 
 
-int msh_DestroyVariable(VariableNode_t* var_node)
+int msh_DestroyVariable(VariableNode_T* var_node)
 {
-	SegmentNode_t* seg_node = msh_GetSegmentNode(var_node);
+	SegmentNode_T* seg_node = msh_GetSegmentNode(var_node);
 	int did_remove_segment = FALSE;
 	
 	/* detach all of the Matlab pointers */
@@ -75,9 +81,9 @@ int msh_DestroyVariable(VariableNode_t* var_node)
 }
 
 
-void msh_ClearVariableList(VariableList_t* var_list)
+void msh_ClearVariableList(VariableList_T* var_list)
 {
-	VariableNode_t* curr_var_node;
+	VariableNode_T* curr_var_node;
 	while(var_list->first != NULL)
 	{
 		curr_var_node = var_list->first;
@@ -87,10 +93,10 @@ void msh_ClearVariableList(VariableList_t* var_list)
 }
 
 
-void msh_CleanVariableList(VariableList_t* var_list, int shared_gc_override)
+void msh_CleanVariableList(VariableList_T* var_list, int shared_gc_override)
 {
-	VariableNode_t* curr_var_node, * next_var_node;
-	SegmentNode_t* curr_seg_node;
+	VariableNode_T* curr_var_node, * next_var_node;
+	SegmentNode_T* curr_seg_node;
 	
 	for(curr_var_node = var_list->first; curr_var_node != NULL; curr_var_node = next_var_node)
 	{
@@ -116,7 +122,7 @@ void msh_CleanVariableList(VariableList_t* var_list, int shared_gc_override)
 }
 
 
-void msh_AddVariableToList(VariableList_t* var_list, VariableNode_t* var_node)
+void msh_AddVariableToList(VariableList_T* var_list, VariableNode_T* var_node)
 {
 	msh_SetVariableList(var_node, var_list);
 	msh_SetNextVariable(var_node, NULL);
@@ -136,10 +142,16 @@ void msh_AddVariableToList(VariableList_t* var_list, VariableNode_t* var_node)
 	/* append to the end of the list */
 	var_list->last = var_node;
 	
+	
+	if(var_list->mvar_table != NULL)
+	{
+		msh_AddSegmentToTable(var_list->mvar_table, msh_GetSegmentNode(var_node), msh_GetVariableData(var_node));
+	}
+	
 }
 
 
-mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node, int will_set_used)
+mxArray* msh_CreateSharedDataCopy(VariableNode_T* var_node, int will_set_used)
 {
 	
 	mxArray* shared_data_copy,* var = msh_GetVariableData(var_node);
@@ -173,11 +185,21 @@ mxArray* msh_CreateSharedDataCopy(VariableNode_t* var_node, int will_set_used)
 }
 
 
-void msh_RemoveVariableFromList(VariableNode_t* var_node)
+void msh_RemoveVariableFromList(VariableNode_T* var_node)
 {
 	
 	/* cache the variable list */
-	VariableList_t* var_list = msh_GetVariableList(var_node);
+	VariableList_T* var_list;
+	
+	if((var_list = msh_GetVariableList(var_node)) == NULL)
+	{
+		return;
+	}
+	
+	if(var_list->mvar_table != NULL)
+	{
+		msh_RemoveSegmentFromTable(var_list->mvar_table, msh_GetSegmentNode(var_node), msh_GetVariableData(var_node));
+	}
 	
 	/* reset references in prev and next var node */
 	if(msh_GetPreviousVariable(var_node) != NULL)
@@ -202,6 +224,7 @@ void msh_RemoveVariableFromList(VariableNode_t* var_node)
 	
 	msh_SetNextVariable(var_node, NULL);
 	msh_SetPreviousVariable(var_node, NULL);
+	msh_SetVariableList(var_node, NULL);
 	
 	/* decrement number of variables in the list */
 	/* var_list->num_vars -= 1; */

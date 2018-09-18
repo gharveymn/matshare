@@ -1,4 +1,4 @@
-mshpoolstartup;
+matshare.examples.mshpoolstartup;
 matshare.clear;
 
 % get the process ids of your parpool workers

@@ -45,11 +45,11 @@ ans =
 ##### Process 2
 
 <pre>
->> fetched = matshare.fetch('myvarname')
-fetched = 
+>> f = matshare.fetch('myvarname')
+f = 
   <font color="blue"><u>matshare object</u></font> storing <strong>1x1</strong> <font color="blue"><u>double</u></font>:
     data: 1
->> fetched.overwrite(2);    
+>> f.data(1) = 2;    
 </pre>
 
 ##### Process 1
@@ -59,12 +59,49 @@ ans =
      2
 </pre>
 
+### Variable Operations
+
+##### Process 1
+<pre>
+>> shared = matshare.share(1);
+>> shared.data
+ans =
+     1
+</pre>
+
+##### Process 2
+
+<pre>
+>> f = matshare.fetch('myvarname')
+f = 
+  <font color="blue"><u>matshare object</u></font> storing <strong>1x1</strong> <font color="blue"><u>double</u></font>:
+    data: 1
+>> f.add = 2;    
+</pre>
+
+##### Process 1
+<pre>
+>> shared.data
+ans =
+     3
+</pre>
+
+This, and all the other operations can be made synchronous through mutexes or lockfree intrinsics.
+
+
 For more details, you can navigate through the documentation with `help matshare` or `help matshare.[command]`, replacing `[command]` with any one of the `matshare` commands.
 
 ## Future Development
-This is not a finished project by any means. If you wish to contribute or have any suggestions feel free to contact me. Currently I plan to implement the following at some point in the future:
-- Atomic variable operations (increments, decrements, swaps, etc.)
-- Variable overwriting by index
-- Thread locks on a sub-global level
+This project is pretty much complete save for the inevitable bugs. However these may be implemented at some point in the future:
+- ~~Variable identifiers (being able to select shared variables by name)~~
+- ~~Atomic variable operations (increments, decrements, swaps, etc.)~~
+- ~~Variable overwriting by index~~
+- ~~Thread locks on a sub-global level~~
 - Rewrite in C++ for R2018a+
 - User defined locks/waits
+- Direct usage of matshare objects without the 'data' property
+
+If you wish to contribute or have any suggestions feel free to contact me.
+
+## License
+This project is licensed under the MIT license.

@@ -1,6 +1,8 @@
 import matshare.tests.common.*
 
-params.verify;
+numworkers = matshare.utils.poolstartup;
+
+params.verifylong;
 
 count = 1;
 total_num_tests = num_maxDepth_tests*num_maxElements_tests*num_maxDims_tests*num_maxChildren_tests*num_typespec_tests;
@@ -48,6 +50,6 @@ for i = 1:num_maxDepth_tests
 		end
 	end
 end
-matshare.clear
+matshare.clearshm
 matshare.detach
 fprintf('Test successful.\n\n');

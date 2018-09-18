@@ -18,7 +18,7 @@ function rns = randfuncworker(maxDepth, maxElements, maxDims, maxChildren, types
 	clear_all_bound = bounds.clear_all;
 	mshreset_bound = bounds.mshreset;
 	mshlocalcopy_bound = bounds.mshlocalcopy;
-	mshclear_bound = bounds.mshclear;
+	mshclear_bound = bounds.clearshm;
 	mshdetach_bound = bounds.mshdetach;
 	chpar_gc_on_bound = bounds.chpar_gc_on;
 	chpar_gc_off_bound = bounds.chpar_gc_off;
@@ -34,7 +34,7 @@ function rns = randfuncworker(maxDepth, maxElements, maxDims, maxChildren, types
 
 	mshlocalcopy_iter = randi(rns, mshlocalcopy_bound);
 	
-	% bound of random call to mshclear
+	% bound of random call to clearshm
 	mshclear_iter = randi(rns, mshclear_bound);
 
 	mshdetach_iter = randi(rns, mshdetach_bound);
@@ -109,10 +109,10 @@ function rns = randfuncworker(maxDepth, maxElements, maxDims, maxChildren, types
 
 		if(mod(i, mshclear_iter) == 0)
 			if(randdoubles2(i) < 0.75 || numel(allvars) == 0)
-				matshare.clear;
+				matshare.clearshm;
 			else
 				clridx = sort(randi(numel(allvars),[2,1]));
-				matshare.clear(f.all(clridx(1):clridx(2)));
+				matshare.clearshm(f.all(clridx(1):clridx(2)));
 			end
 			mshclear_iter = ceil(mshclear_bound*randdoubles3(i));
 		end
@@ -125,7 +125,7 @@ function rns = randfuncworker(maxDepth, maxElements, maxDims, maxChildren, types
 		end
 
 		if(mod(i, mshreset_iter) == 0)
-			matshare.reset;
+			matshare.mshreset;
 			mshreset_iter = ceil(mshreset_bound*randdoubles3(i));
 		end
 

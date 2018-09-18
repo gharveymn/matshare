@@ -4,20 +4,20 @@
 #include "mshsegmentnode.h"
 
 
-typedef struct SegmentTableNode_t
+typedef struct SegmentTableNode_T
 {
-	struct SegmentTableNode_t* next;
-	SegmentNode_t* seg_node;
+	struct SegmentTableNode_T* next;
+	SegmentNode_T* seg_node;
 	void* key;
-} SegmentTableNode_t;
+} SegmentTableNode_T;
 
-typedef struct SegmentTable_t
+typedef struct SegmentTable_T
 {
-	SegmentTableNode_t** table;
+	SegmentTableNode_T** table;
 	uint32_T table_sz;
-	uint32_T (*get_hash)(struct SegmentTable_t*, void*);
+	uint32_T (*get_hash)(struct SegmentTable_T*, void*);
 	int (*compare_keys)(void*, void*);
-} SegmentTable_t;
+} SegmentTable_T;
 
 
 /**
@@ -26,7 +26,7 @@ typedef struct SegmentTable_t
  * @note allocates an array of size MSH_INIT_TABLE_SIZE.
  * @param seg_table A pointer to a segment hash table struct.
  */
-void msh_InitializeTable(SegmentTable_t* seg_table);
+void msh_InitializeTable(SegmentTable_T* seg_table);
 
 
 /**
@@ -36,7 +36,7 @@ void msh_InitializeTable(SegmentTable_t* seg_table);
  * @param seg_table The hash table to which the segment node will be added to.
  * @param seg_node The segment node to be added.
  */
-void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, void* key);
+void msh_AddSegmentToTable(SegmentTable_T* seg_table, SegmentNode_T* seg_node, void* key);
 
 
 /**
@@ -47,10 +47,10 @@ void msh_AddSegmentToTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, v
  * @param seg_num The segment number.
  * @return The segment node if found, otherwise NULL.
  */
-SegmentNode_t* msh_FindSegmentNode(SegmentTable_t* seg_table, void* key);
+SegmentNode_T* msh_FindSegmentNode(SegmentTable_T* seg_table, void* key);
 
 
-void msh_FindAllSegmentNodes(SegmentTable_t* seg_table, SegmentList_t* seg_list_cache, void* key);
+void msh_FindAllSegmentNodes(SegmentTable_T* seg_table, struct SegmentList_T* seg_list_cache, void* key);
 
 /**
  * Removes the specified segment node from the hash table.
@@ -58,7 +58,7 @@ void msh_FindAllSegmentNodes(SegmentTable_t* seg_table, SegmentList_t* seg_list_
  * @param seg_table The hash table from which the segment node will be removed.
  * @param seg_node The segment node to be removed.
  */
-void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_node, void* key);
+void msh_RemoveSegmentFromTable(SegmentTable_T* seg_table, SegmentNode_T* seg_node, void* key);
 
 
 /**
@@ -67,6 +67,9 @@ void msh_RemoveSegmentFromTable(SegmentTable_t* seg_table, SegmentNode_t* seg_no
  * @note Does not free the pointer that was passed.
  * @param seg_table The table to be reset.
  */
-void msh_DestroyTable(SegmentTable_t* seg_table);
+void msh_DestroyTable(SegmentTable_T* seg_table);
+
+void msh_GetCollisions(SegmentTable_T* seg_table, double* data);
+size_t msh_GetMaxCollisions(SegmentTable_T* seg_table);
 
 #endif /* MATSHARE_MSHTABLE_H */

@@ -26,8 +26,7 @@
 #  include <sys/stat.h>
 #endif
 
-
-void msh_AcquireProcessLock(ProcessLock_t process_lock)
+void msh_AcquireProcessLock(FileLock_T file_lock)
 {
 #ifdef MSH_WIN
 	DWORD status;
@@ -37,7 +36,7 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 	{
 
 #ifdef MSH_WIN
-		status = WaitForSingleObject(process_lock, INFINITE);
+		status = WaitForSingleObject(file_lock, INFINITE);
 		if(status == WAIT_ABANDONED)
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "ProcessLockAbandonedError", "Another process has failed. Cannot safely continue.");
@@ -47,7 +46,7 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError", "Failed to lock acquire the process lock.");
 		}
 #else
-		if(lockf(process_lock.lock_handle, F_LOCK, process_lock.lock_size) != 0)
+		if(lockf(file_lock.lock_handle, F_LOCK, file_lock.lock_size) != 0)
 		{
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ProcessLockError", "Failed to acquire the process lock.");
 		}
@@ -60,7 +59,7 @@ void msh_AcquireProcessLock(ProcessLock_t process_lock)
 }
 
 
-void msh_ReleaseProcessLock(ProcessLock_t process_lock)
+void msh_ReleaseProcessLock(FileLock_T file_lock)
 {
 	
 	if(g_local_info.lock_level > 0)
@@ -68,14 +67,14 @@ void msh_ReleaseProcessLock(ProcessLock_t process_lock)
 		if(g_local_info.lock_level == 1)
 		{
 #ifdef MSH_WIN
-			if(ReleaseMutex(process_lock) == 0)
+			if(ReleaseMutex(file_lock) == 0)
 			{
 				/* prevent recursion in error callback */
 				meu_SetErrorCallback(NULL);
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM | MEU_SEVERITY_FATAL, "ProcessUnlockError", "Failed to release the process lock.");
 			}
 #else
-			if(lockf(process_lock.lock_handle, F_ULOCK, process_lock.lock_size) != 0)
+			if(lockf(file_lock.lock_handle, F_ULOCK, file_lock.lock_size) != 0)
 			{
 				/* prevent recursion in error callback */
 				meu_SetErrorCallback(NULL);
@@ -91,19 +90,6 @@ void msh_ReleaseProcessLock(ProcessLock_t process_lock)
 }
 
 
-void msh_WriteSegmentName(char* name_buffer, segmentnumber_t seg_num)
-{
-	if(seg_num == MSH_INVALID_SEG_NUM)
-	{
-		meu_PrintMexError(MEU_FL,
-		                  MEU_SEVERITY_INTERNAL | MEU_SEVERITY_FATAL,
-		                  "InternalLogicError",
-		                  "There was an internal logic error where matshare lost track of its internal shared memory list. Please"
-		                  "report this if you can.");
-	}
-	sprintf(name_buffer, MSH_SEGMENT_NAME_FORMAT, (unsigned long)seg_num);
-}
-
 
 void msh_WriteConfiguration(void)
 {
@@ -112,11 +98,11 @@ void msh_WriteConfiguration(void)
 	DWORD bytes_wr;
 #endif
 	
-	char_t* config_path;
+	char_T* config_path;
 	
 	
-	handle_t config_handle;
-	UserConfig_t local_config = g_user_config, saved_config;
+	handle_T config_handle;
+	UserConfig_T local_config = g_user_config, saved_config;
 	
 	config_path = msh_GetConfigurationPath();
 
@@ -129,15 +115,15 @@ void msh_WriteConfiguration(void)
 	}
 	else
 	{
-		if(ReadFile(config_handle, &saved_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
+		if(ReadFile(config_handle, &saved_config, sizeof(UserConfig_T), &bytes_wr, NULL) == 0)
 		{
 			mxFree(config_path);
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 		}
 		
-		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
+		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_T)) != 0)
 		{
-			if(WriteFile(config_handle, &local_config, sizeof(UserConfig_t), &bytes_wr, NULL) == 0)
+			if(WriteFile(config_handle, &local_config, sizeof(UserConfig_T), &bytes_wr, NULL) == 0)
 			{
 				mxFree(config_path);
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
@@ -157,15 +143,15 @@ void msh_WriteConfiguration(void)
 	}
 	else
 	{
-		if(read(config_handle, &saved_config, sizeof(UserConfig_t)) == -1)
+		if(read(config_handle, &saved_config, sizeof(UserConfig_T)) == -1)
 		{
 			mxFree(config_path);
 			meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ReadFileError", "Error reading from the config file.");
 		}
 		
-		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_t)) != 0)
+		if(memcmp(&local_config, &saved_config, sizeof(UserConfig_T)) != 0)
 		{
-			if(write(config_handle, &local_config, sizeof(UserConfig_t)) == -1)
+			if(write(config_handle, &local_config, sizeof(UserConfig_T)) == -1)
 			{
 				mxFree(config_path);
 				meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "WriteFileError", "Error writing to the config file.");
@@ -184,10 +170,10 @@ void msh_WriteConfiguration(void)
 }
 
 
-char_t* msh_GetConfigurationPath(void)
+char_T* msh_GetConfigurationPath(void)
 {
-	char_t* user_config_folder;
-	char_t* config_path;
+	char_T* user_config_folder;
+	char_T* config_path;
 
 #ifdef MSH_WIN
 	
@@ -200,7 +186,7 @@ char_t* msh_GetConfigurationPath(void)
 		}
 	}
 	
-	config_path = mxCalloc(strlen(user_config_folder) + 2 + strlen(MSH_CONFIG_FOLDER_NAME) + 2 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
+	config_path = mxCalloc(strlen(user_config_folder) + 2 + strlen(MSH_CONFIG_FOLDER_NAME) + 2 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_T));
 	sprintf(config_path, "%s\\%s", user_config_folder, MSH_CONFIG_FOLDER_NAME);
 	if(CreateDirectory(config_path, NULL) == 0)
 	{
@@ -218,7 +204,7 @@ char_t* msh_GetConfigurationPath(void)
 		meu_PrintMexError(MEU_FL, MEU_SEVERITY_SYSTEM, "ConfigPathError", "Could not find a suitable configuration path. Please make sure $HOME is defined.");
 	}
 	
-	config_path = mxCalloc(strlen(user_config_folder) + 1 + strlen(HOME_CONFIG_FOLDER) + 1 + strlen(MSH_CONFIG_FOLDER_NAME) + 1 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_t));
+	config_path = mxCalloc(strlen(user_config_folder) + 1 + strlen(HOME_CONFIG_FOLDER) + 1 + strlen(MSH_CONFIG_FOLDER_NAME) + 1 + strlen(MSH_CONFIG_FILE_NAME) + 1, sizeof(char_T));
 	sprintf(config_path, "%s/%s", user_config_folder, HOME_CONFIG_FOLDER);
 	if(mkdir(config_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) == -1)
 	{
@@ -247,7 +233,7 @@ char_t* msh_GetConfigurationPath(void)
 }
 
 
-pid_t msh_GetPid(void)
+pid_T msh_GetPid(void)
 {
 #ifdef MSH_WIN
 	return GetCurrentProcessId();
@@ -257,186 +243,9 @@ pid_t msh_GetPid(void)
 }
 
 
-int msh_CompareVariableSize(const mxArray* dest_var, const mxArray* comp_var)
-{
-	/* for loops */
-	size_t idx, count, dest_num_elems;
-	
-	/* for structures */
-	int field_num, dest_num_fields;                /* current field */
-	
-	mxClassID dest_class_id = mxGetClassID(dest_var);
-	
-	/* can't allow differing dimensions because matlab doesn't use shared pointers to dimensions in mxArrays */
-	if(dest_class_id != mxGetClassID(comp_var) || mxGetNumberOfDimensions(dest_var) != mxGetNumberOfDimensions(comp_var) ||
-	   memcmp(mxGetDimensions(dest_var), mxGetDimensions(comp_var), mxGetNumberOfDimensions(dest_var)*sizeof(mwSize)) != 0)
-	{
-		return FALSE;
-	}
-	
-	/* Structure case */
-	if(dest_class_id == mxSTRUCT_CLASS)
-	{
-		
-		dest_num_elems = mxGetNumberOfElements(dest_var);
-		dest_num_fields = mxGetNumberOfFields(dest_var);
-		
-		if(dest_num_fields != mxGetNumberOfFields(comp_var) || dest_num_elems != mxGetNumberOfElements(comp_var))
-		{
-			return FALSE;
-		}
-		
-		/* Go through each element */
-		for(field_num = 0, count = 0; field_num < dest_num_fields; field_num++)     /* each field */
-		{
-			
-			if(strcmp(mxGetFieldNameByNumber(dest_var, field_num), mxGetFieldNameByNumber(comp_var, field_num)) != 0)
-			{
-				return FALSE;
-			}
-			
-			for(idx = 0; idx < dest_num_elems; idx++, count++)
-			{
-				if(!msh_CompareVariableSize(mxGetFieldByNumber(dest_var, idx, field_num), mxGetFieldByNumber(comp_var, idx, field_num)))
-				{
-					return FALSE;
-				}
-			}
-			
-		}
-		
-	}
-	else if(dest_class_id == mxCELL_CLASS) /* Cell case */
-	{
-		dest_num_elems = mxGetNumberOfElements(dest_var);
-		
-		if(dest_num_elems != mxGetNumberOfElements(comp_var))
-		{
-			return FALSE;
-		}
-		
-		for(count = 0; count < dest_num_elems; count++)
-		{
-			if(!msh_CompareVariableSize(mxGetCell(dest_var, count), mxGetCell(comp_var, count)))
-			{
-				return FALSE;
-			}
-		}
-	}
-	else if(mxIsNumeric(dest_var) || dest_class_id == mxLOGICAL_CLASS || dest_class_id == mxCHAR_CLASS)      /*base case*/
-	{
-		
-		if(mxIsComplex(dest_var) != mxIsComplex(comp_var))
-		{
-			return FALSE;
-		}
-		
-		if(mxIsSparse(dest_var))
-		{
-			if(mxGetNzmax(dest_var) != mxGetNzmax(comp_var) || mxGetN(dest_var) != mxGetN(comp_var) || !mxIsSparse(comp_var))
-			{
-				return FALSE;
-			}
-		}
-		else
-		{
-			if(mxGetNumberOfElements(dest_var) != mxGetNumberOfElements(comp_var) || mxIsSparse(comp_var))
-			{
-				return FALSE;
-			}
-		}
-	}
-	else
-	{
-		/* this may occur if the user passes a destination variable which is not in shared memory */
-		meu_PrintMexError(MEU_FL,
-		                  MEU_SEVERITY_USER,
-		                  "InvalidTypeError",
-		                  "Unexpected input type. All elements of the shared variable must be of type 'numeric', 'logical', 'char', 'struct', or 'cell'.");
-	}
-	
-	return TRUE;
-}
-
-
-void msh_OverwriteVariable(const mxArray* dest_var, const mxArray* in_var)
-{
-	size_t idx, count, num_elems, nzmax;
-	
-	/* for structures */
-	int field_num, num_fields;                /* current field */
-	
-	mxClassID shared_class_id = mxGetClassID(in_var);
-	
-	/* Structure case */
-	if(shared_class_id == mxSTRUCT_CLASS)
-	{
-		num_elems = mxGetNumberOfElements(in_var);
-		num_fields = mxGetNumberOfFields(in_var);
-		
-		/* Go through each element */
-		for(field_num = 0, count = 0; field_num < num_fields; field_num++)     /* each field */
-		{
-			for(idx = 0; idx < num_elems; idx++, count++)
-			{
-				/* And fill it */
-				msh_OverwriteVariable(mxGetFieldByNumber(dest_var, idx, field_num), mxGetFieldByNumber(in_var, idx, field_num));
-			}
-		}
-	}
-	else if(shared_class_id == mxCELL_CLASS) /* Cell case */
-	{
-		num_elems = mxGetNumberOfElements(in_var);
-		
-		for(count = 0; count < num_elems; count++)
-		{
-			/* And fill it */
-			msh_OverwriteVariable(mxGetCell(dest_var, count), mxGetCell(in_var, count));
-		}
-	}
-	else     /*base case*/
-	{
-		
-		/* if sparse get a list of the elements */
-		if(mxIsSparse(in_var))
-		{
-			
-			nzmax = mxGetNzmax(in_var);
-			
-			memcpy(mxGetIr(dest_var), mxGetIr(in_var), nzmax*sizeof(mwIndex));
-			memcpy(mxGetJc(dest_var), mxGetJc(in_var), (mxGetN(in_var) + 1)*sizeof(mwIndex));
-			
-			/* rewrite real data */
-			memcpy(mxGetData(dest_var), mxGetData(in_var), nzmax*mxGetElementSize(in_var));
-			
-			/* if complex get a pointer to the complex data */
-			if(mxIsComplex(in_var))
-			{
-				memcpy(mxGetImagData(dest_var), mxGetImagData(in_var), nzmax*mxGetElementSize(in_var));
-			}
-		}
-		else if(!mxIsEmpty(in_var))
-		{
-			
-			num_elems = mxGetNumberOfElements(in_var);
-			
-			/* rewrite real data */
-			memcpy(mxGetData(dest_var), mxGetData(in_var), num_elems*mxGetElementSize(in_var));
-			
-			/* if complex get a pointer to the complex data */
-			if(mxIsComplex(in_var))
-			{
-				memcpy(mxGetImagData(dest_var), mxGetImagData(in_var), num_elems*mxGetElementSize(in_var));
-			}
-		}
-		
-	}
-}
-
-
 size_t msh_PadToAlignData(size_t curr_sz)
 {
-	return curr_sz + (DATA_ALIGNMENT_SHIFT - ((curr_sz - 1) & DATA_ALIGNMENT_SHIFT));
+	return curr_sz + ((MSH_ALIGNMENT-1) - ((curr_sz - 1) & (MSH_ALIGNMENT-1)));
 }
 
 
@@ -478,7 +287,7 @@ void msh_CheckVarname(const mxArray* varname)
 }
 
 
-/* MurmurHash3, by Austin Appleby (with a few modifications) */
+/* MurmurHash3, by Austin Appleby (public domain---thanks, Austin!) */
 uint32_T msh_MurmurHash3(const uint8_T* key, size_t len, int seed)
 {
 	uint32_T h = (uint32_T)seed;

@@ -14,10 +14,10 @@
 #  ifndef WIN32_LEAN_AND_MEAN
 #    define WIN32_LEAN_AND_MEAN
 #  endif
-#  include <windows.h>
-   typedef DWORD errcode_t;
+#  include <Windows.h>
+   typedef DWORD errcode_T;
 #else
-   typedef int errcode_t;
+   typedef int errcode_T;
 #  if(((_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && !_GNU_SOURCE) || defined(__APPLE__))
      /* XSI-compliant version */
      extern int strerror_r(int errnum, char *buf, size_t buflen);
