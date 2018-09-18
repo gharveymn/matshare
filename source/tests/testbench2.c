@@ -2,5 +2,6 @@
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {	
-	mxGetIr(prhs[0])[0] = 5;	
+    size_t x = 0xFFFFFFFF;
+	mexPrintf("%lu\n",x >> 100);	
 }

@@ -1,4 +1,4 @@
-/** mshvarops.c
+﻿/** mshvarops.c
  * Defines functions for variable operations.
  *
  * Copyright © 2018 Gene Harvey
@@ -2098,7 +2098,7 @@ NEG_UINT_METADEF(64);
 #define ARS_UINT_DEF(NAME, TYPE)          \
 static TYPE NAME(TYPE in, TYPE num_shift) \
 {                                         \
-	return (TYPE)((size_t)in >> (size_t)num_shift);              \
+	return (TYPE)((uint64_T)in >> (uint64_T)num_shift);              \
 }
 
 #define ARS_UINT_METADEF(SIZE)                                 \
