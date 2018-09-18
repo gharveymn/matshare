@@ -76,9 +76,4 @@ void msh_CleanVariableList(VariableList_T* var_list, int shared_gc_override);
 
 mxArray* msh_CreateSharedDataCopy(VariableNode_T* var_node, int will_set_used);
 
-
-
-/** Forward declaration of the global variable list. **/
-extern VariableList_T g_local_var_list;
-
 #endif /* MATSHARE_MSHLISTS_H */

@@ -43,6 +43,17 @@ function config(varargin)
 %            Values: An octal security value
 %            Default: '0600'
 %            Notes: Only available for Linux.
+%
+%        ['FetchDefault','fd'] -- Set the default operation for fetching 
+%                                 variables.
+%            Values: a character vector
+%            Default: '-r'
+%            Notes: You can set this as a variable name if you so want to.
+%
+%        ['SyncDefault','sd'] -- Set the default synchronization for 
+%                                variable operations.
+%            Values: '-s','-a','-t','-n'
+%            Default: '-a'
 
 %% Copyright © 2018 Gene Harvey
 %    This software may be modified and distributed under the terms

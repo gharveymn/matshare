@@ -13,15 +13,14 @@
 %        Primary:
 %            matshare.share           - Copy a variable to shared memory
 %            matshare.fetch           - Fetch variables from shared memory 
-%            matshare.pshare          - Share a variable and disable MATSHARE garbage collection on it
-%            matshare.clear           - Clear variables from shared memory
+%            matshare.clearshm        - Clear variables from shared memory
 %            matshare.detach          - Detach shared memory from this process
 %        Utility:            
 %            matshare.config          - Configure MATSHARE
 %            matshare.status          - Print the current status of MATSHARE
 %            matshare.copy            - Copy a variable from shared memory
 %            matshare.debug           - Print out MATSHARE debug information
-%            matshare.reset           - Reset the configuration and clear all variables from shared memory
+%            matshare.mshreset        - Reset the configuration and clear all variables from shared memory
 %            matshare.lock            - Acquire the MATSHARE interprocess lock
 %            matshare.unlock          - Release the MATSHARE interprocess lock
 %            matshare.clean           - Run MATSHARE garbge collection

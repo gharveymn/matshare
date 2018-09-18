@@ -116,6 +116,17 @@ extern char_T* g_msh_warning_help_message;
  */
 extern LocalInfo_T g_local_info;
 
+
+/**
+ * Forward declaration of the global segment list.
+ */
+extern struct SegmentList_T g_local_seg_list;
+
+/**
+ * Forward declaration of the global variable list.
+ */
+extern struct VariableList_T g_local_var_list;
+
 #define g_shared_info (g_local_info.shared_info_wrapper.ptr)
 
 #define g_process_lock (g_local_info.process_lock)

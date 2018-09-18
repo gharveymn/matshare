@@ -59,7 +59,7 @@ LocalInfo_T g_local_info =
 /**
  * MATLAB variable tracking table
  */
-SegmentTable_T g_mvar_table =
+static SegmentTable_T s_mvar_table =
 {
 	NULL,
 	0,
@@ -70,7 +70,7 @@ SegmentTable_T g_mvar_table =
 /**
  * Segment tracking table via segment numbers
  */
-SegmentTable_T g_seg_table =
+static SegmentTable_T s_seg_table =
 {
 	NULL,
 	0,
@@ -81,7 +81,7 @@ SegmentTable_T g_seg_table =
 /**
  * Segment table of variable names
  */
-SegmentTable_T g_name_table =
+static SegmentTable_T s_name_table =
 {
 	NULL,
 	0,
@@ -91,8 +91,8 @@ SegmentTable_T g_name_table =
 
 SegmentList_T g_local_seg_list =
 {
-	&g_seg_table,
-	&g_name_table,
+	&s_seg_table,
+	&s_name_table,
 	NULL,
 	NULL,
 	0,
@@ -101,7 +101,7 @@ SegmentList_T g_local_seg_list =
 
 VariableList_T g_local_var_list =
 {
-	&g_mvar_table,
+	&s_mvar_table,
 	NULL,
 	NULL
 };
