@@ -6,12 +6,22 @@ classdef object
 %    property.
 %
 %    Methods:
-%        matshare.object.overwrite    - Overwrite the variable in-place
-%        matshare.object.copy         - Copy the variable from shared memory
-%        matshare.object.clearshm     - Clear the variable from shared memory
+%        <a href="matlab:help matshare.object/overwrite">overwrite</a>    - Overwrite the variable in-place
+%        <a href="matlab:help matshare.object/copy">copy</a>         - Copy the variable from shared memory
+%        <a href="matlab:help matshare.object/clearshm">clearshm</a>         - Clear the variable from shared memory
+%        <a href="matlab:help matshare.object/abs">abs</a>          - Absolute value
+%        <a href="matlab:help matshare.object/add">add</a>          - Add 
+%        <a href="matlab:help matshare.object/sub">sub</a>          - Subtract
+%        <a href="matlab:help matshare.object/mul">mul</a>          - Multiply
+%        <a href="matlab:help matshare.object/div">div</a>          - Divide
+%        <a href="matlab:help matshare.object/rem">rem</a>          - Remainder
+%        <a href="matlab:help matshare.object/mod">mod</a>          - Modulus
+%        <a href="matlab:help matshare.object/neg">neg</a>          - Negate
+%        <a href="matlab:help matshare.object/ars">ars</a>          - Arithmetic right shift
+%        <a href="matlab:help matshare.object/als">als</a>          - Arithmetic left shift
 %
-%    Instances of this class should only be created via <a href="matlab:help matshare.share">matshare.share</a>,
-%    <a href="matlab:help matshare.pshare">matshare.pshare</a>, and <a href="matlab:help matshare.fetch">matshare.fetch</a>.
+%    Instances of this class should only be created via <a href="matlab:help matshare.share">matshare.share</a> 
+%    and <a href="matlab:help matshare.fetch">matshare.fetch</a>.
 
 %% Copyright © 2018 Gene Harvey
 %    This software may be modified and distributed under the terms
@@ -32,15 +42,14 @@ classdef object
 %% OBJECT  Create matshare objects.
 %    OBJ = MATSHARE.OBJECT Creates a scalar matshare object.
 %
-%    OBJ = MATSHARE.OBJECT(S) Creates a scalar matshare object storing S 
-%    as data.
+%    OBJ = MATSHARE.OBJECT(S) Creates a scalar matshare object storing S as 
+%    data.
 %
 %    OBJ = MATSHARE.OBJECT(S,N) Creates an array of matshare objects 
 %    interpreting S as a cell array containing data to be stored with N elements.
 %
-%    Note: Do not call this directly. Use <a href="matlab:help matshare.share">matshare.share</a>,
-%    <a href="matlab:help matshare.pshare">matshare.pshare</a>, and <a href="matlab:help
-%    matshare.fetch">matshare.fetch</a> to create and fetch variables.
+%    Note: Do not call this directly. Use <a href="matlab:help matshare.share">matshare.share</a> and <a href="matlab:help matshare.fetch">matshare.fetch</a> to 
+%    create and fetch variables.
 			
 			if(nargin > 0)
 				if(nargin > 1)
@@ -68,8 +77,7 @@ classdef object
 %    DAT = OBJ.ABS(...) overwrites the variable contents with its absolute
 %    value. 
 %
-%    See <a href="matlab:help matshare.object.overwrite">matshare.object.overwrite</a> 
-%    for details on the optional arguments.
+%    See <a href="matlab:help matshare.object/overwrite">overwrite</a> for details on the optional arguments.
 			if(nargout == 0)
 				matshare_(8, 0, obj.shared_data, {}, varargin);
 			else
@@ -81,8 +89,7 @@ classdef object
 %% ADD  Add another variable to the currently shared variable
 %    DAT = OBJ.ADD(IN, ...) adds IN to the variable contents.
 %
-%    See <a href="matlab:help matshare.object.overwrite">matshare.object.overwrite</a> 
-%    for details on the optional arguments.
+%    See <a href="matlab:help matshare.object/overwrite">overwrite</a> for details on the optional arguments.
 			if(nargout == 0)
 				matshare_(8, 1, obj.shared_data, {in}, varargin);
 			else
@@ -94,8 +101,7 @@ classdef object
 %% SUB  Subtract another variable from the currently shared variable
 %    DAT = OBJ.SUB(IN, ...) subtracts IN from the variable contents.
 %
-%    See <a href="matlab:help matshare.object.overwrite">matshare.object.overwrite</a> 
-%    for details on the optional arguments.			
+%    See <a href="matlab:help matshare.object/overwrite">overwrite</a> for details on the optional arguments.			
 			if(nargout == 0)
 				matshare_(8, 2, obj.shared_data, {in}, varargin);
 			else
@@ -108,7 +114,7 @@ classdef object
 %    DAT = OBJ.MUL(IN, ...) multiplies IN by the stored variable and 
 %    overwrites the shared memory with the result.
 %
-%    See <a href="matlab:help matshare.object.overwrite">matshare.object.overwrite</a> 
+%    See <a href="matlab:help matshare.object/overwrite">overwrite</a> 
 %    for details on the optional arguments.			
 			if(nargout == 0)
 				matshare_(8, 3, obj.shared_data, {in}, varargin);
@@ -122,8 +128,7 @@ classdef object
 %    DAT = OBJ.DIV(IN, ...) divides the stored variable by IN and 
 %    overwrites the shared memory with the result.
 %
-%    See <a href="matlab:help matshare.object.overwrite">matshare.object.overwrite</a> 
-%    for details on the optional arguments.			
+%    See <a href="matlab:help matshare.object/overwrite">overwrite</a> for details on the optional arguments.			
 			if(nargout == 0)
 				matshare_(8, 4, obj.shared_data, {in}, varargin);
 			else
@@ -136,8 +141,7 @@ classdef object
 %    DAT = OBJ.REM(IN, ...) finds the remainder of dividing the stored 
 %    variable by the input and stores the result.
 %
-%    See <a href="matlab:help matshare.object.overwrite">matshare.object.overwrite</a> 
-%    for details on the optional arguments.			
+%    See <a href="matlab:help matshare.object/overwrite">overwrite</a> for details on the optional arguments.			
 			if(nargout == 0)
 				matshare_(8, 5, obj.shared_data, {in}, varargin);
 			else
@@ -150,8 +154,7 @@ classdef object
 %    DAT = OBJ.MOD(IN, ...) finds the modulus of the stored variable by IN
 %    and stores the result.
 %
-%    See <a href="matlab:help matshare.object.overwrite">matshare.object.overwrite</a> 
-%    for details on the optional arguments.				
+%    See <a href="matlab:help matshare.object/overwrite">overwrite</a> for details on the optional arguments.				
 			if(nargout == 0)
 				matshare_(8, 6, obj.shared_data, {in}, varargin);
 			else
@@ -162,8 +165,7 @@ classdef object
 		function ret = neg(obj, varargin)
 %% NEG  Overwrite variable contents with its negation.
 %    DAT = OBJ.NEG(...) overwrites the variable contents with its negation. 
-%    See <a href="matlab:help matshare.object.overwrite">matshare.object.overwrite</a> 
-%    for details on the optional arguments.			
+%    See <a href="matlab:help matshare.object/overwrite">overwrite</a> for details on the optional arguments.			
 			if(nargout == 0)
 				matshare_(8, 7, obj.shared_data, {}, varargin);
 			else
@@ -176,8 +178,7 @@ classdef object
 %    DAT = OBJ.ARS(IN, ...) performs an arithmetic right shift on the 
 %    variable and stores the result
 %
-%    See <a href="matlab:help matshare.object.overwrite">matshare.object.overwrite</a> 
-%    for details on the optional arguments.				
+%    See <a href="matlab:help matshare.object/overwrite">overwrite</a> for details on the optional arguments.				
 			if(nargout == 0)
 				matshare_(8, 8, obj.shared_data, {in}, varargin);
 			else
@@ -190,8 +191,7 @@ classdef object
 %    DAT = OBJ.ALS(IN, ...) performs an arithmetic left shift on the 
 %    variable and stores the result
 %
-%    See <a href="matlab:help matshare.object.overwrite">matshare.object.overwrite</a> 
-%    for details on the optional arguments.
+%    See <a href="matlab:help matshare.object/overwrite">overwrite</a> for details on the optional arguments.
 			if(nargout == 0)
 				matshare_(8, 9, obj.shared_data, {in}, varargin);
 			else
@@ -213,7 +213,8 @@ classdef object
 %
 %    DAT = OBJ.OVERWRITE(IN,S) will do the same as above except on a 
 %    subset of elements when S is a struct with the same structure as that
-%    returned by the built-in `substruct`.
+%    returned by the built-in `substruct`. The same effect can be achieved
+%    by using subsasgn indexing in the style of OBJ.data(idx) = IN.
 %
 %    This function is completely asynchronous by default. You can specify
 %    the default behavior with <a href="matlab:help matshare.config">matshare.config</a>.
@@ -227,7 +228,7 @@ classdef object
 		
 		function clearshm(obj)
 %% CLEARSHM  Clear the matshare object data from shared memory.
-%    OBJ.CLEARSHM removes the data assocated to OBJ from shared memory.		
+%    OBJ.CLEARSHM removes the data assocated with OBJ from shared memory.		
 			
 			matshare_(6, obj.shared_data);
 			
@@ -235,7 +236,7 @@ classdef object
 		
 		function out = copy(obj)
 %% COPY  Copy the matshare object data from shared memory.
-%    OBJ.COPY copies the data assocated to OBJ from shared memory.
+%    OBJ.COPY copies the data assocated with OBJ from shared memory.
 			
 			out = matshare_(4, obj);
 			

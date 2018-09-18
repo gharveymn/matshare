@@ -1,5 +1,5 @@
 %% MATSHARE  A subsystem for shared memory in MATLAB.
-%    Compatibility: R2008b-R2017b
+%    Compatibility: R2008b-R2018b
 %
 %    MATSHARE is a subsystem for MATLAB which provides functions for 
 %    creating and operating on shared memory. It has mechanisms for 
@@ -28,9 +28,19 @@
 %    MATSHARE stores the shared memory in <a href="matlab:help matshare.object">matshare objects</a>. You can access
 %    the shared memory by querying the <a href="matlab:help matshare.object/data">data</a> property. Methods available to 
 %    <a href="matlab:help matshare.object">matshare objects</a> are as follows:
-%        matshare.object.overwrite    - Overwrite the variable in-place
-%        matshare.object.copy         - Copy the variable from shared memory
-%        matshare.object.clear        - Clear the variable from shared memory
+%        matshare.object/overwrite    - Overwrite the variable in-place
+%        matshare.object/copy         - Copy the variable from shared memory
+%        matshare.object/clearshm     - Clear the variable from shared memory
+%        matshare.object/abs          - Absolute value
+%        matshare.object/add          - Add 
+%        matshare.object/sub          - Subtract
+%        matshare.object/mul          - Multiply
+%        matshare.object/div          - Divide
+%        matshare.object/rem          - Remainder
+%        matshare.object/mod          - Modulus
+%        matshare.object/neg          - Negate
+%        matshare.object/ars          - Arithmetic right shift
+%        matshare.object/als          - Arithmetic left shift
 
 %% Copyright © 2018 Gene Harvey
 %    This software may be modified and distributed under the terms
