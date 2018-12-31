@@ -72,11 +72,11 @@ ans =
 ##### Process 2
 
 <pre>
->> f = matshare.fetch('myvarname')
+>> f = matshare.fetch
 f = 
   <font color="blue"><u>matshare object</u></font> storing <strong>1x1</strong> <font color="blue"><u>double</u></font>:
     data: 1
->> f.add = 2;    
+>> f.add(2);    
 </pre>
 
 ##### Process 1
